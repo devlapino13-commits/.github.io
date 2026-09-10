@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BLANK_AKT_ECASH_MEMBERS — процедура — схема БД</title>
+<meta name="description" content="Процедура BLANK_AKT_ECASH_MEMBERS: 1 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>BLANK_AKT_ECASH_MEMBERS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_opercash_book_info.html"><div class="to">HP_OPERCASH_BOOK_INFO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_MEMBER_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_MEMBER_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_SIGN_QR</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_SIGNED</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE BLANK_AKT_ECASH_MEMBERS(
+    ID D_INTEGER)
+RETURNS (
+    RES_MEMBER_KIND D_STR_CODE,
+    RES_MEMBER_FIO D_STR_100,
+    RES_SIGN_QR D_STR_LONG,
+    RES_SIGNED D_BOOL)
+AS
+declare variable TMP_ID D_INTEGER;
+declare variable MAIN_AKT_ID D_INTEGER;
+declare variable FACT_AKT_ID D_INTEGER;
+declare variable CIM_ROLE_KIND D_INTEGER;
+declare variable C_ID D_ID;
+declare variable OPC_DATE D_DATE;
+declare variable OPC_CASHIER_ID D_ID;
+declare variable OPC_MANAGER_ID D_ID;
+declare variable OPC_FROM_C_ID D_ID;
+declare variable EDL_ID D_ID;
+declare variable OFFICE_ID D_INTEGER;
+declare variable IS_ONLINE boolean;
+begin
+  select opc_from_cil_id, opc_from_c_id, opc_cashier_id, opc_manager_id, opc_from_edl_id, opc_office_id, opc_date, opc_is_online = 1
+  from opercash
+  where opc_id = :id
+  into tmp_id, opc_from_c_id, opc_cashier_id, opc_manager_id, :edl_id, :office_id, :opc_date, :is_online;
+
+  if (row_count = 0) then
+  begin
+    select cil_id, cil_cashier_id, cil_inspector_id
+    from cashinvlist
+    where cil_id = :id
+    into tmp_id, opc_cashier_id, opc_manager_id;
+
+    select first 1 opc_from_edl_id, opc_office_id, opc_date, opc_is_online = 1, coalesce(opc_from_c_id, opc_cashier_id)
+    from opercash
+    where opc_from_cil_id = :id
+    into :edl_id, :office_id, :opc_date, :is_online, opc_from_c_id;
+  end
+
+  if (tmp_id is null) then
+    exit;
+
+  select cil_parent_id
+  from cashinvlist
+  where cil_id = :tmp_id
+  into main_akt_id;
+
+  if (main_akt_id is not null) then
+    fact_akt_id = tmp_id;
+  else
+  begin
+    main_akt_id = tmp_id;
+
+    select cil_id
+    from cashinvlist
+    where cil_parent_id = :main_akt_id
+    order by cil_id desc
+    rows 1
+    into fact_akt_id;
+  end
+
+  if (opc_from_c_id is not null) then
+  begin
+    res_member_kind = f_enum_name(&#x27;cashmemberrole&#x27;, -1);
+    res_member_fio = &#x27;&#x27;;
+    select c_name_fio
+    from clients
+    where c_id = :opc_from_c_id
+    into res_member_fio;
+
+    res_sign_qr = iif(is_online, f_edoc_qr_by_edl(:edl_id, :opc_from_c_id), null);
+    res_signed = iif(res_sign_qr is null, 0, 1);
+    suspend;
+  end
+
+  if (opc_cashier_id is not null) then
+  begin
+    res_member_kind = f_enum_name(&#x27;cashmemberrole&#x27;, 0);
+    res_member_fio = &#x27;&#x27;;
+    select c_name_fio
+    from clients
+    where c_id = :opc_cashier_id
+    into res_member_fio;
+
+    res_sign_qr = iif(is_online, f_edoc_qr_by_edl(:edl_id, :opc_cashier_id), null);
+    res_signed = iif(res_sign_qr is null, 0, 1);
+    suspend;
+  end
+
+  if (opc_manager_id is not null) then              --
+  begin
+    res_member_kind = f_enum_name(&#x27;cashmemberrole&#x27;, 1);
+    res_member_fio = &#x27;&#x27;;
+    select c_name_fio
+    from clients
+    where c_id = :opc_manager_id
+    into res_member_fio;
+
+    if (is_online) then
+    begin
+      res_sign_qr = f_edoc_qr_by_edl(:edl_id, :opc_manager_id);
+      if (res_sign_qr is null) then
+        res_sign_qr = (
+          select f_edoc_qr_by_edl(cbm_from_edl_id, cbm_manager_id)
+          from hp_opercash_book_info (:office_id, :opc_date)
+          where cbm_manager_id = :opc_manager_id);
+    end else
+      res_sign_qr = null;
+    res_signed = iif(res_sign_qr is null, 0, 1);
+    suspend;
+  end
+
+  for select distinct cim_role_kind, cim_from_c_id
+  from cashinvmembers
+  where cim_from_cil_id in (:main_akt_id, :fact_akt_id) and
+        cim_from_c_id not in (:opc_cashier_id, :opc_manager_id) and
+        cim_role_kind &gt;= 0
+  order by 1
+  into cim_role_kind, c_id
+  do
+  begin
+    res_member_kind = f_enum_name(&#x27;cashmemberrole&#x27;, cim_role_kind);
+    res_member_fio = &#x27;&#x27;;
+    select c_name_fio
+    from clients
+    where c_id = :c_id
+    into res_member_fio;
+
+    res_sign_qr = iif(is_online, f_edoc_qr_by_edl(:edl_id, :c_id), null);
+    res_signed = iif(res_sign_qr is null, 0, 1);
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

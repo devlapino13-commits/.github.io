@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MC_DUPL_REGISTR_CLIENTS — процедура — схема БД</title>
+<meta name="description" content="Процедура MC_DUPL_REGISTR_CLIENTS: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>MC_DUPL_REGISTR_CLIENTS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MCL_FROM_C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE MC_DUPL_REGISTR_CLIENTS(
+    MCL_FROM_C_ID DECIMAL(18,0))
+AS
+declare variable mcl_datetime timestamp;
+declare variable mcl_login varchar(50);
+declare variable login_cnt integer;
+declare variable index1 integer;
+begin
+/* Данная процедура проверяет количество активных регистраций у клиента mcl_is_delete = 0 , если больше одного
+ то ориентируясь по дате оставляет активным одну регистрацию, остальные закрывает*/
+  for select mcl_from_c_id
+      from mc_login mc
+      where mc.mcl_is_delete = 0 and
+            mc.mcl_from_c_id = :mcl_from_c_id and
+            mc.mcl_from_c_id is not null
+      group by mcl_from_c_id
+      having count(*) &gt; 1
+      into :mcl_from_c_id
+  do
+  begin
+    index1 = 0;
+    for select mcl_login, mcl_datetime
+        from mc_login mc_l
+        where mc_l.mcl_from_c_id = :mcl_from_c_id and
+              mc_l.mcl_is_delete &lt;&gt; 1
+        order by mc_l.mcl_datetime desc
+        into mcl_login, :mcl_datetime
+    do
+    begin
+      for select count(*)
+          from mc_login mc_l
+          where mcl_login starting :mcl_login
+          into login_cnt
+      do
+      begin
+        if (index1 &gt; 0) then
+        begin
+          -- Переименовываем существующего пользователя в вид login_nnn
+          update mc_login
+          set mcl_login = mcl_login || &#x27;_&#x27; || lpad(:login_cnt, 3, &#x27;0&#x27;),
+              mcl_is_delete = 1
+          where mcl_login = :mcl_login;
+        end
+      end
+      index1 = index1 + 1;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_JSON_CLEAR_PARSE — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_JSON_CLEAR_PARSE: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_JSON_CLEAR_PARSE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_json_parse.html"><div class="to">FM_JSON_PARSE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">JSON_OBJECT</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">NEW_JSON</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_JSON_CLEAR_PARSE(
+    JSON_OBJECT BLOB SUB_TYPE TEXT SEGMENT SIZE 80)
+RETURNS (
+    NEW_JSON BLOB SUB_TYPE TEXT SEGMENT SIZE 80)
+AS
+declare variable quote_symbol varchar(1);
+declare variable kol integer;
+declare variable start_sym integer;
+declare variable n integer;
+declare variable i integer;
+declare variable len integer;
+declare variable last_sym integer;
+declare variable sym varchar(1);
+declare variable isopen integer;
+begin
+-- Процедура возвращает значение параметра json-объекта
+-- по переданному json-объекту и имени параметра
+
+  quote_symbol = &#x27;•&#x27;;
+
+  json_object = replace(json_object, &#x27;\&quot;&#x27;, :quote_symbol);
+
+  len = char_length(json_object);
+  i = 0;
+  new_json = &#x27;&#x27;;
+  kol = 0;
+  start_sym = 0;
+  n = 0;
+  last_sym = 0;
+  while (i &lt; len) do
+  begin
+    i = i + 1;
+    sym = substring(json_object from i for 1);
+
+    if ((kol &lt;&gt; 2) and
+        (kol = 1 or sym &lt;&gt; &#x27; &#x27;)) then
+    begin
+      n = n + 1;
+      new_json = BLOB_APPEND(new_json, sym);
+    end
+
+    if (kol = 2) then
+    begin
+      if (sym in (&#x27;:&#x27;, &#x27;,&#x27;, &#x27;}&#x27;, &#x27;]&#x27;)) then
+      begin
+        kol = 0;
+        n = n + 1;
+        new_json = BLOB_APPEND(new_json, sym);
+      end
+      if (sym = &#x27;:&#x27;) then
+        last_sym = n;
+    end
+    if (sym = &#x27;&quot;&#x27;) then
+      kol = kol + 1;
+    if (sym = &#x27;:&#x27; and
+        kol &lt;&gt; 1) then
+      start_sym = i;
+    if (start_sym &gt; 0 and
+        sym = &#x27;&quot;&#x27;) then
+      start_sym = 0;
+    if (start_sym &gt; 0 and
+        (sym = &#x27;,&#x27; or sym = &#x27;}&#x27; or sym = &#x27;]&#x27; or i = len)) then
+    begin
+      if (i &lt; len or sym = &#x27;,&#x27; or sym = &#x27;}&#x27; or sym = &#x27;]&#x27;) then
+      begin
+        new_json = left(new_json, n - 1) || &#x27;&quot;&#x27; || substring(json_object from i for 1);
+        n = n + 1;
+        new_json = left(new_json, last_sym) || &#x27;&quot;&#x27; || substring(new_json from last_sym + 1);
+        n = n + 1;
+      end
+      else
+      begin
+        new_json = left(new_json, start_sym - 1) || &#x27;&quot;&#x27; || substring(json_object from start_sym + 1) || &#x27;&quot;&#x27;;
+      end
+      start_sym = 0;
+      last_sym = 0;
+    end
+  end
+
+  new_json = trim(new_json);
+  new_json = replace(new_json, ascii_char(10), &#x27;&#x27;);
+  new_json = replace(new_json, ascii_char(13), &#x27;&#x27;);
+  new_json = trim(new_json);
+
+  json_object = new_json;
+  len = char_length(json_object);
+  i = 0;
+  new_json = &#x27;&#x27;;
+  kol = 0;
+  isopen = 0;
+  while (i &lt; len) do
+  begin
+    i = i + 1;
+    sym = substring(json_object from i for 1);
+    if (sym = &#x27;&quot;&#x27;) then
+      isopen = 1 - isopen;
+    if (isopen &lt;&gt; 1) then
+    begin
+      if (sym = &#x27;{&#x27;) then
+        kol = kol + 1;
+      if (sym = &#x27;}&#x27;) then
+      begin
+        kol = kol - 1;
+        if (kol = 0) then
+        begin
+          new_json = BLOB_APPEND(new_json, &#x27;,&quot;EndOfObject&quot;:&quot;&quot;&#x27;);
+        end
+      end
+    end
+    new_json = BLOB_APPEND(new_json, sym);
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_OVERPAYMENT_CHECK — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_OVERPAYMENT_CHECK: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_OVERPAYMENT_CHECK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_make_zad_list.html"><div class="to">AAREP_MAKE_ZAD_LIST</div></a><a class="ref-card" href="hp_check_client_fio_ft.html"><div class="to">HP_CHECK_CLIENT_FIO_FT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_OVERPAYMENT_CHECK
+AS
+declare variable rd_id d_integer;
+declare variable over_sum d_currency;
+declare variable ovm_id d_integer;
+declare variable c_id d_id;
+declare variable k_id d_id;
+declare variable status d_integer;
+declare variable memo d_str_255;
+declare variable kc_id d_id;
+declare variable phone d_str_100;
+declare variable start_time timestamp;
+begin
+  -- процедура производит фильтрацию зафиксированных переплат, для отправки СМС
+
+  start_time = cast(&#x27;now&#x27; as timestamp);
+  rd_id = f_get_rd_id(&#x27;OperExtraKind.LawClientExpense&#x27;);
+
+  for select ovm_id, kc_from_c_id, kc_from_k_id, kc_id
+  from overpayment_msg ovm, knclient kc
+  where ovm_status = 0       -- новые
+    and kc_id = ovm_from_kc_id
+  into ovm_id, c_id, k_id, kc_id
+  do
+  begin
+    status = 999;  -- конечный статус, если все проверки пройдены
+    memo = null;
+
+    -- проверка &quot;не была начислена судебная госпошлина&quot;
+    if (status &gt; 0) then
+      if (exists(select * from operextra ox
+                    where ox.ox_object_kind = 9
+                      and ox.ox_object_id = :k_id
+                      and ox.ox_ol_is_active = 1
+                      and ox.ox_amount_plus &gt; 0
+                      and ox.ox_from_rd_id =  :rd_id)
+        or
+          exists(select * from opersud
+                  where osd_from_k_id = :k_id and
+                        osd_ol_is_delete = 0))
+      then
+          status = - 3;
+
+    -- сумма переплаты должна быть не меньше рубля
+    over_sum = (select -sum(ok_os)
+                from operkred
+                where ok_from_k_id = :k_id
+                  and ok_ol_is_active = 1
+                  and ok_type = 9);
+
+    if (coalesce(over_sum, 0) &lt; 1) then
+      status = - 1;
+
+    -- проверка наличия основного номера телефона
+    if (status &gt; 0) then
+    begin
+      phone = (select cci.ok_cell_main from continfo cci
+                  where cci.cci_object_id = :c_id
+                    and cci.cci_object_kind = 0);
+
+      if (coalesce(phone, &#x27;&#x27;) = &#x27;&#x27;) then
+        status = - 2;
+    end 
+
+    -- проверка ПОДФТ
+    if (status &gt; 0) then
+    begin
+      memo = (select &#x27;ПОДФТ: Совпадение с лицом по &#x27; || c_comment || &#x27; &#x27; || c_name_fio
+              from hp_check_client_fio_ft(:c_id, 1));
+
+      if (memo is not null) then
+        status = - 4;
+    end 
+
+    -- проверка нет долга
+    if(status &gt; 0 and (select coalesce(sum(zad_os + zad_perc), 0) &gt; 0
+          from aarep_make_zad_list(:k_id, current_date, 1)))
+    then
+      status = - 5;
+
+
+    update overpayment_msg
+    set ovm_status = :status
+    where (ovm_id = :ovm_id);
+
+    if (memo is not null) then
+      update or insert into overpayment_msg_memo (omm_id, omm_memo)
+      values (:ovm_id, :memo)
+      matching (omm_id);
+
+    -- Работаем не больше 25 минут
+    if (datediff(minute, start_time, cast(&#x27;now&#x27; as timestamp)) &gt; 25) then
+      break;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

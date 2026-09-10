@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$UXINDEX_INSERT_VIRTUAL — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$UXINDEX_INSERT_VIRTUAL: 3 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$UXINDEX_INSERT_VIRTUAL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SOURCE_NAME</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SOURCE_FIELDS</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FK_SOURCE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$UXINDEX_INSERT_VIRTUAL(
+    SOURCE_NAME D_STR_CODE,
+    SOURCE_FIELDS D_STR_CODE,
+    FK_SOURCE D_STR_CODE)
+AS
+declare variable tmp_source d_str_code;
+declare variable fk_index d_str_100;
+declare variable field_count d_integer;
+begin
+  fk_index = &#x27;&#x27;;
+
+  if (coalesce(source_name, &#x27;&#x27;) = &#x27;&#x27;) then
+    exception e_default &#x27;Source_name is empty&#x27;;
+
+  if (coalesce(source_fields, &#x27;&#x27;) = &#x27;&#x27;) then
+    exception e_default &#x27;Source_fields is empty&#x27;;
+
+  if (coalesce(fk_source, &#x27;&#x27;) = &#x27;&#x27;) then
+    exception e_default &#x27;FK_Source is empty&#x27;;
+
+  select count(*)
+  from uxp$split_str(:source_fields, &#x27;;&#x27;)
+  into field_count;
+
+  select uix_index
+  from ux$index
+  where uix_source = :fk_source and
+        (uix_pk = 1 or uix_uniq = 1) and
+        uix_count = :field_count
+  order by uix_pk desc
+  rows 1
+  into fk_index;
+
+  if (fk_index = &#x27;&#x27;) then
+  begin
+    select lower(trim(i.rdb$index_name))
+    from rdb$indices i
+    where rdb$relation_name = upper(:fk_source) and
+          i.rdb$unique_flag = 1 and
+          rdb$segment_count = :field_count
+    order by i.rdb$index_id
+    rows 1
+    into fk_index;
+
+    if (fk_index &lt;&gt; &#x27;&#x27;) then
+    begin
+      select source_name
+      from uxp$index_load(:fk_index)
+      into :tmp_source;
+
+      if (tmp_source &lt;&gt; fk_source) then
+        exception e_default f_format(&#x27;Incorrect FK source name: &quot;%1&quot; and &quot;%2&quot;&#x27;, upper(fk_source), upper(tmp_source));
+    end else
+      exception e_default f_format(&#x27;PK or Unique field(s) not found. Source: %1&#x27;, upper(fk_source));
+  end
+
+  insert into ux$index (uix_source, uix_fields, uix_fk, uix_virtual, uix_fk_source, uix_fk_index, uix_state)
+  values (:source_name, :source_fields, 1, 1, :fk_source, :fk_index, 0);
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

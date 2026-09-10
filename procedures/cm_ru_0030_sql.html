@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0030_SQL — процедура — схема БД</title>
+<meta name="description" content="Проверка кредитных продуктов Семья и Баракат">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0030_SQL</code></h1>
+<p class="desc">Проверка кредитных продуктов Семья и Баракат</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_client_relation_list.html"><div class="to">HP_CLIENT_RELATION_LIST</div></a><a class="ref-card" href="hp_kontstate_loan_status.html"><div class="to">HP_KONTSTATE_LOAN_STATUS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0030_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare kc_amount curr_type;
+declare kf_disb_date d_date;
+declare variable k_amount_approved curr_type;
+declare variable k_kolich_repay integer;
+declare variable pr_code varchar(20);
+declare variable in_rows1 integer;
+declare variable rows1_cli_id id_type;
+declare variable kc_from_c_id id_type;
+declare variable k_kommis_perc perc_type;
+declare variable k curr_type;
+declare variable kol_cli_group integer;
+declare variable C_CURR_BONUS_STATUS integer;
+declare variable PRL_PERCENT_MAX perc_type;
+declare variable pr_id integer;
+declare variable k_percent perc_type;
+declare variable c_citizen integer;
+declare variable rd_code varchar(255);
+begin
+  for
+  select k_amount_approved,
+         k_kolich_repay,
+         pr_code,
+         k_disb_date,
+         k_kommis_perc,
+         k_kolich_client_approved,
+         pr_id,
+         k_percent
+  from kontract, product
+  where k_id = :k_id
+  and k_from_pr_id = pr_id
+  and pr_code similar to &#x27;%(.FAMILY.|.FAMILY PLUS.|.BARAKAT.|.BARAKAT PLUS.)%&#x27;
+  into k_amount_approved,
+       k_kolich_repay,
+       pr_code,
+       kf_disb_date,
+       k_kommis_perc,
+       kol_cli_group,
+       pr_id,
+       k_percent
+  do
+  begin
+    C_CURR_BONUS_STATUS = null;
+    select C_CURR_BONUS_STATUS
+    from HP_KONTSTATE_LOAN_STATUS(:K_ID, 0, 0, :kf_disb_date, null)
+    into C_CURR_BONUS_STATUS;
+    if (C_CURR_BONUS_STATUS is null) then C_CURR_BONUS_STATUS = 0;
+    PRL_PERCENT_MAX = null;
+    select max(PRL_PERCENT_MAX)
+    from prodlogic
+    where prl_from_pr_id = :pr_id
+    and :kf_disb_date between prl_date_begin and prl_date_end
+    and :kol_cli_group between prl_kolich_min and prl_kolich_max
+    and :k_kolich_repay between prl_repay_min and prl_repay_max
+    into PRL_PERCENT_MAX;
+    if (PRL_PERCENT_MAX is null) then PRL_PERCENT_MAX = 100;
+--    if (K_Percent &lt;&gt; (PRL_PERCENT_MAX - C_CURR_BONUS_STATUS * 0.2)) then
+--    begin
+--       res_error_text = &#x27;Процентная ставка не правильно указано!&#x27;;
+--       res_error_is_critical = 2;
+--       suspend;
+--    end 
+--  проверка по продукту Семья
+    if (pr_code containing &#x27;.FAMILY.&#x27;) then
+    begin
+      if (kol_cli_group &lt;&gt; 2) then
+      begin
+        res_error_text = &#x27;Кол-во клиентов данного продукта не правильно указано!&#x27;;
+        res_error_is_critical = 2;
+        suspend;
+      end 
+      if (k_kommis_perc &lt;&gt; 1.25) then
+      begin
+        res_error_text = &#x27;Для данного продукта Доп. процент не правильно указано!&#x27;;
+        res_error_is_critical = 2;
+        suspend;
+      end
+    end
+--  проверка по продукту Семья Плюс
+    if (pr_code containing &#x27;.FAMILY PLUS.&#x27;) then
+    begin
+      if (kol_cli_group &lt;&gt; 3) then
+      begin
+        res_error_text = &#x27;Кол-во клиентов данного продукта не правильно указан!&#x27;;
+        res_error_is_critical = 2;
+        suspend;
+      end 
+      if (k_kommis_perc &lt;&gt; 1.00) then
+      begin
+        res_error_text = &#x27;Для данного продукта Доп. процент не правильно указан!&#x27;;
+        res_error_is_critical = 2;
+        suspend;
+      end
+    end 
+--  проверка членов семья должны быть родственниками
+--  Семья и Семья+
+    if (pr_code containing &#x27;.FAMILY&#x27;) then
+    begin
+      in_rows1 = 1;
+      rows1_cli_id = 0;
+      for
+      select kc_from_c_id, kc_amount_approved
+      from knclient
+      where kc_from_k_id = :k_id
+      and kc_amount_approved &gt; 0
+      into kc_from_c_id, kc_amount
+      do
+      begin
+        select c_name_fio
+        from clients
+        where c_id = :kc_from_c_id
+        into res_info_text;
+        if (in_rows1 = 1) then
+        begin
+          in_rows1 = 0;
+          rows1_cli_id = kc_from_c_id;
+        end else
+        begin
+          if ((:kc_from_c_id not in (select CREL_OTHER_C_ID
+                                     from HP_CLIENT_RELATION_LIST(:rows1_cli_id,0))
+              )) then
+          begin
+            res_error_text = &#x27;Клиент &#x27;||res_info_text||&#x27; не является родственником!&#x27;;
+            res_error_is_critical = 0;
+            suspend;
+          end 
+        end
+        if (pr_code containing &#x27;.FAMILY.&#x27;) then k = 35000;
+        else k = 30000;
+        if (kc_amount not in (15000, 25000, :k)) then
+        begin
+          res_error_text = &#x27;У клиента указана не правильная сумма!&#x27;;
+          res_error_is_critical = 2;
+          suspend;
+        end
+      end
+    end
+--  проверка по продукту Семья
+    if (pr_code containing &#x27;.BARAKAT.&#x27;) then
+    begin
+      if (kol_cli_group &lt;&gt; 1) then
+      begin
+        res_error_text = &#x27;Кол-во клиентов данного продукта не правильно указан!&#x27;;
+        res_error_is_critical = 2;
+        suspend;
+      end 
+      if (k_kommis_perc &lt;&gt; 1.50) then
+      begin
+        res_error_text = &#x27;Для данного продукта Доп. процент не правильно указан!&#x27;;
+        res_error_is_critical = 2;
+        suspend;
+      end
+      for
+      select kc_from_c_id, kc_amount_approved
+      from knclient
+      where kc_from_k_id = :k_id
+      and kc_amount_approved &gt; 0
+      into kc_from_c_id, kc_amount
+      do
+      begin
+        select c_name_fio, c_citizen
+        from clients
+        where c_id = :kc_from_c_id
+        into res_info_text, c_citizen;
+        select rd_code from refdata
+        where rd_id = :c_citizen
+        into rd_code;
+
+--    Обязательно наличие у клиента Патента или Разрешения на работу
+          if (not exists(
+                select *
+                from CLIENTDOCS, PASSKIND, PASSDOCTYPE
+                where CDS_FROM_C_ID = :kc_from_c_id
+                and cds_from_pk_id = pk_id
+                and pk_from_pdt_id = pdt_id
+                and cds_is_delete = 0
+                and :kf_disb_date between CDS_DOC_DATE_BEGIN and iif(CDS_DOC_DATE_END is null and pdt_code = &#x27;job_agreement&#x27;,&#x27;31.12.9999&#x27;, CDS_DOC_DATE_END)
+                and (pdt_code in (&#x27;work_permit&#x27;, -- Разрешение на работу
+                                 &#x27;work_patent&#x27;)  -- Патент
+                     or (:rd_code in (&#x27;Citizen.KG&#x27;, &#x27;Citizen.RU&#x27;)
+                         and pdt_code = &#x27;job_agreement&#x27;) -- Трудовой договор или справа с места работы
+                    ))) then
+          begin
+            res_error_text = &#x27;У клиента должно быть патент или разрешения на работу!&#x27;;
+            res_error_is_critical = 1;
+            suspend;
+          end
+          if (kc_amount not in (10000
+--                              , 15000 пока без этого, но потом нужно дополнительную проверку по пукнтку 3,2 нужно сделать
+--                              , 20000
+                              )) then
+          begin
+            res_error_text = &#x27;У клиента указана не правильная сумма!&#x27;;
+            res_error_is_critical = 2;
+            suspend;
+          end
+      end
+    end 
+--  проверка по продукту Семья Плюс
+    if (pr_code containing &#x27;.BARAKAT PLUS.&#x27;) then
+    begin
+      if (kol_cli_group &lt;&gt; 1) then
+      begin
+        res_error_text = &#x27;Кол-во клиентов данного продукта не правильно указан!&#x27;;
+        res_error_is_critical = 2;
+        suspend;
+      end 
+      if (k_kommis_perc &lt;&gt; 1.50) then
+      begin
+        res_error_text = &#x27;Для данного продукта Доп. процент не правильно указан!&#x27;;
+        res_error_is_critical = 2;
+        suspend;
+      end
+      for
+      select kc_from_c_id, kc_amount_approved
+      from knclient
+      where kc_from_k_id = :k_id
+      and kc_amount_approved &gt; 0
+      into kc_from_c_id, kc_amount
+      do
+      begin
+        select c_name_fio, c_citizen
+        from clients
+        where c_id = :kc_from_c_id
+        into res_info_text, c_citizen;
+        select rd_code from refdata
+        where rd_id = :c_citizen
+        into rd_code;
+--    Обязательно наличие у клиента Разрешения на временное проживание в РФ или Вид на жительство
+          if (not exists(
+                select *
+                from CLIENTDOCS, PASSKIND, PASSDOCTYPE
+                where CDS_FROM_C_ID = :kc_from_c_id
+                and cds_from_pk_id = pk_id
+                and pk_from_pdt_id = pdt_id
+                and cds_is_delete = 0
+                and :kf_disb_date between CDS_DOC_DATE_BEGIN and iif(CDS_DOC_DATE_END is null and pdt_code = &#x27;job_agreement&#x27;,&#x27;31.12.9999&#x27;, CDS_DOC_DATE_END)
+                and (pdt_code in (&#x27;registration_rvp&#x27;, -- Разрешение на временное проживание (РВП)
+                                 &#x27;registration_vnj&#x27;) -- Вид на жительство (ВНЖ)
+                    or (:rd_code in (&#x27;Citizen.KG&#x27;, &#x27;Citizen.RU&#x27;)
+                         and pdt_code = &#x27;job_agreement&#x27;)) -- Трудовой договор или справа с места работы
+                    )) then
+          begin
+              res_error_text = &#x27;У клиента должно быть Разрешения на временное проживание или Вид на жительство&#x27;;
+              res_error_is_critical = 1;
+              suspend;
+          end
+          if (kc_amount not in (10000, 15000
+--                              , 20000, 30000 пока без этого, потом по пукнту 3,2 нужно доработать
+                              )) then
+          begin
+            res_error_text = &#x27;У клиента указано не правильная сумма!&#x27;;
+            res_error_is_critical = 2;
+            suspend;
+          end
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

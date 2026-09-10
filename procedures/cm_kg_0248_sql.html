@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_KG_0248_SQL — процедура — схема БД</title>
+<meta name="description" content="Процедура CM_KG_0248_SQL: 3 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_KG_0248_SQL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_KG_0248_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable COMMISSION D_CURRENCY;
+declare variable OK_AMOUNT D_CURRENCY;
+declare variable k_amount_approved D_CURRENCY;
+declare variable C_ID D_ID;
+declare variable POINT D_INTEGER;
+declare variable INSURANCE_REQUIRED D_SMALLINT;
+declare variable k_disb_date d_date;
+begin
+  if (f_get_const(&#x27;new_loan_conditions&#x27;) &lt;&gt; 1) then
+    exit;
+
+  res_error_is_critical = 1;
+  begin
+    for select cl.c_name_fio,
+           cl.c_id,
+           ik.ik_commission,
+           k.k_disb_date,
+           k.k_amount_approved
+    from kontract k
+    inner join knclient kc on k.k_id = kc.kc_from_k_id
+    inner join product p on k.k_from_pr_id = p.pr_id
+    inner join clients cl on cl.c_id = kc.kc_from_c_id
+    inner join insurance_kontract ik on ik.ik_from_k_id = k.k_id
+    where k.k_id = :k_id
+        and kc.kc_amount_approved &gt; 0
+        and p.pr_code not containing &#x27;.ipf.&#x27;
+        and p.pr_code containing &#x27;.ind.&#x27;
+        and p.pr_code containing &#x27;.standart.&#x27;
+        and p.pr_code containing &#x27;.consultation.&#x27;
+        and p.pr_code containing &#x27;.INSUR.&#x27;
+    into :res_info_text, :c_id , :commission, k_disb_date, k_amount_approved
+    do
+    begin
+      point = coalesce(f_point(:c_id, :k_disb_date), 0);
+
+      if (point &lt; 20) then
+      -- Баллы 0–19 страховка ОБЯЗАТЕЛЬНО
+        insurance_required = 1;
+      else
+        -- Баллы 20 и выше → смотрим сумму кредита
+      insurance_required = iif(k_amount_approved &gt;= 250000, 1, 0);
+
+      if (insurance_required = 0) then
+        exit;
+
+      ok_amount = 0;
+      select sum(ok.ok_amount) from operkontract ok
+      inner join operlist ol on ol.ol_id = ok.ok_from_ol_id
+      where ok.ok_from_k_id = :k_id
+      and ok.ok_operation_type = f_get_rd_id(&#x27;CashTransactionIncom.Insurance&#x27;)
+      and ol.is_delete = 0
+      and ol_document_client = :c_id
+      into :ok_amount;
+    
+      ok_amount = coalesce(ok_amount, 0);
+    
+      res_error_text=&#x27;&#x27;;
+    
+      if (ok_amount = 0) then
+      begin
+        res_error_text = &#x27;Оплата за страхование не произведена&#x27;;
+        suspend;
+      end
+      else if (ok_amount &lt; commission) then
+      begin
+        res_error_text = &#x27;Оплата за страхование произведена не в полном объеме. Цена за страхование = &#x27;||round(commission)||&#x27; сом . Оплачено: &#x27;||round(ok_amount)||&#x27; сом&#x27;;
+        suspend;
+      end
+      else if (ok_amount &gt; commission) then
+      begin
+        res_error_text = &#x27;Оплата за страхование произведена в большем объеме. Цена за страхование = &#x27;||round(commission)||&#x27; сом . Оплачено: &#x27;||round(ok_amount)||&#x27; сом&#x27;;
+        suspend;
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

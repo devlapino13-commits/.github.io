@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_PAYSYS_ONE_CARD_OPER — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_PAYSYS_ONE_CARD_OPER: 5 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_PAYSYS_ONE_CARD_OPER</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_paysys_make_operbook_kg.html"><div class="to">HP_PAYSYS_MAKE_OPERBOOK_KG</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_paysys_one_ol_oper.html"><div class="to">HP_PAYSYS_ONE_OL_OPER</div></a><a class="ref-card" href="hp_paysys_one_policy_oper.html"><div class="to">HP_PAYSYS_ONE_POLICY_OPER</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PSI_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DESTIN_KIND</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DESTIN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OPER_MEMO</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PSM_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(70)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_PAYSYS_ONE_CARD_OPER(
+    PSI_ID DECIMAL(18,0),
+    DESTIN_KIND INTEGER,
+    DESTIN_ID DECIMAL(18,0),
+    UN_ID DECIMAL(18,0),
+    OPER_MEMO VARCHAR(255))
+RETURNS (
+    PSM_ID DECIMAL(18,0),
+    RES_TEXT VARCHAR(70))
+AS
+declare variable source_kind integer;
+declare variable source_id decimal(18,0);
+declare variable kol integer;
+declare variable reg_id integer;
+declare variable oper_kind smallint;
+declare variable psm_from_c_source decimal(18,0);
+declare variable psm_from_c_destin decimal(18,0);
+begin
+-- сначала находим где карта/бсо числится
+  source_id = null;
+  source_kind = null;
+  res_text = &#x27;&#x27;; -- пустой текст означает успешную передачу
+
+  kol = 0;
+  for select psl_object_kind, psl_object_id
+      from paysys_list
+      where psl_from_psi_id = :psi_id and
+            psl_is_delete = 0
+      group by psl_object_kind, psl_object_id
+      having sum(psl_sign) &gt; 0
+      into :source_kind, source_id
+  do
+    kol = kol + 1;
+
+  if (kol = 1) then -- если карта числится только в одном месте
+  begin
+    if ((source_id = destin_id) and
+        (source_kind = destin_kind)) then
+    begin
+-- приемник и источник один и тот же, возвращаем id сохраненной операции
+      select psl_from_psm_id
+      from paysys_list
+      where psl_from_psi_id = :psi_id and
+            psl_is_delete = 0 and
+            psl_object_kind = :source_kind and
+            psl_object_id = :source_id
+      order by psl_from_psm_id desc
+      rows 1
+      into :psm_id;
+      suspend;
+    end
+    else
+    begin
+      reg_id = null;
+      if (source_kind = 1) then
+        reg_id = source_id;
+      else
+      if (destin_kind = 1) then
+        reg_id = destin_id;
+      else
+      if (source_kind = 3) then
+        select k_last_reg_id
+        from kontract
+        where k_id = :source_id
+        into reg_id;
+      else
+      if (destin_kind = 3) then
+        select k_last_reg_id
+        from kontract
+        where k_id = :destin_id
+        into reg_id;
+      else
+      if (source_kind = 4) then
+        select ol_from_reg_id
+        from operlist
+        where ol_id = :source_id
+        into reg_id;
+      else
+      if (destin_kind = 4) then
+        select ol_from_reg_id
+        from operlist
+        where ol_id = :destin_id
+        into reg_id;
+      if (reg_id is null) then
+      begin
+        res_text = &#x27;офис операции не определен&#x27;;
+        suspend;
+      end
+      else
+      begin
+        oper_kind = 0;
+        psm_from_c_source = null;
+        psm_from_c_destin = null;
+        if (destin_id is null) then
+          oper_kind = 1; -- аннулирование
+
+        if (source_kind = 1) then
+          select un_from_c_id
+          from username
+          where un_id = :un_id
+          into :psm_from_c_source;
+        if (destin_kind = 1) then
+          select un_from_c_id
+          from username
+          where un_id = :un_id
+          into :psm_from_c_destin;
+        if (source_kind = 3) then
+        begin
+          select kc_from_c_id
+          from knclient
+          where kc_from_k_id = :source_id and
+                kc_status = 2 and
+                kc_amount_approved &gt; 0
+          into :psm_from_c_source;
+          if (psm_from_c_source is null) then
+            select kc_from_c_id
+            from knclient
+            where kc_from_k_id = :source_id and
+                  kc_amount_approved &gt; 0 rows 1
+            into :psm_from_c_source;
+        end
+        if (destin_kind = 3) then
+        begin
+          select kc_from_c_id
+          from knclient
+          where kc_from_k_id = :destin_id and
+                kc_status = 2 and
+                kc_amount_approved &gt; 0
+          into :psm_from_c_destin;
+          if (psm_from_c_destin is null) then
+            select kc_from_c_id
+            from knclient
+            where kc_from_k_id = :destin_id and
+                  kc_amount_approved &gt; 0 rows 1
+            into :psm_from_c_destin;
+        end
+
+        insert into paysys_main (psm_id, psm_date, psm_from_reg_id, psm_memo, psm_oper_kind, psm_from_c_source,
+                                 psm_from_c_destin, psm_item_count, psm_from_un_id, psm_is_delete, psm_status)
+        values (-1, current_date, :reg_id, :oper_memo, :oper_kind, :psm_from_c_source, :psm_from_c_destin, 1, :un_id, 0,
+                1)
+        returning psm_id
+        into :psm_id;
+
+        insert into paysys_list (psl_from_psm_id, psl_id, psl_date, psl_from_psi_id, psl_object_kind, psl_object_id,
+                                 psl_sign, psl_is_delete)
+        values (:psm_id, -1, current_date, :psi_id, :source_kind, :source_id, -1, 0);
+
+        if (destin_id is not null) then
+        begin
+          insert into paysys_list (psl_from_psm_id, psl_id, psl_date, psl_from_psi_id, psl_object_kind, psl_object_id,
+                                   psl_sign, psl_is_delete)
+          values (:psm_id, -1, current_date, :psi_id, :destin_kind, :destin_id, 1, 0);
+        end
+
+        if (f_get_db_id() in (39801, 41701)) then
+          update paysys_main set
+            psm_from_ol_id = (select ol_id from hp_paysys_make_operbook_kg(:psm_id))
+          where psm_id = :psm_id;
+
+        suspend;
+      end
+    end
+  end
+  else
+  begin
+    if (kol = 0) then
+      res_text = &#x27;карта/бсо нигде не числится.&#x27;;
+    if (kol &gt; 1) then
+      res_text = &#x27;карта/бсо числится в нескольких местах, обратитесь к тех.поддержке.&#x27;;
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_PERSVALUE_RESTORE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_PERSVALUE_RESTORE: 7 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_PERSVALUE_RESTORE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">7</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_persinfo_do_restore.html"><div class="to">HP_PERSINFO_DO_RESTORE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">7 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PIF_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc">Таблица где меняется данные</div></div><div class="prow"><div class="pname">PIF_INDEXED</div><div class="ptype">SMALLINT</div><div class="pdesc">Поле где меняется информация</div></div><div class="prow"><div class="pname">TABLE_KEY_ID</div><div class="ptype">BIGINT</div><div class="pdesc">Значение ключевого поля</div></div><div class="prow"><div class="pname">FIELD_NEW_VALUE</div><div class="ptype">VARCHAR(255)</div><div class="pdesc">Новое значение</div></div><div class="prow"><div class="pname">VALUE_SIGNED</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MODIFY_DATETIME</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">COMMON_USR_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_PERSVALUE_RESTORE(
+    PIF_UUID D_UUID NOT NULL,
+    PIF_INDEXED D_BOOL NOT NULL,
+    TABLE_KEY_ID D_ID NOT NULL,
+    FIELD_NEW_VALUE D_STR_255,
+    VALUE_SIGNED D_BOOL,
+    MODIFY_DATETIME D_DATETIME,
+    COMMON_USR_ID D_ID)
+AS
+declare variable pda_id d_id;
+declare variable pva_id d_id;
+declare variable curr_value d_str_255;
+declare variable pda_value_id d_id;
+declare variable pva_is_null d_bool;
+declare variable pva_is_delete d_bool;
+declare variable pin_id d_id;
+begin
+  if (f_get_db_id() &lt;&gt; 81001) then
+    exit;
+
+  select pin_id
+  from persinfo
+  where pin_object_kind = 0 and
+        pin_object_id = :table_key_id
+  into pin_id;
+
+  if (row_count = 0) then
+  begin
+    insert into persinfo (pin_object_kind, pin_object_id)
+    values (0, :table_key_id)
+    returning pin_id
+    into pin_id;
+  end
+
+  select pda_id, pda_value_id
+  from persdata
+  where pda_from_pif_uuid = :pif_uuid and
+        pda_from_pin_id = :pin_id
+  into :pda_id, pda_value_id;
+
+  if (pda_id is null) then
+  begin
+    insert into persdata (pda_from_pif_uuid, pda_from_pin_id)
+    values (:pif_uuid, :pin_id)
+    returning pda_id
+    into :pda_id;
+  end
+
+  if (modify_datetime is null) then
+    modify_datetime = cast(&#x27;NOW&#x27; as timestamp);
+
+  if (pda_value_id is not null) then
+  begin
+    pva_is_delete = 0;
+
+    select pva_is_null, pva_is_delete
+    from persvalue v
+    where pva_id = :pda_value_id
+    into pva_is_null, pva_is_delete;
+
+    if (pva_is_delete = 0 and pva_is_null = 1 and field_new_value is null) then
+      exit;
+
+    if (pif_indexed = 0) then
+    begin
+      select pvs_value
+      from persvalstr
+      where pvs_pva_id = :pda_value_id
+      into curr_value;
+    end else
+    begin
+      select pvx_value
+      from persvalidx
+      where pvx_pva_id = :pda_value_id
+      into curr_value;
+    end
+
+    if (pva_is_delete = 0 and curr_value is not distinct from field_new_value) then
+      exit;
+  end
+
+  insert into persvalue (pva_from_pda_id, pva_is_null, pva_datetime, pva_usr_id)
+  values (:pda_id, iif(:field_new_value is null, 1, 0), :modify_datetime, :common_usr_id)
+  returning pva_id
+  into :pva_id;
+
+  if (field_new_value is not null) then
+  begin
+    if (pif_indexed = 0) then
+    begin
+      insert into persvalstr (pvs_pva_id, pvs_value)
+      values (:pva_id, :field_new_value);
+    end else
+    begin
+      insert into persvalidx (pvx_pva_id, pvx_value)
+      values (:pva_id, :field_new_value);
+    end
+
+    if (value_signed = 1) then
+    begin
+      update or insert into persedoc (ped_pva_id)
+      values (:pva_id)
+      matching (ped_pva_id);
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

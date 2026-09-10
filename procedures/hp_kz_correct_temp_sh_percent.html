@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_KZ_CORRECT_TEMP_SH_PERCENT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_KZ_CORRECT_TEMP_SH_PERCENT: 2 входных, 7 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_KZ_CORRECT_TEMP_SH_PERCENT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">7</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fhp_agein360.html"><div class="to">FHP_AGEIN360</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_reschedule_kz_dynamic.html"><div class="to">HP_DO_RESCHEDULE_KZ_DYNAMIC</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MONTHLY_PAYMENT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">7 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CORRECTION_APPLIED</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEED_MORE_MONTH</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REST_OS</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REST_PERC</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MAX_PAYMENT_TOTAL</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FIRST_PAYMENT_TOTAL</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SECOND_PAYMENT_TOTAL</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_KZ_CORRECT_TEMP_SH_PERCENT(
+    REP_DATE D_DATE,
+    MONTHLY_PAYMENT CURR_TYPE)
+RETURNS (
+    CORRECTION_APPLIED D_BOOL,
+    NEED_MORE_MONTH D_BOOL,
+    REST_OS CURR_TYPE,
+    REST_PERC CURR_TYPE,
+    MAX_PAYMENT_TOTAL CURR_TYPE,
+    FIRST_PAYMENT_TOTAL CURR_TYPE,
+    SECOND_PAYMENT_TOTAL CURR_TYPE)
+AS
+declare variable rate_per_day d_percent;
+declare variable round_perc d_integer;
+declare variable is_360 d_integer;
+
+declare variable first_rec_id d_integer;
+declare variable first_sh_id d_integer;
+declare variable first_date d_date;
+declare variable first_os curr_type;
+declare variable first_perc curr_type;
+
+declare variable second_rec_id d_integer;
+declare variable second_os curr_type;
+declare variable second_perc curr_type;
+
+declare variable payment_limit curr_type;
+declare variable move_amount curr_type;
+declare variable dec_first_perc curr_type;
+declare variable dec_first_os curr_type;
+declare variable new_first_os curr_type;
+declare variable new_first_perc curr_type;
+
+declare variable total_os_orig curr_type;
+declare variable total_os_check curr_type;
+
+declare variable cur_rec_id d_integer;
+declare variable cur_sh_id d_integer;
+declare variable cur_date d_date;
+declare variable cur_date_orig d_date;
+declare variable cur_old_os curr_type;
+declare variable cur_old_perc curr_type;
+declare variable cur_old_total curr_type;
+
+declare variable prev_date d_date;
+declare variable days_qty d_integer;
+declare variable balans_os curr_type;
+declare variable s_percent curr_type;
+declare variable calc_perc curr_type;
+
+declare variable target_payment curr_type;
+declare variable pay_perc curr_type;
+declare variable pay_os curr_type;
+declare variable allow_os d_bool;
+begin
+  correction_applied = 0;
+  need_more_month = 0;
+  rest_os = 0;
+  rest_perc = 0;
+  max_payment_total = 0;
+  first_payment_total = 0;
+  second_payment_total = 0;
+
+  if (rep_date is null) then
+    exception e_message &#x27;Дата реструктуризации не указана&#x27;;
+
+  if (coalesce(monthly_payment, 0) &lt;= 0) then
+    exception e_message &#x27;Не задан ежемесячный платеж&#x27;;
+
+  /*
+    Параметры берем из temp_params после hp_do_reschedule(..., &#x27;auto&#x27;, ...).
+    То есть эту процедуру нужно вызывать только после построения temp_sh.
+  */
+  select kd_percent_per_day,
+         pr_round_perc,
+         pr_is_360
+  from temp_params
+  into :rate_per_day, :round_perc, :is_360;
+
+  rate_per_day = coalesce(rate_per_day, 0);
+  round_perc = coalesce(round_perc, 0);
+  is_360 = coalesce(is_360, 0);
+
+  -- Первый будущий ненулевой платеж.
+  first_rec_id = null;
+  first_sh_id = null;
+  first_date = null;
+  first_os = 0;
+  first_perc = 0;
+  first_payment_total = 0;
+
+  select
+      sh_rec_id,
+      sh_id,
+      sh_date,
+      coalesce(sh_new_os, 0),
+      coalesce(sh_new_perc, 0),
+      coalesce(sh_new_os, 0) + coalesce(sh_new_perc, 0)
+  from temp_sh
+  where sh_date &gt;= :rep_date
+    and sh_repay_mode &lt;&gt; 1
+    and (coalesce(sh_new_os, 0) &lt;&gt; 0 or coalesce(sh_new_perc, 0) &lt;&gt; 0)
+  order by sh_date, sh_id, sh_rec_id
+  rows 1
+  into :first_rec_id,
+       :first_sh_id,
+       :first_date,
+       :first_os,
+       :first_perc,
+       :first_payment_total;
+
+
+  -- Второй будущий ненулевой платеж.
+  second_rec_id = null;
+  second_os = 0;
+  second_perc = 0;
+  second_payment_total = 0;
+
+  select
+      sh_rec_id,
+      coalesce(sh_new_os, 0),
+      coalesce(sh_new_perc, 0),
+      coalesce(sh_new_os, 0) + coalesce(sh_new_perc, 0)
+  from temp_sh
+  where sh_date &gt;= :rep_date
+    and sh_repay_mode &lt;&gt; 1
+    and (coalesce(sh_new_os, 0) &lt;&gt; 0 or coalesce(sh_new_perc, 0) &lt;&gt; 0)
+  order by sh_date, sh_id, sh_rec_id
+  rows 2 to 2
+  into :second_rec_id,
+       :second_os,
+       :second_perc,
+       :second_payment_total;
+
+
+  -- Если корректировка не нужна — ничего не трогаем
+  if (first_rec_id is null or
+      second_rec_id is null or
+      coalesce(second_payment_total, 0) &lt;= 0 or
+      coalesce(first_payment_total, 0) &lt;= coalesce(second_payment_total, 0)) then
+  begin
+    correction_applied = 0;
+    need_more_month = 0;
+
+    suspend;
+    exit;
+  end
+
+  correction_applied = 1;
+
+  /*
+    Лимит после корректировки — второй платеж
+    Первый платеж уменьшаем до него
+  */
+  payment_limit = second_payment_total;
+
+  if (payment_limit &lt;= 0) then
+    payment_limit = monthly_payment;
+
+  /*
+    Фиксируем общий ОС до любых изменений
+    После корректировки сумма sh_new_os должна остаться такой же
+  */
+  select sum(coalesce(sh_new_os, 0))
+  from temp_sh
+  where sh_date &gt;= :rep_date
+    and sh_repay_mode &lt;&gt; 1
+  into :total_os_orig;
+
+  total_os_orig = coalesce(total_os_orig, 0);
+
+  /*
+    Уменьшаем первый платеж до лимита payment_limit
+
+    Лишнюю сумму сначала снимаем с процентной части первого платежа,
+    потому что именно процентную перегрузку первого платежа нужно перенести дальше
+
+    Снятый процент не списывается:
+      dec_first_perc ниже попадает в s_percent
+      и будет оплачен в следующих платежах с приоритетом перед ОС
+
+    Если процентной части первого платежа не хватило,
+    уменьшаем ОС первого платежа. Эта часть ОС не теряется,
+    она остается в balans_os и будет разложена дальше как тело долга
+  */
+  move_amount = first_payment_total - payment_limit;
+
+  dec_first_perc = minvalue(:move_amount, :first_perc);
+  dec_first_os = :move_amount - :dec_first_perc;
+
+  if (dec_first_os &gt; first_os) then
+    dec_first_os = first_os;
+
+  new_first_perc = first_perc - dec_first_perc;
+  new_first_os = first_os - dec_first_os;
+
+  if (new_first_perc &lt; 0) then
+    new_first_perc = 0;
+
+  if (new_first_os &lt; 0) then
+    new_first_os = 0;
+
+  update temp_sh
+  set sh_new_os = :new_first_os,
+      sh_new_perc = :new_first_perc,
+      sh_new_fine = 0,
+      sh_annu = :new_first_os + :new_first_perc,
+      sh_is_grace_os = 0,
+      sh_is_grace_perc = 0,
+      sh_is_grace_os_orig = 0,
+      sh_is_grace_perc_orig = 0
+  where sh_rec_id = :first_rec_id;
+
+  /*
+    Ключевой момент:
+    срезанный процент первого платежа не исчезает
+    Он становится накопленным процентом и должен быть оплачен дальше
+  */
+  s_percent = coalesce(dec_first_perc, 0);
+
+  /*
+    ОС после первого платежа
+    Если мы уменьшили ОС первого платежа, этот ОС просто остается в балансе
+  */
+  balans_os = total_os_orig - new_first_os;
+
+  if (balans_os &lt; 1 and balans_os &gt; -1) then
+    balans_os = 0;
+
+  prev_date = first_date;
+
+  /*
+    Дальше идем по строкам после первого платежа
+    Проценты пересчитываем от текущего остатка ОС
+    Платежи держим в пределах payment_limit
+  */
+  for
+    select
+        sh_rec_id,
+        sh_id,
+        sh_date,
+        sh_date_orig,
+        coalesce(sh_new_os, 0),
+        coalesce(sh_new_perc, 0),
+        coalesce(sh_new_os, 0) + coalesce(sh_new_perc, 0)
+    from temp_sh
+    where sh_date &gt;= :rep_date
+      and sh_repay_mode &lt;&gt; 1
+      and (
+            sh_date &gt; :first_date
+         or (sh_date = :first_date and sh_id &gt; :first_sh_id)
+         or (sh_date = :first_date and sh_id = :first_sh_id and sh_rec_id &gt; :first_rec_id)
+      )
+      and (
+            coalesce(sh_new_os, 0) &lt;&gt; 0
+         or coalesce(sh_new_perc, 0) &lt;&gt; 0
+         or sh_date_orig is null
+      )
+    order by sh_date, sh_id, sh_rec_id
+    into :cur_rec_id,
+         :cur_sh_id,
+         :cur_date,
+         :cur_date_orig,
+         :cur_old_os,
+         :cur_old_perc,
+         :cur_old_total
+  do
+  begin
+    pay_os = 0;
+    pay_perc = 0;
+    target_payment = 0;
+    allow_os = 1;
+
+
+    -- Если всё уже закрыто — остальные добавленные строки оставляем пустыми.
+    if (balans_os &lt;= 0 and s_percent &lt;= 0) then
+    begin
+      update temp_sh
+      set sh_new_os = 0,
+          sh_new_perc = 0,
+          sh_new_fine = 0,
+          sh_annu = 0,
+          sh_is_grace_os = 0,
+          sh_is_grace_perc = 0,
+          sh_is_grace_os_orig = 0,
+          sh_is_grace_perc_orig = 0
+      where sh_rec_id = :cur_rec_id;
+
+      prev_date = cur_date;
+    end
+    else
+    begin
+      -- Начисляем процент за период от предыдущей строки до текущей.
+      if (cur_date &gt; prev_date) then
+      begin
+        select res_days
+        from fhp_agein360(:prev_date, :cur_date, :is_360)
+        into :days_qty;
+
+        if (days_qty &lt; 0) then
+          days_qty = 0;
+
+        calc_perc = round((balans_os * rate_per_day / 100.0000) * cast(days_qty as double precision), 2);
+
+        s_percent = coalesce(s_percent, 0) + coalesce(calc_perc, 0);
+        s_percent = round(s_percent, :round_perc);
+      end
+
+      /*
+        Если это старая нулевая календарная строка — платежа нет,
+        но накопленный процент переносится дальше.
+      */
+      if (cur_old_total = 0 and cur_date_orig is not null) then
+      begin
+        update temp_sh
+        set sh_new_os = 0,
+            sh_new_perc = 0,
+            sh_new_fine = 0,
+            sh_annu = 0
+        where sh_rec_id = :cur_rec_id;
+
+        prev_date = cur_date;
+      end
+      else
+      begin
+        /*
+          Для реальных платежных строк и добавленных новых строк
+          используем лимит payment_limit.
+        */
+        target_payment = payment_limit;
+
+        /*
+          Если строка изначально была чисто процентной,
+          не кладем туда ОС. Это сохраняет смысл льготного/процентного периода.
+        */
+        if (cur_old_os = 0 and cur_old_perc &gt; 0) then
+          allow_os = 0;
+
+        /*
+          Сначала закрываем накопленный процент.
+        */
+        if (s_percent &gt; 0) then
+        begin
+          pay_perc = minvalue(:s_percent, :target_payment);
+          s_percent = s_percent - pay_perc;
+        end
+
+        /*
+          Потом ОС, если в строке можно гасить ОС.
+        */
+        if (allow_os = 1 and target_payment &gt; pay_perc and balans_os &gt; 0) then
+          pay_os = minvalue(:balans_os, :target_payment - :pay_perc);
+        else
+          pay_os = 0;
+
+        update temp_sh
+        set sh_new_os = :pay_os,
+            sh_new_perc = :pay_perc,
+            sh_new_fine = 0,
+            sh_annu = :pay_os + :pay_perc,
+            sh_is_grace_os = 0,
+            sh_is_grace_perc = 0,
+            sh_is_grace_os_orig = 0,
+            sh_is_grace_perc_orig = 0
+        where sh_rec_id = :cur_rec_id;
+
+        balans_os = balans_os - pay_os;
+
+        if (balans_os &lt; 1 and balans_os &gt; -1) then
+          balans_os = 0;
+
+        if (s_percent &lt; 1 and s_percent &gt; -1) then
+          s_percent = 0;
+
+        prev_date = cur_date;
+      end
+    end
+  end
+
+  rest_os = coalesce(balans_os, 0);
+  rest_perc = coalesce(s_percent, 0);
+
+  if (rest_os &gt; 1 or rest_perc &gt; 1) then
+    need_more_month = 1;
+  else
+    need_more_month = 0;
+
+  select
+      coalesce(sum(coalesce(sh_new_os, 0)), 0),
+      coalesce(max(coalesce(sh_new_os, 0) + coalesce(sh_new_perc, 0)), 0)
+  from temp_sh
+  where sh_date &gt;= :rep_date
+    and sh_repay_mode &lt;&gt; 1
+  into :total_os_check, :max_payment_total;
+
+  /*
+    Проверка баланса ОС:
+    разложенный ОС + остаток ОС должен равняться исходному ОС.
+  */
+  if (abs((coalesce(total_os_check, 0) + coalesce(rest_os, 0)) - coalesce(total_os_orig, 0)) &gt; 1) then
+    exception e_message
+        &#x27;Ошибка корректировки графика. ОС до=&#x27; || cast(:total_os_orig as varchar(30)) ||
+        &#x27;, ОС после=&#x27; || cast(:total_os_check as varchar(30)) ||
+        &#x27;, остаток ОС=&#x27; || cast(:rest_os as varchar(30));
+
+  if (max_payment_total &gt; payment_limit) then
+    need_more_month = 1;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

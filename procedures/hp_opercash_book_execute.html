@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_OPERCASH_BOOK_EXECUTE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_OPERCASH_BOOK_EXECUTE: 2 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_OPERCASH_BOOK_EXECUTE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_opercash_book_process.html"><div class="to">HP_OPERCASH_BOOK_PROCESS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OPC_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_IS_ERROR</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_OPERCASH_BOOK_EXECUTE(
+    OPC_ID D_INTEGER,
+    UN_ID D_ID)
+RETURNS (
+    RES_IS_ERROR D_BOOL,
+    RES_TEXT D_STR_255)
+AS
+declare variable OPC_FROM_OL_ID D_ID;
+declare variable OPC_DATE D_DATE;
+declare variable OPC_AMOUNT D_CURRENCY;
+declare variable OPC_DOC_NO D_INTEGER;
+declare variable OPC_IS_SIGNED D_BOOL;
+declare variable OPC_STATUS D_SMALLINT;
+declare variable OL_IS_DELETE D_BOOL;
+declare variable OPC_OFFICE_ID D_INTEGER;
+declare variable ASYNC_OPERCASH D_INTEGER;
+declare variable OPC_OPER_KIND D_INTEGER;
+begin
+  res_is_error = 1;
+  res_text = &#x27;&#x27;;
+
+  for select opc_date, opc_oper_kind, opc_office_id, opc_doc_no, opc_from_ol_id, opc_amount, opc_is_signed, opc_status, ol.is_delete
+  from opercash
+       inner join cashplace on opc_from_csp_id = csp_id
+       left join operlist OL on opc_from_ol_id = ol_id
+  where opc_id = :opc_id and            
+        opc_parent_id is null
+  union
+  select opc_date, opc_oper_kind, opc_office_id, opc_doc_no, opc_from_ol_id, opc_amount, opc_is_signed, opc_status, OL.is_delete
+  from opercash
+       inner join cashplace on opc_from_csp_id = csp_id
+       left join operlist OL on opc_from_ol_id = ol_id
+  where opc_parent_id = :opc_id
+  order by 1
+  into opc_date, opc_oper_kind, opc_office_id, opc_doc_no, opc_from_ol_id, opc_amount, opc_is_signed, opc_status, ol_is_delete
+  do
+  begin
+    if (ol_is_delete is null) then
+      ol_is_delete = 0;
+
+    if (ol_is_delete = 1) then
+      opc_from_ol_id = null;
+
+    if (opc_is_signed = 0 and res_text = &#x27;&#x27;) then
+      res_text = &#x27;Документ не подтвержден менеджером, № &#x27; || opc_doc_no || &#x27;, сумма: &#x27; || f_numtostr(opc_amount, 0);
+
+    if (opc_status &lt;&gt; 1 and res_text = &#x27;&#x27;) then
+      res_text = &#x27;Документ еще не подписан, № &#x27; || opc_doc_no || &#x27;, сумма: &#x27; || f_numtostr(opc_amount, 0);
+
+    if (opc_from_ol_id is not null and res_text = &#x27;&#x27;) then
+      res_text = &#x27;Операция уже проведена, № &#x27; || opc_doc_no || &#x27;, сумма: &#x27; || f_numtostr(opc_amount, 0);
+
+    if (res_text &lt;&gt; &#x27;&#x27;) then
+      break;
+  end
+
+  if (opc_date is null and res_text = &#x27;&#x27;) then
+    res_text = &#x27;Операция не найдена либо она связана с другой операцией&#x27;;
+
+  if (res_text = &#x27;&#x27;) then
+  begin
+    res_is_error = 0;
+
+    async_opercash = f_async_opercash();
+    -- async_opercash:
+    -- 0 - асинхронная обработка операций отключена
+    -- 1 - асинхронная обработка операций включена для конкретного офиса
+    -- 2 - асинхронная обработка операций включена для всей компании
+
+    if (async_opercash = 3 and not(opc_oper_kind in (1))) then -- не погашение, тут можно расширять IN
+      async_opercash = 0;
+
+    if (async_opercash = 1 and opc_office_id &lt;&gt; 1070100) then -- не 0701 Тогтогул
+      async_opercash = 0;
+
+    if (async_opercash &lt;&gt; 0) then
+    begin
+      -- Если ранее была ошибка (кроме блокировок), проводим вручную без очереди
+      if (exists(select * from cashprocess
+                 where cpr_from_opc_id = :opc_id and
+                       coalesce(cpr_error_text, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;)) then
+      async_opercash = 0;
+    end
+  
+    if (async_opercash &lt;&gt; 0) then
+    begin
+      -- Добавление в очередь для асинхронного выполнения
+      delete from cashprocess
+      where cpr_from_opc_id = :opc_id;
+  
+      insert into cashprocess (cpr_from_opc_id, cpr_date, cpr_from_un_id, cpr_error_text)
+      values (:opc_id, :opc_date, :un_id, &#x27;&#x27;);
+  
+      res_is_error = 0;
+      res_text = &#x27;Проведение операции добавлено в очередь&#x27;;
+    end else
+    begin
+      -- Проведение документа напрямую (синхронно)
+  
+      select res_is_error, res_text
+      from hp_opercash_book_process(:opc_id, :un_id)
+      into :res_is_error, :res_text;
+  
+      delete from cashprocess
+      where cpr_from_opc_id = :opc_id;
+  
+      res_text = &#x27;Операция успешно проведена&#x27;;
+    end
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

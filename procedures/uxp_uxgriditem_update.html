@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$UXGRIDITEM_UPDATE — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$UXGRIDITEM_UPDATE: 6 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$UXGRIDITEM_UPDATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">GRID_UUID_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ITEM_POSITION</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ITEM_FIELDNAME</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ITEM_CAPTION</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ITEM_HINT</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ITEM_SUMMARY</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$UXGRIDITEM_UPDATE(
+    GRID_UUID_CODE D_STR_CODE,
+    ITEM_POSITION D_INTEGER,
+    ITEM_FIELDNAME D_STR_CODE,
+    ITEM_CAPTION D_STR_100,
+    ITEM_HINT D_STR_LONG,
+    ITEM_SUMMARY D_SMALLINT)
+AS
+declare variable grid_uuid d_uuid;
+declare variable uf_uuid d_uuid;
+begin
+  if (coalesce(item_fieldname, &#x27;&#x27;) = &#x27;&#x27;) then
+    exit;
+
+  grid_uuid = char_to_uuid(grid_uuid_code);
+
+  if (not exists(select * from ux$grid
+                 where ugr_uuid = :grid_uuid)) then
+  begin
+    select ugr_uuid
+    from ux$grid
+    where ugr_ufr_uuid = :grid_uuid
+    order by ugr_datetime desc
+    rows 1
+    into grid_uuid;
+
+    if (row_count = 0) then
+    begin
+      select ugr_uuid
+      from ux$frame, ux$grid
+      where ufr_owner = :grid_uuid and
+            ugr_ufr_uuid = ufr_uuid
+      order by ugr_datetime desc
+      rows 1
+      into grid_uuid;
+
+      if (row_count = 0) then
+        exception e_message &#x27;Grid not found: &#x27; || grid_uuid_code;
+    end
+  end
+
+  if (coalesce(item_summary, 0) = 0) then
+    item_summary = null;
+
+  if (item_fieldname = &#x27;delete others&#x27;) then
+  begin
+    delete from ux$gritem
+    where ugi_ugr_uuid = :grid_uuid and
+          ugi_position &gt;= :item_position
+    order by ugi_position desc;
+
+    exit;
+  end
+
+  select uf_uuid
+  from ux$grid, ux$frame, ux$field
+  where ugr_uuid = :grid_uuid and
+        ufr_uuid = ugr_ufr_uuid and
+        uf_owner = ufr_us_uuid and
+        uf_field_name = trim(:item_fieldname)
+  into uf_uuid;
+
+  if (uf_uuid is null) then
+    exception e_message &#x27;Field not found: &#x27; || item_fieldname;
+
+  update ux$gritem
+  set ugi_position = :item_position,
+      ugi_caption = :item_caption,
+      ugi_hint = :item_hint,
+      ugi_summary_kind = coalesce(:item_summary, ugi_summary_kind)
+  where ugi_ugr_uuid = :grid_uuid and
+        ugi_uf_uuid = :uf_uuid;
+
+  if (row_count = 0) then
+  begin
+    insert into ux$gritem (ugi_ugr_uuid, ugi_uf_uuid, ugi_position, ugi_caption, ugi_hint, ugi_summary_kind)
+    values (:grid_uuid, :uf_uuid, :item_position, :item_caption, :item_hint, :item_summary);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_PRINT_AFM_CHECK_NAME — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_PRINT_AFM_CHECK_NAME: 2 входных, 6 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_PRINT_AFM_CHECK_NAME</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_blobex_blob.html"><div class="to">HP_GET_BLOBEX_BLOB</div></a><a class="ref-card" href="hp_print_afm_result.html"><div class="to">HP_PRINT_AFM_RESULT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ADD_PARAMS</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REQUEST_ID</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RESPONSE_DATETIME</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SEARCH_DATETIME</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_NAME_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">QR_CODE</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_PRINT_AFM_CHECK_NAME(
+    K_ID D_ID,
+    ADD_PARAMS D_STR_LONG = null)
+RETURNS (
+    REQUEST_ID D_STR_CODE,
+    RESPONSE_DATETIME D_DATETIME,
+    SEARCH_DATETIME D_DATETIME,
+    C_NAME_FIO D_STR_100,
+    RES_TEXT D_BLOB_TEXT,
+    QR_CODE D_STR_LONG)
+AS
+declare variable C_ID D_ID;
+declare variable MA_ID D_ID;
+declare variable BLOB_ID D_ID;
+declare variable JSON_INFO D_BLOB_TEXT;
+begin
+    select ac.ac_from_c_id, ac.ac_from_ma_id
+    from afm_check ac
+    join kontract k on ac.ac_from_ma_id = k.k_from_ma_app_id
+    where k.k_id = :k_id
+          and ac.ac_is_actual = 1
+    into :c_id, :ma_id;
+
+    select res_text
+    from hp_print_afm_result(:c_id, :ma_id)
+    into :res_text;
+
+    select c_name_fio
+    from clients
+    where c_id = :c_id
+    into :c_name_fio;
+
+    select eil.eil_from_bls_id, eil.eil_create_datetime, eil.eil_status_datetime
+    from extinfolist eil
+    join extinfocfg eic on eil.eil_from_eic_id = eic.eic_id
+                           and eic.eic_code = &#x27;afm_name_check&#x27;
+    where eil.eil_object_id = :ma_id
+          and eil.eil_object_kind = f_objkind(&#x27;miniapp&#x27;, &#x27;id&#x27;)
+          and eil.eil_status = 2
+          and eil.eil_from_bls_id is not null
+          and coalesce(eil.eil_from_bls_id, 0) &gt; 0
+    into :blob_id, :search_datetime, :response_datetime;
+
+    in autonomous transaction do
+        select blx_blob
+        from hp_get_blobex_blob(:blob_id)
+        into :json_info;
+
+    :request_id = f_json_blob_get_value(:json_info, &#x27;data.id&#x27;, &#x27;&#x27;);
+    :qr_code = &#x27;https://aml-system.kz/check-request/&#x27; || :request_id;
+    suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

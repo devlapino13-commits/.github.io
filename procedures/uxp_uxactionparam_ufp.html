@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$UXACTIONPARAM_UFP — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$UXACTIONPARAM_UFP: 2 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$UXACTIONPARAM_UFP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UA_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UA_UUID_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ID</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SOURCE_FIELD</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$UXACTIONPARAM_UFP(
+    UA_UUID D_UUID,
+    UA_UUID_CODE D_STR_CODE = null)
+RETURNS (
+    ID D_STR_CODE,
+    TEXT D_STR_255,
+    SOURCE_FIELD D_STR_100)
+AS
+declare variable fr_uuid d_uuid;
+declare variable ua_owner d_uuid;
+declare variable uf_is_param d_integer;
+declare variable ufd_source d_str_code;
+declare variable uf_name d_str_100;
+declare variable ufr_is_mainframe d_bool;
+declare variable ux_kind d_str_code;
+begin
+  if (coalesce(ua_uuid, &#x27;&#x27;) = &#x27;&#x27;) then
+    ua_uuid = uxf$uniq(ua_uuid_code);
+
+  id = null;
+  text = &#x27;&#x27;;
+  suspend;
+
+  if (coalesce(ua_uuid, &#x27;&#x27;) = &#x27;&#x27;) then
+    exit;
+
+  select ua_owner
+  from ux$action
+  where ua_uuid = :ua_uuid
+  into ua_owner;
+
+  if (ua_owner is null) then
+    ua_owner = ua_uuid;
+
+  ux_kind = uxf$code(ua_owner, &#x27;kind&#x27;);
+
+  if (ux_kind = &#x27;uxframe&#x27;) then
+  begin
+    select ufr_owner
+    from ux$frame
+    where ufr_uuid = :ua_owner
+    into ua_owner;
+  end
+
+  for select ufr_uuid, us_code, ufr_is_mainframe
+  from ux$frame, ux$source
+  where ufr_owner = :ua_owner and
+        ufr_us_uuid = us_uuid
+  into fr_uuid, ufd_source, ufr_is_mainframe
+  do
+  begin
+    for select uuid_to_char(ufp_uuid), uf_name, uf_field_name, uf_is_param, us_code || &#x27;$&#x27; || uf_field_name
+    from ux$frparam, ux$field, ux$source
+    where ufp_ufr_uuid = :fr_uuid and
+          ufp_uf_uuid = uf_uuid and
+          uf_owner = us_uuid and
+          ufp_parent is null
+    order by uf_is_param desc, uf_position
+    into id, uf_name, text, uf_is_param, source_field
+    do
+    begin
+      if (uf_is_param = 1) then
+        text = text || &#x27;  /P&#x27;;
+      else
+        text = text || &#x27;  /F&#x27;;
+
+      if (text not containing uf_name) then
+        text = text || &#x27;   - &#x27; || uf_name;
+
+      if (ufr_is_mainframe = 0) then
+        text = text || &#x27;   (&#x27; || ufd_source || &#x27;)&#x27;;
+
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

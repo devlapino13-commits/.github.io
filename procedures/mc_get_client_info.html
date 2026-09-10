@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MC_GET_CLIENT_INFO — процедура — схема БД</title>
+<meta name="description" content="Процедура MC_GET_CLIENT_INFO: 1 входных, 6 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>MC_GET_CLIENT_INFO</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fio_separation.html"><div class="to">FIO_SEPARATION</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MCL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MCL_LOGIN</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REG_NAME</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_NAME_FIO_OFFICER</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CELL_MAIN_OFFICER</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MCL_BIRTH_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MCL_CLIENT_NAME</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE MC_GET_CLIENT_INFO(
+    MCL_ID D_ID)
+RETURNS (
+    MCL_LOGIN D_STR_CODE,
+    REG_NAME D_STR_CODE,
+    C_NAME_FIO_OFFICER D_STR_100,
+    CELL_MAIN_OFFICER D_STR_20,
+    MCL_BIRTH_DATE D_DATE,
+    MCL_CLIENT_NAME D_STR_255)
+AS
+declare variable temp_cl_name d_str_100;
+declare variable c_id d_id;
+declare variable kf_officer d_id;
+declare variable db_id d_integer;
+declare variable mcl_user_code d_integer;
+declare variable ma_id d_integer;
+declare variable reg_id d_integer;
+begin
+  db_id = f_get_db_id();
+  mcl_client_name = &#x27;не задан&#x27;; -- поле добавлено по части кмп кг
+
+  select mcl.mcl_from_c_id,
+         mcl.mcl_login,
+         mcl.mcl_birth_date,
+         mcl.mcl_user_code
+  from mc_login mcl
+  where mcl.mcl_id = :mcl_id
+  into :c_id,
+       :mcl_login,
+       :mcl_birth_date,
+       :mcl_user_code;
+
+  if (c_id is not null) then
+  begin
+    -- получаем последний контракт клиента, офис и випс-а с которым работал клиент.
+    -- не важно, получил клиент заем или нет, активный или закрытый
+    select first 1
+        maa.ma_id,
+        reg.reg_name,
+        kal.kal_new_kf_officer,
+        kal.kal_new_reg_id
+    from miniapp  maa
+    inner join miniappclient macl on macl.mac_from_ma_id = maa.ma_id
+        and macl.mac_from_c_id = :c_id
+        and macl.mac_amount &gt; 0
+    inner join knaktlist kal on kal.kal_from_kf_id = maa.ma_from_kf_id
+        and kal.is_delete = 0
+        and current_date between kal.kal_date and kal.kal_date_end
+    inner join region reg on reg.reg_unicode = kal.kal_new_reg_id
+    where maa.ma_date_end = &#x27;31.12.9999&#x27;
+    order by ma_id desc
+    into
+        :ma_id,
+        :reg_name,
+        :kf_officer,
+        :reg_id;
+
+    if (ma_id is not null) then
+    begin
+        -- RFCKG-4609
+
+        if (not exists(select 1
+                   from hr_pstatus hps
+                   where current_date between hps.ps_date_begin and hps.ps_date_end and
+                         hps.ps_is_working = 1 and
+                         hps.ps_from_c_id = :kf_officer)) then
+        begin
+            -- Если ВИПС, за которым закреплен клиент, уже не работает, выводим ФИО менеджера офиса
+            select first 1 hps.ps_from_c_id
+            from hr_pstatus hps
+            inner join joblist jl on jl.jl_id = ps_from_jl_id
+            inner join jobkind jk on jk.jk_id = jl.jl_kind
+            where current_date between ps_date_begin and ps_date_end and
+                  hps.ps_is_working = 1 and
+                  hps.ps_from_reg_id = :reg_id and
+                  jk.jk_system_code = &#x27;JobSystem.Region_KM&#x27; -- Менеджер офиса
+            into :kf_officer;
+            
+        end
+
+        select
+            cl.c_name_fio,
+            f_cont_info(&#x27;clients&#x27;, cl.c_id, &#x27;cell_main&#x27;, &#x27;ok&#x27;)
+        from clients cl
+        where cl.c_id = :kf_officer
+        into
+            :c_name_fio_officer,
+            :cell_main_officer;
+    end
+
+    if (db_id in (39801, 41701)) then
+    begin
+      select cl.c_name_fio
+      from clients cl
+      where cl.c_id = :c_id
+      into :temp_cl_name;
+
+      select iif(fname = &#x27;уулу&#x27; or fname = &#x27;кызы&#x27;,patronymic,fname)
+      from fio_separation(:temp_cl_name)
+      into :mcl_client_name;
+
+      if (mcl_user_code = 1) then mcl_client_name = &#x27;Агент&#x27;;
+    end
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

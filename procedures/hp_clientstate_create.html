@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CLIENTSTATE_CREATE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CLIENTSTATE_CREATE: 0 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CLIENTSTATE_CREATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CLIENTSTATE_CREATE
+RETURNS (
+    RES_C_ID DECIMAL(18,0))
+AS
+declare variable c_id decimal(18,0);
+declare variable kf_id decimal(18,0);
+declare variable c_id_prior decimal(18,0);
+declare variable ks_date_end date;
+declare variable res_date date;
+declare variable res_region_id integer;
+declare variable res_lo_id decimal(18,0);
+declare variable res_kf_name varchar(100);
+declare variable res_staff_state integer;
+declare variable res_client_state integer;
+declare variable dd date;
+declare variable kf_id_prior decimal(18,0);
+declare variable cl_circle integer;
+begin
+-- Процедура возвращает актуальный статус клиента.
+
+-- Нижеуказанный код должен быть выполнен отдельным скриптом, далее пересчет индексов
+
+--  delete from clientstate;
+--
+--  insert into clientstate (cs_from_c_id, cs_client_state, cs_staff_state)
+--  select c_id, -1, -1
+--  from clients;
+
+--  update clientstate
+--  set cs_client_state=-1,
+--      cs_staff_state=-1;
+
+-- Статус сотрудника
+  res_staff_state = null;
+  for select ps_from_c_id, ps_is_working
+      from hr_pstatus
+      where ps_date_end = &#x27;31.12.9999&#x27; and
+            ps_status = 1
+      into res_c_id, :res_staff_state
+  do
+  begin
+    update clientstate
+    set cs_staff_state = :res_staff_state
+    where (cs_from_c_id = :res_c_id);
+  end
+  suspend;
+
+-- Статус клиента
+  c_id_prior = 0;
+  kf_id_prior = 0;
+  cl_circle = 0;
+  for select kc_from_c_id, ks_date_end, ks_date_begin, k_from_kf_id
+      from kontstate, knclient, kontract
+      where ks_from_k_id = kc_from_k_id and
+            ks_state = 1 and
+            ks_ol_is_delete = 0 and
+            kc_amount_approved &gt; 0 and
+            ks_from_k_id = k_id
+      order by kc_from_c_id, ks_date_end desc, ks_date_begin
+      into c_id, ks_date_end, res_date, kf_id
+  do
+  begin
+    if (c_id &lt;&gt; c_id_prior) then
+    begin
+      res_c_id = c_id;
+      if (kf_id &lt;&gt; kf_id_prior) then
+      begin
+        select kal_new_reg_id, kal_new_kf_officer, kal_new_kf_name
+        from knaktlist
+        where knaktlist.is_delete = 0 and
+              kal_date_end = &#x27;31.12.9999&#x27; and
+              kal_from_kf_id = :kf_id
+        into :res_region_id, :res_lo_id, res_kf_name;
+
+        kf_id_prior = kf_id;
+      end
+      if (ks_date_end = &#x27;31.12.9999&#x27;) then
+        res_client_state = 1;
+      else
+      begin
+        res_client_state = 2;
+        res_date = ks_date_end + 1;
+      end
+
+      update clientstate
+      set cs_client_state = :res_client_state,
+          cs_date = :res_date,
+          cs_region_id = :res_region_id,
+          cs_lo_id = :res_lo_id,
+          cs_kf_name = :res_kf_name
+      where (cs_from_c_id = :res_c_id);
+
+      if (c_id_prior &lt;&gt; 0) then
+      begin
+        update clientstate
+        set cs_client_circle = :cl_circle
+        where cs_from_c_id = :c_id_prior;
+
+        cl_circle = 0;
+      end
+    end
+    c_id_prior = c_id;
+    cl_circle = cl_circle + 1;
+  end
+
+  update clientstate
+  set cs_client_circle = :cl_circle
+  where cs_from_c_id = :c_id;
+
+  suspend;
+
+-- Заявки
+  dd = current_date - 45;
+  c_id_prior = 0;
+  res_client_state = 0;
+  for select mac_from_c_id, ma_date_app, ma_from_kf_id
+      from miniapp, miniappclient, clientstate
+      where ma_id = mac_from_ma_id and
+            ma_is_active = 1 and
+            mac_amount &gt; 0 and
+            ma_date_app &gt;= :dd and
+            ma_date_end = &#x27;31.12.9999&#x27; and
+            cs_from_c_id = mac_from_c_id and
+            cs_client_state &lt;&gt; 1
+      order by 1, 2 desc
+      into c_id, res_date, kf_id
+  do
+  begin
+    if (c_id &lt;&gt; c_id_prior) then
+    begin
+      res_c_id = c_id;
+
+      select kal_new_reg_id, kal_new_kf_officer, kal_new_kf_name
+      from knaktlist
+      where knaktlist.is_delete = 0 and
+            kal_date_end = &#x27;31.12.9999&#x27; and
+            kal_from_kf_id = :kf_id
+      into :res_region_id, :res_lo_id, res_kf_name;
+
+      update clientstate
+      set cs_client_state = :res_client_state,
+          cs_date = :res_date,
+          cs_region_id = :res_region_id,
+          cs_lo_id = :res_lo_id,
+          cs_kf_name = :res_kf_name
+      where (cs_from_c_id = :res_c_id);
+
+    end
+    c_id_prior = c_id;
+  end
+  suspend;
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_REPAY_ALLOC_TMP — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_REPAY_ALLOC_TMP: 9 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_REPAY_ALLOC_TMP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">9</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_repay_alloc.html"><div class="to">HP_REPAY_ALLOC</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">9 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ALLOC_DIRECTION</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ORDER_OS</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ORDER_PERC</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ORDER_FINE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ORDER_KOMMIS</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REPAY_MODE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SPECIAL_MODE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_SALDO</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_REPAY_ALLOC_TMP(
+    ALLOC_DIRECTION VARCHAR(20),
+    REP_DATE DATE,
+    ORDER_OS INTEGER,
+    ORDER_PERC INTEGER,
+    ORDER_FINE INTEGER,
+    ORDER_KOMMIS INTEGER,
+    AMOUNT DECIMAL(18,4),
+    REPAY_MODE INTEGER,
+    SPECIAL_MODE INTEGER)
+RETURNS (
+    REP_SALDO DECIMAL(18,4))
+AS
+declare variable order_no double precision;
+declare variable repay_os decimal(18,4) = 0;
+declare variable repay_perc decimal(18,4) = 0;
+declare variable repay_fine decimal(18,4) = 0;
+declare variable zad_os decimal(18,4) = 0;
+declare variable calcing_perc decimal(18,4) = 0;
+declare variable zad_fine decimal(18,4);
+declare variable order_kind integer;
+declare variable repay_tax decimal(18,4);
+declare variable repay_kommis decimal(18,4) = 0;
+declare variable tax_tmp decimal(18,4) = 0;
+declare variable zad_kommis decimal(18,4) = 0;
+declare variable pr_pay_pros_more integer;
+declare variable tax_perc decimal(18,7); /* Ставка НсП */
+declare variable pr_round_perc integer;
+declare variable pr_percent_method integer;
+declare variable is_grace integer;
+declare variable diff_os decimal(18,4) = 0;
+declare variable zad_perc decimal(18,4) = 0;
+declare variable local_saldo decimal(18,4) = 0;
+declare variable zad_extra decimal(18,4) = 0;
+declare variable repay_extra decimal(18,4) = 0;
+declare variable zad_tax decimal(18,4) = 0;
+declare variable total_zad decimal(18,4) = 0;
+declare variable repay_koef double precision;
+declare variable s_rec_no integer;
+declare variable s_date date;
+declare variable db_id integer;
+declare variable max_kind d_integer;
+begin
+  if (coalesce(amount, 0) = 0) then
+    exit;
+  db_id = f_get_db_id();
+
+  max_kind = 999;
+  if (alloc_direction = &#x27;Proportional_ipf&#x27;) then
+  begin
+    alloc_direction = &#x27;Proportional&#x27;;
+    max_kind = 2;
+  end
+
+  if (not(alloc_direction in (&#x27;Horizontal&#x27;, &#x27;Vertical&#x27;, &#x27;Extra&#x27;, &#x27;Proportional&#x27;))) then
+    exception e_default &#x27;Illegal repay allocation method!&#x27;;
+
+-- Special_Mode=1 - Особое распределение просрочки с начала
+-- Special_Mode=0 - Обычное распределение с начала
+-- Special_Mode=-1 - Обычное распределение с конца
+  if (special_mode = -1) then
+  begin
+    special_mode = 0;
+    order_kind = -1;
+  end
+  else
+    order_kind = 1;
+
+  select pr_pay_pros_more, pr_round_perc, tax_perc, pr_percent_method
+  from temp_params
+  into :pr_pay_pros_more, :pr_round_perc, :tax_perc, :pr_percent_method;
+
+  if (repay_mode &gt; 1) then
+    pr_pay_pros_more = 0;
+
+  if (db_id = 39801) then
+    pr_pay_pros_more = 999999;
+
+-- Вычисляем остаточный баланс, чтоб распределение на ОС не было больше этой суммы
+  select sum(zad_os - pay_os)
+  from temp_vrepay
+  into :local_saldo;
+
+  rep_saldo = amount; -- Сумма для распределения
+
+  if (alloc_direction = &#x27;Extra&#x27;) then
+  begin
+    for select s_rec_no, zad_extra
+        from temp_vrepay
+        where zad_extra &lt;&gt; 0
+        order by s_id
+        into s_rec_no, :zad_extra
+-- as cursor cur
+    do
+    begin
+      repay_extra = 0;
+
+-- Распределение доп.обязательств
+      if (rep_saldo &gt; 0) then
+      begin
+        repay_extra = minvalue(rep_saldo, zad_extra);
+        rep_saldo = rep_saldo - repay_extra;
+        update temp_vrepay
+        set pay_extra = :repay_extra
+        where s_rec_no = :s_rec_no;
+      end
+    end
+  end
+
+  if (alloc_direction = &#x27;Proportional&#x27;) then
+  begin
+    update temp_vrepay
+    set pay_os = 0,
+        pay_perc = 0,
+        pay_fine = 0,
+        pay_tax = 0
+    where s_date is not null;
+
+    -- Распределение погашений пропорционально на ОС, наценку, НсП и пеня
+    for select s_rec_no, zad_os, calcing_perc, zad_fine
+        from temp_vrepay
+        where repay_mode &lt;= :max_kind
+        order by s_id
+        into s_rec_no, zad_os, calcing_perc, zad_fine
+    do
+    begin
+      if (rep_saldo &gt; 0) then
+      begin
+        zad_tax = (calcing_perc * tax_perc) / 100.00; -- вычисляем НсП от процента
+        zad_tax = round(zad_tax, pr_round_perc);
+        total_zad = zad_os + calcing_perc + zad_fine + zad_tax;
+
+        repay_os = 0;
+        repay_perc = 0;
+        repay_fine = 0;
+        repay_tax = 0;
+
+        if (total_zad &lt;= rep_saldo) then
+        begin
+          -- если общая сумма в платеже не больше чем распределяемая сумма, то берем все суммы
+          repay_os = zad_os;
+          repay_perc = calcing_perc;
+          repay_fine = zad_fine;
+          repay_tax = zad_tax;
+        end
+        else
+        begin
+          -- Иначе берем пропорциоанально
+          repay_koef = rep_saldo / total_zad;
+          repay_perc = round(calcing_perc * repay_koef, pr_round_perc);
+          if (abs(repay_perc - calcing_perc) &lt;= 1) then
+            repay_perc = calcing_perc;
+
+          repay_tax = round(zad_tax * repay_koef, pr_round_perc);
+          if (abs(repay_tax - zad_tax) &lt;= 1) then
+            repay_tax = zad_tax;
+
+          repay_fine = round(zad_fine * repay_koef, pr_round_perc);
+          if (abs(repay_fine - zad_fine) &lt;= 1) then
+            repay_fine = zad_fine;
+
+          repay_os = rep_saldo - (repay_perc + repay_fine + repay_tax);
+        end
+
+        update temp_vrepay
+        set pay_os = :repay_os,
+            pay_perc = :repay_perc,
+            pay_fine = :repay_fine,
+            pay_tax = :repay_tax
+        where s_rec_no = :s_rec_no;
+        rep_saldo = rep_saldo - (repay_os + repay_perc + repay_fine + repay_tax);
+      end
+    end
+
+    if (max_kind = 2 and rep_saldo &gt; 0) then
+    begin
+      -- На будущие платежи распределяем только на ОС
+      calcing_perc = 0;
+      zad_fine = 0;
+      zad_tax = 0;
+      repay_perc = 0;
+      repay_fine = 0;
+      repay_tax = 0;
+  
+      for select s_rec_no, zad_os
+          from temp_vrepay
+          where repay_mode = 3
+          order by s_id desc
+          into s_rec_no, zad_os
+      do
+      begin
+        if (rep_saldo &gt; 0) then
+        begin
+          repay_os = 0;
+  
+          if (zad_os &lt;= rep_saldo) then
+            repay_os = zad_os;
+          else
+            repay_os = rep_saldo;
+  
+          update temp_vrepay
+          set pay_os = :repay_os
+          where s_rec_no = :s_rec_no;
+  
+          rep_saldo = rep_saldo - repay_os;
+        end
+      end
+    end
+  end
+
+  if (alloc_direction = &#x27;Horizontal&#x27;) then
+  begin
+    for select s_rec_no, zad_os, calcing_perc, zad_fine, zad_kommis, is_grace, zad_perc
+        from temp_vrepay
+        where ((datediff(day, coalesce(s_date, cast(&#x27;01.01.1900&#x27; as date)), :rep_date) &gt; :pr_pay_pros_more and
+              :special_mode = 1) -- igusev 22.09.2018 добавил coalesce(s_date, cast(&#x27;01.01.1900&#x27; as date)) #operkroff_pay
+              or
+              (datediff(day, coalesce(s_date, cast(&#x27;01.01.1900&#x27; as date)), :rep_date) &lt;= :pr_pay_pros_more and
+              :special_mode = 0)) -- igusev 22.09.2018 добавил coalesce(s_date, cast(&#x27;01.01.1900&#x27; as date)) #operkroff_pay
+              and
+              repay_mode = :repay_mode
+        order by s_rec_no * :order_kind
+        into s_rec_no, zad_os, calcing_perc, zad_fine, zad_kommis, is_grace, zad_perc
+-- as cursor cur
+    do
+    begin
+      order_no = 0;
+      repay_tax = 0;
+      repay_kommis = 0;
+      repay_os = 0;
+      repay_perc = 0;
+      repay_fine = 0;
+      while (order_no &lt; 4) do
+      begin
+        order_no = order_no + 1;
+
+-- Распределение основной суммы
+        if ((rep_saldo &gt; 0) and
+            (order_no = order_os)) then
+        begin
+-- контролируем чтоб на ОС не распределилось больше чем есть в балансе
+          repay_os = minvalue(minvalue(rep_saldo, local_saldo), zad_os);
+          rep_saldo = rep_saldo - repay_os;
+          update temp_vrepay
+          set pay_os = :repay_os
+          where s_rec_no = :s_rec_no;
+
+-- уменьшаем баланс на уже распределенную часть ОС
+          local_saldo = local_saldo - repay_os;
+
+-- Если метод аннуитета и ОС распределяется после %%,
+-- или льготное погашение
+-- то разницу между накопленным %% и по графику перекидываем на ОС
+          if (((pr_percent_method = 2) and
+              (order_os &gt; order_perc)) or ((is_grace = 1) and
+              (order_os &gt; order_perc))) then
+          begin
+            diff_os = zad_perc - calcing_perc;
+            if ((diff_os &gt; 0) and
+                (rep_saldo &gt; 0)) then
+            begin
+              repay_os = minvalue(minvalue(rep_saldo, local_saldo), diff_os);
+              rep_saldo = rep_saldo - repay_os;
+              update temp_vrepay
+              set pay_os = pay_os + :repay_os
+              where s_rec_no = :s_rec_no;
+              local_saldo = local_saldo - repay_os;
+            end
+          end
+        end
+
+-- Распределение процентов
+        if ((rep_saldo &gt; 0) and
+            (order_no = order_perc)) then
+        begin
+          repay_tax = 0;
+          if (tax_perc &gt; 0) then -- если есть НсП, вычисляем
+          begin
+            tax_tmp = (calcing_perc * tax_perc) / 100.00; -- вычисляем НсП от процента
+            tax_tmp = round(tax_tmp, pr_round_perc);
+            if (calcing_perc + tax_tmp &lt;= rep_saldo) then -- если %%+НсП больше остатка, берем эту НсП
+            begin
+              repay_tax = tax_tmp;
+              repay_perc = calcing_perc;
+            end
+            else
+            begin
+-- Иначе от суммы остатка выделяем НсП, остальное на %%
+              tax_tmp = (rep_saldo / (cast((100.00 + tax_perc) as double precision))) * tax_perc;
+              repay_tax = round(tax_tmp, pr_round_perc);
+              repay_perc = rep_saldo - repay_tax;
+            end
+          end
+          else
+            repay_perc = minvalue(rep_saldo, calcing_perc);
+
+          rep_saldo = rep_saldo - repay_perc - repay_tax;
+
+          update temp_vrepay
+          set pay_perc = :repay_perc,
+              pay_tax = :repay_tax
+          where s_rec_no = :s_rec_no;
+
+          -- Если метод аннуитета и ОС распределяется ДО %%,
+          -- или льготное погашение
+          -- то разницу между накопленным %% и по графику перекидываем на ОС
+          if (pr_percent_method = 2 and order_os &lt; order_perc and db_id = 39801) then
+          begin
+            diff_os = zad_perc - calcing_perc;
+            if ((diff_os &gt; 0) and
+                (rep_saldo &gt; 0)) then
+            begin
+              repay_os = minvalue(minvalue(rep_saldo, local_saldo), diff_os);
+              rep_saldo = rep_saldo - repay_os;
+              update temp_vrepay
+              set pay_os = pay_os + :repay_os
+              where s_rec_no = :s_rec_no;
+              local_saldo = local_saldo - repay_os;
+            end
+          end
+        end
+
+-- Распределение комиссии за досрочное погашение
+        if ((rep_saldo &gt; 0) and
+            (order_no = order_kommis)) then
+        begin
+          repay_tax = 0;
+          repay_kommis = 0;
+          if (tax_perc &gt; 0) then -- если есть НсП, вычисляем
+          begin
+            tax_tmp = (zad_kommis * tax_perc) / 100.00; -- вычисляем НсП на комиссию за досрочное погашение
+            tax_tmp = round(tax_tmp, pr_round_perc);
+            if (zad_kommis + tax_tmp &lt;= rep_saldo) then -- если %%+НсП больше остатка, берем эту НсП
+            begin
+              repay_tax = tax_tmp;
+              repay_kommis = zad_kommis;
+            end
+            else
+            begin
+-- Иначе от суммы остатка выделяем НсП, остальное на %%
+              tax_tmp = (rep_saldo / (cast((100.00 + tax_perc) as double precision))) * tax_perc;
+              repay_tax = round(tax_tmp, pr_round_perc);
+              repay_kommis = rep_saldo - repay_tax;
+            end
+          end
+          else
+            repay_kommis = minvalue(rep_saldo, zad_kommis);
+
+          rep_saldo = rep_saldo - repay_kommis - repay_tax;
+          update temp_vrepay
+          set pay_kommis = :repay_kommis,
+              pay_tax = pay_tax + :repay_tax
+          where s_rec_no = :s_rec_no;
+        end
+
+-- Распределение пени
+        if ((rep_saldo &gt; 0) and
+            (order_no = order_fine)) then
+        begin
+          repay_fine = minvalue(rep_saldo, zad_fine);
+          rep_saldo = rep_saldo - repay_fine;
+          update temp_vrepay
+          set pay_fine = :repay_fine
+          where s_rec_no = :s_rec_no;
+        end
+
+      end
+    end
+  end
+
+  if (alloc_direction = &#x27;Vertical&#x27;) then
+  begin
+    order_no = 0;
+    while (order_no &lt; 4) do
+    begin
+      order_no = order_no + 1;
+      for select s_rec_no, zad_os, calcing_perc, zad_fine, zad_kommis, is_grace, zad_perc, s_date
+          from temp_vrepay
+          where ((datediff(day, coalesce(s_date, cast(&#x27;01.01.1900&#x27; as date)), :rep_date) &gt; :pr_pay_pros_more and
+                :special_mode = 1) -- igusev 22.09.2018 добавил coalesce(s_date, cast(&#x27;01.01.1900&#x27; as date)) #operkroff_pay
+                or
+                (datediff(day, coalesce(s_date, cast(&#x27;01.01.1900&#x27; as date)), :rep_date) &lt;= :pr_pay_pros_more and
+                :special_mode = 0)) -- igusev 22.09.2018 добавил coalesce(s_date, cast(&#x27;01.01.1900&#x27; as date)) #operkroff_pay
+                and
+                repay_mode = :repay_mode
+          order by s_rec_no * :order_kind
+          into s_rec_no, :zad_os, calcing_perc, zad_fine, zad_kommis, is_grace, zad_perc, s_date
+-- as cursor cur
+      do
+      begin
+        repay_tax = 0;
+        repay_kommis = 0;
+        repay_os = 0;
+        repay_perc = 0;
+        repay_fine = 0;
+
+-- Распределение основной суммы
+        if ((rep_saldo &gt; 0) and
+            (order_no = order_os)) then
+        begin
+-- контролируем чтоб на ОС не распределилось больше чем есть в балансе
+          repay_os = minvalue(minvalue(rep_saldo, local_saldo), zad_os);
+          rep_saldo = rep_saldo - repay_os;
+          update temp_vrepay
+          set pay_os = :repay_os
+          where s_rec_no = :s_rec_no;
+
+-- уменьшаем баланс на уже распределенную часть ОС
+          local_saldo = local_saldo - repay_os;
+
+-- Если метод аннуитета и ОС распределяется после %%,
+-- или льготное погашение
+-- то разницу между накопленным %% и по графику перекидываем на ОС
+          if (((pr_percent_method = 2) and
+              (order_os &gt; order_perc)) or ((is_grace = 1) and
+              (order_os &gt; order_perc))) then
+          begin
+            diff_os = zad_perc - calcing_perc;
+            if ((diff_os &gt; 0) and
+                (rep_saldo &gt; 0)) then
+            begin
+              repay_os = minvalue(minvalue(rep_saldo, local_saldo), diff_os);
+              rep_saldo = rep_saldo - repay_os;
+              update temp_vrepay
+              set pay_os = pay_os + :repay_os
+              where s_rec_no = :s_rec_no;
+              local_saldo = local_saldo - repay_os;
+            end
+          end
+        end
+
+-- Распределение процентов
+        if ((rep_saldo &gt; 0) and
+            (order_no = order_perc)) then
+        begin
+          if (tax_perc &gt; 0) then -- если есть НсП, вычисляем
+          begin
+            tax_tmp = 0;
+            if (not(db_id in (39801, 41701) and s_date is null)) then  -- Если внесистемный учет и КГ база то на погашенные проценты НСП не будет, добавлено от 03.06.2019
+            tax_tmp = (calcing_perc * tax_perc) / 100.00; -- вычисляем НсП от процента
+            tax_tmp = round(tax_tmp, pr_round_perc);
+            if (calcing_perc + tax_tmp &lt;= rep_saldo) then -- если %%+НсП больше остатка, берем эту НсП
+            begin
+              repay_tax = tax_tmp;
+              repay_perc = calcing_perc;
+            end
+            else
+            begin
+-- Иначе от суммы остатка выделяем НсП, остальное на %%
+              if (not(db_id in (39801, 41701) and s_date is null)) then -- Если внесистемный учет и КГ база то на погашенные проценты НСП не будет, добавлено от 03.06.2019
+              tax_tmp = (rep_saldo / (cast((100.00 + tax_perc) as double precision))) * tax_perc;
+              repay_tax = round(tax_tmp, pr_round_perc);
+              repay_perc = rep_saldo - repay_tax;
+            end
+          end
+          else
+            repay_perc = minvalue(rep_saldo, calcing_perc);
+
+          rep_saldo = rep_saldo - repay_perc - repay_tax;
+--          repay_tax = 0; -- 4
+          update temp_vrepay
+          set pay_perc = :repay_perc,
+              pay_tax = :repay_tax
+          where s_rec_no = :s_rec_no;
+        end
+
+-- Распределение комиссии за досрочное погашение
+        if ((rep_saldo &gt; 0) and
+            (order_no = order_kommis)) then
+        begin
+          repay_tax = 0;
+          repay_kommis = 0;
+          if (tax_perc &gt; 0) then -- если есть НсП, вычисляем
+          begin
+            tax_tmp = (zad_kommis * tax_perc) / 100.00; -- вычисляем НсП на комиссию за досрочное погашение
+            tax_tmp = round(tax_tmp, pr_round_perc);
+            if (zad_kommis + tax_tmp &lt;= rep_saldo) then -- если %%+НсП больше остатка, берем эту НсП
+            begin
+              repay_tax = tax_tmp;
+              repay_kommis = zad_kommis;
+            end
+            else
+            begin
+-- Иначе от суммы остатка выделяем НсП, остальное на %%
+              tax_tmp = (rep_saldo / (cast((100.00 + tax_perc) as double precision))) * tax_perc;
+
+              repay_tax = round(tax_tmp, pr_round_perc);
+              repay_kommis = rep_saldo - repay_tax;
+            end
+          end
+          else
+            repay_kommis = minvalue(rep_saldo, zad_kommis);
+
+          rep_saldo = rep_saldo - repay_kommis - repay_tax;
+          update temp_vrepay
+          set pay_kommis = :repay_kommis,
+              pay_tax = pay_tax + :repay_tax
+          where s_rec_no = :s_rec_no;
+        end
+
+-- Распределение пени
+        if ((rep_saldo &gt; 0) and
+            (order_no = order_fine)) then
+        begin
+          repay_fine = minvalue(rep_saldo, zad_fine);
+          rep_saldo = rep_saldo - repay_fine;
+          update temp_vrepay
+          set pay_fine = :repay_fine
+          where s_rec_no = :s_rec_no;
+        end
+      end
+    end
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

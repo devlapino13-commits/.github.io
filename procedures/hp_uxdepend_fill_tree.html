@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_UXDEPEND_FILL_TREE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_UXDEPEND_FILL_TREE: 5 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_UXDEPEND_FILL_TREE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_uxkind_image_id.html"><div class="to">HP_UXKIND_IMAGE_ID</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_uxdepend_fill.html"><div class="to">HP_UXDEPEND_FILL</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UX_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OWNER_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PARENT_CODE</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CURR_LEVEL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MAX_LEVEL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_UXDEPEND_FILL_TREE(
+    UX_CODE D_STR_CODE,
+    OWNER_CODE D_STR_CODE,
+    PARENT_CODE D_STR_255,
+    CURR_LEVEL D_INTEGER,
+    MAX_LEVEL D_INTEGER)
+AS
+declare variable res_kind d_str_code;
+declare variable res_image d_integer;
+declare variable res_code d_str_100;
+declare variable tmp_ux_code d_str_code;
+declare variable owner_table d_str_code;
+declare variable ua_code d_str_100;
+declare variable lock_delete d_bool;
+declare variable tmp_parent_code d_str_255;
+declare variable uxa_kind d_smallint;
+begin
+  if (curr_level is null) then
+    curr_level = 0;
+
+  if (max_level is null) then
+    max_level = 1;
+
+  curr_level = curr_level + 1;
+
+  if (curr_level &gt; max_level) then
+    exit;
+
+  if (coalesce(parent_code, &#x27;&#x27;) = &#x27;&#x27;) then
+    parent_code = null;
+
+  if (coalesce(owner_code, &#x27;&#x27;) = &#x27;&#x27;) then
+    owner_code = ux_code;
+
+  select ux_table_name
+  from uxcode
+  where ux_code = :owner_code
+  into :owner_table;
+
+  for select iif(:owner_table &lt;&gt; ux_table_name, 1, 0), uxf$kind(ux_kind, &#x27;code&#x27;)
+  from uxcode
+  where ux_code = :ux_code
+  into lock_delete, res_kind
+  do
+  begin
+    select res_image_id
+    from hp_uxkind_image_id(:res_kind, :lock_delete)
+    into :res_image;
+
+    res_code = null;
+
+    select udp_code
+    from uxdepend
+    where udp_owner_code = :owner_code and
+          udp_ux_code = :ux_code
+    into res_code;
+
+    if (res_code is null) then
+    begin
+      insert into uxdepend (udp_owner_code, udp_parent_code, udp_ux_code, udp_ux_kind, udp_image_id, udp_lock_delete)
+      values (:owner_code, :parent_code, :ux_code, :res_kind, :res_image, :lock_delete)
+      returning udp_code
+      into :res_code;
+    end else
+    begin
+      if (lock_delete = 1) then
+      begin
+        update uxdepend
+        set udp_lock_delete = 1
+        where udp_owner_code = :owner_code and
+              udp_ux_code = :ux_code;
+      end
+
+      exit;
+    end
+
+    if (res_kind = &#x27;uxframe&#x27;) then
+    begin
+      for select ucf_ux_code
+      from uxcodeframe
+      where ucf_ufr_code = :ux_code
+      into tmp_ux_code
+      do
+      begin
+        execute procedure hp_uxdepend_fill_tree(:tmp_ux_code, :owner_code, :res_code, :curr_level, :max_level);
+      end
+    end else
+    begin
+      lock_delete = 1;
+      for select ua_code, uxa_ux_code, uxa_kind,
+                 iif(ua_ux_code = &#x27;fm_mainmenu&#x27;, 1, iif(ua_usr_id_field &lt;&gt; &#x27;&#x27;, 1, 0))
+      from uxaction, uxalias
+      where uxa_ux_code = :ux_code and
+            uxa_code = ua_uxa_code and
+            ua_ux_code = &#x27;fm_mainmenu&#x27;
+      into :ua_code, :tmp_ux_code, :uxa_kind, :lock_delete
+      do
+      begin
+        if (not exists(select udp_code
+        from uxdepend
+        where udp_owner_code = :owner_code and
+              udp_ux_code = :ua_code)) then
+        begin
+          select res_image_id
+          from hp_uxkind_image_id(&#x27;uxaction&#x27;, &#x27;mainmenu&#x27;)
+          into :res_image;
+
+          insert into uxdepend (udp_owner_code, udp_parent_code, udp_ux_code, udp_ux_kind, udp_image_id, udp_lock_delete)
+          values (:owner_code, :res_code, :ua_code, &#x27;uxaction&#x27;, :res_image, :lock_delete);
+        end
+      end
+
+      lock_delete = 0;
+      for select distinct ua_ux_code
+      from uxaction, uxalias
+      where uxa_ux_code = :ux_code and
+            uxa_code = ua_uxa_code and
+            ua_ux_code &lt;&gt; &#x27;fm_mainmenu&#x27;
+      into :tmp_ux_code
+      do
+      begin
+        execute procedure hp_uxdepend_fill_tree(:tmp_ux_code, :owner_code, :res_code, :curr_level, :max_level);
+
+        tmp_parent_code = null;
+        select udp_code
+        from uxdepend
+        where udp_owner_code = :owner_code and
+              udp_ux_code = :tmp_ux_code
+        into tmp_parent_code;
+
+        if (tmp_parent_code is null) then
+          tmp_parent_code = res_code;
+
+        for select ua_code, iif(ua_usr_id_field &lt;&gt; &#x27;&#x27;, -1, uxa_kind)
+        from uxaction, uxalias
+        where uxa_ux_code = :ux_code and
+              uxa_code = ua_uxa_code and
+              ua_ux_code = :tmp_ux_code
+        into :ua_code, :uxa_kind
+        do
+        begin
+          if (not exists(select udp_code
+          from uxdepend
+          where udp_owner_code = :owner_code and
+                udp_ux_code = :ua_code)) then
+          begin
+            select res_image_id
+            from hp_uxkind_image_id(&#x27;uxaction&#x27;, :uxa_kind)
+            into :res_image;
+
+            insert into uxdepend (udp_owner_code, udp_parent_code, udp_ux_code, udp_ux_kind, udp_image_id, udp_lock_delete)
+            values (:owner_code, :tmp_parent_code, :ua_code, &#x27;uxaction&#x27;, :res_image, :lock_delete);
+          end
+        end
+      end
+
+      for select ucf_ufr_code
+      from uxcodeframe
+      where ucf_ux_code = :ux_code
+      into tmp_ux_code
+      do
+        execute procedure hp_uxdepend_fill_tree(:tmp_ux_code, :owner_code, :res_code, :curr_level, :max_level);
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

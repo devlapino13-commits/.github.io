@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CANCEL_TERMINATION — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CANCEL_TERMINATION: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CANCEL_TERMINATION</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_cancel_termination_res.html"><div class="to">HP_CANCEL_TERMINATION_RES</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">TO_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CANCEL_TERMINATION(
+    K_ID D_ID,
+    TO_DATE D_DATE)
+RETURNS (
+    RES_TXT D_STR_255)
+AS
+declare variable ol_id d_id;
+declare variable ol_datetime d_datetime;
+declare variable k_stop_perc d_date;
+begin
+  res_txt = &#x27;&#x27;;
+
+  select k_stop_perc, ol_id, ol_datetime
+  from kontract
+  left join operlist on ol_id = k_stopped_perc_ol_id and
+        is_delete = 0 and
+        ol_date = :to_date
+  where k_id = :k_id
+  into k_stop_perc, ol_id, ol_datetime;
+
+  if (ol_id is not null) then
+  begin
+    -- Есть операция сворачивания графика
+    if (not exists(select *
+                   from operkred
+                   inner join operlist on ol_id = ok_from_ol_id and
+                         is_delete = 0 and
+                         ol_id &gt; :ol_id and
+                         ol_datetime &gt; :ol_datetime
+                   where ok_from_k_id = :k_id)) then
+    begin
+      update operlist
+      set is_delete = 1
+      where ol_id = :ol_id;
+    end
+    else
+      res_txt = &#x27;Есть активные операции после расторжения.&#x27;;
+  end
+  else
+  if (k_stop_perc is not null) then
+  begin
+    -- График не сворачивался, operlist&#x27;a нет
+    -- Проверяем только операции датой приостановки и позже
+    if (exists(select *
+               from operkred
+               inner join operlist on ol_id = ok_from_ol_id and
+                     is_delete = 0 and
+                     ol_datetime &gt;= :k_stop_perc
+               where ok_from_k_id = :k_id)) then
+      res_txt = &#x27;Есть активные операции в дату расторжения или позже.&#x27;;
+  end
+  else
+    res_txt = &#x27;На дату не найдено расторжение договора.&#x27;;
+
+  if (res_txt = &#x27;&#x27;) then
+    update kontract
+    set k_stop_perc = null,
+        k_stop_fine = null
+    where k_id = :k_id;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

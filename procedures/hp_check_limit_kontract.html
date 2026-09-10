@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CHECK_LIMIT_KONTRACT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CHECK_LIMIT_KONTRACT: 1 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CHECK_LIMIT_KONTRACT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="cm_ru_0244_sql.html"><div class="to">CM_RU_0244_SQL</div></a><a class="ref-card" href="make_new_kontract.html"><div class="to">MAKE_NEW_KONTRACT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ERROR_STATUS</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CHECK_LIMIT_KONTRACT(
+    K_ID D_ID NOT NULL)
+RETURNS (
+    ERROR_STATUS D_STR_100,
+    ERROR_TEXT D_STR_255)
+AS
+declare variable c_name_fio d_str_100;
+declare variable final_pdn d_currency;
+declare variable k_amount_approved d_currency;
+declare variable final_limit d_currency;
+declare variable is_error d_smallint;
+declare variable c_id d_id;
+declare variable ks_date_begin d_date;
+declare variable kol_day d_integer;
+declare variable k_refund d_smallint;
+declare variable k_id_last d_id;
+declare variable pr_code_last d_str_100;
+declare variable kc_id d_id;
+begin
+  --RFCRU-2874 автоматизация продукта Удобный 3
+
+  -- Лимит проверяется в :
+  -- ОТПРАВКА КК
+  -- УТВЕРЖДЕНИЕ ЗАЙМА
+  -- ВЫДАЧА
+  error_status = 1;
+  error_text = &#x27;&#x27;;
+  final_pdn = 0;
+  for select kn.k_id, kn.k_amount_approved, knc.kc_from_c_id, kn.k_refund, kc_id
+      from kontract kn
+      inner join knclient knc on knc.kc_from_k_id = kn.k_id
+      inner join product pr on pr.pr_id = kn.k_from_pr_id
+      where kn.k_id = :k_id and
+            knc.kc_amount_approved &gt; 0 and
+            pr.pr_code containing &#x27;.comfortable.&#x27;
+      into :k_id, k_amount_approved, c_id, k_refund, kc_id
+  do
+  begin
+    --проверяем условие пдн и суммы займа
+    select kc_pdn_koef
+    from knclient_pdn
+    where kc_id = :kc_id and
+          kcp_kind = 0
+    into final_pdn;
+
+    if (final_pdn &lt;= 50) then
+    begin
+      if ((k_amount_approved = 49000) or (k_amount_approved = 100000)) then
+        error_status = 0;
+    end
+    else
+    begin
+      if (k_amount_approved = 49000) then
+        error_status = 0;
+    end
+
+    if (error_status = 1) then
+    begin
+       if (final_pdn &gt; 50) then
+        error_text = f_format(&#x27;ПДН более 50%, сумма займа должна быть 49 000р&#x27;);
+      else
+        error_text = f_format(&#x27;ПДН не более 50%, сумма займа должна быть 49 000р или 100 000 р&#x27;);
+      --error_text = f_format(&#x27;По займу &quot;Удобный 3.0&quot; сумма займа может быть 49 000 или 100 000&#x27;);
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

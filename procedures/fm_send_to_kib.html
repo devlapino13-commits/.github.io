@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_SEND_TO_KIB — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_SEND_TO_KIB: 3 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_SEND_TO_KIB</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">4 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_check_data_complete.html"><div class="to">HP_CHECK_DATA_COMPLETE</div></a><a class="ref-card" href="hp_clients_without_ds.html"><div class="to">HP_CLIENTS_WITHOUT_DS</div></a><a class="ref-card" href="hp_get_priority_rep_id.html"><div class="to">HP_GET_PRIORITY_REP_ID</div></a><a class="ref-card" href="insert_kibminiapp.html"><div class="to">INSERT_KIBMINIAPP</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_cmd.html"><div class="to">FM_REPORT_CMD</div></a><a class="ref-card" href="hp_do_expressapp_act_send_kib.html"><div class="to">HP_DO_EXPRESSAPP_ACT_SEND_KIB</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OBJ_KIND</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SHOW_RES</div><div class="ptype">VARCHAR(10)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_SEND_TO_KIB(
+    OBJ_KIND D_STR_100,
+    OBJ_ID D_ID,
+    UN_ID D_ID)
+RETURNS (
+    RES_TEXT D_BLOB_TEXT,
+    SHOW_RES D_STR_10)
+AS
+declare variable DB_ID D_INTEGER;
+declare variable TMP_INT D_INTEGER;
+declare variable CL_FIO_PRIOR D_STR_100;
+declare variable CL_FIO D_STR_100;
+declare variable TMP_STR_LONG D_STR_2048;
+declare variable C_ID D_ID;
+declare variable EDOC_STATUS D_STR_CODE;
+begin
+  res_text = &#x27;&#x27;;
+  show_res = &#x27;window&#x27;;
+
+  db_id = f_get_db_id();
+
+  tmp_int = 0;
+
+  if (f_objkind(obj_kind, &#x27;code&#x27;) = &#x27;miniapp&#x27;) then
+  begin
+
+    if (db_id = 39801) then -- RFCKG-4210 Если согласия не подписаны / RFCKG-4486 Если нет кредитной истории
+    begin
+      if ((select priority_id
+         from hp_get_priority_rep_id(f_objkind(&#x27;miniapp&#x27;, &#x27;id&#x27;), :obj_id)) = -1) then
+      begin
+         res_text = &#x27;У клиента отсутствует кредитная история&#x27;;
+         show_res = &#x27;dialog&#x27;;
+         suspend;
+         exit;
+      end
+
+      for select c.c_id, c.c_name_fio
+      from miniapp ma
+      inner join miniappclient mac on mac.mac_from_ma_id = ma.ma_id
+      inner join clients c on c.c_id = mac.mac_from_c_id
+      where ma.ma_id = :obj_id and
+            mac_is_poruch = 0 and
+            ma_date_end &gt;= &#x27;31.12.2999&#x27;
+      into c_id, cl_fio
+      do
+      begin
+        edoc_status =  f_edoc_status(&#x27;pers_data_consent&#x27;, :c_id, current_date);
+
+        if (edoc_status &lt;&gt; &#x27;signed&#x27;) then
+        begin
+          res_text = cl_fio || &#x27;: Сначала клиент должен подписать согласия&#x27;;
+          show_res = &#x27;dialog&#x27;;
+          suspend;
+          exit;
+        end
+      end
+    end
+
+    if (db_id in (39801, 41701)) then
+    begin
+      res_text = (select cl_list from hp_clients_without_ds(:obj_id));
+      if (res_text &lt;&gt; &#x27;&#x27;) then
+      begin
+        show_res = &#x27;dialog&#x27;;
+        suspend;
+        exit;
+      end
+    end
+
+    cl_fio_prior = &#x27;&#x27;;
+    for
+      select
+        res_client_fio,
+        iif(res_is_critical = 1,
+          iif(:db_id &lt;&gt; 94401, &#x27;&lt;font color=&quot;red&quot;&gt;критично&lt;/font&gt;&#x27;, &#x27;&lt;font color=&quot;red&quot;&gt;kritik&lt;/font&gt;&#x27;),
+            iif(res_is_critical = 2, iif(:db_id &lt;&gt; 94401, &#x27;&lt;font color=&quot;red&quot;&gt;очень критично&lt;/font&gt;&#x27;, &#x27;&lt;font color=&quot;red&quot;&gt;krtiki hədd&lt;/font&gt;&#x27;), iif(:db_id &lt;&gt; 94401, &#x27;сигнал&#x27;, &#x27;Siqnal&#x27;))) || &#x27; -&gt; &#x27; || res_txt
+      from hp_check_data_complete(:obj_kind, :obj_id)
+      where res_is_critical &gt; 0
+      order by res_client_fio
+      into
+        :cl_fio,
+        :tmp_str_long
+    do
+    begin
+      tmp_int = tmp_int + 1;
+      if (cl_fio &lt;&gt; cl_fio_prior) then
+      begin
+        res_text = BLOB_APPEND(res_text, iif(cl_fio_prior &lt;&gt; &#x27;&#x27;, &#x27;&lt;br&gt;&lt;br&gt;&#x27;, &#x27;&#x27;) || &#x27;&lt;b&gt;&#x27; || cl_fio || &#x27;&lt;/b&gt;&#x27;);
+        cl_fio_prior = cl_fio;
+      end
+      res_text = BLOB_APPEND(res_text, &#x27;&lt;br&gt;&#x27; || tmp_str_long);
+    end
+  end
+
+  if (tmp_int = 0)
+    then res_text = &#x27;&#x27;;
+    else res_text = BLOB_APPEND(res_text, &#x27;&lt;/body&gt;&#x27;);
+
+  if (res_text &lt;&gt; &#x27;&#x27;) then
+  begin
+    suspend;
+    exit;
+  end
+
+  if (db_id = 39801 and
+      f_objkind(obj_kind, &#x27;code&#x27;) = &#x27;kontract&#x27;) then -- RFCKG-4210 Если согласия не подписаны / RFCKG-4486 Если нет кредитной истории
+    begin
+      if ((select priority_id
+         from hp_get_priority_rep_id(f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;), :obj_id)) = -1) then
+      begin
+         res_text = &#x27;У клиента отсутствует кредитная история&#x27;;
+         show_res = &#x27;dialog&#x27;;
+         suspend;
+         exit;
+      end
+
+      for select c.c_id, c.c_name_fio
+      from kontract k
+      inner join knclient kc on kc.kc_from_k_id = k.k_id
+      inner join clients c on c.c_id = kc.kc_from_c_id
+      where k.k_id = :obj_id and
+            kc.kc_amount_approved &gt; 0
+      into c_id, cl_fio
+      do
+      begin
+        edoc_status =  f_edoc_status(&#x27;pers_data_consent&#x27;, :c_id, current_date);
+
+        if (edoc_status &lt;&gt; &#x27;signed&#x27;) then
+        begin
+          res_text = cl_fio || &#x27;: Сначала клиент должен подписать согласия&#x27;;
+          show_res = &#x27;dialog&#x27;;
+          suspend;
+          exit;
+        end
+      end
+    end
+
+  select send_kol
+  from insert_kibminiapp(0, :obj_id, :un_id)
+  into tmp_int;
+
+  if (tmp_int = 0)
+    then res_text = iif(db_id &lt;&gt; 94401,
+                          &#x27;Клиенты НЕ отправлены. Возможно они ранее уже отправлялись&#x27;,
+                          &#x27;Müştərilər göndərilmədi.Əvvəl göndərilib&#x27;);
+    else res_text = iif(db_id &lt;&gt; 94401,
+                          &#x27;Данные успешно отправлены на проверку в КИБ. Количество отправленных клиентов: &#x27;,
+                          &#x27;Məlumatlar MKR-də yoxlama üçün göndərildi. Göndərilən müştərilərin sayı: &#x27;) || tmp_int;
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

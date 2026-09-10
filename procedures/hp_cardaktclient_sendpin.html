@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CARDAKTCLIENT_SENDPIN — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CARDAKTCLIENT_SENDPIN: 3 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CARDAKTCLIENT_SENDPIN</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CAC_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CSC_CODE</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ERR_CODE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ERR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CARDAKTCLIENT_SENDPIN(
+    CAC_ID D_INTEGER NOT NULL,
+    CSC_CODE D_STR_100 NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    ERR_CODE D_INTEGER,
+    ERR_TEXT D_STR_255)
+AS
+declare variable card_id d_integer;
+declare variable reg_id d_integer;
+declare variable c_id d_id;
+declare variable k_id d_id;
+declare variable cca_id d_integer;
+declare variable cac_status d_integer;
+declare variable date_prev d_datetime;
+declare variable retry_period d_integer;
+declare variable cell_no d_str_20;
+declare variable cs_request_json d_str_8100;
+declare variable obj_kind d_integer;
+declare variable status_prev d_integer;
+begin
+  err_code = 0;
+  err_text = &#x27;&#x27;;
+  obj_kind = f_objkind(&#x27;cardaktclient&#x27;, &#x27;id&#x27;);
+
+  if (csc_code not in (&#x27;send_pin&#x27;, &#x27;resend_pin&#x27;)) then
+  begin
+    err_code = 1;
+    err_text = &#x27;Недопустимый вх.параметр процедуры&#x27;;
+  end
+
+  if (err_text = &#x27;&#x27;) then
+  begin
+    select
+      cac_card_id,
+      cac_from_reg_id,
+      cac_from_c_id,
+      cac_from_k_id,
+      cac_from_cca_id,
+      cac_status
+    from cardaktclient
+    where cac_id = :cac_id
+    into
+      :card_id,
+      :reg_id,
+      :c_id,
+      :k_id,
+      :cca_id,
+      :cac_status;
+
+    if (row_count = 0) then
+    begin
+      err_code = 2;
+      err_text = &#x27;Акт выдачи карты №&#x27; || cac_id || &#x27; не найден&#x27;;
+    end
+
+    if (err_text = &#x27;&#x27; and cac_status &lt; 4) then
+    begin
+      err_code = 3;
+      err_text = f_format(&#x27;Текущий статус акта выдачи карты №%1 не соответствует данной операции.&#x27;, cac_id);
+    end
+
+    if (err_text = &#x27;&#x27; and csc_code = &#x27;resend_pin&#x27;) then
+    begin
+      if (exists(
+        select *
+        from cardsync
+        where cs_object_id = :cac_id
+          and cs_object_kind = :obj_kind
+          and cs_answer_json is null )) then
+      begin
+        err_code = 4;
+        err_text = &#x27;Предыдущий запрос на переотправку PIN-кода еще не обработан.&#x27;;
+      end
+
+      if (err_text = &#x27;&#x27;) then
+      begin
+        retry_period = 10; -- разрешенный период повтора (мин.)
+        select first 1
+          cs_datetime,
+          cs_status
+        from cardsync
+        where cs_card_id = :card_id
+          and cs_from_csc_id in (f_get_cardsynccfg_id(&#x27;send_pin&#x27;), f_get_cardsynccfg_id(&#x27;resend_pin&#x27;))
+        order by cs_id desc
+        into
+          :date_prev,
+          :status_prev;
+
+        if (status_prev = -1) then
+        begin
+          err_code = 5;
+          err_text = &#x27;Временная ошибка отправки PIN-кода. Запрос будет повторен.&#x27;;
+        end else
+        begin
+          if (date_prev is not null and datediff(minute, date_prev, current_timestamp) &lt; retry_period ) then
+          begin
+            err_code = 6;
+            err_text = f_format(&#x27;Задачу на переотправку PIN-кода клиенту, можно инициировать раз в %1 мин.&#x27;, retry_period);
+          end
+        end
+      end
+    end
+  end
+
+  if (err_text = &#x27;&#x27;) then
+  begin
+    -- новая задача по отправке/переотправке PIN-кода карты клиенту
+    cell_no = coalesce(f_cont_info(&#x27;clients&#x27;, :c_id, &#x27;cell_main&#x27;, &#x27;ok&#x27;), &#x27;&#x27;);
+    if (cell_no &lt;&gt; &#x27;&#x27;) then
+    begin
+      cs_request_json = f_format(&#x27;{&quot;card_id&quot;:%1, &quot;phone&quot;:&quot;%2&quot;}&#x27;, card_id, cell_no);
+      insert into cardsync(
+        cs_from_csc_id,
+        cs_card_id,
+        cs_from_cca_id,
+        cs_object_kind,
+        cs_object_id,
+        cs_request_json,
+        cs_office_id,
+        cs_from_k_id,
+        cs_from_c_id,
+        cs_from_un_id
+        )
+      values(
+        f_get_cardsynccfg_id(:csc_code),
+        :card_id,
+        :cca_id,
+        :obj_kind,
+        :cac_id,
+        :cs_request_json,
+        :reg_id,
+        :k_id,
+        :c_id,
+        :un_id
+        );
+      if (csc_code = &#x27;resend_pin&#x27;) then
+        err_text = &#x27;Запрос на переотправку PIN-кода сгенерирован.&#x27;;
+    end else
+    begin
+      err_code = 7;
+      err_text = &#x27;Верифицированный номер телефона клиента не определен.&#x27;;
+    end
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

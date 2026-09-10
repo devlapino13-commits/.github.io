@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_USER_REGION — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_USER_REGION: 3 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_USER_REGION</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_user_region_tmp.html"><div class="to">HP_USER_REGION_TMP</div></a><a class="ref-card" href="region_list.html"><div class="to">REGION_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">USER_ROLE</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REG_ID_INP</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REG_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REG_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_USER_REGION(
+    USER_ROLE D_STR_100,
+    UN_ID D_ID,
+    REG_ID_INP D_INTEGER)
+RETURNS (
+    REG_ID D_INTEGER,
+    REG_NAME D_STR_100)
+AS
+declare variable reg_id_tmp d_integer;
+declare variable c_id_list d_str_long;
+declare variable sql d_str_2048;
+begin
+  if (:user_role in (&#x27;accountant&#x27;, &#x27;reg_manager&#x27;) or un_id = 1090100002454) then
+  begin
+    select reg.reg_unicode, reg.reg_code || &#x27; &#x27; || reg.reg_name
+    from region reg
+    where reg.reg_unicode = 1000000
+    into :reg_id, :reg_name;
+
+    suspend;
+
+    for select reg.reg_unicode, reg.reg_code || &#x27; &#x27; || reg.reg_name
+        from region_list(1000000, 1, 3, 1) rl
+        inner join region reg on rl.id_list = reg.reg_unicode
+        into :reg_id, :reg_name
+    do
+      suspend;
+    exit;
+  end
+  if (:user_role = &#x27;kred_manager&#x27;) then
+  begin
+    select list(c_id, &#x27;,&#x27;)
+    from hp_user_region_tmp(:un_id)
+    into :c_id_list;
+    sql = f_format(&#x27;select pm.pm_subject_id as reg_id
+    from permissions pm
+    where pm.pm_object_kind = 0 and
+    pm.pm_object_id = %1 and
+    pm.pm_access_kind = 1 and
+    pm.pm_is_delete = 0 and
+    current_date between pm.pm_date_begin and coalesce(pm.pm_date_end, &#x27;&#x27;31.12.2999&#x27;&#x27;) and
+    pm.pm_subject_kind = 4
+    union
+    select ps.ps_from_reg_id as reg_id
+    from hr_pstatus ps
+    where current_date between ps.ps_date_begin and ps.ps_date_end and
+    ps.ps_is_working = 1 and
+    ps.ps_status = 1 and
+    ps.ps_from_c_id in (%2)&#x27;, :un_id, :c_id_list);
+    for execute statement(:sql)
+            into :reg_id
+    do
+    begin
+      select reg.reg_code || &#x27; &#x27; || reg.reg_name
+      from region reg
+      where reg.reg_unicode = :reg_id
+      into :reg_name;
+      suspend;
+    end
+    exit;
+  end
+  if (:user_role in (&#x27;admin_assistant&#x27;, &#x27;admin_assistant_chief&#x27;)) then
+  begin
+    for select pm.pm_subject_id
+        from permissions pm
+        where pm.pm_object_kind = 0 and
+              pm.pm_object_id = :un_id and
+              pm.pm_subject_kind = 4 and
+              pm.pm_is_delete = 0 and
+              pm.pm_access_kind = 1 and
+              current_date between coalesce(pm.pm_date_begin, current_date) and coalesce(pm.pm_date_end, &#x27;31.12.2999&#x27;)
+        into :reg_id_tmp
+    do
+    begin
+      if (:reg_id_tmp = 1000000) then
+      begin
+        select reg.reg_unicode, reg.reg_code || &#x27; &#x27; || reg.reg_name
+        from region reg
+        where reg.reg_unicode = 1000000
+        into :reg_id, :reg_name;
+        suspend;
+      end
+
+      for select reg.reg_unicode, reg.reg_code || &#x27; &#x27; || reg.reg_name
+          from region_list(:reg_id_tmp, 1, 3, 1) rl
+          inner join region reg on rl.id_list = reg.reg_unicode
+          into :reg_id, :reg_name
+      do
+        suspend;
+    end
+    exit;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

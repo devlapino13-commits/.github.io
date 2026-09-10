@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_KONTUR_B2_CHECK — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_KONTUR_B2_CHECK: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_KONTUR_B2_CHECK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_extinfo_insert_kontur.html"><div class="to">HP_EXTINFO_INSERT_KONTUR</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_KONTUR_B2_CHECK
+AS
+declare variable k_id d_id;
+declare variable c_id d_id;
+declare variable kont_err_list d_str_long;
+begin
+
+  kont_err_list = &#x27;&#x27;;
+  -- Группировку по контракту не делаем, т.к. на уровне клиента лишний раз не вставится
+  -- Но есть плюс, добавятся залогодатели по всем автозаймам
+  for select kc.kc_from_c_id, kc.kc_from_k_id
+  from oksummary oks
+  inner join knclient kc on oks.oks_from_k_id = kc.kc_from_k_id
+  where
+    current_date between oks_date_begin and oks_date_end and
+    (oks_curr_sh_os + oks_curr_sh_perc + oks_delinq_os + oks_delinq_perc + oks_out_os + oks_out_perc + oks_out_other + oks_extra) &gt; 0
+  into c_id, k_id do
+  begin
+
+    if (f_bankrupt(c_id, current_date) = 1) then
+    begin
+      -- Если банкротство завершено, не отправляем
+      if (exists (
+          select *
+          from bankrupt
+          where brt_from_c_id = :c_id and
+            brt_is_finished = 1 and
+            current_date between brt_date_begin and brt_date_end)) then
+        continue;
+    end
+    in autonomous transaction do
+      execute procedure hp_extinfo_insert_kontur(&#x27;kontract&#x27;, k_id, 0, null, 1);
+    when any do
+      kont_err_list = left(kont_err_list || iif(kont_err_list &lt;&gt; &#x27;&#x27;, &#x27;,&#x27;, &#x27;&#x27;) || k_id, 8100);
+  end
+
+  if (kont_err_list &gt; &#x27;&#x27;) then
+    exception e_default &#x27;Контракты с ошибками отправки в Контур:&#x27; || kont_err_list;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_OPERKRED_LEGITIMATE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_OPERKRED_LEGITIMATE: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_OPERKRED_LEGITIMATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_kontract_legitimate.html"><div class="to">HP_KONTRACT_LEGITIMATE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SH_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_OPERKRED_LEGITIMATE(
+    K_ID ID_TYPE,
+    SH_DATE DATE)
+AS
+declare variable k_amount_approved curr_type;
+declare variable pr_product_kind smallint;
+declare variable delinq_day integer;
+declare variable ol_date date;
+declare variable zad_os curr_type;
+declare variable zad_perc curr_type;
+declare variable c_id id_type;
+declare variable dolya double precision;
+declare variable is_legitimate smallint;
+declare variable repay_sum curr_type;
+declare variable is_legitimate_cli smallint;
+declare variable woff_sum curr_type;
+declare variable pr_code varchar(100);
+begin
+  select k_amount_approved, pr_product_kind, pr_code
+  from kontract, product
+  where k_id = :k_id and
+        k_from_pr_id = pr_id
+  into k_amount_approved, pr_product_kind, pr_code;
+
+  ol_date = null;
+  for select max(ok_ol_date) as ol_date, sum(ok_os + ok_sh_os) as os, sum(ok_perc + ok_sh_perc) as perc
+      from operkred
+      where ok_ol_is_active = 1 and
+            ok_from_k_id = :k_id and
+            ok_sh_date = :sh_date and
+            ok_type &lt; 7 and
+            (ok_os &lt;&gt; 0 or
+            ok_perc &lt;&gt; 0 or
+            ok_sh_os &lt;&gt; 0 or
+            ok_sh_perc &lt;&gt; 0 or
+            ok_sh_id = 0) -- погашении только по пеням не включать
+      into ol_date, zad_os, zad_perc
+  do
+  begin
+    delinq_day = iif(ol_date &gt; sh_date, ol_date - sh_date, 0);
+--  проверка закрыт ли платеж, не досрочно ли закрыт за 10 дней и не параллельный кредит ли
+    if (zad_os &lt;= 0 and
+        zad_perc &lt;= 0
+--        and sh_date - ol_date &lt;= 10
+--        and pr_product_kind &lt;&gt; 2
+        ) then
+      is_legitimate = 1;
+    else
+      is_legitimate = 0;
+
+    repay_sum = 0;
+    delinq_day = 0;
+    woff_sum = 0;
+    if (is_legitimate = 1) then
+    begin
+      /*
+      repay_sum = null;
+      select -sum(ok_os + ok_perc) from operkred
+      where ok_ol_is_active = 1
+      and ok_from_k_id = :k_id
+      and ok_sh_date = :sh_date
+      and ok_ol_date = :ol_date
+      and ok_type = 4
+      into repay_sum;
+      repay_sum = coalesce(repay_sum,0);
+      */
+      repay_sum = null;
+      delinq_day = null;
+      woff_sum = null;
+      select -sum(iif(ok_type = 4, ok_os + ok_perc, 0)), max(ok_ol_date - ok_sh_date),
+             -sum(iif(ok_type = 5, ok_os + ok_perc, 0))
+      from operkred
+      where ok_ol_is_active = 1 and
+            ok_sh_date = :sh_date and
+            ok_from_k_id = :k_id and
+            ok_type in (4, 5) and
+            ok_os + ok_perc &lt; 0 and
+            ok_sh_date - ok_ol_date &lt;= 10
+      into repay_sum, delinq_day, woff_sum;
+      repay_sum = coalesce(repay_sum, 0);
+      delinq_day = coalesce(delinq_day, 0);
+      woff_sum = coalesce(woff_sum, 0);
+
+      if (delinq_day &lt; 0) then
+        delinq_day = 0;
+    end
+
+    for select kc_from_c_id, cast(kc_amount_approved as double precision) / :k_amount_approved
+        from knclient
+        where kc_from_k_id = :k_id and
+              kc_amount_approved &gt; 0
+        into c_id, dolya
+    do
+    begin
+      is_legitimate_cli = is_legitimate;
+      if (is_legitimate = 1 and
+          (dolya * repay_sum &lt; 2500.00 or woff_sum &gt; 0 or pr_product_kind = 2 or pr_code containing &#x27;.express.&#x27;)) then
+        is_legitimate_cli = 0;
+
+      update or insert into clilegpay (clp_from_c_id, clp_from_k_id, clp_sh_date, clp_ol_date, clp_is_legitimate,
+                                       clp_delinq_day)
+      values (:c_id, :k_id, :sh_date, :ol_date, :is_legitimate_cli, :delinq_day)
+      matching (clp_from_c_id, clp_from_k_id, clp_sh_date);
+
+    end
+--    suspend;
+  end
+-- если запись удален из таблицы operkred то и в таблице CliLegPay тоже должно удалиться
+-- если запись удален то не будет возвращать результат верхнего скрипта и ol_date будет null
+
+  if (ol_date is null) then
+  begin
+    delete from clilegpay
+    where clp_from_k_id = :k_id and
+          clp_sh_date = :sh_date;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

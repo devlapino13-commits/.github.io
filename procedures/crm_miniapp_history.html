@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CRM_MINIAPP_HISTORY — процедура — схема БД</title>
+<meta name="description" content="Процедура CRM_MINIAPP_HISTORY: 3 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CRM_MINIAPP_HISTORY</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PHONE_NO</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ID_STATUS</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ID_SVZ</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OPER_DATE_TIME</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ID_REFUSAL</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CRM_MINIAPP_HISTORY(
+    PHONE_NO STR_255,
+    REP_DATE_BEGIN DATE,
+    REP_DATE_END DATE)
+RETURNS (
+    ID_STATUS STR_100,
+    ID_SVZ ID_TYPE,
+    OPER_DATE_TIME D_DATETIME,
+    ID_REFUSAL STR_255)
+AS
+declare variable ma_id id_type;
+declare variable ma_number d_smallint;
+declare variable k_id id_type;
+declare variable krl_id id_type;
+begin
+
+    for select mac_from_ma_id, ma_number, max(ma_date_save)
+    from miniapp
+    inner join miniappclient on mac_from_ma_id = ma_id
+                             and ma_date_end = &#x27;31.12.9999&#x27;
+    inner join continfo on cci_object_id = mac_from_c_id
+                        and (ok_cell_main = :phone_no
+                        or last_cell_main = :phone_no)
+    where mac_amount &gt; 0
+    and ma_date_app between :rep_date_begin and :rep_date_end
+    group by 1,2
+    into ma_id, ma_number, oper_date_time
+    do
+    begin
+        for select (case
+                    when (ma.ma_is_active &lt;= 0 or k.k_status &lt;= -1) then &#x27;Отказан&#x27;
+                    when ma.ma_is_active = 1 and k.k_status = 0 then &#x27;В процессе&#x27;
+                    when ma.ma_is_active = 1 and k.k_status = 1 then &#x27;Выдан&#x27;
+                    end) as status,
+                    iif(un.un_from_c_id &lt;&gt; k.k_fact_disb_lo_id, coalesce(k.k_fact_disb_lo_id, un.un_from_c_id), coalesce(k.k_fact_disb_lo_id, un.un_from_c_id)),
+                    k.k_id
+        from miniapp ma
+        left join kontract k on k.k_from_ma_app_id = ma.ma_id
+        inner join username un on un.un_id = ma.ma_from_un_id
+        where ma.ma_id = :ma_id
+        and ma.ma_number = :ma_number
+        and ma.ma_date_app between :rep_date_begin and :rep_date_end
+        group by 1,2,3
+        into id_status, id_svz, k_id
+        do
+        begin
+            id_status = trim(id_status);
+            if(id_status = &#x27;Отказан&#x27;) then
+            begin
+    
+                for select max(krl_id)
+                from kontreslist
+                where krl_from_k_id = :k_id
+                or krl_ma_id = :ma_id
+                into krl_id
+                do
+                begin
+                    select kr_text
+                    from kontres
+                    inner join kontreslist krl on krl_from_kr_id = kr_id
+                    where krl.krl_id = :krl_id
+                    into id_refusal;
+                end
+            end
+            if (id_status = &#x27;Выдан&#x27;) then
+            begin
+              select ol_datetime
+              from operlist
+              inner join operkred on ok_from_ol_id = ol_id
+              where ok_from_k_id = :k_id 
+              and is_delete = 0
+              and ok_type = 8
+              into oper_date_time;
+            end
+           suspend;
+           id_refusal = null;
+        end
+    end
+
+    for select (case ema_status
+                when -1 then &#x27;Отказ&#x27;
+                when 0 then &#x27;В ожидании&#x27;
+                when 1 then &#x27;Обработан&#x27;
+               end),
+               ema_lo_id,
+               coalesce(ema_status_datetime, ema_datetime),
+               rd_name
+    from extminiapp
+    inner join refdata on rd_id = ema_result_rd_id
+    inner join continfo on cci_object_id = ema_from_c_id
+                        and (ok_cell_main = :phone_no
+                        or last_cell_main = :phone_no)
+    where ema_date between :rep_date_begin and :rep_date_end
+    into id_status ,id_svz, oper_date_time, id_refusal
+    do
+    begin
+        id_status = trim(id_status);
+        suspend;
+    end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

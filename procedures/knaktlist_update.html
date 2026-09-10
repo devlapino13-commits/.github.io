@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KNAKTLIST_UPDATE — процедура — схема БД</title>
+<meta name="description" content="Процедура KNAKTLIST_UPDATE: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>KNAKTLIST_UPDATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_clientstate_set.html"><div class="to">HP_CLIENTSTATE_SET</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_transfer_miniapp_folder.html"><div class="to">HP_TRANSFER_MINIAPP_FOLDER</div></a><a class="ref-card" href="hp_transfer_online_loan_to_lo.html"><div class="to">HP_TRANSFER_ONLINE_LOAN_TO_LO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">KF</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KAL_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE KNAKTLIST_UPDATE(
+    KF D_ID,
+    KAL_DATE D_DATE)
+AS
+declare variable k_no integer;
+declare variable d date;
+declare variable d_prior date;
+declare variable ka_id decimal(18,0);
+declare variable reg_id integer;
+declare variable reg_first integer;
+declare variable k_id decimal(18,0);
+declare variable kal_date_end date;
+declare variable k_last_reg_id integer;
+declare variable lo_id_prior decimal(18,0);
+declare variable reg_id_prior integer;
+declare variable kf_prior_name varchar(100);
+declare variable kf_name varchar(100);
+declare variable lo_id decimal(18,0);
+declare variable kal_to_other_lo_last integer;
+declare variable kal_to_other_lo integer;
+declare variable lo_id_last decimal(18,0);
+declare variable c_id decimal(18,0);
+begin
+  if (kal_date is null) then
+    exit;
+
+  reg_first = 0;
+  update knaktlist
+  set kal_date_end = (kal_date - 1)
+  where kal_from_kf_id = :kf and
+        is_delete = 1 and
+        kal_date_end &lt;&gt; (kal_date - 1);
+
+  d_prior = cast(&#x27;31.12.9999&#x27; as date);
+  for select kal_number, kal_from_ka_id, kal_date, kal_new_reg_id, kal_date_end
+      from knaktlist
+      where kal_from_kf_id = :kf and
+            is_delete = 0
+      order by kal_date desc, kal_from_ka_id desc, kal_number desc
+      into :k_no, :ka_id, :d, :reg_id, :kal_date_end
+  do
+  begin
+    if (reg_first = 0) then
+      reg_first = :reg_id;
+
+    if ((d_prior &lt;&gt; kal_date_end) or (kal_date_end is null)) then
+    begin
+      update knaktlist
+      set kal_date_end = :d_prior
+      where kal_from_ka_id = :ka_id and
+            kal_number = :k_no and
+            kal_from_kf_id = :kf;
+    end
+
+    for select k_id, k_last_reg_id
+        from kontract, kontstate
+        where ks_state = 2 and
+              ks_date_begin between :d_prior and :d and
+              ks_ol_is_delete = 0 and
+              ks_from_k_id = k_id and
+              k_from_kf_id = :kf
+        into :k_id, :k_last_reg_id
+    do
+    begin
+      if ((k_last_reg_id &lt;&gt; :reg_id) or (k_last_reg_id is null)) then
+      begin
+        update kontract
+        set k_last_reg_id = :reg_id
+        where k_id = :k_id;
+      end
+    end
+
+    d_prior = d - 1;
+    if (d &lt; kal_date) then
+      break;
+  end
+
+  lo_id_prior = null;
+  reg_id_prior = null;
+  kf_prior_name = null;
+  for select kal_number, kal_from_ka_id, kal_date, kal_new_reg_id, kal_date_end, kal_new_kf_officer, kal_new_kf_name,
+             kal_to_other_lo
+      from knaktlist
+      where kal_from_kf_id = :kf and
+            is_delete = 0
+      order by kal_date, kal_from_ka_id, kal_number
+      into :k_no, :ka_id, :d, :reg_id, :kal_date_end, :lo_id, :kf_name, :kal_to_other_lo_last
+  do
+  begin
+    kal_to_other_lo = 0;
+    if (kal_to_other_lo_last is null) then
+      kal_to_other_lo_last = -2;
+    if (lo_id_prior is null) then
+    begin
+      lo_id_prior = :lo_id;
+      reg_id_prior = :reg_id;
+      kf_prior_name = kf_name;
+      lo_id_last = :lo_id;
+      kal_to_other_lo = -1;
+    end
+
+    if ((lo_id &gt; 1000000000004) and
+        (kal_to_other_lo = 0)) then
+    begin
+      if (lo_id &lt;&gt; lo_id_last) then
+        kal_to_other_lo = 1;
+    end
+
+    if ((lo_id_prior &lt;&gt; lo_id) or (reg_id_prior &lt;&gt; reg_id) or (kf_prior_name = kf_name) or (kal_to_other_lo &lt;&gt; kal_to_other_lo_last)) then
+    begin
+      update knaktlist
+      set kal_prior_reg_id = :reg_id_prior,
+          kal_prior_lo_id = :lo_id_prior,
+          kal_prior_kf_name = :kf_prior_name,
+          kal_to_other_lo = :kal_to_other_lo
+      where kal_from_ka_id = :ka_id and
+            kal_number = :k_no and
+            kal_from_kf_id = :kf;
+    end
+    lo_id_prior = :lo_id;
+    reg_id_prior = :reg_id;
+    kf_prior_name = kf_name;
+  end
+
+  for select k_id
+      from kontract, kontstate
+      where ks_state &lt;= 1 and
+            ks_date_end &gt;= &#x27;01.01.2999&#x27; and
+            ks_date_begin &lt; ks_date_end and
+            ks_ol_is_delete = 0 and
+            ks_from_k_id = k_id and
+            k_from_kf_id = :kf
+      into :k_id
+  do
+  begin
+    update kontract
+    set k_last_reg_id = :reg_first
+    where k_id = :k_id and
+          (k_last_reg_id &lt;&gt; :reg_first or
+          k_last_reg_id is null);
+  end
+
+  for select distinct kc_from_c_id
+      from knclient, kontract
+      where kc_from_k_id = k_id and
+            k_from_kf_id = :kf
+      union
+      select distinct mac_from_c_id
+      from miniappclient, miniapp
+      where mac_from_ma_id = ma_id and
+            ma_from_kf_id = :kf
+      into :c_id
+  do
+  begin
+    execute procedure hp_clientstate_set(:c_id);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

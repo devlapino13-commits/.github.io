@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MILLICARD_CLIENTS_FOR_ADD — процедура — схема БД</title>
+<meta name="description" content="Процедура MILLICARD_CLIENTS_FOR_ADD: 1 входных, 10 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>MILLICARD_CLIENTS_FOR_ADD</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">10</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PROJECT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">10 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ESM_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FRONTID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SERIALNUM</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FIRSTNAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LASTNAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MIDDLENAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PASPNUM</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PASPPIN</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PASPNUM_ORIGINAL</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">GENDER</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE MILLICARD_CLIENTS_FOR_ADD(
+    PROJECT STR_100 = &#x27;millicard_disb&#x27;)
+RETURNS (
+    ESM_ID ID_TYPE,
+    FRONTID ID_TYPE,
+    SERIALNUM STR_100,
+    FIRSTNAME STR_100,
+    LASTNAME STR_100,
+    MIDDLENAME STR_100,
+    PASPNUM STR_100,
+    PASPPIN STR_100,
+    PASPNUM_ORIGINAL STR_100,
+    GENDER SMALLINT)
+AS
+begin
+  project = coalesce(project, &#x27;&#x27;);
+  if (project = &#x27;&#x27;) then
+    project = &#x27;millicard_disb&#x27;;
+
+  for select em.esm_id, esm_object_id
+      from extsysmain em
+      where em.esm_project = :project and
+            em.esm_action = &#x27;addClient&#x27; and
+            em.esm_status = 0
+      into :esm_id, :frontid
+  do
+  begin
+    for select fl.fl_name1, -- Фамилия
+               fl.fl_name2, -- Имя
+               fl.fl_name3, -- Отчество
+               cl.c_pass_no, cl.c_pincode, iif(cl.c_sex = 1, 1, 2)
+        from clients cl
+        inner join fiolist fl on cl.c_from_fl_id = fl.fl_id
+        where cl.c_id = :frontid
+        into :lastname, :firstname, :middlename, :paspnum, :pasppin, :gender
+    do
+    begin
+      paspnum_original = paspnum;
+
+      if (paspnum starting &#x27;AZE&#x27;) then
+      begin
+        serialnum = left(paspnum, 3);
+        paspnum = substring(paspnum from 4);
+      end
+      else
+      begin
+        serialnum = left(paspnum, 2);
+        paspnum = substring(paspnum from 3);
+      end
+
+      /*
+        frontid * String This parameter is defined by NBCO. Each new customer should be given a unique id. The length of Frontid should not be less than 4 characters. Example: 0000001.
+        firstName * String Customer Name.
+        lastName * String Customer&#x27;s Last Name
+        middleName* String Customer&#x27;s  Father Name birth String Customer&#x27;s
+        birth date. Format: &quot;dd /MM/yyyy&quot;. For example: 21/02/1989
+        gender String 1 – male ;     2 - Female
+        maritalStatus String 1 – single;    2 – married;
+        mobilePhone String It is important to fill when the customer enables SMS banking service.
+        email String Customer&#x27;s email address
+        serialNum * String Identity card serial number. For example: &quot;AZE&quot;
+        paspNum * String Identity card number. For example: &quot;11111111&quot;
+        paspDate String Date of issue of identity card. Format: &quot; dd /MM/yyyy &quot;. For example: &quot;22/02/2012&quot;
+        paspExpiry String Expiry date of ID card. Format: &quot; dd /MM/yyyy &quot;. For example: &quot;22/02/2032&quot;
+        paspOrg String Identity card issuer.
+        country String Customer&#x27;s country.
+        city String Customer City
+        address String Customer&#x27;s registered address.
+        paspPin * String Customer ID&#x27;s PIN.     */
+
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

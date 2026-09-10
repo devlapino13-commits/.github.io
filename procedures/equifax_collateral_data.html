@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EQUIFAX_COLLATERAL_DATA — процедура — схема БД</title>
+<meta name="description" content="Процедура EQUIFAX_COLLATERAL_DATA: 1 входных, 7 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>EQUIFAX_COLLATERAL_DATA</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">7</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="equifax_prep_kont_list_temp.html"><div class="to">EQUIFAX_PREP_KONT_LIST_TEMP</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">7 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SUBJECT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">COLLATERAL_ID</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">COLLATERAL_NO</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">COLLATERAL_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">COLLATERAL_ENDDATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ASSESSMENT</div><div class="ptype">DECIMAL(15,2)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ASSESSMENT_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE EQUIFAX_COLLATERAL_DATA(
+    K_ID ID_TYPE)
+RETURNS (
+    SUBJECT INTEGER,
+    COLLATERAL_ID STR_255,
+    COLLATERAL_NO STR_20,
+    COLLATERAL_DATE DATE,
+    COLLATERAL_ENDDATE DATE,
+    ASSESSMENT DECIMAL(15,2),
+    ASSESSMENT_DATE DATE)
+AS
+declare variable drl_id id_type;
+declare variable zs_id integer;
+begin
+  for
+    select
+      zs_id,
+      k_kontract_no,
+      k_kontract_date,
+      k_kredline_end,
+      z_cost_likvid,
+      k_disb_date,
+      cds_from_drl_id
+    from zalog
+      inner join zalogsubtype
+        on zs_id = z_subtype
+      inner join kontract
+        on k_id = z_from_k_id
+      inner join knclient
+        on kc_from_k_id = k_id
+          and kc_amount_approved &gt; 0
+      left join clientdocs
+        on cds_from_c_id = kc_from_c_id
+          and cast(cds_create_datetime as date) &lt;= k_disb_date -- прикреплен не позднее дня выдачи кредита
+          and cds_from_drl_id &gt; 0
+          and cds_from_pk_id = 315 -- Паспорт трансп. средства (ПТС)
+    where z_from_k_id = :k_id
+      and z_type = 1
+    order by cds_is_delete, cds_create_datetime desc   -- последний прикрепленный не аннулированный, если все аннулированы, то последний из аннулированных
+    rows 1
+  into
+    :zs_id,
+    :collateral_no,
+    :collateral_date,
+    :collateral_enddate,
+    :assessment,
+    :assessment_date,
+    :drl_id
+  do
+  begin
+    if (drl_id is not null) then begin
+      collateral_id = f_docrecog_value(:drl_id, &#x27;vin&#x27;);
+
+      if (zs_id = 1) then
+      begin
+        subject = 1;
+      end
+
+      subject = (case zs_id when 2 then 1 -- FS: Недвижимость =  Equifax: Недвижимость
+                            when 3 then 3 -- FS: Оборудования =  Equifax: Машина, оборудование
+                            when 4 then 2 -- FS: Транспортные средства = Equifax: Транспортное средство
+                            when 5 then 8 -- FS: Товары = Equifax: Товар
+                            when 6 then 6 -- FS: Патенты, лицензии = Equifax: Ценные бумаги
+                 end);
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_PROD_CDM_IGNORE_SHOW — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_PROD_CDM_IGNORE_SHOW: 3 входных, 5 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_PROD_CDM_IGNORE_SHOW</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PR_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PRL_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SHOW_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CDM_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CDM_MEMO</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CDM_IS_ACTIVE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CDM_OBJECT_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_PROD_CDM_IGNORE_SHOW(
+    PR_ID D_INTEGER,
+    PRL_ID D_INTEGER,
+    SHOW_CODE D_STR_CODE)
+RETURNS (
+    CDM_ID D_INTEGER,
+    CDM_MEMO D_STR_255,
+    CDM_IS_ACTIVE D_INTEGER,
+    CDM_OBJECT_KIND D_STR_CODE,
+    CHECK_KIND D_STR_255)
+AS
+declare variable cdm_check_kind d_str_255;
+begin
+  -- RFCKG-3811 процедура отображает данные для модуля
+  -- show_code отражает какую информацию нужно показать
+  -- show_code = &#x27;all&#x27; показывает все блоки
+  -- show_code = &#x27;byProduct&#x27; показывает игнорируемые продуктом
+  if (show_code = &#x27;all&#x27;) then
+  begin
+    for select cdm.cdm_id,
+               cdm.cdm_memo,
+               cdm.cdm_is_active,
+               cdm.cdm_object_kind,
+               cdm.cdm_check_kind
+        from conditionmain cdm
+        order by cdm_id
+        into cdm_id,
+             cdm_memo,
+             cdm_is_active,
+             cdm_object_kind,
+             cdm_check_kind
+    do
+    begin
+      check_kind = &#x27;&#x27;;
+
+      if (exists(select *
+                 from product_condition_ignore pci
+                 where pci.pci_from_prl_id = :prl_id and
+                       pci.pci_from_pr_id = :pr_id and
+                       pci.pci_is_delete = 0 and
+                       pci.pci_from_cdm_id = :cdm_id)) then
+        cdm_is_active = 0;
+
+      if (cdm_check_kind similar to &#x27;%(.loan.)%&#x27;) then
+        check_kind = check_kind || &#x27; в кредите&#x27;;
+
+      if (cdm_check_kind similar to &#x27;%(.check_preview.)%&#x27;) then
+        check_kind = check_kind || &#x27; при просмотре&#x27;;
+
+      if (cdm_check_kind similar to &#x27;%(.loan_approve.)%&#x27;) then
+        check_kind = check_kind || &#x27; при утверждении займа&#x27;;
+
+      if (cdm_check_kind similar to &#x27;%(.send_kk.)%&#x27;) then
+        check_kind = check_kind || &#x27; при отправке на кредитный коммитет&#x27;;
+
+      if (cdm_check_kind similar to &#x27;%(.loan_disb.)%&#x27;) then
+        check_kind = check_kind || &#x27; при выдаче&#x27;;
+
+      if (cdm_check_kind similar to &#x27;%(.miniapp.)%&#x27;) then
+        check_kind = check_kind || &#x27; на уровне кредитной заявки&#x27;;
+
+      if (cdm_check_kind similar to &#x27;%(.create_loan.)%&#x27;) then
+        check_kind = check_kind || &#x27; при сохранении кредитной заявки&#x27;;
+
+      if (cdm_check_kind similar to &#x27;%(.create_loan.)%&#x27;) then
+        check_kind = check_kind || &#x27; при сохранении заявки&#x27;;
+      suspend;
+    end
+  end
+
+  if (show_code = &#x27;byProduct&#x27;) then
+  begin
+    cdm_is_active = 0;
+
+    for select cdm.cdm_id,
+               cdm.cdm_memo,
+               cdm.cdm_object_kind,
+               cdm.cdm_check_kind
+        from product_condition_ignore pci
+        inner join conditionmain cdm on cdm_id = pci.pci_from_cdm_id
+        where pci.pci_from_prl_id = :prl_id and
+              pci.pci_from_pr_id = :pr_id and
+              pci.pci_is_delete = 0
+        order by cdm_id
+        into cdm_id,
+             cdm_memo,
+             cdm_object_kind,
+             cdm_check_kind
+    do
+    begin
+      if (cdm_check_kind similar to &#x27;%(.loan.)%&#x27;) then
+        check_kind = check_kind || &#x27; в кредите&#x27;;
+
+      if (cdm_check_kind similar to &#x27;%(.check_preview.)%&#x27;) then
+        check_kind = check_kind || &#x27; при просмотре&#x27;;
+
+      if (cdm_check_kind similar to &#x27;%(.loan_approve.)%&#x27;) then
+        check_kind = check_kind || &#x27; при утверждении займа&#x27;;
+
+      if (cdm_check_kind similar to &#x27;%(.send_kk.)%&#x27;) then
+        check_kind = check_kind || &#x27; при отправке на кредитный коммитет&#x27;;
+
+      if (cdm_check_kind similar to &#x27;%(.loan_disb.)%&#x27;) then
+        check_kind = check_kind || &#x27; при выдаче&#x27;;
+
+      if (cdm_check_kind similar to &#x27;%(.miniapp.)%&#x27;) then
+        check_kind = check_kind || &#x27; на уровне кредитной заявки&#x27;;
+
+      if (cdm_check_kind similar to &#x27;%(.create_loan.)%&#x27;) then
+        check_kind = check_kind || &#x27; при сохранении кредитной заявки&#x27;;
+
+      if (cdm_check_kind similar to &#x27;%(.create_loan.)%&#x27;) then
+        check_kind = check_kind || &#x27; при сохранении заявки&#x27;;
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

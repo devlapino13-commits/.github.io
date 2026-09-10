@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_OPERAGR_DO_CALC — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_OPERAGR_DO_CALC: 3 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_OPERAGR_DO_CALC</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">AG_RD_CODE</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_OPERAGR_DO_CALC(
+    AG_RD_CODE D_STR_255 NOT NULL,
+    OBJ_KIND D_STR_CODE NOT NULL,
+    OBJ_ID D_ID NOT NULL)
+AS
+declare variable rd_id d_integer;
+declare variable rd_code d_str_255;
+declare variable obj_kind_str d_str_code;
+declare variable cell_main d_str_code;
+declare variable cell_add d_str_code;
+declare variable disb_date d_date;
+declare variable c_id d_id;
+declare variable ol_id d_id;
+declare variable calc_amount d_currency;
+declare variable ag_id d_integer;
+declare variable clk_id d_id;
+declare variable last_close_date d_date;
+declare variable cli_id d_id;
+begin
+  -- Процедура возвращать Agreements.AG_ID
+
+  if (ag_rd_code similar to &#x27;[-]?[[:DIGIT:]]+&#x27;) then
+  begin
+    select rd_id, rd_code
+    from refdata
+    where rd_id = :ag_rd_code
+    into rd_id, rd_code;
+  end else
+  begin
+    select rd_id, rd_code
+    from refdata
+    where rd_code = :ag_rd_code
+    into rd_id, rd_code;
+  end
+
+  if (rd_id is null) then Exit;
+
+  obj_kind_str = f_objkind(obj_kind, &#x27;name&#x27;);
+  obj_kind = f_objkind(obj_kind, &#x27;id&#x27;);
+
+  if (rd_code = &#x27;AgreementKinds.loyal_agreement&#x27;) then -- программа лояльности
+  begin
+    if (obj_kind_str &lt;&gt; &#x27;kontract&#x27;) then
+      exception e_default &#x27;obj_kind expected Kontract, actually: &#x27; || obj_kind_str;
+
+    -- получаем телефонные номера клиента, получивщий займ
+    for select ks_from_ol_id, ks_date_begin,
+               f_cont_info(&#x27;clients&#x27;, kc_from_c_id, &#x27;cell_main&#x27;, &#x27;ok&#x27;),
+               f_cont_info(&#x27;clients&#x27;, kc_from_c_id, &#x27;cell_add&#x27;, &#x27;last&#x27;)
+    from knclient, kontstate
+    where ks_from_k_id = :obj_id and
+          ks_state = 1 and
+          ks_ol_is_delete = 0 and
+          kc_from_k_id = ks_from_k_id and
+          kc_amount_approved &gt;= 10000
+    into ol_id, disb_date, cell_main, cell_add
+    do
+    begin
+      ag_id = null;
+      if (cell_main &lt;&gt; &#x27;&#x27; and cell_add = cell_main) then cell_add = &#x27;&#x27;;
+
+      -- Ищем клиента, кто предоставлял эти номера как номера своего друга.
+      -- Номер друга должен быть предоставлен не позже дня выдачи
+
+      -- поиск по основному номеру
+      c_id = null;
+      if (cell_main &lt;&gt; &#x27;&#x27;) then
+      begin
+        select clk_id, clk_from_c_id
+        from clientlink
+        where clk_link_cell_no = :cell_main and
+              clk_add_datetime between dateadd(day, -90, :disb_date) and (:disb_date + 1)
+        order by clk_id desc
+        rows 1
+        into clk_id, c_id;
+      end
+
+      -- поиск по доп.номеру
+      if (cell_add &lt;&gt; &#x27;&#x27; and c_id is null) then
+      begin
+        select clk_id, clk_from_c_id
+        from clientlink
+        where clk_link_cell_no = :cell_add and
+              clk_add_datetime between dateadd(day, -90, :disb_date) and (:disb_date + 1)
+        order by clk_id desc
+        rows 1
+        into clk_id, c_id;
+      end
+
+      -- находит ID клиета чтобы проверить последний закрытый контракт
+      select kc_from_c_id from knclient
+      where kc_from_k_id = :obj_id
+      and kc_amount_approved &gt; 0
+      rows 1
+      into cli_id;
+
+      -- проверка на закрытие последнего контракта должно пройти более 6ти месяцев
+      if (c_id is not null) then
+      begin
+        last_close_date = null;
+        select max(ks_date_end) from knclient, kontstate
+        where kc_from_c_id = :cli_id
+        and kc_amount_approved &gt; 0
+        and kc_from_k_id = ks_from_k_id
+        and ks_ol_is_delete = 0
+        and ks_state = 1
+        and ks_from_ol_id &lt;&gt; :ol_id
+        into last_close_date;
+
+        if (last_close_date is not null) then
+        begin
+          if (last_close_date &gt;= dateadd(month, -6, disb_date) - 1) then
+          begin
+            c_id = null;
+          end
+        end
+      end 
+
+      -- если нашли клиента-агента, ищем его договор вступления в программу лояльности
+      -- договор должен быть подтвержденным и действующим на дату выдачи
+      if (c_id is not null) then
+      begin
+        select ag_id
+        from agreements
+        where ag_from_rd_id = :rd_id and
+              ag_object_kind = f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;) and
+              ag_object_id = :c_id and
+              ag_status = 1 and
+              :disb_date between ag_date_begin and coalesce(ag_date_end, :disb_date)
+        order by ag_id desc
+        rows 1
+        into ag_id;
+
+        if (ag_id is not null) then
+        begin
+          if (not exists(
+          select * from operagr
+          where ogr_from_ag_id = :ag_id and
+                ogr_from_rd_id = :rd_id and
+                ogr_ol_is_active = 1 and
+                ogr_object_kind = f_objkind(&#x27;clientlink&#x27;, &#x27;id&#x27;) and
+                ogr_object_id = :clk_id)) then
+          begin
+            if (not exists(
+            select * from operagr
+            where ogr_from_ol_id = :ol_id and
+                  ogr_ol_is_active = 1 and
+                  ogr_from_ag_id = :ag_id and
+                  ogr_from_rd_id = :rd_id)) then
+            begin
+              if (exists(select *
+                         from partner_program_group
+                         where ppg_bonus = 600 and
+                               ppg_from_c_id = :c_id)) then
+                calc_amount = 600.00 * 2;
+              else
+                calc_amount = 600.00;
+
+              -- RFCRU-6095: изменение баллов с 429 на 600
+
+              insert into operagr (ogr_from_ol_id, ogr_from_ag_id, ogr_from_rd_id, ogr_sign, ogr_amount, ogr_tax_fl,
+                                   ogr_object_kind, ogr_object_id, ogr_ol_date, ogr_ol_is_active)
+              values (:ol_id, :ag_id, :rd_id, 1, :calc_amount, 0, f_objkind(&#x27;clientlink&#x27;, &#x27;id&#x27;), :clk_id,  :disb_date, 1);
+            end
+          end
+        end
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

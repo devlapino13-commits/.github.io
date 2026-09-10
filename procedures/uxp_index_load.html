@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$INDEX_LOAD — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$INDEX_LOAD: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$INDEX_LOAD</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">INDEX_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SOURCE_NAME</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$INDEX_LOAD(
+    INDEX_NAME D_STR_100)
+RETURNS (
+    SOURCE_NAME D_STR_CODE)
+AS
+declare variable fields d_str_100;
+declare variable is_uniq d_bool;
+declare variable fk_index d_str_code;
+declare variable is_pk d_bool;
+declare variable is_fk d_bool;
+declare variable uix_pk d_bool;
+declare variable uix_fields d_str_100;
+declare variable us_uuid d_uuid;
+declare variable pk_id d_integer;
+declare variable field_name d_str_code;
+begin
+  if (trim(coalesce(index_name, &#x27;&#x27;)) = &#x27;&#x27;) then
+    exit;
+
+  index_name = upper(trim(:index_name));
+  source_name = &#x27;&#x27;;
+
+  select uix_source, uix_pk, uix_fields
+  from ux$index
+  where uix_index = :index_name
+  into :source_name, uix_pk, uix_fields;
+
+  if (source_name = &#x27;&#x27;) then
+  begin
+    for select trim(rdb$relation_name), rdb$unique_flag, lower(trim(coalesce(rdb$foreign_key, &#x27;&#x27;)))
+    from rdb$indices
+    where rdb$index_name = :index_name
+    into source_name, is_uniq, fk_index
+    do
+    begin
+      select list(lower(trim(i.rdb$field_name)), &#x27;;&#x27;)
+      from rdb$index_segments i
+      where i.rdb$index_name = :index_name
+      into fields;
+  
+      if (coalesce(fields, &#x27;&#x27;) = &#x27;&#x27;) then
+        exception e_default f_format(&#x27;Index without fields: %1&#x27;, index_name);
+  
+      is_pk = 0;
+      is_fk = 0;
+  
+      if (exists(select *
+      from rdb$relation_constraints r
+      where r.rdb$index_name = :index_name and
+            r.rdb$relation_name = :source_name and
+            r.rdb$constraint_type = &#x27;PRIMARY KEY&#x27;)) then
+        is_pk = 1;
+  
+      if (fk_index &lt;&gt; &#x27;&#x27;) then
+        is_fk = 1;
+  
+      insert into ux$index (uix_index, uix_source, uix_fields, uix_pk, uix_uniq, uix_fk, uix_fk_index)
+      values (lower(:index_name), lower(:source_name), :fields, :is_pk, :is_uniq, :is_fk, :fk_index);
+    end
+  end else
+  begin
+    update ux$index
+    set uix_state = 0
+    where uix_index = lower(:index_name);
+
+    if (uix_pk = 1) then
+    begin
+      select us_uuid
+      from ux$source
+      where us_code = :source_name and
+            us_is_table = 1 and
+            us_kind = 0
+      into us_uuid;
+
+      if (us_uuid is not null) then
+      begin
+        update ux$field
+        set uf_pk_field = 0
+        where uf_owner = :us_uuid and
+              uf_pk_field &lt;&gt; 0;
+  
+        pk_id = 0;
+        for select res_str
+        from uxp$split_str(:uix_fields, &#x27;;&#x27;)
+        into :field_name
+        do
+        begin
+          pk_id = pk_id + 1;
+  
+          update ux$field
+          set uf_pk_field = :pk_id
+          where uf_owner = :us_uuid and
+                uf_field_name = :field_name;
+        end
+      end
+    end
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

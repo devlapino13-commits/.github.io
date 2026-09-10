@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_PRETRIAL_CLAIM_ADD — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_PRETRIAL_CLAIM_ADD: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_PRETRIAL_CLAIM_ADD</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_sud_loandocs_add.html"><div class="to">HP_SUD_LOANDOCS_ADD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SMD_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_PRETRIAL_CLAIM_ADD(
+    SMD_ID D_ID,
+    UN_ID D_ID)
+RETURNS (
+    RES_TEXT D_STR_255)
+AS
+declare variable stage_id d_integer;
+declare variable doc_kind d_integer;
+declare variable doc_code d_str_code;
+declare variable res_sld_id d_id;
+declare variable err_text d_str_255;
+begin
+  -- Процедура добавляет в список документов по судебному делу документ &quot;Претензия досудебная&quot; (RFCRU-3114)
+  -- при переходе заявки из стадии &quot;Заявка на утверждение&quot; в стадию &quot;Определение подсудности&quot;
+  -- претензия добавляется автоматически через sud_maindocs_ai0 -&gt; hp_sud_loandocs_autocreate,
+  -- если же претензию необходимо добавить в заявках, которые уже прошли стадию &quot;Заявка на утверждение&quot;,
+  -- т.е. в заявках которые в работе до внедрения эл. документа претензии, то используется данная процедура.
+
+  res_sld_id = null;
+  doc_code = &#x27;pretrial_claim&#x27;;
+
+  if (un_id is null) then
+    un_id = 1000000000000;
+
+  select sul_object_kind
+  from sud_mainreq
+  inner join sud_mainlog on sul_id = smr_last_sul_id
+  where smr_id = :smd_id
+  into stage_id;
+
+  if (stage_id &lt;&gt; f_objkind(&#x27;sud_maindocs&#x27;, &#x27;id&#x27;)) then
+    exception e_message &#x27;Претензию можно добавить, если заявка на этапе Документы&#x27;;
+
+  select scd_id
+  from sud_cfgdockind
+  where scd_code = :doc_code
+  into doc_kind;
+
+  select res_sld_id
+  from hp_sud_loandocs_add(:smd_id, null, :doc_kind, :un_id)
+  into :res_sld_id;
+
+  if (res_sld_id is null) then
+    exception e_message &#x27;Бланк эл. документа претензии не добавлен&#x27;;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

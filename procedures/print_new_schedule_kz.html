@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PRINT_NEW_SCHEDULE_KZ — процедура — схема БД</title>
+<meta name="description" content="Процедура PRINT_NEW_SCHEDULE_KZ: 2 входных, 5 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>PRINT_NEW_SCHEDULE_KZ</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_blobex_blob.html"><div class="to">HP_GET_BLOBEX_BLOB</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ADD_PARAMS</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SH_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SH_OS</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SH_PERC</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SH_TOTAL_OS_PERC</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SH_REMAIN_OS</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE PRINT_NEW_SCHEDULE_KZ(
+    K_ID D_ID,
+    ADD_PARAMS D_STR_LONG = null)
+RETURNS (
+    SH_DATE D_DATE,
+    SH_OS CURR_TYPE,
+    SH_PERC CURR_TYPE,
+    SH_TOTAL_OS_PERC CURR_TYPE,
+    SH_REMAIN_OS CURR_TYPE)
+AS
+declare variable counter d_integer;
+declare variable bls_id d_id;
+declare variable json_text d_blob_text;
+declare variable json_schedule d_blob_text;
+declare variable schedule_counter d_integer;
+declare variable sh_balance_before curr_type;
+begin
+  for select eil.eil_from_bls_id
+      from extinfolist eil
+      inner join extinfocfg eic on eic.eic_id = eil.eil_from_eic_id and
+            eic.eic_code = &#x27;restruct_schedule&#x27;
+      where eil.eil_status = 2 and
+            eil.eil_object_kind = f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;) and
+            eil.eil_object_id = :k_id and
+            eil.eil_is_json = 1 and
+            eil.eil_from_bls_id &gt; 0
+      order by eil.eil_id desc rows 1
+      into bls_id
+  do
+  begin
+
+    select blx_blob
+    from hp_get_blobex_blob(:bls_id)
+    into json_text;
+
+    sh_balance_before = f_json_str_get_value(:json_text, &#x27;sh_balance_before&#x27;, &#x27;&#x27;);
+    json_schedule = cast(f_json_blob_get_value(:json_text, &#x27;schedule&#x27;, &#x27;&#x27;) as d_blob_text);
+    schedule_counter = f_json_str_get_count(:json_text, &#x27;schedule&#x27;);
+    counter = 0;
+    sh_date = null;
+    sh_os = 0;
+    sh_perc = 0;
+    sh_total_os_perc = 0;
+    sh_remain_os = sh_balance_before;
+    while (json_schedule &lt;&gt; &#x27;&#x27; and schedule_counter &gt; counter) do
+    begin
+      sh_date = f_json_str_get_value(:json_text, &#x27;schedule[&#x27; || cast(counter as varchar(25)) || &#x27;].sh_date&#x27;, &#x27;&#x27;);
+      sh_os = f_json_str_get_value(:json_text, &#x27;schedule[&#x27; || cast(counter as varchar(25)) || &#x27;].zad_os&#x27;, &#x27;&#x27;);
+      sh_perc = f_json_str_get_value(:json_text, &#x27;schedule[&#x27; || cast(counter as varchar(25)) || &#x27;].zad_perc&#x27;, &#x27;&#x27;);
+      sh_total_os_perc = sh_os + sh_perc;
+      sh_remain_os = sh_remain_os - sh_os;
+      counter = counter + 1;
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

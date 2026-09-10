@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_UPDATE_FP_ANKETA — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_UPDATE_FP_ANKETA: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_UPDATE_FP_ANKETA</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_contdata_get_cell_valid.html"><div class="to">HP_CONTDATA_GET_CELL_VALID</div></a><a class="ref-card" href="hp_contdata_get_email_valid.html"><div class="to">HP_CONTDATA_GET_EMAIL_VALID</div></a><a class="ref-card" href="hp_fp_anketa_ins_upd.html"><div class="to">HP_FP_ANKETA_INS_UPD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_UPDATE_FP_ANKETA
+AS
+declare variable fpa_id id_type;
+declare variable fpa_c_id id_type;
+declare variable fpa_date date;
+declare variable fpa_date_str str_100;
+declare variable fpa_changes varchar(1000);
+declare variable fpa_cell_no str_100;
+declare variable fpa_email str_100;
+declare variable dochange smallint;
+declare variable fpa_city_id id_type;
+declare variable fpa_ank_resp id_type;
+declare variable fpa_rel_start date;
+declare variable ma_id integer;
+declare variable fpa_date_check date;
+declare variable fpa_cell_no_tmp str_100;
+declare variable fpa_email_tmp str_100;
+begin
+  for select fpc.fpa_id, fpc.fpa_c_id, coalesce(fpc.fpa_cell_no, &#x27;&#x27;), coalesce(fpc.fpa_email, &#x27;&#x27;)
+      from fp_anketa_cl fpc
+      order by fpc.fpa_c_id, fpc.fpa_id
+      into :fpa_id, :fpa_c_id, :fpa_cell_no, :fpa_email
+  do
+  begin
+    dochange = 0;
+
+    if (fpa_id = 1) then
+    begin
+      dochange = 1;
+
+      select reg.reg_from_pl_id, cl.c_id, ks.ks_date_begin, kont.k_from_ma_app_id
+      from knclient kncl
+      inner join kontract kont on kont.k_id = kncl.kc_from_k_id
+      inner join kontstate ks on ks.ks_from_k_id = kncl.kc_from_k_id
+      inner join region reg on reg.reg_unicode = ks.ks_region_id
+      inner join operlist ol on ol.ol_id = ks.ks_from_ol_id
+      inner join username un on un.un_id = ol.ol_user_id
+      inner join clients cl on cl.c_id = un.un_from_c_id
+      where ks.ks_ol_is_delete = 0 and
+            ks.ks_state = 1 and
+            kncl.kc_amount_approved &gt; 0 and
+            kont.k_status &lt;&gt; -1 and
+            kncl.kc_from_c_id = :fpa_c_id
+      order by ks.ks_date_begin
+      rows 1
+      into :fpa_city_id, :fpa_ank_resp, :fpa_rel_start, :ma_id;
+
+      select maa.ma_date_app
+      from miniapp maa
+      where maa.ma_id = :ma_id and
+            maa.ma_date_end = &#x27;31.12.9999&#x27;
+      into :fpa_date_check;
+    end
+
+    fpa_cell_no_tmp = &#x27;&#x27;;
+    fpa_email_tmp = &#x27;&#x27;;
+
+    select cont_value
+    from hp_contdata_get_cell_valid(0, :fpa_c_id)
+    into :fpa_cell_no_tmp;
+
+    select cont_value
+    from hp_contdata_get_email_valid(0, :fpa_c_id)
+    into :fpa_email_tmp;
+
+    if (fpa_cell_no &lt;&gt; fpa_cell_no_tmp) then
+    begin
+      fpa_cell_no = fpa_cell_no_tmp;
+      dochange = 1;
+    end
+
+    if (fpa_email &lt;&gt; fpa_email_tmp) then
+    begin
+      fpa_email = fpa_email_tmp;
+      dochange = 1;
+    end
+
+    if (dochange = 1) then
+    begin
+      update fp_anketa_cl fpc
+      set fpc.fpa_email = :fpa_email,
+          fpc.fpa_cell_no = :fpa_cell_no
+      where fpc.fpa_id = :fpa_id and
+            fpc.fpa_c_id = :fpa_c_id;
+    end
+
+    execute procedure hp_fp_anketa_ins_upd(:fpa_id, :fpa_c_id, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, 1);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

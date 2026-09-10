@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FSROBOT_MAILING_SMS_DISB_X — процедура — схема БД</title>
+<meta name="description" content="Процедура FSROBOT_MAILING_SMS_DISB_X: 3 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FSROBOT_MAILING_SMS_DISB_X</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">4 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_contdata_get_cell_main.html"><div class="to">HP_CONTDATA_GET_CELL_MAIN</div></a><a class="ref-card" href="hp_fio_clear.html"><div class="to">HP_FIO_CLEAR</div></a><a class="ref-card" href="hp_show_clientuniq_acc_no.html"><div class="to">HP_SHOW_CLIENTUNIQ_ACC_NO</div></a><a class="ref-card" href="mc_send_push.html"><div class="to">MC_SEND_PUSH</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_PARAMS</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_EMAIL</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">USER_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_SUBJECT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_BODY</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_MAILLIST</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FSROBOT_MAILING_SMS_DISB_X(
+    REP_PARAMS VARCHAR(255),
+    REP_EMAIL VARCHAR(255),
+    USER_FIO VARCHAR(100))
+RETURNS (
+    RES_SUBJECT VARCHAR(255),
+    RES_BODY BLOB SUB_TYPE TEXT SEGMENT SIZE 80,
+    RES_MAILLIST VARCHAR(255),
+    RES_C_ID DECIMAL(18,0))
+AS
+declare variable c_name_fio varchar(100);
+declare variable ol_date date;
+declare variable c_cell_no varchar(100);
+declare variable c_id decimal(18,0);
+declare variable kol integer;
+declare variable date_format_str varchar(20);
+declare variable k_id decimal(18,0);
+declare variable amount decimal(18,4) = 0;
+declare variable uniq_acc_str varchar(10);
+declare variable amount_str varchar(20);
+declare variable db_id integer;
+declare variable amount_sym varchar(10);
+declare variable cell_all varchar(255);
+declare variable push_body d_str_long;
+begin
+-- Процедура вызывается из FSROBOT_ON_MAILING
+-- Процедура готовит список уведомлений для отправки роботом по почте или sms
+-- REP_COMMAND_KIND. Настройки сообщения хранятся в таблице RefData:
+-- справочник NotifyMail || &#x27;.&#x27; || Rep_Command_Kind - строка настроек email
+-- справочник NotifySMS  || &#x27;.&#x27; || Rep_Command_Kind - строка настроек SMS
+
+-- RefData.RD_Memo    - Список получателей
+-- RefData.RD_Tag     - Срок жизни сообщения
+-- RefData.RD_STR_ID  - Название хранимой процедуры, которая готовит текст сообщения
+
+-- Rep_Params - входящий параметры в зависимости от команды
+-- Rep_UN_ID - пользователь
+
+-- СМС при аннулирование выдачи
+
+  if (user_fio is null) then
+    user_fio = &#x27;&#x27;;
+  res_maillist = :rep_email;
+
+  db_id = f_get_db_id();
+  amount_sym = (case
+                  when (db_id = 81001) then &#x27; rub&#x27;
+                  when (db_id in (39801, 41701)) then &#x27;c.&#x27;
+                  when (db_id = 94401) then &#x27;AZN&#x27;
+                end);
+
+  res_body = &#x27;&#x27;;
+  kol = 0;
+  for select distinct ok_from_k_id, ok_ol_date
+      from operkred, operlist
+      where ok_from_ol_id = :rep_params and
+            ol_id = :rep_params and
+            ol_oper_type = 1 -- Выдача
+            and
+            ol_oper_subtype = 1 -- Выдача
+            and
+            ok_ol_is_active = 0 -- Аннулирован
+            and
+            ok_type = 8 -- Выдача
+      into :k_id, :ol_date
+  do
+  begin
+    date_format_str = f_datetostr(ol_date);
+
+    cell_all = &#x27;&#x27;;
+    for select c_id, kc_amount_approved,
+               (select cont_value
+                from hp_contdata_get_cell_main(0, c_id)), c_name_fio
+        from knclient, clients
+        where kc_amount_approved &gt; 0 and
+              kc_from_k_id = :k_id and
+              kc_from_c_id = c_id
+        into :c_id, :amount, c_cell_no, c_name_fio
+    do
+    begin
+      res_c_id = c_id;
+      if ((right(coalesce(c_cell_no, &#x27;000000&#x27;), 6) &lt;&gt; &#x27;000000&#x27;) and
+          (position(c_cell_no, cell_all) &lt;= 0)) then
+      begin
+        cell_all = cell_all || c_cell_no || &#x27;;&#x27;;
+        c_name_fio = (select short_fio
+                      from hp_fio_clear(:c_name_fio));
+        uniq_acc_str = (select uniq_acc_str
+                        from hp_show_clientuniq_acc_no(:c_id));
+
+        amount_str = round(amount, 0);
+        if (char_length(amount_str) &gt; 6) then
+          amount_str = left(amount_str, char_length(amount_str) - 6) || &#x27;,&#x27; || left(right(amount_str, 6), 3) || &#x27;,&#x27; || right(amount_str, 3);
+        else
+        if (char_length(amount_str) &gt; 3) then
+          amount_str = left(amount_str, char_length(amount_str) - 3) || &#x27;,&#x27; || right(amount_str, 3);
+        amount_str = amount_str || amount_sym;
+        kol = kol + 1;
+
+        -- СМС, об аннулировании транзакции
+        res_body = &#x27;&#x27;;
+        res_maillist = :c_cell_no;
+        res_subject = &#x27;Выдача кредита: Аннулирована&#x27;;
+
+        if (db_id in (39801, 41701)) then
+          res_body = &#x27;Л/счет:&#x27; || uniq_acc_str || &#x27;;Финансирование &#x27; || amount_str || &#x27;с. не выдано, &#x27; || :date_format_str;
+        else
+        if (db_id = 81001 and f_clientcom_allowed(c_id, 0, 0, 1) = 1) then
+        begin
+          res_body = &#x27;Lisevoi chet: &#x27; || uniq_acc_str || &#x27;. Vydacha annulirovana. Zaem: &#x27; || amount_str || &#x27;.ot &#x27; || :date_format_str;
+          -- отправляем в КМП пуш-уведомление
+          push_body = &#x27;Лицевой счет:&#x27; || uniq_acc_str || &#x27;. Выдача аннулирована. Заём: &#x27; || amount_str || &#x27; от &#x27; || :date_format_str;
+          execute procedure mc_send_push(&#x27;clients&#x27;, :c_id, :res_subject, :push_body);
+        end
+        else
+        if (db_id = 94401) then -- AZ
+          res_body = &#x27;Hesab N:&#x27; || uniq_acc_str || &#x27;; MolBulaka odenish legv olundu: &#x27; || amount_str || &#x27; / tarix &#x27; || :date_format_str;
+        if (db_id &lt;&gt; 81001 or f_clientcom_allowed(c_id, 0, 0, 1) = 1) then
+          suspend;
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

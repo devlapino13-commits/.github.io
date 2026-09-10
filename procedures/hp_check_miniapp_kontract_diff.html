@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CHECK_MINIAPP_KONTRACT_DIFF — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CHECK_MINIAPP_KONTRACT_DIFF: 3 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CHECK_MINIAPP_KONTRACT_DIFF</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_check_loan_data.html"><div class="to">HP_GET_CHECK_LOAN_DATA</div></a><a class="ref-card" href="hp_objectprops_memo_set.html"><div class="to">HP_OBJECTPROPS_MEMO_SET</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_miniapp_kontract_sync.html"><div class="to">HP_MINIAPP_KONTRACT_SYNC</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KIND</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CHECK_MINIAPP_KONTRACT_DIFF(
+    K_ID DECIMAL(18,0),
+    MA_ID INTEGER,
+    KIND VARCHAR(20))
+AS
+declare variable db_id integer;
+declare variable need_cancel_kk integer;
+declare variable rd_id integer;
+declare variable cl_diff integer;
+declare variable acl_id decimal(18,0);
+declare variable c_id decimal(18,0);
+declare variable new_memo varchar(255);
+declare variable un_id decimal(18,0);
+declare variable opr_id decimal(18,0);
+begin
+-- Процедуры выполняется в момент синхронизации данных между договором и заявки
+-- Если имеются нижеуказанные изменения и существует положительное решение кредитного комитета,
+-- то процедура отменяет решение
+
+  :db_id = f_get_db_id();
+
+  /*select rd_id
+  from refdata
+  where rd_code = &#x27;ActionGroup.Check_Loan_Data&#x27; and
+        rd_is_active = 1
+  into :rd_id;*/
+
+  select rd_id
+  from hp_get_check_loan_data(:k_id)
+  into:rd_id;
+
+  if (rd_id is null) then
+    exit; -- Если нет анкеты КК, отменяем действие
+
+  select acl_id
+  from actionlist
+  where acl_object_kind = 9 and
+        acl_object_id = :k_id and
+        acl_status = 2 and
+        acl_from_rd_id = :rd_id
+  order by acl_id desc
+  rows 1
+  into acl_id;
+  if (acl_id is null) then
+    exit; -- если нет положительного решения, завершаем процесс
+
+  need_cancel_kk = 0;
+-- Проверяем измененные данные
+
+-- Сменился участник
+  for select kc_from_c_id
+      from knclient
+      where kc_from_k_id = :k_id and
+            kc_amount_approved &gt; 0
+      into :c_id
+  do
+  begin
+    if (not(exists(select *
+                   from miniappclient
+                   where mac_from_ma_id = :ma_id and
+                         mac_amount &gt; 0 and
+                         mac_from_c_id = :c_id))) then
+      need_cancel_kk = 1;
+  end
+
+  if (need_cancel_kk = 0) then
+  begin
+    for select mac_from_c_id
+        from miniappclient
+        where mac_from_ma_id = :ma_id and
+              mac_amount &gt; 0
+        into :c_id
+    do
+    begin
+      if (not(exists(select *
+                     from knclient
+                     where kc_from_k_id = :k_id and
+                           kc_amount_approved &gt; 0 and
+                           kc_from_c_id = :c_id))) then
+        need_cancel_kk = 1;
+    end
+  end
+  if (need_cancel_kk = 0) then
+  begin
+-- Количество участников отличается
+    cl_diff = 0;
+    with tab
+    as (select count(*) as cl_count
+        from knclient
+        where kc_from_k_id = :k_id and
+              kc_amount_approved &gt; 0
+        union
+        select -count(*) as cl_count
+        from miniappclient
+        where mac_from_ma_id = :ma_id and
+              mac_amount &gt; 0)
+    select sum(cl_count)
+    from tab
+    into :cl_diff;
+    if (cl_diff is null) then
+      cl_diff = 0;
+    if (cl_diff &lt;&gt; 0) then
+      need_cancel_kk = 1;
+  end
+
+  if (need_cancel_kk = 0) then
+  begin
+-- Проверяем срок кредита
+    if (kind = &#x27;k-&gt;m&#x27;) then
+    begin
+      if (exists(select *
+                 from kontract, miniapp
+                 where k_id = :k_id and
+                       ma_id = :ma_id and
+                       ma_date_end &gt;= &#x27;31.12.2999&#x27; and
+                       k_kolich_repay &lt; ma_kolich_repay)) then
+        need_cancel_kk = 1;
+    end
+    else
+    begin
+      if (exists(select *
+                 from kontract, miniapp
+                 where k_id = :k_id and
+                       ma_id = :ma_id and
+                       ma_date_end &gt;= &#x27;31.12.2999&#x27; and
+                       ma_kolich_repay &lt; k_kolich_repay)) then
+        need_cancel_kk = 1;
+    end
+  end
+
+  if (need_cancel_kk = 0) then
+  begin
+-- Проверка увеличения суммы
+    if (kind = &#x27;k-&gt;m&#x27;) then
+    begin
+-- Меняется договора
+      if (exists(select *
+                 from knclient, miniappclient
+                 where kc_from_k_id = :k_id and
+                       kc_amount_approved &gt; 0 and
+                       mac_from_ma_id = :ma_id and
+                       mac_amount &gt; 0 and
+                       kc_amount_approved &gt; mac_amount and
+                       mac_from_c_id = kc_from_c_id)) then
+        need_cancel_kk = 1;
+    end
+    else
+    begin
+-- Меняется заявка
+      if (exists(select *
+                 from knclient, miniappclient
+                 where kc_from_k_id = :k_id and
+                       kc_amount_approved &gt; 0 and
+                       mac_from_ma_id = :ma_id and
+                       mac_amount &gt; 0 and
+                       mac_amount &gt; kc_amount_approved and
+                       mac_from_c_id = kc_from_c_id)) then
+        need_cancel_kk = 1;
+    end
+  end
+
+  if (need_cancel_kk = 1) then
+  begin
+    select k_user_id
+    from kontract
+    where k_id = :k_id
+    into :un_id;
+
+    --S.K. 12.11.2019
+    --delete from zalog where z_from_k_id = :k_id;
+
+    update actionlist
+    set acl_status = -1,
+        acl_from_un_id = :un_id
+    where acl_id = :acl_id;
+
+    new_memo = &#x27;Доработка: Отозван из КК в связи с изменениями условий заявки&#x27;;
+    execute procedure hp_objectprops_memo_set(9, :k_id, -1, :rd_id, :new_memo, :un_id);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

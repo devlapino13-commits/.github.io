@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_OIVO_FPS_BANK_CHECK — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_OIVO_FPS_BANK_CHECK: 4 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_OIVO_FPS_BANK_CHECK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="mc_check_online_loan_availability.html"><div class="to">MC_CHECK_ONLINE_LOAN_AVAILABILITY</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PHONE</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FPB_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FCB_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FCB_STATUS</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_OIVO_FPS_BANK_CHECK(
+    C_ID D_ID,
+    PHONE D_STR_20,
+    FPB_ID D_INTEGER,
+    UN_ID D_ID)
+RETURNS (
+    RES_CODE D_STR_CODE,
+    RES_TEXT D_STR_255,
+    FCB_ID D_INTEGER,
+    FCB_STATUS D_SMALLINT)
+AS
+declare variable clt_id d_integer;
+declare variable check_count d_integer;
+declare variable last_check_dt d_datetime;
+declare variable result_stale_minutes d_integer;
+begin
+    -- RFCRU-5828
+    /* Проверка принадлежности номера phone клиенту c_id в банке fpb_id.
+       res_code: &#x27;success&#x27; - номер подтвержден банком,
+                 &#x27;fail&#x27;    - номер не принадлежит клиенту,
+                 &#x27;limit&#x27;   - превышен лимит проверок за сутки,
+                 &#x27;error&#x27;   - результат из банка еще не получен либо
+                             некорректные входные данные */
+    res_code = &#x27;error&#x27;;
+    res_text = &#x27;&#x27;;
+    fcb_id = null;
+    fcb_status = null;
+
+    -- результат старше этого интервала считаем устаревшим и
+    -- отправляем номер на повторную проверку в банк
+    result_stale_minutes = 30;
+
+    if (coalesce(phone, &#x27;&#x27;) = &#x27;&#x27;) then
+    begin
+        res_text = &#x27;Номер телефона не определен&#x27;;
+        suspend;
+        exit;
+    end
+
+    if (fpb_id is null) then
+    begin
+        res_text = &#x27;Банк СБП не выбран&#x27;;
+        suspend;
+        exit;
+    end
+
+    if (not exists(select * from fps_banks
+                   where fpb_id = :fpb_id and fpb_status = 1 and
+                                  fpb_name_full is not null)) then
+    begin
+        res_text = &#x27;Выбранный банк СБП не активен&#x27;;
+        suspend;
+        exit;
+    end
+
+    clt_id = f_cont_id(phone, &#x27;add&#x27;);
+
+    select fcb_id, fcb_status
+    from fps_client_banks
+    where fcb_from_c_id = :c_id and
+          fcb_from_clt_id = :clt_id and
+          fcb_from_fpb_id = :fpb_id
+    into fcb_id, fcb_status;
+
+    -- связки клиент + номер + банк еще нет (номер введен на этапе 17):
+    -- создаем запись, триггеры отправят ее на проверку в банк
+    if (fcb_id is null) then
+    begin
+        insert into fps_client_banks (fcb_from_c_id, fcb_from_clt_id, fcb_from_fpb_id, fcb_from_un_id)
+        values (:c_id, :clt_id, :fpb_id, :un_id)
+        returning fcb_id, fcb_status
+        into fcb_id, fcb_status;
+
+        res_text = &#x27;Проверка номера в банке инициирована, результат еще не получен&#x27;;
+        suspend;
+        exit;
+    end
+
+    -- номер подтвержден банком
+    if (fcb_status = 2) then
+    begin
+        res_code = &#x27;success&#x27;;
+        suspend;
+        exit;
+    end
+
+    -- проверка в банке еще выполняется
+    if (fcb_status = 0) then
+    begin
+        res_text = &#x27;Проверка номера в банке выполняется, результат еще не получен&#x27;;
+        suspend;
+        exit;
+    end
+
+    select max(fcc_datetime)
+    from fps_client_banks_checks
+    where fcc_from_fcb_id = :fcb_id
+    into last_check_dt;
+
+    -- свежий результат - это ответ банка на текущую проверку
+    if (last_check_dt is not null and
+        datediff(minute, last_check_dt, current_timestamp) &lt;= result_stale_minutes) then
+    begin
+        res_code = &#x27;fail&#x27;;
+        res_text = case fcb_status
+                     when  1 then &#x27;ФИО владельца номера в банке не совпадает с данными клиента&#x27;
+                     when -1 then &#x27;Номер не найден в выбранном банке&#x27;
+                     else &#x27;Принадлежность номера не подтверждена&#x27;
+                   end;
+        suspend;
+        exit;
+    end
+
+    -- результат устарел: отправляем на повторную проверку
+    -- с контролем лимита проверок за сутки
+    check_count = 0;
+    select count(*)
+    from fps_client_banks_checks
+    where fcc_from_fcb_id = :fcb_id
+      and datediff(hour, fcc_datetime, current_timestamp) &lt;= 24
+    into check_count;
+
+    if (check_count &gt;= 5) then
+    begin
+        res_code = &#x27;limit&#x27;;
+        res_text = &#x27;Превышен лимит проверок номера в СБП. Попробуйте позже или выберите другой банк&#x27;;
+        suspend;
+        exit;
+    end
+
+    -- более двух суток данные о проверках не храним
+    delete from fps_client_banks_checks
+    where fcc_from_fcb_id = :fcb_id
+      and fcc_datetime &lt; current_timestamp - 2;
+
+    update fps_client_banks
+    set fcb_status = 0,
+        fcb_from_un_id = :un_id
+    where fcb_id = :fcb_id;
+
+    fcb_status = 0;
+    res_text = &#x27;Проверка номера в банке инициирована повторно, результат еще не получен&#x27;;
+    suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_DISB_POINT_TMP — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_DISB_POINT_TMP: 2 входных, 5 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_DISB_POINT_TMP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_disb_point.html"><div class="to">AAREP_DISB_POINT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REG_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PR_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_DISB_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_POINT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CLIENT_STATE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_DISB_POINT_TMP(
+    REP_DATE_BEGIN D_DATE,
+    REP_DATE_END D_DATE)
+RETURNS (
+    REG_ID D_INTEGER,
+    PR_ID D_INTEGER,
+    K_DISB_DATE D_DATE,
+    RES_POINT D_INTEGER,
+    CLIENT_STATE D_INTEGER)
+AS
+declare variable c_id d_id;
+declare variable last_close_date d_date;
+begin
+  for select kc_from_c_id, ks_date_begin, k_from_pr_id, ks_region_id
+  from kontstate, kontract, knclient
+  where ks_date_begin between :rep_date_begin and :rep_date_end and
+        ks_state = 1 and
+        ks_ol_is_delete = 0 and
+        ks_from_k_id = k_id and
+        k_id = kc_from_k_id and
+        kc_amount_approved &gt; 0
+  into c_id, k_disb_date, pr_id, reg_id
+  do
+  begin
+    res_point = f_point(c_id, k_disb_date);
+
+    client_state = 0; -- Клиент новый
+    last_close_date = null;
+    select ks_date_end
+    from kontstate, knclient
+    where ks_state = 1 and
+          ks_ol_is_delete = 0 and
+          ks_date_begin &lt; :k_disb_date and
+          ks_from_k_id = kc_from_k_id and
+          kc_from_c_id = :c_id and
+          kc_amount_approved &gt; 0
+    order by ks_date_end desc
+    rows 1
+    into last_close_date;
+    if (last_close_date is not null) then
+    begin
+      if (last_close_date &lt; &#x27;31.12.9999&#x27;) then
+        last_close_date = last_close_date + 1;
+
+      if (last_close_date &gt; k_disb_date)
+      then client_state = 1; -- Клиент активный на момент выдачи
+      else
+        if (last_close_date &gt;= dateadd(day, -30, k_disb_date))
+        then client_state = 2; -- Клиент закрыл за последние 30 дней
+        else client_state = 3; -- Клиент закрыт ранее 30 дней
+    end
+
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

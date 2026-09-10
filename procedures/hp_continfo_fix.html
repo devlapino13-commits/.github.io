@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CONTINFO_FIX — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CONTINFO_FIX: 2 входных, 5 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CONTINFO_FIX</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_objectvalues_dates.html"><div class="to">HP_OBJECTVALUES_DATES</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_contdata_check.html"><div class="to">HP_CONTDATA_CHECK</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">NEW_C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEED_SUSPEND</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RD_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CURR_VALUE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEW_VALUE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">F_NAME</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CONTINFO_FIX(
+    NEW_C_ID D_ID,
+    NEED_SUSPEND D_SMALLINT = 0)
+RETURNS (
+    C_ID D_ID,
+    RD_CODE D_STR_CODE,
+    CURR_VALUE D_STR_CODE,
+    NEW_VALUE D_STR_CODE,
+    F_NAME VARCHAR(50))
+AS
+declare variable rd_id d_integer;
+declare variable opr_id d_id;
+declare variable orig_opr_id d_id;
+declare variable last_cell d_str_code;
+declare variable ok_cell d_str_code;
+declare variable cv_verify_datetime d_datetime;
+declare variable ovs_datetime d_datetime;
+begin
+  for select cci_object_id
+  from continfo
+  where cci_object_kind = 0 and
+        cci_object_id = :new_c_id
+  into c_id
+  do
+  begin
+    for select rd_id, rd_code
+    from refdata
+    where rd_main_code = &#x27;contactinfo&#x27; and
+          rd_main_code &lt;&gt; rd_code
+    into rd_id, rd_code
+    do
+    begin
+      f_name = replace(rd_code, &#x27;contactinfo.&#x27;, &#x27;&#x27;);
+      f_name = &#x27;last_&#x27; || f_name;
+      if (f_name = &#x27;last_insta&#x27;) then
+        continue;
+
+      orig_opr_id = null;
+      select opr_id
+      from objectprops
+      where opr_object_kind = 0 and
+            opr_object_id = :c_id and
+            opr_subject_kind = -1 and
+            opr_subject_id = :rd_id
+      into orig_opr_id;
+
+      if (orig_opr_id is not null) then
+        execute procedure hp_objectvalues_dates(orig_opr_id);
+
+      curr_value = &#x27;&#x27;;
+      execute statement (&#x27;select &#x27; || f_name || &#x27; from continfo where cci_object_kind = 0 and cci_object_id = :c_id&#x27;)
+                        (c_id := c_id)
+      into curr_value;
+
+      opr_id = null;
+      new_value = &#x27;&#x27;;
+      select opr_id, coalesce(ovs_value, &#x27;&#x27;)
+      from objectprops, objectvalues
+      where opr_id = :orig_opr_id and
+            ovs_from_opr_id = opr_id and
+            opr_actual_ovs_id = ovs_id and  -- actual
+            coalesce(ovs_value, &#x27;&#x27;) &lt;&gt; :curr_value
+      into opr_id, new_value;
+  
+      if (opr_id is not null) then
+      begin
+        if (need_suspend = 1) then
+          suspend;
+
+        execute statement (&#x27;update continfo set &#x27; || f_name || &#x27; = :new_value where cci_object_kind = 0 and cci_object_id = :c_id;&#x27;)
+                          (c_id := c_id, new_value := new_value);
+      end
+
+      f_name = replace(rd_code, &#x27;contactinfo.&#x27;, &#x27;&#x27;);
+      f_name = &#x27;ok_&#x27; || f_name;
+
+      curr_value = &#x27;&#x27;;
+      execute statement (&#x27;select &#x27; || f_name || &#x27; from continfo where cci_object_kind = 0 and cci_object_id = :c_id&#x27;)
+                        (c_id := c_id)
+      into curr_value;
+
+      if (rd_code in (&#x27;contactinfo.cell_main&#x27;, &#x27;contactinfo.cell_add&#x27;, &#x27;contactinfo.email&#x27;)) then
+      begin
+        opr_id = null;
+        new_value = &#x27;&#x27;;
+        select opr_id, coalesce(ovs_value, &#x27;&#x27;)
+        from objectprops, objectvalues
+        where opr_id = :orig_opr_id and
+              ovs_from_opr_id = opr_id and
+              opr_fact_ovs_id = ovs_id and -- fact
+              coalesce(ovs_value, &#x27;&#x27;) &lt;&gt; :curr_value
+        into opr_id, new_value;
+    
+        if (opr_id is not null) then
+        begin
+          if (need_suspend = 1) then
+            suspend;
+  
+          execute statement (&#x27;update continfo set &#x27; || f_name || &#x27; = :new_value where cci_object_kind = 0 and cci_object_id = :c_id;&#x27;)
+                            (c_id := c_id, new_value := new_value);
+        end
+      end
+
+      if (rd_code in (&#x27;contactinfo.cell_main&#x27;, &#x27;contactinfo.cell_add&#x27;)) then
+      begin
+        last_cell = &#x27;&#x27;;
+        ok_cell = &#x27;&#x27;;
+        if (rd_code = &#x27;contactinfo.cell_main&#x27;) then
+        begin
+          select last_cell_main, ok_cell_main
+          from continfo
+          where cci_object_kind = 0 and
+                cci_object_id = :c_id and
+                last_cell_main &lt;&gt; ok_cell_main
+          into last_cell, ok_cell;
+        end else
+        begin
+          select last_cell_add, ok_cell_add
+          from continfo
+          where cci_object_kind = 0 and
+                cci_object_id = :c_id and
+                last_cell_add &lt;&gt; ok_cell_add
+          into last_cell, ok_cell;
+        end
+        if (last_cell is null) then last_cell = &#x27;&#x27;;
+        if (ok_cell is null) then ok_cell = &#x27;&#x27;;
+
+        if (ok_cell &lt;&gt; last_cell) then
+        begin
+          cv_verify_datetime = null;
+          select cv_verify_datetime
+          from contverify
+          where cv_object_kind = 0 and
+                cv_object_id = :c_id and
+                cv_from_rd_id = :rd_id and
+                cv_contact_value = :ok_cell and
+                cv_status &gt; 0 and
+                cv_verify_datetime is not null
+          order by cv_verify_datetime desc
+          rows 1
+          into cv_verify_datetime;
+  
+          if (cv_verify_datetime is not null) then
+          begin
+            ovs_datetime = null;
+            select ovs_datetime
+            from objectprops, objectvalues
+            where opr_id = :orig_opr_id and
+                  ovs_from_opr_id = opr_id and
+                  coalesce(ovs_value, &#x27;&#x27;) = :last_cell
+            order by ovs_datetime desc
+            rows 1
+            into ovs_datetime;
+
+            if (ovs_datetime &lt; cv_verify_datetime) then
+            begin
+              if (rd_code = &#x27;contactinfo.cell_main&#x27;) then
+              begin
+                update continfo
+                set last_cell_main = ok_cell_main
+                where cci_object_kind = 0 and
+                      cci_object_id = :c_id;
+              end else
+              begin
+                update continfo
+                set last_cell_add = ok_cell_add
+                where cci_object_kind = 0 and
+                      cci_object_id = :c_id;
+              end
+
+              if (need_suspend = 1) then
+                suspend;
+            end
+          end
+        end
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

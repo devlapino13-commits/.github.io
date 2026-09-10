@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DO_REF_ACCOUNT_REGION_CREATE — процедура — схема БД</title>
+<meta name="description" content="Создает стандартные счета по ЕПС для одноо офиса">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DO_REF_ACCOUNT_REGION_CREATE</code></h1>
+<p class="desc">Создает стандартные счета по ЕПС для одноо офиса</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="get_ref_account_office.html"><div class="to">GET_REF_ACCOUNT_OFFICE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REGION_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DO_REF_ACCOUNT_REGION_CREATE(
+    REGION_ID INTEGER)
+AS
+declare variable sab_full_code d_str_255;
+declare variable acc_id id_type;
+declare variable ol_date date;
+declare variable reg_id d_integer;
+begin
+  ol_date = &#x27;31.12.2017&#x27;;
+
+  for select reg_unicode
+      from region
+      where reg_status = 3 and
+            coalesce(reg_date_close, &#x27;31.12.2999&#x27;) &gt;= :ol_date and
+            (:region_id = 0 or
+            reg_unicode = :region_id)
+      into reg_id
+  do
+  begin
+    for select sab_full_code
+        from sys_accbalance
+        where (sab_full_code starting &#x27;деньги.нал.&#x27; or
+              sab_full_code starting &#x27;микрозаймы.&#x27;) and
+              sab_create_kind &lt;&gt; 0 and
+              sab_acc_mask like &#x27;%.rrrr&#x27; and
+              sab_acc_mask not containing &#x27;A&#x27;
+        into sab_full_code
+    do
+    begin
+      acc_id = null;
+
+      select acc_id
+      from get_ref_account_office(:sab_full_code, &#x27;&#x27;, :reg_id, &#x27;810&#x27;, -1, 0, 3, :ol_date)
+      into acc_id;
+
+      if (acc_id is not null) then
+      begin
+        if (sab_full_code = &#x27;Деньги.Нал.Касса&#x27;) then
+        begin
+          update acc_list
+          set al_from_acc_id = :acc_id
+          where al_from_reg_id = :reg_id and
+                al_from_bg_id = &#x27;50-01&#x27; and
+                al_currency = &#x27;810&#x27; rows 1;
+        end
+
+        if (sab_full_code = &#x27;Деньги.Нал.вПути&#x27;) then
+        begin
+          update acc_list
+          set al_from_acc_id = :acc_id
+          where al_from_reg_id = :reg_id and
+                al_from_bg_id = &#x27;57-01&#x27; rows 1;
+        end
+      end
+
+      if (sab_full_code = &#x27;Деньги.Нал.Касса&#x27;) then
+      begin
+        acc_id = null;
+
+        select acc_id
+        from get_ref_account_office(:sab_full_code, &#x27;&#x27;, :reg_id, &#x27;840&#x27;, -1, 0, 3, :ol_date)
+        into acc_id;
+
+        if (acc_id is not null) then
+        begin
+          update acc_list
+          set al_from_acc_id = :acc_id
+          where al_from_reg_id = :reg_id and
+                al_from_bg_id = &#x27;50-11&#x27; and
+                al_currency = &#x27;840&#x27; rows 1;
+        end
+
+        acc_id = null;
+
+        select acc_id
+        from get_ref_account_office(:sab_full_code, &#x27;&#x27;, :reg_id, &#x27;978&#x27;, -1, 0, 3, :ol_date)
+        into acc_id;
+
+        if (acc_id is not null) then
+        begin
+          update acc_list
+          set al_from_acc_id = :acc_id
+          where al_from_reg_id = :reg_id and
+                al_from_bg_id = &#x27;50-11&#x27; and
+                al_currency = &#x27;978&#x27; rows 1;
+        end
+      end
+
+      if (sab_full_code starting &#x27;микрозаймы.&#x27;) then
+      begin
+        select acc_id
+        from get_ref_account_office(:sab_full_code, &#x27;&#x27;, :reg_id, &#x27;810&#x27;, -1, 1, 3, :ol_date)
+        into acc_id;
+      end
+
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

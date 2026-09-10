@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EFFECT_RATE_RU — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EFFECT_RATE_RU: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EFFECT_RATE_RU</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_effect_rate_common.html"><div class="to">HP_EFFECT_RATE_COMMON</div></a><a class="ref-card" href="hp_effect_rate_to_date.html"><div class="to">HP_EFFECT_RATE_TO_DATE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CALC_EFF</div><div class="ptype">DECIMAL(18,3)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EFFECT_RATE_RU(
+    K_ID D_ID)
+RETURNS (
+    CALC_EFF DECIMAL(18,3))
+AS
+declare variable max_iter integer = 100;
+declare variable calc_error double precision = 0.000001;
+declare variable iter integer;
+declare variable sh_date date;
+declare variable first_date date;
+declare variable prc double precision;
+declare variable l_prc double precision;
+declare variable h_prc double precision;
+declare variable q integer;
+declare variable e double precision;
+declare variable a_sum double precision;
+declare variable bp integer;
+declare variable sh_amount decimal(18,4) = 0;
+declare variable rep_count integer;
+begin
+  -- Расчет полной стоимости кредита (Россия)
+
+  calc_eff = 0.0;
+  if (not(exists(select *
+                 from temp_schedule))) then
+  begin
+    suspend;
+    exit;
+  end
+
+  -- Расчет базового периода для массива платежей
+  -- Ищем минимальный интервал, встречающийся с наибольшей частотой
+  select sh_days, count(*)
+  from temp_schedule
+  where sh_id &gt; 0
+  group by sh_days
+  order by count(*) desc, sh_days asc
+  rows 1
+  into bp, rep_count;
+
+  if (rep_count = 1) then
+  begin
+    -- Если нет повторяющихся периодов, берем среднее арифметическое
+    select ceil(sum(sh_days * 1.0) / count(*))
+    from temp_schedule
+    where sh_id &gt; 0
+    into bp;
+  end
+
+  -- Расчет ПСК
+  l_prc = 0; -- 0%
+  h_prc = cast(10.0 as double precision) / 365.0 * bp; -- предполагаем что не больше 1000% в год
+  iter = 0;
+  select sh_date
+  from temp_schedule
+  where sh_id = 0
+  into first_date;
+  while (iter &lt;= max_iter) do
+  begin
+    a_sum = 0;
+    prc = (l_prc + h_prc) / 2;
+
+    for select sh_date, sh_os
+        from temp_schedule
+        order by sh_date
+        into sh_date, sh_amount
+    do
+    begin
+      q = (sh_date - first_date) / bp;
+      e = mod(sh_date - first_date, bp) * 1.000000 / bp;
+      a_sum = a_sum + sh_amount / ((1 + e * prc) * power(1 + prc, q));
+    end
+
+    if (abs(a_sum) &lt; calc_error) then
+      break;
+    if (a_sum &gt; 0) then
+      l_prc = prc;
+    else
+      h_prc = prc;
+    iter = iter + 1;
+  end
+  if (iter &gt;= max_iter) then
+    exception e_default &#x27;Cannot calc effective rate for contract: &#x27; || k_id;
+  calc_eff = round(prc * 365 / bp, 5) * 100;
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

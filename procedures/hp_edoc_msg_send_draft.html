@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EDOC_MSG_SEND_DRAFT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EDOC_MSG_SEND_DRAFT: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EDOC_MSG_SEND_DRAFT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_edoc_object_info.html"><div class="to">HP_EDOC_OBJECT_INFO</div></a><a class="ref-card" href="hp_edoc_sms_text.html"><div class="to">HP_EDOC_SMS_TEXT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_edoc_msg_insert.html"><div class="to">HP_EDOC_MSG_INSERT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EDL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EDOC_MSG_SEND_DRAFT(
+    EDL_ID D_ID)
+RETURNS (
+    RES_TEXT D_STR_255)
+AS
+declare variable edl_status d_smallint;
+declare variable email_text d_str_8100;
+declare variable c_id d_id;
+declare variable mail_tmp d_str_8100;
+declare variable doc_name d_str_255;
+declare variable edl_object_kind d_integer;
+declare variable edl_object_id d_id;
+declare variable mail_to d_str_long;
+declare variable msg_type d_integer;
+declare variable edc_state d_integer;
+declare variable edc_name d_str_255;
+declare variable eds_id d_id;
+declare variable msg_id d_id;
+declare variable esc_message d_str_long;
+declare variable msg_subject d_str_long;
+declare variable un_id d_id;
+declare variable reg_id d_integer;
+declare variable reg_email_operator d_str_100;
+declare variable cont_info d_str_100;
+declare variable c_name d_str_100;
+declare variable edc_email_on_draft d_str_255;
+declare variable edl_blank_date d_date;
+begin
+  -- Процедура используется для отправки сообщений в режиме теста (eDoc_Cfg.EDC_State in (1, 2))
+
+  res_text = &#x27;&#x27;;
+
+  select edl_status, edc_state, edc_name, edl_object_kind, edl_object_id,
+         edl_create_un_id, edc_email_on_draft, edl_blank_date, edl_from_reg_id
+  from edoc_list, edoc_cfg
+  where edl_id = :edl_id and
+        edl_from_edc_id = edc_id
+  into edl_status, edc_state, edc_name, edl_object_kind, edl_object_id,
+       un_id, edc_email_on_draft, edl_blank_date, reg_id;
+
+  if (edc_state = 0) then res_text = &#x27;Проект не актуален&#x27;;
+  if (res_text = &#x27;&#x27; and edc_state = 3) then res_text = &#x27;Процедура должна вызываться только в режиме тестирования&#x27;;
+  if (res_text = &#x27;&#x27; and edl_status = -1) then res_text = &#x27;Данные устарели&#x27;;
+  if (res_text = &#x27;&#x27; and edl_status = 1) then res_text = &#x27;Документы уже подписаны&#x27;;
+
+  if (res_text = &#x27;&#x27;) then
+  begin
+    mail_to = &#x27;&#x27;;
+    msg_type = 4;
+
+    msg_subject = &#x27;Электронный документ - Тестовый режим&#x27;;
+
+    -- получаем офис и номер документа
+    select iif(:reg_id is null, reg_id, :reg_id), doc_name
+    from hp_edoc_object_info(:edl_object_kind, :edl_object_id, :un_id, :edl_blank_date)
+    into :reg_id, doc_name;
+
+    if (edc_state = 1)
+    then mail_to = edc_email_on_draft; -- получатели тестеры
+    else
+    begin
+      -- получатели: менеджер и КОБД
+
+      select reg_email_manager
+      from region
+      where reg_unicode = :reg_id
+      into mail_to;
+      mail_to = trim(coalesce(mail_to, &#x27;&#x27;));
+
+      select reg_email_operator
+      from region
+      where reg_unicode = :reg_id
+      into reg_email_operator;
+      reg_email_operator = trim(coalesce(reg_email_operator, &#x27;&#x27;));
+
+      if (mail_to = &#x27;&#x27;)
+      then mail_to = reg_email_operator;
+      else
+        if (reg_email_operator &lt;&gt; &#x27;&#x27;)
+        then mail_to = mail_to || &#x27;; &#x27; || reg_email_operator;
+
+      if (mail_to = &#x27;&#x27;) then
+        res_text = &#x27;Email менеджера офиса не заполнен&#x27;;
+    end
+  end
+
+  email_text = &#x27;&#x27;;
+  mail_tmp = &#x27;&#x27;;
+
+  if (res_text = &#x27;&#x27;) then
+  begin
+    -- создаем сообщение
+    insert into fsrobot_msgbox (msg_type, msg_mail_to, msg_subject, msg_body, msg_lifetime_days, msg_from_un_id,
+                                msg_command_kind, msg_object_kind, msg_object_id)
+    values (:msg_type, :mail_to, :msg_subject, :email_text, -1, :un_id, &#x27;&#x27;, null, null)
+    returning msg_id
+    into msg_id;
+
+    -- собираем текст СМС по всем подписантам
+    for select eds_id, eds_from_c_id
+    from edoc_sign
+    where eds_from_edl_id = :edl_id and
+          eds_from_c_id is not null
+    into eds_id, c_id
+    do
+    begin
+      esc_message = &#x27;&#x27;;
+      select cont_info, esc_message, res_text
+      from hp_edoc_sms_text(:eds_id, :msg_id)
+      into cont_info, esc_message, res_text;
+
+      if (res_text &lt;&gt; &#x27;&#x27;) then
+      begin
+        suspend;
+        exit;
+      end
+
+      c_name = &#x27;&lt;Без ФИО&gt;&#x27;;
+      select c_name_fio
+      from clients
+      where c_id = :c_id
+      into c_name;
+  
+      if (mail_tmp &lt;&gt; &#x27;&#x27;) then
+        mail_tmp = mail_tmp || &#x27;&lt;br&gt;&lt;br&gt;&#x27;;
+  
+      mail_tmp = mail_tmp ||
+                &#x27;Получатель: &lt;b&gt;&#x27; || c_name || &#x27;&lt;/b&gt;&lt;br&gt;&#x27; ||
+                &#x27;Телефон: &lt;b&gt;&#x27; || cont_info || &#x27;&lt;/b&gt;&lt;br&gt;&#x27; ||
+                &#x27;Сообщение: &lt;br&gt;&#x27; || esc_message || &#x27;&lt;br&gt;&#x27;;
+    end
+
+    email_text = &#x27;Электронный документ: &#x27; || edc_name;
+
+    if (doc_name &lt;&gt; &#x27;&#x27;) then
+      email_text = email_text || &#x27;, № &#x27; || doc_name;
+  
+    email_text = email_text || &#x27;&lt;br&gt;&#x27; ||
+                              &#x27;Тестируемый проект: &#x27; || edc_name ||&#x27;&lt;br&gt;&#x27; ||
+                              &#x27;Id электронного документа: &#x27; || edl_id || &#x27;&lt;br&gt;&#x27; ||
+                              &#x27;В боевом режиме будут отправлены нижеуказанные СМС.&lt;br&gt;&lt;br&gt;&#x27;;
+
+    email_text = email_text || mail_tmp || &#x27;&lt;br&gt;&#x27;;
+  
+    -- обновляем текст email для отправки получателям (тестерам)
+    update fsrobot_msgbox
+    set msg_body = :email_text
+    where msg_id = :msg_id;
+  end
+
+  Suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_LOGIN_ACTION_CHECKS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_LOGIN_ACTION_CHECKS: 3 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_LOGIN_ACTION_CHECKS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_time_left_formatted.html"><div class="to">HP_GET_TIME_LEFT_FORMATTED</div></a><a class="ref-card" href="hp_msgquota_process.html"><div class="to">HP_MSGQUOTA_PROCESS</div></a><a class="ref-card" href="hp_parse_quota_code.html"><div class="to">HP_PARSE_QUOTA_CODE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="mc_login_action.html"><div class="to">MC_LOGIN_ACTION</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ACTION_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACTION_DATA</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_EXTRA_DATA</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ERR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_LOGIN_ACTION_CHECKS(
+    ACTION_CODE D_STR_CODE,
+    ACTION_DATA D_STR_LONG,
+    CHECK_EXTRA_DATA D_STR_LONG = null)
+RETURNS (
+    RES_CODE D_STR_CODE,
+    ERR_TEXT D_STR_255)
+AS
+declare variable mcl_id d_id;
+declare variable mcl_login d_str_code;
+declare variable mcl_project d_integer;
+declare variable mcl_birth_date d_date;
+declare variable login_try_cnt d_integer;
+declare variable send_code_cnt d_integer;
+declare variable check_code_cnt d_integer;
+declare variable mcc_pin_code d_integer;
+declare variable max_check_cnt d_smallint;
+declare variable pin_code d_integer;
+declare variable db_is_actual d_smallint;
+declare variable db_id d_integer;
+declare variable is_biom d_smallint;
+declare variable c_id_by_login d_id;
+declare variable c_birth_date d_date;
+declare variable tcv_create_datetime d_datetime;
+declare variable tcv_count d_integer;
+declare variable tcv_max_count d_integer;
+declare variable wait_time_minutes_left d_integer;
+declare variable wait_time_minutes_max d_integer;
+declare variable quota_exceeded d_bool;
+declare variable quota_cfg_code d_str_code;
+declare variable quota_cont_code d_str_code ;
+declare variable ip_address d_str_code;
+declare variable mcl_pass_hash d_str_long;
+declare variable mcl_dev_id_str d_str_code;
+declare variable mcl_dev_id d_uuid;
+declare variable mcl_dev_id_actual d_uuid;
+declare variable checks_limit_exceeded d_smallint;
+declare variable quota_code d_str_code;
+declare variable quota_interval_parsed d_integer;
+declare variable time_left_str d_str_100;
+begin
+    /*
+        RFCKG-4671
+        Процедура отвечает за различные проверки, выполняемые в процедуре mc_login_action
+        За валидацию входных параметров отвечает другая процедура - hp_login_action_validation
+    */
+    db_id = f_get_db_id();
+    db_is_actual = 0;
+
+    is_biom = iif(db_id in (39801, 41701), 1, 0);
+
+    if (exists(select * from hp_db_is_actual)) then
+        db_is_actual = 1;
+
+
+    if (action_code in (&#x27;send_code&#x27;, &#x27;check_code&#x27;, &#x27;update_pass&#x27;, &#x27;login&#x27;)) then
+    begin
+        mcl_login = f_json_str_get_value(:action_data, &#x27;login&#x27;, &#x27;&#x27;);
+        mcl_project = f_enum(&#x27;mcl_project&#x27;, f_json_str_get_value(:action_data, &#x27;project&#x27;, &#x27;kmp&#x27;), &#x27;id&#x27;, 0);
+
+        checks_limit_exceeded = 0;
+        login_try_cnt = 0;
+        send_code_cnt = 0;
+        check_code_cnt = 0;
+        max_check_cnt = 3; -- !!HARDCODE!!
+
+        select mcc.mcc_login_try_cnt, mcc.mcc_send_code_cnt, mcc.mcc_check_code_cnt, mcc.mcc_pin_code
+        from mc_check mcc
+        where mcc.mcc_login = :mcl_login and
+              mcc.mcc_check_kind = 0 and
+              mcc.mcc_project = :mcl_project
+        into :login_try_cnt, :send_code_cnt, :check_code_cnt, :mcc_pin_code;
+
+        if (action_code = &#x27;send_code&#x27;) then
+        begin
+            if (db_is_actual = 1 and send_code_cnt &gt;= max_check_cnt) then
+                checks_limit_exceeded = 1; -- Чтобы не дублировать сообщения об ошибках, выносим их в конец и используем флаг ошибки
+        end
+
+        if (action_code in (&#x27;check_code&#x27;, &#x27;update_pass&#x27;)) then
+        begin
+            pin_code = f_json_str_get_value(action_data, &#x27;pin_code&#x27;, -1);
+
+            if (db_is_actual = 1 and check_code_cnt &gt;= max_check_cnt or mcc_pin_code = 0) then
+                checks_limit_exceeded = 1;
+
+            if (checks_limit_exceeded = 0 and mcc_pin_code &lt;&gt; pin_code) then
+            begin
+                update or insert into mc_check
+                (
+                    mcc_login,
+                    mcc_check_code_cnt,
+                    mcc_check_kind,
+                    mcc_project
+                )
+                values
+                (
+                    :mcl_login,
+                    :check_code_cnt + 1,
+                    0,
+                    :mcl_project
+                )
+                matching (mcc_login, mcc_check_kind, mcc_project);
+
+                res_code = case action_code
+                                when &#x27;check_code&#x27; then &#x27;check_error&#x27;
+                                when &#x27;update_pass&#x27; then &#x27;pass_error&#x27;
+                           end;
+
+                err_text = &#x27;Коды не совпадают.&#x27;;
+                
+                suspend;
+                exit;
+            end
+        end
+
+        if (action_code = &#x27;login&#x27;) then
+        begin
+            mcl_pass_hash = f_json_str_get_value(action_data, &#x27;password&#x27;, &#x27;&#x27;);
+            mcl_id = 0;
+
+            select
+              mcl.mcl_id
+            from mc_login mcl
+            where mcl.mcl_login = :mcl_login
+              and mcl.mcl_is_delete = 0
+              and mcl.mcl_project = :mcl_project
+              and mcl.mcl_pass_hash = :mcl_pass_hash
+            into
+              :mcl_id;
+
+            if (coalesce(mcl_id, 0) = 0) then
+            begin
+                update or insert into mc_check
+                (
+                    mcc_login,
+                    mcc_login_try_cnt,
+                    mcc_check_kind,
+                    mcc_project
+                )
+                values
+                (
+                    :mcl_login,
+                    :login_try_cnt + 1,
+                    0,
+                    :mcl_project
+                )
+                matching (mcc_login, mcc_check_kind, mcc_project);
+                
+                res_code = &#x27;login_error&#x27;;
+                err_text = &#x27;Неправильный номер телефона или пароль&#x27;;
+    
+                suspend;
+                exit;
+            end
+
+            if (login_try_cnt &gt;= max_check_cnt) then
+                checks_limit_exceeded = 1;
+        end
+
+        if (checks_limit_exceeded = 1) then
+        begin
+            res_code = case action_code
+                            when &#x27;send_code&#x27; then &#x27;send_block&#x27;
+                            when &#x27;check_code&#x27; then &#x27;check_block&#x27;
+                            when &#x27;update_pass&#x27; then &#x27;pass_block&#x27;
+                            when &#x27;login&#x27; then &#x27;login_block&#x27;
+                       end;
+    
+            err_text = case action_code
+                            when &#x27;send_code&#x27; then &#x27;Превышен лимит отправок кода. Повторите попытку через 15 минут&#x27;
+                            when &#x27;check_code&#x27; then &#x27;Превышен лимит проверок кода. Повторите попытку через 15 минут&#x27;
+                            when &#x27;update_pass&#x27; then &#x27;Превышен лимит попыток смены пароля. Повторите попытку через 15 минут&#x27;
+                            when &#x27;login&#x27; then &#x27;Превышен лимит ошибочных попыток входа. Повторите попытку через 15 минут&#x27;
+                       end;
+            suspend;
+            exit;            
+        end
+    end
+
+    if (action_code in (&#x27;send_code&#x27;, &#x27;update_pass&#x27;)) then
+    begin
+        if (:is_biom = 0) then
+        begin
+            mcl_login = f_json_str_get_value(:action_data, &#x27;login&#x27;, &#x27;&#x27;);
+            mcl_birth_date = cast(f_json_str_get_value(:action_data, &#x27;birth_date&#x27;, &#x27;&#x27;) as date);
+            res_code = case action_code
+                            when &#x27;send_code&#x27; then &#x27;send_error&#x27;
+                            when &#x27;update_pass&#x27; then &#x27;pass_error&#x27;
+                       end;
+    
+            select first 1 cd.cda_from_c_id
+            from contdata cd
+            where cd.cda_from_clt_id = f_cont_id(:mcl_login, &#x27;null&#x27;) and
+                  cd.cda_cont_kind = 0 and
+                  cd.cda_is_main = 1 and
+                  cd.cda_status = 1 and
+                  cd.cda_is_delete = 0
+            into :c_id_by_login;
+    
+            if (c_id_by_login is not null) then
+            begin
+                select cl.c_birth_date
+                from clients cl
+                where cl.c_id = :c_id_by_login
+                into :c_birth_date;
+                
+                if (c_birth_date is null) then
+                begin
+                    err_text = &#x27;У найденного клиента не указана дата рождения&#x27;;
+                    suspend;
+                    exit;
+                end
+                
+                if (mcl_birth_date &lt;&gt; c_birth_date) then
+                begin
+                    err_text = &#x27;Данный номер закреплен за другим клиентом. Обратитесь в офис компании для подтверждения&#x27;;
+                    suspend;
+                    exit;
+                end
+            end
+    
+            if (coalesce(err_text, &#x27;&#x27;) = &#x27;&#x27;) then
+                res_code = null;
+        end
+    end
+
+    -- ***************************************************************************
+
+    if (action_code = &#x27;send_code&#x27;) then
+    begin
+        if (db_id = 39801 and db_is_actual = 1) then
+        begin
+            tcv_create_datetime = null;
+            tcv_count = null;
+            tcv_max_count = 3; -- !!HARDCODE!!
+            wait_time_minutes_max = 15; -- !!HARDCODE!!
+            wait_time_minutes_left = 0;
+
+            select tcv.tcv_create_datetime, tcv.tcv_count
+            from try_counter_verify tcv
+            where tcv.tcv_phone = :mcl_login
+            into :tcv_create_datetime, :tcv_count;
+
+            wait_time_minutes_left = wait_time_minutes_max - datediff(minute, :tcv_create_datetime, current_timestamp);
+
+            if (tcv_count &gt;= tcv_max_count and wait_time_minutes_left &gt; 0) then
+            begin
+                res_code = &#x27;send_block&#x27;;
+                err_text = &#x27;Вы не прошли биометрию, повторите попытку через &#x27; || :wait_time_minutes_left|| &#x27; минут&#x27;;
+                suspend;
+                exit;
+            end
+        end
+
+        if (db_is_actual = 1) then
+        begin
+            ip_address = f_json_str_get_value(:action_data, &#x27;ip&#x27;, &#x27;&#x27;);
+            res_code = &#x27;send_error&#x27;;
+
+            quota_cfg_code = &#x27;mobile.clients.send_code_login&#x27;;
+            quota_cont_code = mcl_login;
+
+            select quota_exceeded, quota_code
+            from hp_msgquota_process(:quota_cfg_code, :quota_cont_code)
+            into :quota_exceeded, :quota_code;
+
+            -- Если квота по номеру не превышена, проверяем квоту по IP
+            if (quota_exceeded = 0) then
+            begin
+                quota_cfg_code = &#x27;mobile.clients.send_code_ip&#x27;;
+                quota_cont_code = ip_address;
+
+                select quota_exceeded, quota_code
+                from hp_msgquota_process(:quota_cfg_code, :quota_cont_code)
+                into :quota_exceeded, :quota_code;
+            end
+
+            if (quota_exceeded = 1) then
+            begin
+                quota_interval_parsed = (select quota_interval from hp_parse_quota_code(:quota_code));
+
+                if (coalesce(quota_interval_parsed, -1) &lt;&gt; -1) then
+                begin
+                    time_left_str =  (select time_left from hp_get_time_left_formatted(:quota_interval_parsed, :quota_cont_code, :quota_cfg_code));
+                    err_text = f_format(&#x27;Отправка кода временно ограничена. Пожалуйста, повторите попытку через %1 [#%2]&#x27;, :time_left_str, :quota_code);
+                end
+                else
+                    err_text = &#x27;Отправка кода временно ограничена. Пожалуйста, повторите попытку позже&#x27;;
+
+                suspend;
+                exit;
+            end
+        end
+
+        if (coalesce(err_text, &#x27;&#x27;) = &#x27;&#x27;) then
+            res_code = null;
+    end
+
+    -- ***************************************************************************
+
+    if (action_code = &#x27;login&#x27;) then
+    begin
+        mcl_dev_id_str = f_json_str_get_value(action_data, &#x27;uuid_id&#x27;, &#x27;&#x27;);
+        mcl_dev_id = null;
+
+        if (char_length(mcl_dev_id_str) &gt; 0) then
+          mcl_dev_id = char_to_uuid(mcl_dev_id_str);
+
+        select
+          mcl.mcl_dev_id
+        from mc_login mcl
+        where mcl.mcl_login = :mcl_login
+          and mcl.mcl_is_delete = 0
+          and mcl.mcl_project = :mcl_project
+          and mcl.mcl_pass_hash = :mcl_pass_hash
+        into
+          :mcl_dev_id_actual;
+    
+        if (mcl_dev_id &lt;&gt; mcl_dev_id_actual) then
+        begin
+            res_code = &#x27;login_error&#x27;;
+            err_text = &#x27;Скорее всего Вы пытаетесь зайти с другого устройства. Пройдите процесс регистрации после нажатия &quot;Забыл Пин код&quot;&#x27;;
+            suspend;
+            exit;
+        end
+    end
+
+    -- ***************************************************************************
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

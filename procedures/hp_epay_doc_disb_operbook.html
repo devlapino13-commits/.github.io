@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EPAY_DOC_DISB_OPERBOOK — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EPAY_DOC_DISB_OPERBOOK: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EPAY_DOC_DISB_OPERBOOK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="get_ref_account_agreements.html"><div class="to">GET_REF_ACCOUNT_AGREEMENTS</div></a><a class="ref-card" href="hp_do_kn_operbook_ins.html"><div class="to">HP_DO_KN_OPERBOOK_INS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_epay_doc_disb.html"><div class="to">HP_EPAY_DOC_DISB</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EPAY_DOC_DISB_OPERBOOK(
+    OL_ID D_ID)
+AS
+declare variable ag_id d_integer;
+declare variable epay_amount d_currency;
+declare variable epay_tax_fl d_currency;
+declare variable non_resident d_integer;
+declare variable loyal_acc_id d_id;
+declare variable curr_saldo d_currency;
+declare variable reg_id d_integer;
+declare variable ol_is_active d_integer;
+declare variable ob_detail d_str_long;
+declare variable ol_date d_date;
+declare variable acc_id d_id;
+declare variable ob_amount d_currency;
+declare variable acc_code d_str_code;
+declare variable al_id d_str_code;
+begin
+  select ol_date, ol_from_reg_id, 1 - is_delete
+  from operlist
+  where ol_id = :ol_id
+  into ol_date, reg_id, ol_is_active;
+
+  if (ol_date is null) then
+    exception e_default &#x27;ol_id is not found&#x27;;
+
+  for select ogr_from_ag_id, sum(ogr_amount), sum(ogr_tax_fl)
+  from operagr
+  where ogr_from_ol_id = :ol_id
+  group by ogr_from_ag_id
+  into ag_id, epay_amount, epay_tax_fl
+  do
+  begin
+    loyal_acc_id = null;
+    non_resident = null;
+
+    select epd_non_resident
+    from epay_list, epay_doc
+    where epl_from_ol_id = :ol_id and
+          epd_from_epl_id = epl_id
+    into non_resident;
+    if (non_resident is null) then
+      exception e_default &#x27;non_resident value not defined&#x27;;
+
+    select acc_id
+    from get_ref_account_agreements(&#x27;Расчеты.ЛоялПартнеры&#x27;, &#x27;&#x27;, :ag_id, :non_resident, :ol_date)
+    into :loyal_acc_id;
+
+    if (loyal_acc_id is null) then
+      exception e_default &#x27;Account not found&#x27;;
+
+    -- проверяем, есть ли другой счет отличающийся по резидентству
+    acc_id = null;
+    for select acc_id
+    from ref_account
+    where acc_object_kind = f_objkind(&#x27;agreements&#x27;, &#x27;id&#x27;) and
+          acc_object_id = :ag_id and
+          acc_non_resident = 1 - :non_resident
+    into acc_id
+    do
+    begin
+      -- если счет есть, проверяем остаток
+      curr_saldo = 0;
+      if (acc_id is not null) then
+        curr_saldo = f_acc_bal(acc_id, ol_date);
+  
+      -- если есть остаток на другом счете, переносим на новый счет
+      if (curr_saldo &lt;&gt; 0) then
+      begin
+        ob_detail = &#x27;Перенос сальдо из-за смены резиденства участника&#x27;;
+        execute procedure hp_do_kn_operbook_ins(:ol_id, null, :acc_id, :loyal_acc_id, null, null, 0, 0, 0, :ol_date,
+            :reg_id, :ol_is_active, :ob_detail, 1, 0);
+      end
+    end
+
+    if (epay_amount + epay_tax_fl &lt;&gt; 0) then
+    begin
+      ob_amount = epay_amount + epay_tax_fl;
+
+      acc_code = &#x27;71802810005540710101&#x27;; --  Расходы на рекламу
+      acc_id = f_get_acc_id(acc_code);
+      if (acc_id is null) then
+        exception e_default &#x27;Account &#x27; || acc_code || &#x27; not found&#x27;;
+
+      ob_detail = &#x27;Сумма начисленных баллов в рублевом эквиваленте к выплате&#x27;;
+      execute procedure hp_do_kn_operbook_ins(:ol_id, null, :acc_id, :loyal_acc_id, null, null, :ob_amount, 0, :ob_amount, :ol_date,
+          :reg_id, :ol_is_active, :ob_detail, 0, 1);
+    end
+
+    if (epay_tax_fl &lt;&gt; 0) then
+    begin
+      ob_amount = epay_tax_fl;
+
+      acc_code = &#x27;60301810000000000001&#x27;; --  Расчеты по НДФЛ при исполнении обязанностей налогового агента
+      acc_id = f_get_acc_id(acc_code);
+      if (acc_id is null) then
+        exception e_default &#x27;Account &#x27; || acc_code || &#x27; not found&#x27;;
+
+      ob_detail = &#x27;Сумма НДФЛ на сумму выплат свыше 4000р. за календарный год&#x27;;
+      execute procedure hp_do_kn_operbook_ins(:ol_id, null, :loyal_acc_id, :acc_id, null, null, :ob_amount, 0, ob_amount, :ol_date,
+          :reg_id, :ol_is_active, :ob_detail, 0, 1);
+    end
+
+    if (epay_amount &lt;&gt; 0) then
+    begin
+      ob_amount = epay_amount;
+
+      acc_code = &#x27;20501810000000000047&#x27;; --  Расчетный счет ООО Монета
+      acc_id = f_get_acc_id(acc_code);
+      if (acc_id is null) then
+        exception e_default &#x27;Account &#x27; || acc_code || &#x27; not found&#x27;;
+
+      ob_detail = &#x27;Выплата начисленных баллов в рублевом эквиваленте&#x27;;
+      execute procedure hp_do_kn_operbook_ins(:ol_id, null, :loyal_acc_id, :acc_id, null, null, :ob_amount, 0, :ob_amount, :ol_date,
+          :reg_id, :ol_is_active, :ob_detail, 0, 1);
+
+      select al_id
+      from acc_list
+      where al_from_acc_id = :acc_id
+      into al_id;
+      if (al_id is null) then
+        exception e_default &#x27;Счет по Минфин не найден для &#x27; || acc_code;
+
+      insert into operbook (ob_from_ol_id, ob_currency, ob_curr_rate, ob_account_dt, ob_summa_val, ob_summa, ob_account_kt, ob_detail)
+      values (:ol_id, &#x27;810&#x27;, 1, &#x27;010181076-05000005&#x27;, :ob_amount, :ob_amount, :al_id, :ob_detail);
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

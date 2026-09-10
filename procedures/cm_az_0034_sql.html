@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_AZ_0034_SQL — процедура — схема БД</title>
+<meta name="description" content="Стажеры КС не могут выдать больше 2000 манат на одного клиента">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_AZ_0034_SQL</code></h1>
+<p class="desc">Стажеры КС не могут выдать больше 2000 манат на одного клиента</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_AZ_0034_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare kc_amount curr_type;
+declare kf_disb_date d_date;
+declare variable KAL_NEW_KF_OFFICER ID_TYPE;
+declare variable UN_FROM_C_ID ID_TYPE;
+declare variable KC_FROM_C_ID ID_TYPE;
+declare variable UN_NAME varchar(30);
+declare variable PR_CODE varchar(100);
+declare variable JK_SYSTEM_CODE varchar(100);
+declare variable JK_NAME varchar(100);
+begin
+  if (K_ID = 0) then
+    exit;
+  for
+  select KAL_NEW_KF_OFFICER, KC.KC_AMOUNT_APPROVED, KC.KC_FROM_C_ID, K_DISB_DATE
+  from KONTRACT K
+  inner join KNAKTLIST KAL on (K_FROM_KF_ID = KAL_FROM_KF_ID and
+        KAL.IS_DELETE = 0 and
+        K.K_DISB_DATE between KAL_DATE and KAL_DATE_END)
+  inner join KNCLIENT KC on (K_ID = KC_FROM_K_ID and
+        KC_AMOUNT_APPROVED &gt; 0)
+  where K_ID = :K_ID
+  into KAL_NEW_KF_OFFICER, KC_AMOUNT, KC_FROM_C_ID, KF_DISB_DATE
+  do
+  begin
+      if (coalesce(KAL_NEW_KF_OFFICER, 0) &lt;&gt; 0) then
+      begin
+        select JK_SYSTEM_CODE, JK.JK_NAME
+        from HR_PSTATUS, HR_ORDERS, JOBLIST JL, JOBKIND JK
+        where PS_STATUS = 1 and
+              PS_FROM_HO_ID = HO_ID and
+              PS_FROM_JL_ID = JL_ID and
+              PS_FROM_C_ID = :KAL_NEW_KF_OFFICER and
+              :KF_DISB_DATE between PS_DATE_BEGIN and PS_DATE_END and
+              JK.JK_ID = JL.JL_KIND
+        order by PS_DATE_BEGIN desc rows 1
+        into JK_SYSTEM_CODE, JK_NAME;
+    
+        if (JK_SYSTEM_CODE in (&#x27;JobSystem.LO_Standart&#x27;) and
+            JK_NAME = &#x27;Kiçik kredit işçisi&#x27;) then
+        begin
+          /*
+            SYSDBA
+            |Для КС со стажем 90 дней и менее нужно поставить блок на сумму чтобы не смогли принять Заявку на сумму более 2001 манат на 1 клиента.
+        */
+          if (KC_AMOUNT &gt; 2000) then
+          begin
+            res_info_text = (select C_NAME_FIO
+                             from CLIENTS
+                             where C_ID = :KC_FROM_C_ID);
+            res_error_text = &#x27;Kiçik kredit işçisi üçün veriləcək kreditin məbləği 2000 manatdan yuxarı ola bilməz&#x27;;
+            res_error_is_critical = 1;
+            suspend;
+          end
+    
+        end
+      end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

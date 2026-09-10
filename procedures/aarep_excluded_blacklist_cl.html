@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_EXCLUDED_BLACKLIST_CL — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_EXCLUDED_BLACKLIST_CL: 3 входных, 7 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_EXCLUDED_BLACKLIST_CL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">7</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="region_list.html"><div class="to">REGION_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_REGION_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">7 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">M_CLIENT_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">M_CLIENT_BIRTH_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">M_CLIENT_PASS_NO</div><div class="ptype">VARCHAR(30)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MAL_REQ_DATETIME</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MAL_APPR_DATETIME</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MAL_APPR_COMMENT</div><div class="ptype">VARCHAR(512)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_EXCLUDED_BLACKLIST_CL(
+    REP_REGION_ID ID_TYPE,
+    REP_DATE_BEGIN D_DATE,
+    REP_DATE_END D_DATE)
+RETURNS (
+    M_CLIENT_FIO D_STR_100,
+    M_CLIENT_BIRTH_DATE D_DATE,
+    M_CLIENT_PASS_NO VARCHAR(30),
+    MAL_REQ_DATETIME D_DATETIME,
+    MAL_APPR_DATETIME D_DATETIME,
+    MAL_APPR_COMMENT VARCHAR(512),
+    UN_FIO D_STR_100)
+AS
+declare variable reg_id d_integer;
+declare variable mal_appr_user d_id;
+declare variable mal_appr_user_tmp d_id;
+begin
+  mal_appr_user_tmp = 0;
+
+  for select id_list
+      from region_list(:rep_region_id, 1, 3, 1)
+      into :reg_id
+  do
+  begin
+    for select mal.mal_appr_datetime, mal.mal_appr_user, mal.mal_req_comment, m.m_client_fio, m.m_client_birth_date,
+               m.m_client_pass_no, mal.mal_req_datetime
+        from morapprlist mal
+        inner join moratory m on mal.mal_from_m_id = m.m_id and
+              mal.mal_from_m_number = m.m_number
+        where mal.mal_req_state = 0 and
+              mal.mal_appr_status = 1 and
+              cast(mal.mal_appr_datetime as date) between :rep_date_begin and :rep_date_end and
+              mal.mal_from_reg_id = :reg_id
+        order by mal.mal_appr_user
+        into :mal_appr_datetime, :mal_appr_user, :mal_appr_comment, :m_client_fio, :m_client_birth_date,
+             :m_client_pass_no, :mal_req_datetime
+   do
+   begin
+    if (mal_appr_user &lt;&gt; mal_appr_user_tmp) then
+    begin
+        mal_appr_user_tmp = mal_appr_user;
+
+        select un.un_fio
+        from username un
+        where un.un_id = :mal_appr_user
+        into :un_fio;
+    end
+    suspend;
+   end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

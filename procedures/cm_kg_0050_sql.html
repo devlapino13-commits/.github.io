@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_KG_0050_SQL — процедура — схема БД</title>
+<meta name="description" content="Проверка процентной ставки и доп процента заданного контракта">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_KG_0050_SQL</code></h1>
+<p class="desc">Проверка процентной ставки и доп процента заданного контракта</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_percent.html"><div class="to">HP_GET_PERCENT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_KG_0050_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable KC_AMOUNT CURR_TYPE;
+declare variable KF_DISB_DATE D_DATE;
+declare variable PR_ID integer;
+declare variable K_AMOUNT CURR_TYPE;
+declare variable DB_ID integer;
+declare variable MIN_CL_AMOUNT CURR_TYPE;
+declare variable MAX_CL_AMOUNT CURR_TYPE;
+declare variable PERC_YEAR PERC_TYPE;
+declare variable KOMMIS_PERC PERC_TYPE;
+declare variable KOL_CLI integer;
+declare variable KOL_REPAY integer;
+declare variable C_ID_LIST varchar(255);
+declare variable PERC_MIN PERC_TYPE;
+declare variable PERC_MAX PERC_TYPE;
+declare variable PERC_DEFAULT PERC_TYPE;
+declare variable KOMMIS_PERC_MIN PERC_TYPE;
+declare variable KOMMIS_PERC_MAX PERC_TYPE;
+declare variable KOMMIS_PERC_DEFAULT PERC_TYPE;
+declare variable PR_CODE STR_100;
+declare variable K_ADD_MONTH smallint;
+declare variable K_REFUND smallint;
+declare variable K_DISB_KIND D_INTEGER;
+begin
+  if (k_id = 109010327922900101) then exit; -- RFCKG-4029
+
+  select k_from_pr_id, k_disb_date, k_amount_approved, k_percent, k_kommis_perc, k_kolich_client_approved,
+         k_kolich_repay, pr_code, k.k_add_month, k.k_refund, k.k_disb_kind
+  from kontract k
+  inner join product p on p.pr_id = k.k_from_pr_id
+  where k_id = :k_id and
+        pr_id &gt; 0
+  into pr_id, kf_disb_date, k_amount, perc_year, kommis_perc, kol_cli, kol_repay, pr_code, k_add_month, k_refund, k_disb_kind;
+  --  для КГ базы, логика мин макс суммы из продукта можно вытаскивать
+
+  if (pr_code containing &#x27;.express_online.&#x27;) then exit; -- express займ
+  if (pr_code containing &#x27;.online_loan.&#x27;) then exit;
+  if (pr_code containing &#x27;.auto_kk.&#x27; and check_kind = &#x27;.send_kk.&#x27;) then
+    exit;
+
+  -- #cmd_50_min_max -&gt;  
+  c_id_list = &#x27;&#x27;;
+  select min(kncl.kc_amount_approved), max(kncl.kc_amount_approved), list(kc_from_c_id, &#x27;;&#x27;)
+  from knclient kncl
+  where kncl.kc_from_k_id = :k_id and
+        kncl.kc_amount_approved &gt; 0
+  into :min_cl_amount, :max_cl_amount, :c_id_list;
+  -- &lt; --
+  min_cl_amount = coalesce(min_cl_amount, -1);
+  max_cl_amount = coalesce(max_cl_amount, -1);
+  select perc_min, perc_max, perc_default, kommis_perc_min, kommis_perc_max, kommis_perc_default
+  from hp_get_percent(:pr_id, :kf_disb_date, :kol_cli, :k_amount, :kol_repay, :min_cl_amount, :max_cl_amount, :c_id_list, :k_add_month, :k_refund, :k_disb_kind)
+  into :perc_min, :perc_max, :perc_default, :kommis_perc_min, :kommis_perc_max, :kommis_perc_default;
+
+  perc_year = round(coalesce(perc_year, -1), 2);
+  perc_min = round(coalesce(perc_min, -1), 2);
+  perc_max = round(coalesce(perc_max, -1), 2);
+  perc_default = round(coalesce(perc_default, -1), 2);
+  kommis_perc_min = coalesce(kommis_perc_min, -1);
+  kommis_perc_max = coalesce(kommis_perc_max, -1);
+  kommis_perc_default = coalesce(kommis_perc_default, -1);
+
+  -- RFCKG-4254
+  if (perc_default = 100.0) then
+  begin
+    res_error_text = &#x27;Процент/наценка установлен/а некорректно. Пожалуйста, перевыберите Продукт.&#x27;;
+    res_error_is_critical = 2;
+    suspend;
+    exit;
+  end
+
+  if (perc_year not between perc_min and perc_max and
+      round(perc_year, 1) &lt;&gt; round(perc_default, 1)) then
+  begin
+    res_error_text = &#x27;Процент не правильно установлено, предварительно должно быть:&#x27; || round(perc_default, 2);
+    res_error_is_critical = 2;
+    suspend;
+  end
+  if (kommis_perc not between kommis_perc_min and kommis_perc_max and
+      round(kommis_perc, 1) &lt;&gt; round(kommis_perc_default, 1)) then
+  begin
+    res_error_text = &#x27;Доп. процент не правильно установлено, предварительно должно быть:&#x27; || round(kommis_perc_default, 2);
+    res_error_is_critical = 2;
+    suspend;
+  end
+  if (perc_default not between perc_min and perc_max --
+      or --
+      kommis_perc_default not between kommis_perc_min and kommis_perc_max) then
+  begin
+    res_error_text = &#x27;Настройки продукта неправильные, обратитесь к тех.поддержке БД&#x27;;
+    res_error_is_critical = 2;
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

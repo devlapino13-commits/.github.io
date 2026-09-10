@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0008_SQL — процедура — схема БД</title>
+<meta name="description" content="Проверка, если у клиента не указан место работы то заем не утверждается">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0008_SQL</code></h1>
+<p class="desc">Проверка, если у клиента не указан место работы то заем не утверждается</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_objectprops_get.html"><div class="to">HP_OBJECTPROPS_GET</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0008_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable kc_amount curr_type;
+declare variable kf_disb_date d_date;
+declare variable kf_client_pass_no varchar(30);
+declare variable c_id id_type;
+declare variable ws integer;
+declare variable wp integer;
+declare variable wj integer;
+declare variable wa integer;
+declare variable cdc_code varchar(255);
+declare variable cdv_value_string varchar(1024);
+declare variable pr_code varchar(100);
+begin
+  for
+  select kc_from_c_id,
+         k_disb_date,
+         c_name_fio,
+         c_pass_no,
+         kc_amount_approved,
+         pr_code
+  from knclient, kontract, clients, product
+  where kc_from_k_id = :k_id
+  and kc_amount_approved &gt; 0
+  --and kc_kommis_lgota &gt; 0
+  and kc_from_k_id = k_id
+  and kc_from_c_id = c_id
+  and k_from_pr_id = pr_id
+  into c_id,
+       kf_disb_date,
+       res_info_text,
+       kf_client_pass_no,
+       kc_amount,
+       pr_code
+  do
+  begin
+--        Добавлено по письму Бабура от 23.05.2015, если у клиента не указан место работы то заем не утверждается
+      ws = 0; -- work_status
+      wp = 0; -- work_place_name
+      wj = 0; -- work_job_name
+      wa = 0; -- work_address_name
+      cdv_value_string = null;
+      select OVS_VALUE from HP_OBJECTPROPS_GET(0, :c_id, -1, &#x27;work_status&#x27;, current_date)
+      into :cdv_value_string;
+      cdv_value_string = trim(coalesce(cdv_value_string, &#x27;&#x27;));
+      if ((cdv_value_string &lt;&gt; &#x27;&#x27;) and (cdv_value_string &lt;&gt; &#x27;Значение&#x27;)) then
+      begin
+        if (cdv_value_string in (&#x27;Безработный&#x27;, &#x27;не работает&#x27;)) then ws = 2;
+        else  ws = 1; -- работает
+      end
+      cdv_value_string = null;
+      select OVS_VALUE from HP_OBJECTPROPS_GET(0, :c_id, -1, &#x27;work_place_name&#x27;, current_date)
+      into :cdv_value_string;
+      cdv_value_string = trim(coalesce(cdv_value_string, &#x27;&#x27;));
+      if ((cdv_value_string &lt;&gt; &#x27;&#x27;) and (cdv_value_string &lt;&gt; &#x27;Значение&#x27;)) then wp = 1;
+      cdv_value_string = null;
+      select OVS_VALUE from HP_OBJECTPROPS_GET(0, :c_id, -1, &#x27;work_job_name&#x27;, current_date)
+      into :cdv_value_string;
+      cdv_value_string = trim(coalesce(cdv_value_string, &#x27;&#x27;));
+      if ((cdv_value_string &lt;&gt; &#x27;&#x27;) and (cdv_value_string &lt;&gt; &#x27;Значение&#x27;))  then wj = 1;
+      cdv_value_string = null;
+      select OVS_VALUE from HP_OBJECTPROPS_GET(0, :c_id, -1, &#x27;work_address_name&#x27;, current_date)
+      into :cdv_value_string;
+      cdv_value_string = trim(coalesce(cdv_value_string, &#x27;&#x27;));
+      if ((cdv_value_string &lt;&gt; &#x27;&#x27;) and (cdv_value_string &lt;&gt; &#x27;Значение&#x27;)) then wa = 1;
+      if (exists (select * from addrclient ac where ac.adc_from_c_id = :c_id and ac.adc_address_type = 3 and ac.adc_from_adl_id &lt;&gt; 81001000000000)) then wa = 1;
+      /*
+      for
+      select cdc_code, cdv_value_string
+      from  CUSTOMDATACFG, customdatavalue
+      where CDC_OBJECT_KIND = 0 -- client
+      and current_date between cdv_date_begin and cdv_date_end
+      and cdc_is_delete = 0
+      and cdv_object_id = :c_id
+      and CDV_FROM_CDC_ID = cdc_id
+      and cdc_object_kind = cdv_object_kind
+      into cdc_code, cdv_value_string
+      do
+      begin
+        if (cdc_code = &#x27;work_status&#x27;) then
+        begin
+          if (coalesce(cdv_value_string,&#x27;&#x27;) = &#x27;Работает&#x27;) then ws = 1;
+          else if (coalesce(cdv_value_string,&#x27;&#x27;) = &#x27;Безработный&#x27;) then ws = 2;
+        end
+        if (cdc_code = &#x27;work_place_name&#x27; and coalesce(cdv_value_string,&#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then wp = 1;
+        if (cdc_code = &#x27;work_job_name&#x27; and coalesce(cdv_value_string,&#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then wj = 1;
+        if (cdc_code = &#x27;work_address_name&#x27; and coalesce(cdv_value_string,&#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then wa = 1;
+      end
+      */
+    if (pr_code not similar to &#x27;%.FAMILY%|%.PATENT%&#x27;) then  --Добавил по письму Зары
+    /*
+    они должны выбрать, что он безработный, тогда база может пропустить его без
+    указания работы. В других случаях - нет.
+    Плюс, по продукту Микрозаем на патент и Групповой микрозаем на патент тоже
+    может быть не указано место работы, так как клиент может ее не иметь, пока не получил патент
+    */
+    begin
+      if (ws = 0) then
+      begin
+        res_error_is_critical=2;
+        res_error_text=&#x27;Поле &quot;Работает/Безработный&quot; не заполнено!&#x27;;
+        Suspend;
+      end --else ws = 1;
+      if (ws = 1) then
+      begin
+        if (wp = 0) then
+        begin
+          res_error_is_critical=2;
+          res_error_text=&#x27;Место работы не указано!&#x27;;
+          Suspend;
+        end 
+        if (wj = 0) then
+        begin
+          res_error_is_critical=2;
+          res_error_text=&#x27;Должность не указана!&#x27;;
+          Suspend;
+        end
+        if (wa = 0) then
+        begin
+          res_error_is_critical=2;
+          res_error_text=&#x27;Адрес работы не указано!&#x27;;
+          Suspend;
+        end
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

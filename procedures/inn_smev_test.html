@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>INN_SMEV_TEST — процедура — схема БД</title>
+<meta name="description" content="Процедура INN_SMEV_TEST: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>INN_SMEV_TEST</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_extinfo_insert.html"><div class="to">HP_EXTINFO_INSERT</div></a><a class="ref-card" href="hp_fio_clear.html"><div class="to">HP_FIO_CLEAR</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE INN_SMEV_TEST
+AS
+declare variable COUNTER D_INTEGER;
+declare variable C_ID D_ID;
+declare variable C_NAME_FIO D_STR_100;
+declare variable BIRTH_DATE D_DATE;
+declare variable PK_ID D_INTEGER;
+declare variable DOC_NO D_STR_CODE;
+declare variable LAST_NAME D_STR_CODE;
+declare variable MIDDLE_NAME D_STR_CODE;
+declare variable NAME_TAIL D_STR_CODE;
+declare variable DOC_TYPE D_INTEGER;
+declare variable C_ALTERNAT_FIO D_STR_100;
+declare variable CFG D_STR_20;
+declare variable FIRST_NAME d_str_100;
+declare variable DOC_DATE d_str_code;
+begin
+    if (exists(select *
+             from hp_db_is_actual)) then
+        exit;
+
+    counter = 0;
+
+    for select kncl.kc_from_c_id
+    from kontstate ks
+    inner join knclient kncl on ks.ks_from_k_id = kncl.kc_from_k_id
+    where ks.ks_state = 1
+    and current_date between ks.ks_date_begin and ks.ks_date_end
+    and ks.ks_ol_is_delete = 0
+    and kncl.kc_amount_approved &gt; 0
+    and ks.ks_date_begin &gt;= current_date - 3
+    into :c_id
+    do
+    begin
+        select c_name_fio,
+             c_birth_date,
+             c_alternat_fio
+        from clients
+        where c_id = :c_id
+        into c_name_fio,
+           birth_date,
+           c_alternat_fio;
+
+        select txt1, txt2, txt3
+        from hp_fio_clear(:c_name_fio)
+        into last_name, first_name, middle_name;
+        name_tail = &#x27;&#x27;;
+
+        if (c_name_fio like &#x27;%УУЛУ%&#x27;) then
+          name_tail = &#x27;УУЛУ&#x27;;
+        if (c_name_fio like &#x27;%КЫЗЫ%&#x27;) then
+          name_tail = &#x27;КЫЗЫ&#x27;;
+        if (c_name_fio like &#x27;%УГЛИ%&#x27;) then
+           name_tail = &#x27;УГЛИ&#x27;;
+        if (c_name_fio like &#x27;%КИЗИ%&#x27;) then
+          name_tail = &#x27;КЫЗЫ&#x27;;
+    
+        if (name_tail &lt;&gt; &#x27;&#x27;) then
+          if (middle_name &lt;&gt; &#x27;&#x27;) then
+            middle_name = middle_name || &#x27; &#x27; || name_tail;
+          else
+            last_name = last_name || &#x27; &#x27; || name_tail;
+    
+        for select distinct
+            pk_id,
+            cds_doc_no,
+            f_datetostr(cds_doc_date_begin)
+        from clientdocs cds
+        inner join passkind on cds_from_pk_id = pk_id
+        inner join passdoctype on pk_from_pdt_id = pdt_id
+        where cds_from_c_id = :c_id
+        and pdt_is_main_doc = 1
+        and cds_verify_status = 2
+        and cds.cds_is_delete = 0
+        order by cds.cds_doc_date_begin desc
+        rows 1
+        into pk_id, doc_no, doc_date
+        do
+        begin
+          -- Полный справочник документов:
+          -- Паспорт гражданина СССР - &quot;01&quot;
+          -- Свидетельство о рождении - &quot;03&quot;
+          -- Паспорт иностранного гражданина - &quot;10&quot;
+          -- Вид на жительство в России - &quot;12&quot;
+          -- Разрешение на временное проживание в России - &quot;15&quot;
+          -- Свидетельство о предоставлении временного убежища на территории России - &quot;19&quot;
+          -- Паспорт гражданина России - &quot;21&quot;
+          -- Свидетельство о рождении, выданное уполномоченным органом иностранного государства - &quot;23&quot;
+          -- Вид на жительство иностранного гражданина - &quot;62&quot;
+      
+          doc_no = replace(doc_no, &#x27; &#x27;, &#x27;&#x27;);
+          if (coalesce(doc_no, &#x27;&#x27;) = &#x27;&#x27;) then
+            continue;
+    
+          -- Паспорт/Загранпаспорт РФ
+          if (pk_id = 12) then
+          begin
+            doc_type = 21;
+            --Серия и номер паспорта гражданина РФ имеют формат 99 99 9999990, где:
+            --9 – десятичная цифра (обязательная к вводу);
+            --0 – десятичная цифра (необязательная, может отсутствовать).
+            doc_no = left(doc_no, 2) || &#x27; &#x27; || substring(doc_no from 3 for 2) || &#x27; &#x27; || substring(doc_no from 5);
+          end
+          else
+            doc_type = 10;
+        end
+
+        if (coalesce(doc_no, &#x27;&#x27;) = &#x27;&#x27;) then
+          continue;
+
+        if(coalesce(birth_date, &#x27;&#x27;) = &#x27;&#x27;) then
+            continue;
+    
+        if(coalesce(c_name_fio, &#x27;&#x27;) = &#x27;&#x27;) then
+            continue;
+
+        -- создается запрос на получени ИНН
+        execute procedure hp_extinfo_insert(&#x27;inn_smev&#x27;, &#x27;clients&#x27;, :c_id, 0, 1010100000278);
+        counter = counter + 1;
+
+        if (counter = 10) then
+        begin
+            post_event &#x27;inn_smev&#x27;;
+            exit;
+        end
+    end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

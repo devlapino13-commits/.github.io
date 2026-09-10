@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EPAY_ACTIONS_LIST_SVOD — процедура — схема БД</title>
+<meta name="description" content="Процедура EPAY_ACTIONS_LIST_SVOD: 0 входных, 5 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>EPAY_ACTIONS_LIST_SVOD</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="epay_actions_list.html"><div class="to">EPAY_ACTIONS_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PROJECT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PR_TYPE</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACC</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PAY_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACC_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE EPAY_ACTIONS_LIST_SVOD
+RETURNS (
+    PROJECT D_STR_100,
+    PR_TYPE D_STR_20,
+    ACC D_STR_20,
+    PAY_AMOUNT D_CURRENCY,
+    ACC_AMOUNT D_CURRENCY)
+AS
+declare variable al_id d_str_20;
+begin
+  for
+    select
+      a.project,
+      a.pr_type,
+      a.acc,
+      coalesce(b.pay_amount, 0)
+    from (
+      select
+        rd_str_id as project,
+        &#x27;ИПФ&#x27; as pr_type,
+        case rd_str_id
+          when &#x27;elsom&#x27; then &#x27;10101/100&#x27;
+          when &#x27;mbank&#x27; then &#x27;10101/1104&#x27;
+        end as acc
+      from refdata
+      where rd_main_code = &#x27;EPayProjects&#x27;
+        and rd_is_active = 1
+        and rd_parent_id &gt; 0
+      union
+      select
+        rd_str_id as project,
+        &#x27;Классика&#x27; as pr_type,
+        case rd_str_id
+          when &#x27;elsom&#x27; then &#x27;10150/100&#x27;
+          when &#x27;mbank&#x27; then &#x27;10150/1105&#x27;
+        end as acc
+    from refdata
+    where rd_main_code = &#x27;EPayProjects&#x27;
+      and rd_is_active = 1
+      and rd_parent_id &gt; 0
+    ) as a
+      left join (
+        select
+          project,
+          pr_type,
+          sum(kml_total) as pay_amount
+        from epay_actions_list(1000000)
+        group by project, pr_type) as b
+     on a.project = b.project
+        and a.pr_type = b.pr_type
+  into
+    :project,
+    :pr_type,
+    :acc,
+    :pay_amount
+  do
+  begin
+    al_id = (
+      select
+        al_id
+      from acc_list
+      where al_account = :acc
+        and al_from_reg_id = 1090100
+        and al_currency = &#x27;417&#x27;);
+    acc_amount = f_al_bal(al_id, current_date);
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

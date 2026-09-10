@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0175_SQL — процедура — схема БД</title>
+<meta name="description" content="Проверка max/min суммы при продуктах н/к и надежный клиент +">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0175_SQL</code></h1>
+<p class="desc">Проверка max/min суммы при продуктах н/к и надежный клиент +</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="knclient_pdn_limit_check.html"><div class="to">KNCLIENT_PDN_LIMIT_CHECK</div></a><a class="ref-card" href="reliable_client_amount_interval.html"><div class="to">RELIABLE_CLIENT_AMOUNT_INTERVAL</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0175_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable kc_amount curr_type;
+declare variable kf_disb_date d_date;
+declare variable c_id d_id;
+declare variable kc_id d_id;
+declare variable pr_id d_id;
+declare variable amount_min d_integer;
+declare variable amount_max d_integer;
+declare variable point_cl d_integer;
+declare variable is_refund d_smallint;
+declare variable active_loan_balance d_currency;
+declare variable refund_active_loan_balance d_currency;
+declare variable pr_code d_str_100;
+declare variable not_check_pdn d_bool;
+declare variable ma_id d_id;
+begin
+  for select c_id, c_name_fio, k.k_disb_date, knc.kc_amount_approved, pr_id, k_refund, pr_code, kc_id, k.k_from_ma_app_id
+      from knclient knc
+      inner join clients cl on cl.c_id = knc.kc_from_c_id
+      inner join kontract k on k.k_id = knc.kc_from_k_id
+      inner join product pr on pr.pr_id = k.k_from_pr_id and
+            (pr_code containing &#x27;.reliable_client.&#x27; or pr_code containing &#x27;.reliable_client_plus.&#x27; or pr_code containing &#x27;.loyal.&#x27; or
+            pr_code containing &#x27;.shans.&#x27; or pr_code containing &#x27;.express.&#x27; or
+            pr_code containing &#x27;.privilege.&#x27; or pr_code containing &#x27;.privilege_plus.&#x27; or pr_code containing &#x27;.refinance.&#x27; or pr_code containing &#x27;.refinance_oivo.&#x27;
+            )
+      where kc_from_k_id = :k_id and
+            kc_amount_approved &gt; 0
+      into :c_id, :res_info_text, :kf_disb_date, :kc_amount, pr_id, is_refund, pr_code, kc_id, ma_id
+  do
+  begin
+    if (kf_disb_date &lt; cast(&#x27;01.11.2020&#x27; as date)) then -- на выдачи с  01.11.2020
+      exit;
+
+    point_cl = 0;
+    point_cl = f_point(:c_id, :kf_disb_date);
+
+    if (not(/*pr_code containing &#x27;.loyal.&#x27; or */pr_code containing &#x27;.shans.&#x27; or pr_code containing &#x27;.express.&#x27;)) then
+    begin
+      select amount_min, amount_max, point_cl
+      from reliable_client_amount_interval(:c_id, :pr_id, :kf_disb_date)
+      into :amount_min, :amount_max, :point_cl;
+      point_cl = coalesce(point_cl,0);
+      if (kc_amount &gt; amount_max or kc_amount &lt; amount_min) then
+      begin
+        res_error_text = &#x27;У клиента &#x27; || point_cl || &#x27; балла, допустимая минимальная сумма &#x27; || amount_min || &#x27;, максимальная &#x27; || amount_max || &#x27; рублей&#x27;;
+        res_error_is_critical = 1;
+        suspend;
+      end
+    end
+
+    amount_max = null;
+
+    if (kf_disb_date &lt; cast(&#x27;26.06.2023&#x27; as date)) then
+    begin
+      if (pr_code containing &#x27;.reliable_client.&#x27;) then
+      begin
+        amount_max = case
+                       when point_cl &lt;= 2 then 35000
+                       when point_cl &lt;= 5 then 40000
+                       when point_cl &lt;= 8 then 50000
+                       when point_cl &lt;= 11 then 60000
+                       when point_cl &lt;= 14 then 80000
+                       when point_cl &lt;= 17 then 100000
+                       when point_cl &lt;= 23 then 120000
+                       else 150000
+                     end;
+      end else
+      if (pr_code containing &#x27;.reliable_client_plus.&#x27;) then
+      begin
+        amount_max = case
+                       when point_cl &lt;= 2 then 55000
+                       when point_cl &lt;= 5 then 60000
+                       when point_cl &lt;= 8 then 70000
+                       when point_cl &lt;= 11 then 80000
+                       when point_cl &lt;= 17 then 100000
+                       when point_cl &lt;= 23 then 120000
+                       else 150000
+                     end;
+      end
+    end else
+    if (kf_disb_date &lt; cast(&#x27;04.07.2024&#x27; as date)) then
+    begin
+      if (pr_code containing &#x27;.reliable_client.&#x27;) then
+      begin
+        amount_max = case
+                       when point_cl &lt;= 2 then 55000
+                       when point_cl &lt;= 5 then 65000
+                       when point_cl &lt;= 8 then 75000
+                       when point_cl &lt;= 11 then 85000
+                       when point_cl &lt;= 14 then 100000
+                       when point_cl &lt;= 17 then 130000
+                       when point_cl &lt;= 23 then 150000
+                       else 200000
+                     end;
+      end else
+      if (pr_code containing &#x27;.reliable_client_plus.&#x27;) then
+      begin
+        amount_max = case
+                       when point_cl &lt;= 2 then 75000
+                       when point_cl &lt;= 5 then 80000
+                       when point_cl &lt;= 8 then 90000
+                       when point_cl &lt;= 11 then 100000
+                       when point_cl &lt;= 17 then 130000
+                       when point_cl &lt;= 23 then 150000
+                       else 200000
+                     end;
+      end
+    end  else
+    begin
+      if (pr_code containing &#x27;.reliable_client.&#x27; or pr_code containing &#x27;.loyal.&#x27; or pr_code containing &#x27;.shans.&#x27; or pr_code containing &#x27;.express.&#x27; or
+       pr_code containing &#x27;.privilege.&#x27; or pr_code containing &#x27;.privilege_plus.&#x27; or pr_code containing &#x27;.refinance.&#x27; or pr_code containing &#x27;.refinance_oivo.&#x27;
+      ) then
+      begin
+        if (check_kind containing &#x27;.loan_disb.&#x27; or check_kind containing &#x27;.loan_approve.&#x27; or check_kind containing &#x27;.send_kk.&#x27; or check_kind containing  &#x27;.check_preview.&#x27;) then
+        begin
+          -- RFCRU-2617 Если стоит галка &quot;документально подтвержденный доход&quot;, то лимиты по ПДН не считаем до КК
+          not_check_pdn = 0;
+  
+          if (check_kind not containing &#x27;.loan_disb.&#x27;) then
+            select 1
+            from kontract, miniappclient, miniappclient_income
+            where k_id = :k_id
+              and mac_from_ma_id = k_from_ma_app_id
+              and maci_from_mac_id = mac_id
+              and maci_is_documented = 1
+            rows 1
+            into not_check_pdn;
+
+          if (not_check_pdn = 0) then
+          begin
+            for select 2, error_text
+            from knclient_pdn_limit_check(:kc_id)
+            into res_error_is_critical, res_error_text
+            do
+              suspend;
+
+            exit;
+          end
+        end
+      end
+      else
+        if (pr_code containing &#x27;.reliable_client_plus.&#x27;) then
+        begin
+          amount_max = case
+                         when point_cl &lt;= 2 then 85000
+                         when point_cl &lt;= 5 then 100000
+                         when point_cl &lt;= 11 then 120000
+                         when point_cl &lt;= 17 then 150000
+                         else 200000
+                       end;
+        end
+    end 
+
+    active_loan_balance = 0;
+    if (is_refund = 0) then
+    begin
+      select coalesce(sum(oks_balance), 0)
+      from oksummary, knclient
+      where kc_from_c_id = :c_id
+      and kc_amount_approved &gt; 0
+      and oks_from_k_id = kc_from_k_id
+      and :kf_disb_date between oks_date_begin and oks_date_end
+      and oks_close_state = 0
+      into active_loan_balance;
+    end else
+    begin
+      select sum(oks_balance)
+      from oksummary, knclient, kontract, product
+      where kc_from_c_id = :c_id
+      and kc_amount_approved &gt; 0
+      and oks_from_k_id = kc_from_k_id
+      and :kf_disb_date between oks_date_begin and oks_date_end
+      and oks_close_state = 0
+      and oks_from_k_id = k_id
+      and k_from_pr_id = pr_id
+      into active_loan_balance;
+
+      select  coalesce(sum(oks_balance), 0)                  -- RFCRU-4068
+      from oksummary, knclient kc
+      inner join kontrefinance kr on kr.kr_from_k_id = kc.kc_from_k_id
+      where kc_from_c_id = :c_id and
+            kc_amount_approved &gt; 0 and
+            oks_from_k_id = kc_from_k_id and
+            current_date between oks_date_begin and oks_date_end and
+            oks_close_state = 0 and
+            kr.kr_from_ma_id = :ma_id and
+            kr.kr_from_k_id = kc_from_k_id
+      into refund_active_loan_balance;
+    end
+
+    refund_active_loan_balance = coalesce(refund_active_loan_balance, 0); 
+
+    if (amount_max &lt; active_loan_balance + kc_amount - refund_active_loan_balance) then
+    begin
+      res_error_text = f_format(&#x27;Превышена макс. допустимая сумма, тек. баланс: %1, балл: %2.&#x27;, f_numtostr(active_loan_balance, 0), point_cl);
+      res_error_is_critical = 2;
+      suspend;
+    end
+
+  end
+   --по запросу Светланы  При активном займе по продукту «Выгодная сторона» 11.11.2020
+   --надежный клиент и надежный клиент плюс не выдается
+  if (exists (select *
+            from knclient kncl
+            inner join kontract kon on kon.k_id = kncl.kc_from_k_id
+            inner join product pr on pr.pr_id = kon.k_from_pr_id
+            inner join kontstate ks on ks.ks_from_k_id = kon.k_id
+            where kncl.kc_amount_approved &gt; 0
+            and kc_from_c_id = :c_id
+            and k_id &lt;&gt; :k_id
+            and pr.pr_code like &#x27;%.float_percent.%&#x27;
+            and ks_ol_is_delete = 0
+            and ks.ks_state = 1
+            and :kf_disb_date between ks_date_begin and ks_date_end
+    )) then
+    begin
+        res_error_is_critical=1;
+        res_error_text=&#x27;Есть активный займ  по продукту «Выгодная сторона»&#x27;;
+        suspend;
+        exit;
+    end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

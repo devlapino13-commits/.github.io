@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_STATVALUE_UPDATE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_STATVALUE_UPDATE: 7 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_STATVALUE_UPDATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">7</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">7 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">STI_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">STAT_NAME</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PERIOD_BEGIN</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEW_VALUE</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_STATVALUE_UPDATE(
+    STI_ID D_INTEGER NOT NULL,
+    STAT_NAME D_STR_255 NOT NULL,
+    PL_ID D_ID,
+    PERIOD_BEGIN D_INTEGER NOT NULL,
+    NEW_VALUE D_CURRENCY NOT NULL,
+    DATE_BEGIN D_DATE,
+    UN_ID D_ID)
+AS
+declare variable str_id d_integer;
+declare variable stv_id d_id;
+declare variable stv_value d_currency;
+declare variable str_from_pl_id d_id;
+declare variable stp_id d_integer;
+begin
+  -- Процедура добавляет или обновляет значение индикатора по его ID и названии территории
+
+  if (stat_name is null) then exit;
+  stat_name = trim(stat_name);
+
+  -- Получаем по названию ID территории
+  select str_id, str_from_pl_id
+  from statregion
+  where str_name = :stat_name
+  into :str_id, str_from_pl_id;
+
+  -- Если нет, добавляем новую
+  if (str_id is null) then
+  begin
+    insert into statregion (str_name, str_from_pl_id)
+    values (:stat_name, :pl_id)
+    returning str_id
+    into :str_id;
+  end else
+  begin
+    if (coalesce(str_from_pl_id, -1) &lt;&gt; coalesce(pl_id, -1) and
+        pl_id is not null) then
+    begin
+      update statregion
+      set str_from_pl_id = :pl_id
+      where str_id = :str_id;
+    end
+  end
+
+  select stp_id
+  from statpocket
+  where stp_from_sti_id = :sti_id and
+        stp_period_begin = :period_begin and
+        stp_date_begin = :date_begin
+  into stp_id;
+
+  if (stp_id is null) then
+  begin
+    insert into statpocket (stp_from_sti_id, stp_period_begin, stp_date_begin, stp_from_un_id)
+    values (:sti_id, :period_begin, :date_begin, :un_id)
+    returning stp_id
+    into :stp_id;
+  end
+
+  select stv_id, stv_value
+  from statvalue
+  where stv_from_stp_id = :stp_id and
+        stv_from_str_id = :str_id
+  into stv_id, stv_value;
+
+  if (stv_id is not null) then
+  begin
+    -- если есть совпадающая строка и значение отличается, обновляем
+    if (stv_value &lt;&gt; new_value) then
+    begin
+      update statvalue
+      set stv_value = :stv_value
+      where stv_id = :stv_id;
+    end
+  end else
+  begin
+    -- если нет строки, добавляем новую
+    insert into statvalue (stv_from_stp_id, stv_from_str_id, stv_value)
+    values (:stp_id, :str_id, :new_value);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

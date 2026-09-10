@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_SEND_COURT_NOTIFICATION — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_SEND_COURT_NOTIFICATION: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_SEND_COURT_NOTIFICATION</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_contdata_get_cell_main.html"><div class="to">HP_CONTDATA_GET_CELL_MAIN</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_SEND_COURT_NOTIFICATION(
+    K_ID D_ID,
+    C_ID D_ID)
+AS
+declare variable phone_no d_str_code;
+declare variable msg_kind d_str_code;
+declare variable cm_name d_str_code;
+declare variable push_title d_str_code;
+declare variable cl_name d_str_100;
+declare variable msg_body d_str_255;
+declare variable lifetime_days d_smallint;
+declare variable user_id d_id;
+declare variable k_kontract_no d_str_code;
+declare variable kc_id d_id;
+declare variable mcl_project d_integer;
+declare variable msg_sender_code d_str_code;
+begin
+  -- Отправка уведомлений о пердаче дела в суд
+
+  user_id = 1000000000000; -- finstart_robot
+  msg_kind = f_get_msg_kind(c_id, &#x27;hp_send_court_notification&#x27;, &#x27;&#x27;, null, 365);
+  lifetime_days = 1095;
+
+  if (msg_kind in (&#x27;push&#x27;, &#x27;sms&#x27;)) then
+  begin
+    select cm_name
+    from company
+    into cm_name;
+
+    select k_kontract_no, kc_id
+    from kontract, knclient
+    where k_id = :k_id
+      and kc_from_k_id = k_id
+      and kc_from_c_id = :c_id
+    into k_kontract_no, kc_id;
+
+    select txt2
+    from clients, hp_fio_clear(c_name_fio)
+    where c_id = :c_id
+    into cl_name;
+
+    cl_name = coalesce(cl_name, &#x27;&#x27;);
+
+    if (cl_name = &#x27;&#x27;) then
+      cl_name = &#x27;Здравствуйте&#x27;;
+
+    msg_body = cl_name ||
+      &#x27;, у Вас имеется задолженность по договору &#x27; || k_kontract_no ||
+      &#x27;. В связи с неоплатой долга Ваше дело передано в Департамент розыска и принудительного взыскания T.+79067365443&#x27; || cm_name;
+
+    if (msg_kind = &#x27;sms&#x27; and f_clientcom_allowed(c_id, 0, 0, 1) = 1) then
+    begin
+      select cont_value
+      from hp_contdata_get_cell_main(0, :c_id)
+      into phone_no;
+
+      if (phone_no starting &#x27;7&#x27;) then
+      begin
+        mcl_project = f_get_mcl_project(f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;), :k_id);
+        msg_sender_code = f_enum_code(&#x27;sms_sender&#x27;, iif (:mcl_project = 2, 1, 0));
+
+        f_send_sms(phone_no, msg_body, &#x27;knclient&#x27;, kc_id, &#x27;hp_send_court_notification&#x27;, lifetime_days, user_id, 0, :msg_sender_code);
+      end
+
+    end
+    if (msg_kind = &#x27;push&#x27; and f_clientcom_allowed(c_id, 0, 0, 1) = 1) then
+    begin
+      push_title = &#x27;Департамент розыска и принудительного взыскания&#x27;;
+      f_send_push(&#x27;knclient&#x27;, kc_id, push_title, msg_body, &#x27;hp_send_court_notification&#x27;, lifetime_days, user_id);
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_KNCLIENT_PDN_UPDATE_REF — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_KNCLIENT_PDN_UPDATE_REF: 0 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_KNCLIENT_PDN_UPDATE_REF</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_knclient_pdn_update.html"><div class="to">HP_KNCLIENT_PDN_UPDATE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_IS_ERROR</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_KNCLIENT_PDN_UPDATE_REF
+RETURNS (
+    RES_TEXT D_STR_LONG,
+    RES_IS_ERROR D_BOOL)
+AS
+declare variable kc_id d_id;
+declare variable k_id d_id;
+declare variable k_kontract_no d_str_20;
+declare variable k_fact_disb_date d_date;
+declare variable pdr_kind d_smallint;
+declare variable pdn_status_id d_smallint;
+declare variable ssp_date d_date;
+declare variable ki_date d_date;
+declare variable txt d_str_long;
+declare variable is_error d_bool;
+declare variable cnt d_integer;
+begin
+  -- запускает пересчет ПДН по выбранным контрактам в форме &quot;ПДН - расчет в связи с неисполнением цели по рефинансированию&quot; (RFCRU-4309)
+
+  res_text = &#x27;&#x27;;
+  res_is_error = 0;
+
+  select count(*)
+  from pdn_ref_recalclist
+  where prr_is_selected = 1 and
+        prr_date = current_date
+  into cnt;
+
+  if (cnt &gt; 100) then
+    exception e_message &#x27;Кол-во выбранных договоров - &#x27; || cnt || &#x27;, за раз можно пересчитать ПДН максимум по 100 договорам&#x27;;
+
+  txt = &#x27;&#x27;;
+  cnt = 0;
+  pdr_kind = 2; -- пересчет ПДН через 60 дней (enum_list -&gt; pdn_calc_source -&gt; ref_60)
+
+  for select kc_id,
+             prr_k_id,
+             prr_k_kontract_no,
+             prr_k_fact_disb_date,
+             prr_pdn_status_id,
+             prr_ssp_date,
+             prr_ki_date
+      from knclient
+      inner join pdn_ref_recalclist on prr_k_id = kc_from_k_id
+      where prr_is_selected = 1 and
+            prr_date = current_date
+      into kc_id,
+           k_id,
+           k_kontract_no,
+           k_fact_disb_date,
+           pdn_status_id,
+           ssp_date,
+           ki_date
+  do
+  begin
+    is_error = 0;
+
+    if (pdn_status_id not in (5, 6)) then
+    begin
+      if (txt &lt;&gt; &#x27;&#x27;) then
+        txt = txt || ascii_char(10);
+      txt = txt || k_kontract_no || &#x27;: не соответствует статус ПДН&#x27;; -- статус должен быть 5 - &quot;Кандидат: КИ получена&quot; или 6 - &quot;Кандидат: клиент не имеет КИ&quot;
+      is_error = 1;
+    end
+
+    if (is_error = 0 and (ssp_date is null or ssp_date &lt; current_date - 1)) then
+    begin
+      if (txt &lt;&gt; &#x27;&#x27;) then
+        txt = txt || ascii_char(10);
+      txt = txt || k_kontract_no || &#x27;: нет актуального ССП&#x27;;
+      is_error = 1;
+    end
+
+    if (is_error = 0 and (ki_date is null or ki_date &lt; current_date - 1)) then
+    begin
+      if (txt &lt;&gt; &#x27;&#x27;) then
+        txt = txt || ascii_char(10);
+      txt = txt || k_kontract_no || &#x27;: нет актуальной КИ&#x27;;
+      is_error = 1;
+    end
+
+    if (is_error = 0 and exists(select *
+                                from knclient_pdn
+                                where kc_id = :kc_id and
+                                      kcp_kind = :pdr_kind)) then
+    begin
+      if (txt &lt;&gt; &#x27;&#x27;) then
+        txt = txt || ascii_char(10);
+      txt = txt || k_kontract_no || &#x27;: ПДН уже пересчитан&#x27;;
+      is_error = 1;
+    end
+
+    if (is_error = 0) then
+    begin
+      -- ошибок нет, запускаем перерасчет ПДН
+      begin
+        execute procedure hp_knclient_pdn_update(kc_id, 0, null, current_date, null, 2, 1, &#x27;ref_60&#x27;);
+        cnt = cnt + 1;
+
+        when any do
+        begin
+          if (txt &lt;&gt; &#x27;&#x27;) then
+            txt = txt || ascii_char(10);
+          txt = txt || k_kontract_no || &#x27;: ошибка при расчете ПДН&#x27;;
+          is_error = 1;
+        end
+      end
+    end
+  end
+
+  res_text = &#x27;Кол-во успешно пересчитанных ПДН - &#x27; || cnt;
+
+  if (txt &lt;&gt; &#x27;&#x27;) then
+    res_text = res_text || ascii_char(10) || &#x27;Ошибки:&#x27; || ascii_char(10) || txt;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

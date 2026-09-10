@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DO_MONEYOPER_IMPORT_FIX — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DO_MONEYOPER_IMPORT_FIX: 3 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DO_MONEYOPER_IMPORT_FIX</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_kn_operbook_one_online.html"><div class="to">HP_DO_KN_OPERBOOK_ONE_ONLINE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CURRECT_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">WRONG_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DO_MONEYOPER_IMPORT_FIX(
+    OL_ID D_ID,
+    CURRECT_AMOUNT D_CURRENCY,
+    WRONG_AMOUNT D_CURRENCY)
+AS
+declare variable first_line d_integer;
+declare variable kob_id d_id;
+declare variable kob_summa d_currency;
+declare variable stay_kob_id d_id;
+declare variable total_amount d_currency;
+declare variable ol_date d_date;
+declare variable k_id d_id;
+declare variable kc_id d_id;
+declare variable acc_dt d_id;
+declare variable acc_kt d_id;
+declare variable pcb_summa d_currency;
+declare variable row_kol d_integer;
+declare variable fixed d_bool;
+begin
+  select kob_id, kob_from_kc_id, kob_ol_date
+  from kn_operbook
+  where kob_from_ol_id = :ol_id and
+        kob_from_kc_id is not null
+  rows 1
+  into kob_id, kc_id, ol_date;
+
+  if (kc_id is not null) then
+  begin
+    if (not exists(
+    select * from kn_operbook
+    where kob_from_ol_id = :ol_id and
+          (kob_from_kc_id is null or kob_from_kc_id &lt;&gt; :kc_id))) then
+    begin
+      select kc_from_k_id
+      from knclient
+      where kc_id = :kc_id
+      into k_id;
+
+      execute procedure hp_do_kn_operbook_one_online(:k_id, current_date, null, :ol_date - 1);
+      Exit;
+    end
+  end
+
+
+  -- Процедура удаляет дубликаты проводок после импорта из 1С
+
+  first_line = 1;
+  total_amount = 0;
+
+  for select kob_id, kob_summa
+  from kn_operbook
+  where kob_from_ol_id = :ol_id
+  into kob_id, kob_summa
+  do
+  begin
+    if (first_line = 1) then
+    begin
+      if (currect_amount = kob_summa) then
+        stay_kob_id = kob_id;
+    end else
+      total_amount = total_amount + kob_summa;
+
+    first_line = 0;
+  end
+
+
+  if (stay_kob_id is not null and total_amount = wrong_amount - currect_amount) then
+  begin
+    delete from kn_operbook
+    where kob_from_ol_id = :ol_id and
+          kob_id &lt;&gt; :stay_kob_id;
+  end else
+  begin
+    select kob_id, kob_ol_date, kob_acc_dt, kob_acc_kt
+    from kn_operbook
+    where kob_from_ol_id = :ol_id and
+          kob_from_kc_id is null
+    rows 1
+    into kob_id, ol_date, acc_dt, acc_kt;
+
+    pcb_summa = 0;
+    total_amount = 0;
+    fixed = 0;
+
+    for select pcb_amount_sum
+    from packet_1c_imp_bank
+    where pcb_from_ol_id = :ol_id and
+          pcb_acc_dt_id = :acc_dt and
+          pcb_acc_kt_id = :acc_kt and
+          pcb_date = :ol_date
+    into pcb_summa
+    do
+    begin
+      total_amount = total_amount + pcb_summa;
+
+      if (currect_amount = total_amount) then
+      begin
+        fixed = 1;
+
+        delete from kn_operbook
+        where kob_from_ol_id = :ol_id and
+              kob_id &lt;&gt; :kob_id;
+  
+        update kn_operbook
+        set kob_summa = :currect_amount,
+            kob_summa_tax_dt = :currect_amount,
+            kob_summa_tax_kt = :currect_amount
+        where kob_id = :kob_id
+        rows 1;
+
+        exit;
+      end
+    end
+
+    if (fixed = 0) then
+      exception e_default &#x27;Something wrong, ol_id = &#x27; || ol_id;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

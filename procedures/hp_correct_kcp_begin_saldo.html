@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CORRECT_KCP_BEGIN_SALDO — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CORRECT_KCP_BEGIN_SALDO: 0 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CORRECT_KCP_BEGIN_SALDO</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UPDATED</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CORRECT_KCP_BEGIN_SALDO
+RETURNS (
+    UPDATED INTEGER)
+AS
+declare variable k_id decimal(18,0);
+declare variable perc_saldo_end decimal(18,4) = 0;
+declare variable kommis_saldo_end decimal(18,4) = 0;
+declare variable perc_saldo_prior decimal(18,4) = 0;
+declare variable kommis_saldo_prior decimal(18,4) = 0;
+declare variable k_id_prior decimal(18,0);
+declare variable kcp_perc_begin_saldo decimal(18,4) = 0;
+declare variable kcp_kommis_begin_saldo decimal(18,4) = 0;
+declare variable k_period integer;
+declare variable kcp_from_c_id id_type;
+begin
+  perc_saldo_prior = 0;
+  kommis_saldo_prior = 0;
+  k_id_prior = 0;
+  updated = 0;
+  for select kcp_period, kcp_from_k_id, kcp_perc_saldo, kcp_kommis_saldo, kcp_perc_begin_saldo, kcp_kommis_begin_saldo,
+             kcp_from_c_id
+      from kontcalcperc
+      order by kcp_from_k_id, kcp_period
+      into :k_period, k_id, :perc_saldo_end, :kommis_saldo_end, :kcp_perc_begin_saldo, :kcp_kommis_begin_saldo, kcp_from_c_id
+--  as cursor cur
+  do
+  begin
+    if (k_id = k_id_prior) then
+    begin
+      if ((kcp_perc_begin_saldo &lt;&gt; perc_saldo_prior) or (kcp_kommis_begin_saldo &lt;&gt; kommis_saldo_prior)) then
+      begin
+        update kontcalcperc
+        set kcp_perc_begin_saldo = :perc_saldo_prior,
+            kcp_kommis_begin_saldo = :kommis_saldo_prior
+        where kcp_period = :k_period and
+              kcp_from_k_id = :k_id and
+              kcp_from_c_id = :kcp_from_c_id;
+--        where current of cur;
+        updated = updated + 1;
+      end
+    end
+    else
+    begin
+      update kontcalcperc
+      set kcp_perc_begin_saldo = 0,
+          kcp_kommis_begin_saldo = 0
+      where kcp_period = :k_period and
+            kcp_from_k_id = :k_id and
+            kcp_from_c_id = :kcp_from_c_id;
+--      where current of cur;
+    end
+    perc_saldo_prior = :perc_saldo_end;
+    kommis_saldo_prior = :kommis_saldo_end;
+    k_id_prior = k_id;
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

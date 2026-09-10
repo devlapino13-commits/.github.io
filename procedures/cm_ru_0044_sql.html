@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0044_SQL — процедура — схема БД</title>
+<meta name="description" content="Проверка ПАРАЛЛЕЛЬНЫХ кредитов">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0044_SQL</code></h1>
+<p class="desc">Проверка ПАРАЛЛЕЛЬНЫХ кредитов</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_kontstate_client_status.html"><div class="to">HP_KONTSTATE_CLIENT_STATUS</div></a><a class="ref-card" href="hp_kontstate_loan_status.html"><div class="to">HP_KONTSTATE_LOAN_STATUS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0044_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare kc_amount curr_type;
+declare kf_disb_date d_date;
+declare kf_client_pass_no varchar(30);
+declare variable KF_ID ID_TYPE;
+declare variable CURR_K_PERIOD decimal(15,2);
+declare variable CURR_K_DISB_DATE date;
+declare variable k_kredline_end date;
+declare variable IS_DELINQ smallint;
+declare variable KC_FROM_C_ID CURR_TYPE;
+declare variable K_KOLICH_CLIENT_APPROVED integer;
+declare variable C_LAST_BONUS_STATUS integer;
+declare variable C_ID ID_TYPE;
+declare variable K_PERCENT PERC_TYPE;
+declare variable K_KOLICH_REPAY integer;
+declare variable OK_SH_ID integer;
+declare variable OK_OS CURR_TYPE;
+declare variable OK_PERC CURR_TYPE;
+declare variable k_amount_approved CURR_TYPE;
+declare variable KC_AMOUNT_APPROVED CURR_TYPE;
+declare variable K_KONTRACT_NO varchar(30);
+declare variable CURR_K_ID id_type;
+declare variable LAST_K_ID id_type;
+begin
+   res_error_text = &#x27;&#x27;;
+-- 5. Начиная с 1 ноября 2014г. статусные клиенты могут получить параллельный заем, при условии отсутсвтия просрочек гр. займа
+-- по истечении 65 дней с даты выдачи и двух платежей в соответсвии с графиком платежей
+   kf_id = null;
+   select k_from_kf_id, k_disb_date, k_kolich_client_approved, k_percent, k_kolich_repay, k_amount_approved, k_kredline_end
+   from kontract, product
+   where k_id = :k_id
+   and k_from_pr_id = pr_id
+   and pr_product_kind = 2 -- проверка только по параллельным кредитам
+   into kf_id, kf_disb_date, k_kolich_client_approved, k_percent, k_kolich_repay, k_amount_approved, k_kredline_end;
+   if (kf_id is null) then
+   begin
+     Exit;
+   end 
+-- Определяется основной групповой кредит
+   CURR_K_ID = null; -- ID основного контракта
+   select k_id,
+          k_period,
+          ks_date_begin
+   from kontstate, kontract, product
+   where ks_ol_is_delete = 0
+   and ks_state = 1
+   and :KF_DISB_DATE between ks_date_begin and ks_date_end
+   and ks_from_k_id = k_id
+   and k_from_kf_id = :kf_id
+   and k_from_pr_id = pr_id
+   and pr_product_kind = 1   -- групповой кредит
+   order by ks_date_begin desc
+   rows 1
+   into CURR_K_ID, curr_k_period, curr_k_disb_date;
+   if (CURR_K_ID is null) then -- or curr_k_disb_date &gt; cast(&#x27;23.10.2014&#x27; as date)) then
+   begin
+     res_error_text = &#x27;У данного кредита не имеется активный основной групповой заем на &#x27;||:kf_disb_date;
+     res_error_is_critical = 1;
+     suspend;
+   end
+   if (curr_k_period &lt; 5.90) then
+   begin
+     res_error_text = &#x27;Срок основного группового кредита менее 6 месяцев!&#x27;;
+     res_error_is_critical = 1;
+     suspend;
+   end 
+   if (kf_disb_date - curr_k_disb_date &gt;= 65) then
+   begin
+     for
+     select ok_sh_id, sum(ok_os + ok_sh_os), sum(ok_perc + ok_sh_perc)
+     from operkred
+     where ok_ol_is_active = 1
+     and ok_from_k_id = :curr_k_id
+     and ok_ol_date &lt;= :kf_disb_date
+     and ok_from_c_id=0
+--     and ok_sh_date &lt;= :kf_disb_date
+     and ok_type &lt; 7
+     group by ok_sh_id
+     into ok_sh_id, ok_os, ok_perc
+     do
+     begin
+       if (ok_sh_id in (1, 2) and ok_os + ok_perc &gt; 0) then
+       begin
+         res_error_text = &#x27;У основного кредита не произведены 2 успешные платежи!&#x27;;
+         res_error_is_critical = 1;
+         suspend;
+       end
+     end 
+   end else
+   begin
+     res_error_text = &#x27;Со дня выдачи основного группового кредита еще не иcтекли 65 дней!&#x27;;
+     res_error_is_critical = 1;
+     suspend;
+   end 
+-- Проверка просрочки группового займа
+   if (CURR_K_ID is not null) then
+   begin
+     is_delinq = null;
+     select 1 from oksummary
+     where oks_from_k_id = :CURR_K_ID
+     and :KF_DISB_DATE between oks_date_begin and oks_date_end
+     and :KF_DISB_DATE &gt; oks_delinq_date
+     and oks_close_state = 0
+     into is_delinq;
+     if (is_delinq is null) then is_delinq = 0;
+     if (is_delinq = 1) then
+     begin
+       res_error_text = &#x27;Основной групповой займ Просрочен!&#x27;;
+       res_error_is_critical = 2;
+       suspend;
+     end else
+     begin
+--     имеется ли просроченные платежи
+       is_delinq = null;
+       select 1 from operkred
+       where ok_from_k_id = :CURR_K_ID
+       and ok_ol_is_active = 1
+       and ok_ol_date &lt;= :KF_DISB_DATE
+       and ok_type in (4,5)
+       and ok_ol_date &gt; ok_sh_date
+       and ok_os + ok_perc &lt; 0
+       and ok_from_c_id=0
+       rows 1
+       into is_delinq;
+       if (is_delinq is null) then is_delinq = 0;
+       if (is_delinq = 1) then
+       begin
+         res_error_text = &#x27;В основном групповом займе были просроченные платежи!&#x27;;
+         res_error_is_critical = 1;
+         suspend;
+       end else
+       begin
+--      Проверяется предыдущий цикл группового займа
+           LAST_K_ID = null; -- ID основного контракта
+           select k_id from kontstate, kontract, product
+           where ks_ol_is_delete = 0
+           and ks_state = 1
+           and ks_from_k_id = k_id
+           and k_from_kf_id = :kf_id
+           and k_from_pr_id = pr_id
+           and pr_product_kind = 1
+           and ks_date_begin &lt;= :curr_k_disb_date
+           and ks_from_k_id &lt;&gt; :curr_k_id
+           order by ks_date_begin desc
+           rows 1
+           into LAST_K_ID;
+--         если предыдущий контракт существует то проверяет на просроченные платежы
+           if (LAST_K_ID is not null) then
+           begin
+               is_delinq = null;
+               select 1 from operkred
+               where ok_from_k_id = :LAST_K_ID
+               and ok_ol_is_active = 1
+               and ok_ol_date &lt;= :KF_DISB_DATE
+               and ok_type in (4,5)
+               and ok_ol_date &gt; ok_sh_date
+               and ok_os + ok_perc &lt; 0
+               and ok_from_c_id=0
+               rows 1
+               into is_delinq;
+               if (is_delinq is null) then is_delinq = 0;
+        
+               if (is_delinq = 1) then
+               begin
+                 res_error_text = &#x27;В предыдущем групповом займе были просроченные платежи!&#x27;;
+                 res_error_is_critical = 1;
+                 suspend;
+               end
+           end 
+       end 
+     end
+   end
+-- если не имеются предупреждении то проверяет следующее
+--         Выстаскивает статус на начало основного кредита
+--         Если в группе берут 2 и более участников параллельный кредит то проверяется статус на начало
+--         А если один то статус данного клиента
+  if (res_error_text = &#x27;&#x27;) then
+  begin
+       if (k_kolich_client_approved &gt; 1) then
+       begin
+         select C_LAST_BONUS_STATUS
+         from HP_KONTSTATE_LOAN_STATUS(:k_id, 0, 0, :kf_disb_date, &#x27;&#x27;)
+         into :C_LAST_BONUS_STATUS;
+       end else
+       begin
+         c_id = null;
+         select kc_from_c_id from knclient
+         where kc_from_k_id = :k_id
+         and kc_amount_approved &gt; 0
+         into c_id;
+         select C_LAST_BONUS_STATUS
+         from HP_KONTSTATE_CLIENT_STATUS(:c_id, :kf_disb_date)
+         into :C_LAST_BONUS_STATUS;
+       end
+       if (:C_LAST_BONUS_STATUS is null) then C_LAST_BONUS_STATUS = -1;
+    --         Проверка процентной ставки и срок кредита
+       if (C_LAST_BONUS_STATUS = 1) then
+       begin
+         /*
+         if (k_percent &lt;&gt; 6.4) then
+         begin
+           res_error_text = &#x27;Процентная ставка неправильно указан, у данного контракта статус Бронзовый&#x27;;
+           res_error_is_critical = 1;
+           suspend;
+         end 
+         */
+         if (not(k_kolich_repay between 1 and 3)) then
+         begin
+           res_error_text = &#x27;Срок кредита неправильно указан, у данного контракта статус Бронзовый&#x27;;
+           res_error_is_critical = 1;
+           suspend;
+         end 
+       end else
+       if (C_LAST_BONUS_STATUS = 2) then
+       begin
+         /*
+         if (k_percent &lt;&gt; 6.2) then
+         begin
+           res_error_text = &#x27;Процентная ставка неправильно указан, у данного контракта статус Серебряный&#x27;;
+           res_error_is_critical = 1;
+           suspend;
+         end 
+         */
+         if (not(k_kolich_repay between 1 and 4)) then
+         begin
+           res_error_text = &#x27;Срок кредита неправильно указан, у данного контракта статус Серебряный&#x27;;
+           res_error_is_critical = 1;
+           suspend;
+         end 
+       end else
+       if (C_LAST_BONUS_STATUS = 3) then
+       begin
+         /*
+         if (k_percent &lt;&gt; 6.0) then
+         begin
+           res_error_text = &#x27;Процентная ставка неправильно указан, у данного контракта статус Золотой&#x27;;
+           res_error_is_critical = 1;
+           suspend;
+         end
+         */
+         if (not(k_kolich_repay between 1 and 6)) then
+         begin
+           res_error_text = &#x27;Срок кредита неправильно указан, у данного контракта статус Золотой&#x27;;
+           res_error_is_critical = 1;
+           suspend;
+         end 
+       end else
+       if (C_LAST_BONUS_STATUS = 4) then
+       begin
+         /*
+         if (k_percent &lt;&gt; 5.8) then
+         begin
+           res_error_text = &#x27;Процентная ставка неправильно указан, у данного контракта статус Бриллиантовый&#x27;;
+           res_error_is_critical = 1;
+           suspend;
+         end 
+         */
+         if (not(k_kolich_repay between 1 and 9)) then
+         begin
+           res_error_text = &#x27;Срок кредита неправильно указан, у данного контракта статус Бриллиантовый&#x27;;
+           res_error_is_critical = 1;
+           suspend;
+         end 
+       end else
+       if (C_LAST_BONUS_STATUS = 5) then
+       begin
+         /*
+         if (k_percent &lt;&gt; 5.6) then
+         begin
+           res_error_text = &#x27;Процентная ставка неправильно указан, у данного контракта статус Бриллиантовый&#x27;;
+           res_error_is_critical = 1;
+           suspend;
+         end 
+         */
+         if (not(k_kolich_repay between 1 and 9)) then
+         begin
+           res_error_text = &#x27;Срок кредита неправильно указан, у данного контракта статус Бриллиантовый&#x27;;
+           res_error_is_critical = 1;
+           suspend;
+         end 
+       end else
+       if (C_LAST_BONUS_STATUS = 6) then
+       begin
+         /*
+         if (k_percent &lt;&gt; 5.4) then
+         begin
+           res_error_text = &#x27;Процентная ставка неправильно указан, у данного контракта статус Бриллиантовый&#x27;;
+           res_error_is_critical = 1;
+           suspend;
+         end 
+         */
+         if (not(k_kolich_repay between 1 and 9)) then
+         begin
+           res_error_text = &#x27;Срок кредита неправильно указан, у данного контракта статус Бриллиантовый&#x27;;
+           res_error_is_critical = 1;
+           suspend;
+         end 
+       end else
+       if (C_LAST_BONUS_STATUS = 7) then
+       begin
+         /*
+         if (k_percent &lt;&gt; 5.2) then
+         begin
+           res_error_text = &#x27;Процентная ставка неправильно указан, у данного контракта статус Бриллиантовый&#x27;;
+           res_error_is_critical = 1;
+           suspend;
+         end 
+         */
+         if (not(k_kolich_repay between 1 and 12)) then
+         begin
+           res_error_text = &#x27;Срок кредита неправильно указан, у данного контракта статус Бриллиантовый&#x27;;
+           res_error_is_critical = 1;
+           suspend;
+         end 
+       end else
+       if (C_LAST_BONUS_STATUS = 8) then
+       begin
+         /*
+         if (k_percent &lt;&gt; 5.0) then
+         begin
+           res_error_text = &#x27;Процентная ставка неправильно указан, у данного контракта статус Бриллиантовый&#x27;;
+           res_error_is_critical = 1;
+           suspend;
+         end 
+         */
+         if (not(k_kolich_repay between 1 and 12)) then
+         begin
+           res_error_text = &#x27;Срок кредита неправильно указан, у данного контракта статус Бриллиантовый&#x27;;
+           res_error_is_critical = 1;
+           suspend;
+         end 
+       end else
+       if (C_LAST_BONUS_STATUS = 9) then
+       begin
+         /*
+         if (k_percent &lt;&gt; 4.8) then
+         begin
+           res_error_text = &#x27;Процентная ставка неправильно указан, у данного контракта статус Бриллиантовый&#x27;;
+           res_error_is_critical = 1;
+           suspend;
+         end 
+         */
+         if (not(k_kolich_repay between 1 and 12)) then
+         begin
+           res_error_text = &#x27;Срок кредита неправильно указан, у данного контракта статус Бриллиантовый&#x27;;
+           res_error_is_critical = 1;
+           suspend;
+         end 
+       end else
+       if (C_LAST_BONUS_STATUS &gt;= 10) then
+       begin
+         /*
+         if (k_percent &lt;&gt; 4.6) then
+         begin
+           res_error_text = &#x27;Процентная ставка неправильно указан, у данного контракта статус Бриллиантовый&#x27;;
+           res_error_is_critical = 1;
+           suspend;
+         end 
+         */
+         if (not(k_kolich_repay between 1 and 12)) then
+         begin
+           res_error_text = &#x27;Срок кредита неправильно указан, у данного контракта статус Бриллиантовый&#x27;;
+           res_error_is_critical = 1;
+           suspend;
+         end 
+       end else
+       begin
+         res_error_text = &#x27;Основной кредит без статуса.&#x27;;
+         res_error_is_critical = 1;
+         suspend;
+       end
+  --         Проверка каждого клиента     --------------------------------------------------------------------------------------
+           for
+           select kc_amount_approved, c_name_fio, c_pass_no, kc_from_c_id
+           from knclient, clients
+           where kc_from_k_id = :k_id
+           and kc_amount_approved &gt; 0
+           and kc_from_c_id = c_id
+           into kc_amount_approved, res_info_text, kf_client_pass_no, c_id
+           do
+           begin
+              --Добавлено 31.05.16 Музаффар
+               if (kc_amount_approved not between 5000 and 40000) then
+               begin
+                 res_error_text = &#x27;Сумма клиента не правильно указан&#x27;;
+                 res_error_is_critical = 1;
+                 suspend;
+               end 
+             
+              --Проверка суммы ежем. погашения. Параметры микрозаймов от 1 июля пункт 6.6 Добавлено 31.05.16 Музаффар
+              if (exists (select * from schedule sch where sch.sh_from_k_id = :k_id and sh_date &lt;&gt; :k_kredline_end
+                      and sch.sh_id &gt; 0 and :kc_amount_approved/:k_amount_approved * (sch.sh_os + sh_perc) not between 1000 and 5500)) then
+                begin
+                  res_error_text = &#x27;Сумма ежемесячного платежа не должна быть менее 1 000 руб. и не превышать 5 500 руб.!&#x27;;
+                  res_error_is_critical = 1;
+                  suspend;
+                end
+             if (C_LAST_BONUS_STATUS = 1) then
+             begin
+               if (kc_amount_approved &lt;&gt; 5000) then
+               begin
+                 res_error_text = &#x27;Сумма клиента не правильно указан, статус контракта Бронзовый&#x27;;
+                 res_error_is_critical = 1;
+                 suspend;
+               end 
+             end else
+             if (C_LAST_BONUS_STATUS = 2) then
+             begin
+               if (not(kc_amount_approved between 5000 and 10000)) then
+               begin
+                 res_error_text = &#x27;Сумма клиента не правильно указан, статус контракта Серебряный&#x27;;
+                 res_error_is_critical = 1;
+                 suspend;
+               end 
+             end else
+             if (C_LAST_BONUS_STATUS = 3) then
+             begin
+               if (not(kc_amount_approved between 5000 and 15000)) then
+               begin
+                 res_error_text = &#x27;Сумма клиента не правильно указан, статус контракта Золотой&#x27;;
+                 res_error_is_critical = 1;
+                 suspend;
+               end 
+             end else
+             if (C_LAST_BONUS_STATUS in (4,5)) then
+             begin
+               if (not(kc_amount_approved between 5000 and 25000)) then
+               begin
+                 res_error_text = &#x27;Сумма клиента не правильно указан, статус контракта Бриллиантовый&#x27;;
+                 res_error_is_critical = 1;
+                 suspend;
+               end 
+             end
+--  Проверка, клиент не находится ли у других в поручителях
+             if (k_kolich_client_approved = 1) then
+             begin
+                k_kontract_no = null;
+                select k_kontract_no
+                from kontstate, kontract, product, zalog
+                where ks_ol_is_delete = 0
+                and ks_state = 1
+                and :kf_disb_date between ks_date_begin and ks_date_end
+                and ks_from_k_id = k_id
+                and k_from_pr_id = pr_id
+                and pr_loan_type = 1
+                and k_id = z_from_k_id
+                and z_type = 0
+                and z_from_c_id = :kc_from_c_id
+                rows 1
+                into k_kontract_no;
+                if (k_kontract_no is not null) then
+                begin
+                  res_error_is_critical = 1;
+                  res_error_text = &#x27;Клиент поручитель контракта №&#x27;||k_kontract_no||&#x27;, выдача запрещено!&#x27;;
+                  suspend;
+                end 
+              end
+           end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

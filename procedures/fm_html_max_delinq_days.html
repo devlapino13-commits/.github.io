@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_HTML_MAX_DELINQ_DAYS — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_HTML_MAX_DELINQ_DAYS: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_HTML_MAX_DELINQ_DAYS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_html_client_info.html"><div class="to">FM_HTML_CLIENT_INFO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_HTML_MAX_DELINQ_DAYS(
+    C_ID D_ID)
+RETURNS (
+    RES_TEXT D_INTEGER)
+AS
+declare variable K_ID D_ID;
+declare variable DELING D_SMALLINT;
+declare variable KS_STATE D_SMALLINT;
+begin
+  --процедура для подсчета максимальных просроченных дней клиента (будет отоброжаться в меню &quot;информация о клиенте&quot; (после &quot;ограниченный режим просмотра&quot;))
+  res_text = 0;
+  for select k.k_id, ks.ks_state
+      from kontract k
+      inner join kontstate ks on ks.ks_from_k_id = k.k_id
+      inner join knclient kc on kc.kc_from_k_id = k.k_id
+      where kc.kc_from_c_id = :c_id and
+            kc.kc_amount_approved &gt; 0 and
+            ks.ks_state in (1, 2) and
+            current_date between ks.ks_date_begin and ks.ks_date_end and
+            ks.ks_ol_is_delete = 0
+      order by k.k_disb_date desc
+      rows 3
+      into :k_id, :ks_state
+  do
+  begin
+    deling = 0;
+    if (:ks_state = 1) then
+    begin
+      select coalesce(current_date - oks.oks_delinq_date, 0)
+      from oksummary oks
+      where current_date between oks.oks_date_begin and oks.oks_date_end and
+            current_date - oks.oks_delinq_date &gt; 0 and
+            oks_close_state = 0 and
+            oks.oks_from_k_id = :k_id
+      into :deling;
+    end
+    if (:ks_state = 2) then
+    begin
+      select coalesce(max(ok.ok_ol_date - ok_sh_date), 0)
+      from operkred ok
+      where ok.ok_ol_is_active = 1 and
+            ok.ok_ol_date &lt;= current_date and
+            ok.ok_ol_date &gt; ok_sh_date and
+            ok_type &lt; 7 and
+            ok_from_k_id = :k_id and
+            ok_os + ok_perc &lt; 0 and
+            ok_from_c_id = 0
+      into :deling;
+    end
+    if (:deling &gt; :res_text) then
+      :res_text = :deling;
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

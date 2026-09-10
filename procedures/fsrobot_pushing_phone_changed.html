@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FSROBOT_PUSHING_PHONE_CHANGED — процедура — схема БД</title>
+<meta name="description" content="Процедура FSROBOT_PUSHING_PHONE_CHANGED: 3 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FSROBOT_PUSHING_PHONE_CHANGED</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_PARAMS</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_EMAIL</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">USER_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_SUBJECT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_BODY</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_MAILLIST</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FSROBOT_PUSHING_PHONE_CHANGED(
+    REP_PARAMS VARCHAR(255),
+    REP_EMAIL VARCHAR(255),
+    USER_FIO VARCHAR(100))
+RETURNS (
+    RES_SUBJECT VARCHAR(255),
+    RES_BODY BLOB SUB_TYPE TEXT SEGMENT SIZE 80,
+    RES_MAILLIST VARCHAR(255),
+    RES_C_ID DECIMAL(18,0))
+AS
+declare variable c_id id_type;
+declare variable eds_status_date d_date;
+declare variable old_cell_no d_str_100;
+declare variable rd_id d_integer;
+declare variable new_cell_no d_str_100;
+declare variable client_fio d_str_100;
+declare variable reg_name d_str_100;
+declare variable reg_region_director d_id;
+declare variable kc_from_k_id id_type;
+declare variable ovs_datetime d_datetime;
+declare variable res_date_save d_datetime;
+declare variable ma_id d_id;
+declare variable edl_from_reg_id d_integer;
+begin
+  res_body = &#x27;&#x27;;
+
+  /*Задача, если ранее уже был заключен договор эцп и клиент сменил телефон номер должен утверждать РМ */
+
+  /* Анатолий �©егольский
+        Кыял добрый день
+        Когда в МП сотрудник меняет номер телефона вызывается FM_CONTINFO_UPDATE.
+        Но саму проверку и отправку пуш-уведомления лучше сделать в отдельной процедуре для КГ
+        и вызывать в HP_CONTINFO_UPDATE, т.к. она общая для всех систем, не только для МП.
+    */
+
+  -- Отправка PUSH региональному директору, если ранее уже был заключен договор эцп и клиент сменил телефон.
+
+  -- Процедура вызывается из FSROBOT_ON_MAILING
+  -- Процедура готовит список уведомлений для отправки роботом по почте или sms
+  -- REP_COMMAND_KIND. Настройки сообщения хранятся в таблице RefData:
+  -- справочник NotifyMail || &#x27;.&#x27; || Rep_Command_Kind - строка настроек email
+  -- справочник NotifySMS  || &#x27;.&#x27; || Rep_Command_Kind - строка настроек SMS
+
+  -- RefData.RD_Memo    - Список получателей
+  -- RefData.RD_Tag     - Срок жизни сообщения
+  -- RefData.RD_STR_ID  - Название хранимой процедуры, которая готовит текст сообщения
+
+  -- Rep_Params - входящий параметры в зависимости от команды
+  -- Rep_UN_ID - пользователь
+
+  c_id = cast(rep_params as d_id); -- id клиента
+
+  if (user_fio is null) then
+    user_fio = &#x27;&#x27;;
+  res_maillist = :rep_email;
+
+  select cl.c_id, cl.c_name_fio
+  from clients cl
+  where cl.c_id = :c_id
+  into :res_c_id, :client_fio;
+
+  select knc.kc_from_k_id
+  from knclient knc
+  where knc.kc_from_c_id = :c_id and
+        knc.kc_amount_approved &gt; 0
+  order by kc_from_k_id desc
+  rows 1
+  into :kc_from_k_id;
+
+  select k_from_ma_app_id
+  from kontract k
+  where k.k_id = :kc_from_k_id
+  into :ma_id;
+
+  -- номер на дату подписания послднего договора АСП (до текущей смены номера)
+  rd_id = f_get_rd_id(&#x27;ContactInfo.Cell_Main&#x27;);
+
+  select first 1 ma_date_save
+  from miniapp
+  where ma_id = :ma_id and
+        ma_is_active = 1
+  order by ma_number
+  into :res_date_save;
+
+  -- номер на дату заявки
+  old_cell_no = null;
+  select first 1 ovs_value, ovs_datetime
+  from objectprops
+  inner join objectvalues on ovs_from_opr_id = opr_id and
+        ovs_datetime &lt;= :res_date_save and
+        ovs_is_active = 1 and
+        ovs_value &lt;&gt; &#x27;&#x27; and
+        ovs_add_value = 2
+  where opr_object_kind = &#x27;0&#x27; and
+        opr_object_id = :res_c_id and
+        opr_subject_kind = &#x27;-1&#x27; and
+        opr_subject_id = :rd_id
+  order by ovs_datetime desc
+  into :old_cell_no, :ovs_datetime; -- возвращает подтвер тел номер (старый)
+
+  -- если у клиента ранее был подписан договор АСП
+  eds_status_date = null;
+  select cast(eds_status_datetime as date), el.edl_from_reg_id
+  from edoc_list el
+  inner join edoc_sign es on es.eds_from_edl_id = el.edl_id
+  where el.edl_object_kind = 0 and
+        el.edl_object_id = :c_id and
+        el.edl_blank_status = 1 and --бланки приготовлены
+        el.edl_from_edc_id = f_edoc_kind(&#x27;asp.agreement&#x27;, &#x27;id&#x27;) and
+        el.edl_status = 1 and --статус подписан
+        cast(eds_status_datetime as date) &lt; :ovs_datetime rows 1
+  into :eds_status_date, :edl_from_reg_id;
+
+  if (eds_status_date is null) then
+    exit;
+
+  new_cell_no = f_cont_info(&#x27;clients&#x27;, :c_id, &#x27;cell_main&#x27;, &#x27;last&#x27;); -- новый номер
+
+  reg_name = &#x27;&#x27;;
+  select office.reg_name, reg.reg_region_director
+  from region office
+  inner join region reg on reg.reg_unicode = office.parent
+  where office.reg_unicode = :edl_from_reg_id
+  into :reg_name, :reg_region_director;
+
+  if (reg_region_director = 1090100319785) then ----Jira.BOARD-4918 по запросу Алмаз байке
+    reg_region_director = 1090100507011;
+
+  --------  направляю пуш-уведомление PM --------------&gt;
+
+  select un_google_id
+  from username
+  where un_from_c_id = :reg_region_director and
+        un_google_id is not null rows 1
+  into :res_maillist;
+
+  if (coalesce(res_maillist, &#x27;&#x27;) &lt;&gt; &#x27;&#x27; and
+      coalesce(new_cell_no, &#x27;&#x27;) &lt;&gt; coalesce(old_cell_no, &#x27;&#x27;)) then
+  begin
+
+    -- зная id клиента нужно выйти на id РД
+    res_subject = &#x27;У повторного Клиента изменен основной номер телефона.&#x27;;
+
+    res_body = BLOB_APPEND(res_body, &#x27;Смена номера клиента &#x27; || coalesce(:client_fio, &#x27;&#x27;) || ascii_char(10) || ascii_char(13));
+    res_body = BLOB_APPEND(res_body, &#x27;Офис:  &#x27; || coalesce(reg_name, &#x27;&#x27;) || ascii_char(10) || ascii_char(13));
+    res_body = BLOB_APPEND(res_body, &#x27;старый: &#x27; || coalesce(old_cell_no, &#x27;&#x27;) || ascii_char(10) || ascii_char(13));
+    res_body = BLOB_APPEND(res_body, &#x27;новый: &#x27; || coalesce(new_cell_no, &#x27;&#x27;) || ascii_char(10) || ascii_char(13));
+    res_body = BLOB_APPEND(res_body, &#x27;Сравните подпись клиента на новом Договоре ЭЦП и в паспорте.&#x27; || ascii_char(10) || ascii_char(13));
+    res_body = BLOB_APPEND(res_body, &#x27;Позвоните на старый и новый номер для проверки смены номера.&#x27; || ascii_char(10) || ascii_char(13));
+
+  end
+
+  if (coalesce(res_body, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+    suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OKT_DATA_FOR_CONSULTATION — процедура — схема БД</title>
+<meta name="description" content="Процедура OKT_DATA_FOR_CONSULTATION: 3 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>OKT_DATA_FOR_CONSULTATION</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="get_recommended_pay_sum.html"><div class="to">GET_RECOMMENDED_PAY_SUM</div></a><a class="ref-card" href="hp_find_client_by_continfo.html"><div class="to">HP_FIND_CLIENT_BY_CONTINFO</div></a><a class="ref-card" href="hp_show_clientuniq_acc_no.html"><div class="to">HP_SHOW_CLIENTUNIQ_ACC_NO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CELL_NO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">STEP</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_BIRTH_DATE</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_NAME_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DATA_TXT</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE OKT_DATA_FOR_CONSULTATION(
+    CELL_NO D_STR_100,
+    FIO D_STR_100,
+    STEP D_SMALLINT = 1)
+RETURNS (
+    C_ID D_ID,
+    C_BIRTH_DATE D_STR_100,
+    C_NAME_FIO D_STR_100,
+    DATA_TXT D_BLOB_TEXT)
+AS
+declare variable acc d_str_100;
+declare variable kontract_no d_str_100;
+declare variable disb_date d_str_100;
+declare variable k_id d_id;
+declare variable total_debt d_integer;
+declare variable delinq_days d_integer;
+declare variable svz_id d_id;
+declare variable svz_fio d_str_100;
+declare variable svz_cell_no d_str_100;
+declare variable reg_name d_str_100;
+begin
+    data_txt = &#x27;&#x27;;
+
+    cell_no = trim(coalesce(cell_no, &#x27;&#x27;));
+    fio = trim(coalesce(fio, &#x27;&#x27;));
+
+    if ((cell_no = &#x27;&#x27;) and (fio = &#x27;&#x27;)) then
+    begin
+        suspend;
+        exit;
+    end
+
+    if ((cell_no &lt;&gt; &#x27;&#x27;) and (fio &lt;&gt; &#x27;&#x27;)) then
+    begin
+        suspend;
+        exit;
+    end
+
+    if (step = 0) then
+    begin
+        if (fio &lt;&gt; &#x27;&#x27;) then
+        begin
+            for select cl.c_id,
+                   f_datetostr(c_birth_date),
+                   c_name_fio
+            from clients cl
+            where cl.c_name_fio = :fio    
+            into :c_id, :c_birth_date, :c_name_fio
+            do
+            begin
+                suspend;
+            end
+        end
+
+        if (cell_no &lt;&gt; &#x27;&#x27;) then
+        begin
+           for select c_id,
+                 f_datetostr(c_birth_date) as c_birth_date,
+                 c_name_fio
+           from hp_find_client_by_continfo(null, :cell_no)
+           into :c_id, :c_birth_date, :c_name_fio
+           do
+           begin
+                suspend;
+           end
+        end
+    end
+
+    if (step = 1) then
+    begin
+        for select distinct c_id, c_birth_date, c_name_fio
+        from okt_data_for_consultation(:cell_no, :fio, 0)
+        into :c_id, :c_birth_date, :c_name_fio
+        do
+        begin
+            data_txt = BLOB_APPEND(data_txt,&#x27;&lt;b&gt;ФИО:&lt;/b&gt; &#x27;||:c_name_fio||&#x27;&lt;br&gt;&#x27;);
+            data_txt = BLOB_APPEND(data_txt,&#x27;&lt;b&gt;Дата рождения:&lt;/b&gt; &#x27;||:c_birth_date||&#x27;&lt;br&gt;&#x27;);
+    
+            select uniq_acc_str
+            from hp_show_clientuniq_acc_no(:c_id)
+            into :acc; -- № Лицевого счета
+    
+            data_txt = BLOB_APPEND(data_txt,&#x27;&lt;b&gt;Лицевой счет:&lt;/b&gt; &#x27;||:acc||&#x27;&lt;br&gt;&#x27;);
+            data_txt = BLOB_APPEND(data_txt,&#x27;&lt;br&gt;&#x27;);
+    
+            for select kont.k_kontract_no,
+                       f_datetostr(kont.k_disb_date),
+                       k_id,
+                       kal.kal_new_kf_officer,
+                       cl.c_name_fio,
+                       coalesce(f_cont_info(&#x27;clients&#x27;, kal.kal_new_kf_officer, &#x27;cell_main&#x27;, &#x27;ok&#x27;),&#x27;&#x27;),
+                       reg.reg_name
+            from kontstate ks
+            inner join kontract kont on kont.k_id = ks.ks_from_k_id
+            inner join knclient kncl on kncl.kc_from_k_id = ks.ks_from_k_id
+            inner join knaktlist kal on kal.kal_from_kf_id = kont.k_from_kf_id
+            inner join clients cl on cl.c_id = kal.kal_new_kf_officer
+            inner join region reg on reg.reg_unicode = kal.kal_new_reg_id
+            where kncl.kc_amount_approved &gt; 0
+            and kncl.kc_from_c_id = :c_id
+            and ks.ks_ol_is_delete = 0
+            and ks.ks_state = 1
+            and current_date between ks.ks_date_begin and ks.ks_date_end
+            and current_date between kal.kal_date and kal.kal_date_end
+            and kal.is_delete = 0
+            into :kontract_no,
+                 :disb_date,
+                 :k_id,
+                 :svz_id,
+                 :svz_fio,
+                 :svz_cell_no,
+                 :reg_name
+            do
+            begin
+                data_txt = BLOB_APPEND(data_txt,&#x27;&lt;b&gt;-------------------------------------&lt;/b&gt;&#x27;||&#x27;&lt;br&gt;&#x27;);
+                data_txt = BLOB_APPEND(data_txt,&#x27;&lt;b&gt;№ договора:&lt;/b&gt; &#x27;||kontract_no||&#x27;&lt;br&gt;&#x27;);
+                data_txt = BLOB_APPEND(data_txt,&#x27;&lt;b&gt;Офис кредитной папки:&lt;/b&gt; &#x27;||reg_name||&#x27;&lt;br&gt;&#x27;);
+                data_txt = BLOB_APPEND(data_txt,&#x27;&lt;b&gt;Дата выдачи:&lt;/b&gt; &#x27;||disb_date||&#x27;&lt;br&gt;&#x27;);
+                data_txt = BLOB_APPEND(data_txt,&#x27;&lt;b&gt;Рекомендуемая сумма платежа:&lt;/b&gt; &#x27;||(select round(RECOM_PAY_SUM) from GET_RECOMMENDED_PAY_SUM(:k_id, current_date))||&#x27;&lt;br&gt;&#x27;);
+    
+                delinq_days = 0;
+    
+                select iif((current_date - oks.oks_delinq_date&lt;0), 0, current_date -  oks.oks_delinq_date) -- число дней активной просрочки
+                from oksummary oks
+                where current_date between oks.oks_date_begin and oks.oks_date_end
+                and oks_close_state = 0
+                and oks.oks_from_k_id = :k_id
+                into :delinq_days;
+                data_txt = BLOB_APPEND(data_txt,&#x27;&lt;b&gt;Дней активной просрочки:&lt;/b&gt; &#x27;||:delinq_days||&#x27;&lt;br&gt;&#x27;);
+                data_txt = BLOB_APPEND(data_txt,&#x27;&lt;b&gt;ID ВИПС:&lt;/b&gt; &#x27;||:svz_id||&#x27;&lt;br&gt;&#x27;);
+                data_txt = BLOB_APPEND(data_txt,&#x27;&lt;b&gt;ФИО ВИПС:&lt;/b&gt; &#x27;||:svz_fio||&#x27;&lt;br&gt;&#x27;);
+                --data_txt = BLOB_APPEND(data_txt,&#x27;&lt;b&gt;Телефон ВИПС:&lt;/b&gt; &#x27;||:svz_cell_no||&#x27;&lt;br&gt;&#x27;);
+                data_txt = BLOB_APPEND(data_txt,&#x27;&lt;b&gt;-------------------------------------&lt;/b&gt;&#x27;||&#x27;&lt;br&gt;&#x27;);
+            end
+
+            if (k_id is null) then
+                data_txt = BLOB_APPEND(data_txt,&#x27;&lt;b&gt;Активный договор не найден&lt;/b&gt;&lt;br&gt;&#x27;);
+        end
+    end
+    suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

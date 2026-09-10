@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EXTINFO_TO_SEND_NBKI — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EXTINFO_TO_SEND_NBKI: 3 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EXTINFO_TO_SEND_NBKI</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_extinfo_to_send.html"><div class="to">HP_EXTINFO_TO_SEND</div></a><a class="ref-card" href="hp_extinfo_to_send_full.html"><div class="to">HP_EXTINFO_TO_SEND_FULL</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJECT_KIND</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJECT_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">JSON_VALUE</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EXTINFO_TO_SEND_NBKI(
+    C_ID ID_TYPE,
+    OBJECT_KIND D_INTEGER,
+    OBJECT_ID D_ID)
+RETURNS (
+    JSON_VALUE D_BLOB_TEXT)
+AS
+declare variable pass_no str_100;
+declare variable counter integer;
+declare variable str_leng integer;
+declare variable ch str_100;
+declare variable fl_id id_type;
+declare variable c_birth_city str_100;
+declare variable c_birth_country str_100;
+declare variable street str_100;
+declare variable housenumber d_str_20;
+declare variable adr_post_index str_100;
+declare variable street_post_index str_100;
+declare variable city_post_index str_100;
+declare variable city_name str_100;
+declare variable is_finish smallint;
+declare variable birthdt str_100;
+declare variable gender smallint;
+declare variable issuedate str_100;
+declare variable issueauthority str_255;
+declare variable issuecountry str_100;
+declare variable placeofbirth str_100;
+declare variable first_n str_100;
+declare variable name1 str_100;
+declare variable paternal str_100;
+declare variable seria str_100;
+declare variable number str_100;
+declare variable addresstype smallint;
+declare variable ar_housenumber d_str_20;
+declare variable ar_street str_100;
+declare variable ar_city str_100;
+declare variable ar_postal str_100;
+declare variable af_housenumber d_str_20;
+declare variable af_street str_100;
+declare variable af_city str_100;
+declare variable af_postal str_100;
+declare variable ar_addresstype smallint;
+declare variable af_addresstype smallint;
+declare variable create_date date;
+declare variable close_date date;
+declare variable consent_date d_str_code;
+declare variable consent_expire_date d_str_code;
+declare variable ma_id d_id;
+declare variable pass_type d_id;
+begin
+
+  if (coalesce(object_kind, 0) not in (9,11)) then
+  begin
+    exception e_default &#x27;object_kind must be 11 or 9&#x27;;
+  end 
+
+  if (object_kind = 9) then
+  begin
+    select k_kredline_end, k_from_ma_app_id
+    from kontract
+    where k_id = :object_id
+    into close_date, ma_id;
+
+    if (close_date is null) then
+    begin
+        select max(sh_date)
+        from schedule sh
+        where sh.sh_from_k_id = :object_id
+        into :close_date;
+    end
+  end else
+
+  if (object_kind = 11) then
+  begin
+    ma_id = object_id;
+    select max(sh_date) from schedule
+    where sh_from_k_id = -:object_id
+    into close_date;
+
+    if (close_date is null) then
+    begin
+        select max(sh_date)
+        from schedule sh
+        inner join kontract kont on kont.k_id = sh.sh_from_k_id
+        where kont.k_from_ma_app_id = :ma_id
+        into close_date;
+    end
+  end 
+
+  select cast(ma_date_save as date)
+  from miniapp
+  where ma_id = :ma_id
+  order by ma_number
+  rows 1
+  into create_date;
+
+  consent_date = f_datetostr(create_date);
+  consent_expire_date = f_datetostr(close_date);
+
+  select f_datetostr(cl.c_birth_date),
+             coalesce(cl.c_pass_no, &#x27;&#x27;),
+              (
+               case c_sex
+                 when 1 then 1
+                 when 0 then 2
+                 else 9
+              end),
+             iif(c_citizen = 13, 21, 10),
+             f_datetostr(cl.c_pass_date),
+             coalesce(cl.c_pass_who, &#x27;&#x27;),
+             rd.rd_name,
+             cl.c_from_fl_id,
+             cl.c_birth_city,
+             c_birth_country
+  from clients cl
+  left join refdata rd on rd.rd_id = cl.c_citizen
+  where cl.c_id = :c_id
+  into birthDt,
+       pass_no,
+       gender,
+       pass_type,
+       issueDate,
+       issueAuthority,
+       issueCountry,
+       fl_id,
+       c_birth_city,
+       c_birth_country;
+
+  placeOfBirth = c_birth_city;
+  if (c_birth_country &lt;&gt; &#x27;&#x27;) then
+    placeOfBirth = c_birth_country;
+  placeOfBirth= trim(coalesce(placeOfBirth, &#x27;&#x27;));
+
+  select fl.fl_name1, fl.fl_name2, fl.fl_name3
+  from fiolist fl
+  where fl.fl_id = :fl_id
+  into :first_n, :name1, :paternal;
+
+  pass_no = replace(pass_no, &#x27; &#x27;, &#x27;&#x27;);
+  seria = &#x27;&#x27;;
+  number = pass_no;
+
+  if (pass_type = 21) then
+  begin
+    if(pass_no similar to &#x27;[-]?[[:DIGIT:]]+&#x27;) then
+    begin
+        seria = substring(pass_no from 1 for 4);
+        number = substring(pass_no from 5);
+    end
+    else
+    begin
+        counter = 1;
+        is_finish = 0;
+        str_leng = character_length(pass_no);
+        while ((counter &lt; str_leng-1) and (is_finish = 0)) do
+        begin
+            ch = substring(pass_no from counter for 1);
+            if(ch not similar to &#x27;[-]?[[:DIGIT:]]+&#x27;) then
+                seria = seria||ch;
+            else
+            begin
+                number = substring(pass_no from counter);
+                is_finish = 1;
+            end
+            counter = counter + 1;
+        end
+    end
+  end
+
+  for select adcl.adc_address_type,
+             pl_street.pl_name,
+             adl.adl_depart_no,
+             iif(coalesce(adl_post_index,   &#x27;&#x27;) = &#x27;&#x27;, &#x27;000000&#x27;, adl_post_index),
+             iif(coalesce(pl_street.pl_post_index, &#x27;&#x27;) = &#x27;&#x27;, &#x27;000000&#x27;, pl_street.pl_post_index),
+             iif(coalesce(pl_city.pl_post_index, &#x27;&#x27;) = &#x27;&#x27;, &#x27;000000&#x27;, pl_city.pl_post_index),
+             pl_city.pl_name
+      from addrclient adcl
+      inner join addrlist adl on adl.adl_id = adcl.adc_from_adl_id
+      left join places pl_street on pl_street.pl_id = adl.adl_street_id
+      left join places pl_city on pl_city.pl_id = adl.adl_from_pl_id
+      where adcl.adc_from_c_id = :c_id and
+            adcl.adc_address_type in (1, 2)
+      into :addressType,
+           :street,
+           :houseNumber,
+           :adr_post_index,
+           :street_post_index,
+           :city_post_index,
+           :city_name
+  do
+  begin
+      if (adr_post_index = &#x27;000000&#x27;) then
+      begin
+        if (street_post_index &lt;&gt; &#x27;&#x27;) then
+          adr_post_index = :street_post_index;
+        else
+          adr_post_index = :city_post_index;
+      end
+
+      if (addressType = 1) then
+      begin
+          ar_addressType = addressType;
+          ar_houseNumber = houseNumber;
+          ar_street = street;
+          ar_city = city_name;
+          ar_postal = adr_post_index;
+      end
+      else if (addressType = 2) then
+      begin
+          af_addressType = addressType;
+          af_houseNumber = houseNumber;
+          af_street = street;
+          af_city = city_name;
+          af_postal = adr_post_index;
+      end
+  end
+
+  json_value =
+    &#x27;{
+      &quot;prequest&quot;: {
+          &quot;req&quot;: {
+            &quot;InquiryReq&quot;: {
+                &quot;ConsentReq&quot;: {&#x27; ||
+                  f_json_make_pair(&#x27;consentFlag&#x27;, &#x27;Y&#x27;, &#x27;str&#x27;) || &#x27;, &#x27; ||
+                  f_json_make_pair(&#x27;liability&#x27;, &#x27;Y&#x27;, &#x27;str&#x27;) || &#x27;, &#x27; ||
+                  f_json_make_pair(&#x27;consentDate&#x27;, consent_date, &#x27;str&#x27;) || &#x27;, &#x27; ||
+                  f_json_make_pair(&#x27;consentExpireDate&#x27;, consent_expire_date, &#x27;str&#x27;) || &#x27;, &#x27; ||
+                  f_json_make_pair(&#x27;consentPurpose&#x27;, 1, &#x27;num&#x27;) || &#x27; &#x27; ||&#x27;
+                  }
+              },
+              &quot;IdReq&quot;: [{&#x27;||
+                  f_json_make_pair(&#x27;idNum&#x27;, number, &#x27;str&#x27;) || &#x27;, &#x27; ||
+                  f_json_make_pair(&#x27;seriesNumber&#x27;, seria, &#x27;str&#x27;) || &#x27;, &#x27; ||
+                  f_json_make_pair(&#x27;idType&#x27;, pass_type, &#x27;str&#x27;) || &#x27;, &#x27; ||
+                  f_json_make_pair(&#x27;issueDate&#x27;, issuedate, &#x27;str&#x27;) || &#x27;, &#x27; ||
+                  f_json_make_pair(&#x27;issueAuthority&#x27;, issueAuthority, &#x27;str&#x27;) || &#x27;, &#x27; ||
+                  f_json_make_pair(&#x27;issueCountry&#x27;, issueCountry, &#x27;str&#x27;) || &#x27; &#x27; ||&#x27;
+                      }],
+              &quot;PersonReq&quot;: {&#x27;||
+                  f_json_make_pair(&#x27;first&#x27;, first_n, &#x27;str&#x27;) || &#x27;, &#x27; ||
+                  f_json_make_pair(&#x27;name1&#x27;, name1, &#x27;str&#x27;) || &#x27;, &#x27; ||
+                  f_json_make_pair(&#x27;paternal&#x27;, paternal, &#x27;str&#x27;) || &#x27;, &#x27; ||
+                  f_json_make_pair(&#x27;birthDt&#x27;, birthDt, &#x27;str&#x27;) || &#x27;, &#x27; ||
+                  f_json_make_pair(&#x27;gender&#x27;, gender, &#x27;str&#x27;) || &#x27;, &#x27; ||
+                  f_json_make_pair(&#x27;placeOfBirth&#x27;, placeOfBirth, &#x27;str&#x27;) || &#x27; &#x27; ||&#x27;
+               },
+              &quot;AddressReq&quot;: [{&#x27;||
+                  f_json_make_pair(&#x27;houseNumber&#x27;, ar_houseNumber, &#x27;str&#x27;) || &#x27;, &#x27; ||
+                  f_json_make_pair(&#x27;street&#x27;, ar_street, &#x27;str&#x27;) || &#x27;, &#x27; ||
+                  f_json_make_pair(&#x27;city&#x27;, ar_city, &#x27;str&#x27;) || &#x27;, &#x27; ||
+                  f_json_make_pair(&#x27;postal&#x27;, ar_postal, &#x27;str&#x27;) || &#x27;, &#x27; ||
+                  f_json_make_pair(&#x27;addressType&#x27;, ar_addresstype, &#x27;str&#x27;) || &#x27; &#x27; ||&#x27;
+               },{&#x27;||
+                  f_json_make_pair(&#x27;houseNumber&#x27;, af_houseNumber, &#x27;str&#x27;) || &#x27;, &#x27; ||
+                  f_json_make_pair(&#x27;street&#x27;, af_street, &#x27;str&#x27;) || &#x27;, &#x27; ||
+                  f_json_make_pair(&#x27;city&#x27;, af_city, &#x27;str&#x27;) || &#x27;, &#x27; ||
+                  f_json_make_pair(&#x27;postal&#x27;, af_postal, &#x27;str&#x27;) || &#x27;, &#x27; ||
+                  f_json_make_pair(&#x27;addressType&#x27;, af_addresstype, &#x27;str&#x27;) || &#x27; &#x27; ||&#x27;
+                 }]
+              }
+          }
+      }&#x27;;
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

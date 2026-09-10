@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EXTINFO_BANKRUPT_PROCESS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EXTINFO_BANKRUPT_PROCESS: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EXTINFO_BANKRUPT_PROCESS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="get_bankruptcy_status.html"><div class="to">GET_BANKRUPTCY_STATUS</div></a><a class="ref-card" href="hp_get_blobex_blob.html"><div class="to">HP_GET_BLOBEX_BLOB</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_extinfotask_process.html"><div class="to">HP_EXTINFOTASK_PROCESS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EIL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EXTINFO_BANKRUPT_PROCESS(
+    EIL_ID D_ID)
+AS
+declare variable K_ID D_ID;
+declare variable C_ID D_ID;
+declare variable BLS_ID D_ID;
+declare variable BANK_STATE D_STR_255;
+declare variable BANK_DATE D_DATE;
+declare variable JSON_BLOB D_BLOB_TEXT;
+declare variable IDX D_INTEGER;
+declare variable PERSON_COUNT D_INTEGER;
+declare variable BANK_TYPE D_STR_100;
+declare variable IS_BANKRUPTCY D_INTEGER;
+begin
+    -- RFCKZ-258
+    -- Получаем данные из extinfolist
+    select eil.eil_from_c_id,
+           eil.eil_object_id,
+           eil.eil_from_bls_id
+    from extinfolist eil
+    inner join extinfocfg eic on eic.eic_id = eil.eil_from_eic_id
+    where eil.eil_id = :eil_id
+      and eil.eil_status = 2
+      and eic.eic_code = &#x27;bankruptcy&#x27;
+    into c_id, k_id, bls_id;
+
+    select is_bankruptcy
+    from get_bankruptcy_status(:c_id)
+    into is_bankruptcy;
+
+    if (:is_bankruptcy = 0) then
+        exit;
+
+    -- Получаем JSON
+    select blx_blob
+    from hp_get_blobex_blob(:bls_id)
+    into json_blob;
+
+    if (row_count is null or coalesce(json_blob, &#x27;&#x27;) = &#x27;&#x27;) then
+        exit;
+
+    -- Определяем количество элементов массива PersonInfo
+    person_count = f_json_blob_get_count(:json_blob,
+        &#x27;response.responseData.data.ResponseByIin.PersonInfos.PersonInfo&#x27;);
+
+    if (person_count &gt; 0) then
+    begin
+        -- если массив, перебираем все элементы
+        idx = 0;
+        while (idx &lt; person_count) do
+        begin
+            bank_state = f_json_blob_get_value(:json_blob,
+                &#x27;response.responseData.data.ResponseByIin.PersonInfos.PersonInfo[&#x27; || IDX || &#x27;].StatementStatus&#x27;, null);
+
+            if (bank_state = &#x27;Zaversheno&#x27;) then
+            begin
+                bank_date = cast(substring(f_json_blob_get_value(:json_blob,
+                    &#x27;response.responseData.data.ResponseByIin.PersonInfos.PersonInfo[&#x27; || IDX || &#x27;].BankruptStartDate&#x27;, null)
+                    from 1 for 10) as date);
+
+                bank_type = f_json_blob_get_value(:json_blob,
+                    &#x27;response.responseData.data.ResponseByIin.PersonInfos.PersonInfo[&#x27; || IDX || &#x27;].BankruptcyType&#x27;, null);
+
+                insert into bankruptcy_for_exec (bfe_from_c_id, bfe_from_k_id, bfe_from_eil_id, 
+                                                 bfe_bankruptcy_date, bfe_status, bfe_bank_type, bfe_bank_status)
+                values (:c_id, :k_id, :eil_id, :bank_date, 0, :bank_type, :bank_state);
+
+                exit;
+            end
+
+            IDX = IDX + 1;
+        end
+    end
+    else
+    begin
+        -- Если массива нет, проверяем одиночный объект
+        bank_state = f_json_blob_get_value(:json_blob,
+            &#x27;response.responseData.data.ResponseByIin.PersonInfos.PersonInfo.StatementStatus&#x27;, null);
+
+        if (bank_state = &#x27;Zaversheno&#x27;) then
+        begin
+            bank_date = cast(substring(f_json_blob_get_value(:json_blob,
+                &#x27;response.responseData.data.ResponseByIin.PersonInfos.PersonInfo.BankruptStartDate&#x27;, null)
+                from 1 for 10) as date);
+
+            bank_type = f_json_blob_get_value(:json_blob,
+                &#x27;response.responseData.data.ResponseByIin.PersonInfos.PersonInfo.BankruptcyType&#x27;, null);
+
+            insert into bankruptcy_for_exec (bfe_from_c_id, bfe_from_k_id, bfe_from_eil_id, 
+                                             bfe_bankruptcy_date, bfe_status, bfe_bank_type, bfe_bank_status)
+            values (:c_id, :k_id, :eil_id, :bank_date, 0, :bank_type, :bank_state);
+        end
+    end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

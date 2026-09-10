@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_GET_CLIENT_TYPE_OLD — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_GET_CLIENT_TYPE_OLD: 4 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_GET_CLIENT_TYPE_OLD</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CURR_CITIZEN_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DOC_VNJ_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_CLIENT_TYPE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_NON_RESIDENT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_FROM_CDS_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_GET_CLIENT_TYPE_OLD(
+    C_ID D_ID,
+    CURR_CITIZEN_ID D_INTEGER,
+    DOC_VNJ_ID D_INTEGER,
+    REP_DATE D_DATE = null)
+RETURNS (
+    RES_CLIENT_TYPE INTEGER,
+    RES_NON_RESIDENT INTEGER,
+    RES_FROM_CDS_ID INTEGER)
+AS
+declare variable db_id integer;
+declare variable citizen_str d_str_code;
+begin
+  -- устаревшая процедура
+
+  -- определяет резидентсво контрагента и тип (ЮЛ, ФЛ или ИП)
+
+  if (rep_date is null) then
+    rep_date = current_date;
+  res_from_cds_id = null;
+
+  if (curr_citizen_id is null) then
+  begin
+    db_id = f_get_db_id();
+    citizen_str = trim((case db_id
+                          when 81001 then &#x27;citizen.ru&#x27;
+                          when 41701 then &#x27;citizen.kg&#x27;
+                          when 94401 then &#x27;citizen.az&#x27;
+                        end));
+
+    select rd_id
+    from refdata
+    where rd_code = :citizen_str
+    into :curr_citizen_id;
+  end
+
+  if (doc_vnj_id is null) then
+  begin
+    select pk_id
+    from passkind, passdoctype
+    where pdt_id = pk_from_pdt_id and
+          pk_is_delete = 0 and
+          pdt_code = &#x27;registration_vnj&#x27; rows 1
+    into :doc_vnj_id;
+  end
+
+  select iif(c_citizen = :curr_citizen_id, 0, 1),
+         iif(coalesce(c_type, 0) = 1, iif(c_name_fio like &#x27;ИП %&#x27; or c_name_fio like &#x27;% ИП&#x27;, 2, 1), 3)
+  from clients
+  where c_id = :c_id
+  into :res_non_resident, res_client_type;
+  if (res_non_resident is null) then
+    res_non_resident = 0;
+
+  if (res_non_resident = 1 and
+      res_client_type = 3) then
+  begin
+    if (doc_vnj_id is not null) then
+    begin
+      -- если имеется действующий документ ВНЖ, то резидент
+      -- начиная с апреля 2019 добавлено новое условие:
+      -- смотрим на время добавления документа, чтобы исторические отчеты не изменились, Sanjari 28.04.2019
+      select cds_id
+      from clientdocs
+      where cds_from_c_id = :c_id and
+            cds_from_pk_id = :doc_vnj_id and
+            cds_doc_date_begin &lt;= :rep_date and
+            cds_doc_date_end &gt;= :rep_date and
+            cds_is_delete = 0 and
+            coalesce(cds_create_datetime, cds_datetime) &lt; (:rep_date + 1) -- новое условие
+      order by cds_doc_date_begin desc, cds_datetime desc
+      rows 1
+      into :res_from_cds_id;
+
+      if (res_from_cds_id is not null) then
+        res_non_resident = 0;
+    end
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

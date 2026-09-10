@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_SA_TABEL_CORRECT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_SA_TABEL_CORRECT: 0 входных, 9 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_SA_TABEL_CORRECT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">9</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">9 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SAT_FROM_C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SAT_YEAR_MONTH</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SAT_FROM_SAWT_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DD</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OFFICE_MIN</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OFFICE_MAX</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PS_FROM_REG_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REG_FOUND</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SAT_TOTAL_HOURS</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_SA_TABEL_CORRECT
+RETURNS (
+    SAT_FROM_C_ID DECIMAL(18,0),
+    SAT_YEAR_MONTH INTEGER,
+    SAT_FROM_SAWT_ID INTEGER,
+    DD DATE,
+    OFFICE_MIN INTEGER,
+    OFFICE_MAX INTEGER,
+    PS_FROM_REG_ID INTEGER,
+    REG_FOUND INTEGER,
+    SAT_TOTAL_HOURS INTEGER)
+AS
+declare variable sat_year integer;
+declare variable sat_month integer;
+begin
+  for select sat_from_c_id, sat_year_month, sat_from_sawt_id, max(sat_total_hours), min(sat_office_id),
+             max(sat_office_id)
+      from sa_tabel
+      where sat_is_ready = 1 and
+            (sat_total_hours &lt;&gt; 0 or
+            sat_total_calc &lt;&gt; 0)
+      group by sat_from_c_id, sat_year_month, sat_from_sawt_id
+      having count(*) &gt; 1
+      into sat_from_c_id, sat_year_month, sat_from_sawt_id, sat_total_hours, office_min, office_max
+  do
+  begin
+    sat_month = mod(sat_year_month, 100);
+    sat_year = (sat_year_month - sat_month) / 100;
+
+    if (sat_month &lt; 12) then
+      dd = cast(&#x27;01.&#x27; || right(&#x27;00&#x27; ||(sat_month + 1), 2) || &#x27;.&#x27; || sat_year as date) - 1;
+    else
+      dd = cast(&#x27;01.01.&#x27; || sat_year as date);
+
+    ps_from_reg_id = null;
+    select ps_from_reg_id
+    from hr_pstatus
+    where ps_status = 1 and
+          ps_from_c_id = :sat_from_c_id and
+          ps_date_begin &lt;= :dd and
+          ps_date_end &gt;= :dd
+    order by ps_is_working desc
+    rows 1
+    into :ps_from_reg_id;
+
+    if ((ps_from_reg_id = office_min) or (ps_from_reg_id = office_max)) then
+      reg_found = 1;
+    else
+      reg_found = 0;
+
+    if (reg_found = 1) then
+    begin
+      delete from sa_tabel
+      where sat_is_ready = 1 and
+            (sat_total_hours &lt;&gt; 0 or
+            sat_total_calc &lt;&gt; 0) and
+            sat_from_c_id = :sat_from_c_id and
+            sat_year_month = :sat_year_month and
+            sat_from_sawt_id = :sat_from_sawt_id and
+            sat_office_id &lt;&gt; :ps_from_reg_id;
+    end
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

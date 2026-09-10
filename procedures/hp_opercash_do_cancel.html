@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_OPERCASH_DO_CANCEL — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_OPERCASH_DO_CANCEL: 3 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_OPERCASH_DO_CANCEL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_is_day_closed.html"><div class="to">HP_IS_DAY_CLOSED</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">IN_OPC_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RD_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_IS_ERROR</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_OPERCASH_DO_CANCEL(
+    IN_OPC_ID D_ID,
+    RD_ID D_INTEGER,
+    UN_ID D_ID)
+RETURNS (
+    RES_IS_ERROR D_BOOL,
+    RES_TEXT D_STR_255)
+AS
+declare variable reg_id d_integer;
+declare variable ol_id d_id;
+declare variable opc_from_k_id d_id;
+declare variable opc_date d_date;
+declare variable tmp_oper d_str_255;
+declare variable opc_oper_kind d_smallint;
+declare variable kommis_ol_id d_id;
+declare variable kommis_opc_id d_id;
+declare variable cil_id d_integer;
+begin
+  res_is_error = 0;
+
+  select coalesce(opc_parent_id, opc_id), opc_office_id, opc_from_ol_id, opc_from_k_id, opc_date, opc_oper_kind
+  from opercash
+  where opc_id = :in_opc_id
+  into in_opc_id, reg_id, ol_id, opc_from_k_id, opc_date, opc_oper_kind;
+
+  if (row_count = 0) then
+    exception e_message &#x27;Операция не найдена&#x27;;
+
+  if (exists(select *
+             from hp_is_day_closed(:reg_id, :opc_date, 1)
+             where day_closed = 1)) then
+    exception e_message &#x27;Опер.день кассы закрыт: &#x27; || f_datetostr(opc_date);
+
+  if (ol_id is not null) then
+  begin
+    if (exists(select *
+               from pvnopers
+               where po_from_ol_id = :ol_id and
+                     coalesce(po_ol_is_active, 1) = 1)) then
+      exception e_message &#x27;Удаление карточных операций запрещена. Обратитесь к курирующему бухгалтеру&#x27;;
+
+    if (opc_from_k_id is not null) then
+    begin
+      tmp_oper = &#x27;&#x27;;
+      select &#x27;ol_id: &#x27; || ok_from_ol_id || &#x27; от &#x27; || f_datetostr(ol_date)
+      from operkred, operlist
+      where ok_from_k_id = :opc_from_k_id and
+            ok_ol_is_active = 1 and
+            ok_from_ol_id = ol_id and
+            (ol_id is distinct from :ol_id and ol_parent_id is distinct from :ol_id) and
+            (ok_ol_date &gt; :opc_date or (ok_ol_date = :opc_date and ok_from_ol_id &gt; :ol_id))
+      rows 1
+      into tmp_oper;
+
+      if (tmp_oper &lt;&gt; &#x27;&#x27;) then
+        exception e_message &#x27;Имеется более поздняя операция по займу, &#x27; || tmp_oper;
+    end
+
+    if (opc_oper_kind = f_enum_id(&#x27;cashoperkind&#x27;, &#x27;plus.loan.kommis&#x27;)) then
+    begin
+      res_is_error = 1;
+      res_text = &#x27;Удаление комиссии за кассовое обслуживание запрещено&#x27;; -- RFCKG-4146
+    end
+
+    if (exists(select *
+               from operlistappr op
+               where op.olr_from_ol_id = :ol_id and
+                     op.olr_reg_state = 1 and
+                     op.olr_appr_status = 0)) then
+    begin
+      res_is_error = 1;
+      res_text = &#x27;Подождите, данный запрос рассматривается.&#x27;;
+    end
+
+    if (res_is_error = 0) then
+    begin
+      if (rd_id is null) then
+        rd_id = 0;
+
+      insert into operlistappr (olr_from_ol_id, olr_reg_state, olr_reg_user, olr_reg_rd_id, olr_reg_datetime,
+                                olr_appr_status, olr_appr_user, olr_appr_datetime, olr_appr_rd_id, olr_from_reg_id,
+                                olr_is_cashplace)
+      values (:ol_id, 1, :un_id, :rd_id, current_timestamp, 0, null, null, :rd_id, :reg_id, 1);
+
+      if (opc_oper_kind = f_enum_id(&#x27;cashoperkind&#x27;, &#x27;minus.loan.disb&#x27;)) then
+      begin
+        -- при удалении операции выдачи удаляется и комиccия за кассовое обслуживание (RFCKG-4146)
+        kommis_ol_id = 0;
+        select opc_from_ol_id
+        from opercash
+        where opc_is_delete = 0 and
+              opc_parent_id = :in_opc_id and
+              opc_oper_kind = f_enum_id(&#x27;cashoperkind&#x27;, &#x27;plus.loan.kommis&#x27;)
+        into kommis_ol_id;
+
+        if (coalesce(kommis_ol_id, 0) &lt;&gt; 0) then
+         insert into operlistappr (olr_from_ol_id, olr_reg_state, olr_reg_user, olr_reg_rd_id, olr_reg_datetime,
+                                   olr_appr_status, olr_appr_user, olr_appr_datetime, olr_appr_rd_id, olr_from_reg_id,
+                                   olr_is_cashplace)
+         values (:kommis_ol_id, 1, :un_id, :rd_id, current_timestamp, 0, null, null, :rd_id, :reg_id, 1);
+      end
+
+      res_text = &#x27;Создан запрос на аннулирование, ждите подтверждения&#x27;;
+    end
+  end else
+  begin
+    update opercash
+    set opc_is_delete = 1
+    where opc_id = :in_opc_id and
+          opc_is_delete = 0;
+
+    if (opc_oper_kind = f_enum_id(&#x27;cashoperkind&#x27;, &#x27;minus.loan.disb&#x27;)) then
+    begin
+      -- при удалении операции выдачи удаляется и комиccия за кассовое обслуживание (RFCKG-4146)
+      kommis_opc_id = 0;
+      select opc_id
+      from opercash
+      where opc_is_delete = 0 and
+            opc_parent_id = :in_opc_id and
+            opc_oper_kind = f_enum_id(&#x27;cashoperkind&#x27;, &#x27;plus.loan.kommis&#x27;)
+      into kommis_opc_id;
+
+      if (coalesce(kommis_opc_id, 0) &lt;&gt; 0) then
+        update opercash
+        set opc_is_delete = 1
+        where opc_from_ol_id is null and
+              opc_id = :kommis_opc_id;
+    end
+
+    res_text = &#x27;Операция успешно аннулирована&#x27;;
+  end
+
+  -- RFCKG-5475
+  if (opc_oper_kind = f_enum_id(&#x27;cashoperkind&#x27;, &#x27;plus.inkassa&#x27;)) then
+  begin
+    cil_id = (select opc_from_cil_id from opercash where opc_id = :in_opc_id);
+    delete from cashterminal
+    where ctm_from_cil_id = :cil_id;
+    update cashinvlist set
+      cil_is_delete = 1
+    where cil_id = :cil_id;
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_CHECK_VOCATION_DAYS — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_CHECK_VOCATION_DAYS: 4 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_CHECK_VOCATION_DAYS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_sa_tabel_one_voc.html"><div class="to">AAREP_SA_TABEL_ONE_VOC</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ORDER_TYPE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_SALDO</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_CHECK_VOCATION_DAYS(
+    C_ID DECIMAL(18,0),
+    ORDER_TYPE INTEGER,
+    REP_DATE_BEGIN DATE,
+    REP_DATE_END DATE)
+RETURNS (
+    RES_SALDO DECIMAL(18,4))
+AS
+declare variable kol_days integer;
+declare variable rep_region_id integer;
+declare variable rep_year integer;
+declare variable db_id integer;
+declare variable date_buf_str varchar(6);
+declare variable buf_year varchar(4);
+declare variable buf_month integer;
+declare variable year_end date;
+declare variable buf_date_end date;
+declare variable dd1 date;
+declare variable dd2 date;
+declare variable payed_tmp integer;
+declare variable sat_voc_payed decimal(18,4);
+declare variable rep_month smallint;
+declare variable i smallint;
+declare variable calc_tmp decimal(18,4);
+declare variable sat_voc_calc decimal(18,4);
+declare variable hired_date date;
+begin
+  res_saldo = 0;
+
+  :db_id = f_get_db_id();
+
+  if (db_id in (39801, 41701)) then
+  begin
+    if (exists(select *
+               from sa_worktype
+               where sawt_id = :order_type and
+                     sawt_base_type = 4 /* Отпускные */
+                     and
+                     sawt_is_paid = 1)) /* Платные */
+    then
+    begin
+      rep_year = extract(year from rep_date_begin);
+      select ps_from_reg_id, ps_date_begin
+      from hr_pstatus
+      where ps_from_c_id = :c_id and
+            ps_date_begin &lt;= :rep_date_begin and
+            ps_date_end &gt;= :rep_date_begin rows 1
+      into :rep_region_id, :hired_date;
+
+      select max(st.sat_year_month)
+      from sa_tabel st
+      where st.sat_from_c_id = :c_id and
+            st.sat_year_month &gt;= 201301
+      into :date_buf_str;
+
+      if (date_buf_str is null) then
+      begin
+        date_buf_str = extract(year from hired_date) * 100 + extract(month from hired_date);
+      end
+
+      buf_year = substring(date_buf_str from 1 for 4);
+      buf_month = cast(substring(date_buf_str from 5 for 2) as integer);
+      year_end = cast(&#x27;31.12.&#x27; || :buf_year as date);
+
+      sat_voc_payed = 0;
+      if (buf_month &lt; 12) then
+      begin
+        buf_month = buf_month + 1;
+        buf_date_end = &#x27;01.&#x27; || buf_month || &#x27;.&#x27; || buf_year;
+
+        for select hrv_date_begin, hrv_date_end
+            from hr_voctravel, sa_worktype swt, hr_orders
+            where ((hrv_date_begin &gt; :buf_date_end and
+                  hrv_date_begin &lt;= :year_end) or
+                  (hrv_date_end &gt; :buf_date_end and
+                  hrv_date_end &lt;= :year_end)) and
+                  hrv_from_c_id = :c_id and
+                  ho_order_type = sawt_id and
+                  hrv_from_ho_id = ho_id and
+                  hrv_status &gt;= 0 and
+                  swt.sawt_base_type = 4 /* Трудовой отпуск */
+                  and
+                  sawt_is_paid = 1 /* опалчиваемы отпуск */
+            into :dd1, :dd2
+        do
+        begin
+          if (dd1 &lt;= :buf_date_end) then
+            dd1 = :buf_date_end;
+          if (dd2 &gt; :year_end) then
+            dd2 = :year_end;
+          payed_tmp = cast((dd2 - dd1 + 1) as integer);
+          sat_voc_payed = sat_voc_payed + payed_tmp;
+        end
+      end
+
+      kol_days = rep_date_end - rep_date_begin + 1;
+      /*
+        select SAT_VOCATION_END
+        from AAREP_SA_TABEL_ONE_VOC(:REP_REGION_ID, :C_ID, :REP_YEAR, 12)
+        into :RES_SALDO;
+        res_saldo=res_saldo-kol_days - SAT_VOC_PAYED;
+        */
+
+-- закоментировал строку ниже и добавил две строки после нее igusev 11.11.14 --
+--rep_month = 11;
+      if (buf_month = 12) then
+        rep_month = 12;
+      else
+        rep_month = buf_month - 1;
+
+      if (rep_month = 0) then
+        rep_month = 1;
+-------------------------------------------------------------------------------
+
+      res_saldo = 0;
+      select sat_vocation_end
+      from aarep_sa_tabel_one_voc(:rep_region_id, :c_id, :rep_year, :rep_month)
+      into res_saldo;
+
+      sat_voc_calc = 0;
+      if (rep_month &lt; 12) then
+      begin
+        i = rep_month + 1;
+        while (i &lt;= 12) do
+        begin
+          for select sat_vocation_curr
+              from aarep_sa_tabel_one_voc(:rep_region_id, :c_id, :rep_year, :i)
+              into :calc_tmp
+          do
+          begin
+            sat_voc_calc = sat_voc_calc + calc_tmp;
+          end
+          i = i + 1;
+        end
+      end
+      res_saldo = res_saldo + sat_voc_calc - sat_voc_payed - kol_days;
+      if ((res_saldo &lt; 0) and
+          (res_saldo &gt; -0.4)) then
+        res_saldo = 0;
+    end
+  end
+  else
+    res_saldo = 36;
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

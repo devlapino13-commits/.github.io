@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_CASHBOOKPAGES_CHECK — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_CASHBOOKPAGES_CHECK: 2 входных, 8 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_CASHBOOKPAGES_CHECK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">8</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_cash_journal.html"><div class="to">AAREP_CASH_JOURNAL</div></a><a class="ref-card" href="aarep_cash_journal_eps.html"><div class="to">AAREP_CASH_JOURNAL_EPS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_REGION_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">8 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CBP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ERR_TEXT</div><div class="ptype">VARCHAR(200)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CBP_FIRST_PAGE_NUM</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CBP_LAST_PAGE_NUM</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CBP_SALDO_BEGIN</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CBP_SALDO_END</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CJR_SALDO_BEGIN</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CJR_SALDO_END</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_CASHBOOKPAGES_CHECK(
+    REP_REGION_ID INTEGER,
+    REP_DATE DATE)
+RETURNS (
+    CBP_DATE DATE,
+    ERR_TEXT VARCHAR(200),
+    CBP_FIRST_PAGE_NUM INTEGER,
+    CBP_LAST_PAGE_NUM INTEGER,
+    CBP_SALDO_BEGIN DECIMAL(18,4),
+    CBP_SALDO_END DECIMAL(18,4),
+    CJR_SALDO_BEGIN DECIMAL(18,4),
+    CJR_SALDO_END DECIMAL(18,4))
+AS
+declare variable prev_last_page_num d_integer;
+declare variable cbp_year d_smallint;
+declare variable cbp_is_actual d_smallint;
+declare variable eps_cash_date_begin d_date;
+declare variable sab_id d_integer;
+declare variable acc_id d_id;
+declare variable al_id d_str_20;
+begin
+  -- Проверка кассовой книги с начала года по дату отчета
+
+  cbp_year = extract(year from rep_date);
+  cbp_date = cast(&#x27;01.01.&#x27; || cbp_year as date);
+  prev_last_page_num = null;
+  eps_cash_date_begin = f_tmp_const(&#x27;eps_cash_date_begin&#x27;);
+  while (cbp_date &lt;= rep_date) do
+  begin
+    err_text = &#x27;Инфо: Ошибок не найдено&#x27;;
+
+    -- Получаем значения кассовой книги (начальное сальдо, конечное сальдо)
+    cbp_saldo_begin = null;
+    cbp_saldo_end = null;
+    cjr_saldo_begin = null;
+    cjr_saldo_end = null;
+    if (eps_cash_date_begin &gt; cbp_date) then
+      select ol_saldo_begin_dt - ol_saldo_begin_kt,
+             ol_saldo_end_dt - ol_saldo_end_kt
+      from aarep_cash_journal(:rep_region_id, :cbp_date)
+      rows 1
+      into cjr_saldo_begin, cjr_saldo_end;
+    else
+      select ol_saldo_begin_dt - ol_saldo_begin_kt,
+             ol_saldo_end_dt - ol_saldo_end_kt
+      from aarep_cash_journal_eps(:rep_region_id, :cbp_date)
+      rows 1
+      into cjr_saldo_begin, cjr_saldo_end;
+
+    cbp_first_page_num = null;
+    cbp_last_page_num = null;
+    select cbp_first_page_num, cbp_last_page_num, cbp_saldo_begin,
+           cbp_saldo_end, cbp_is_actual
+    from cashbookpages
+    where cbp_date = :cbp_date and
+          cbp_from_reg_id = :rep_region_id and
+          cbp_number = 0
+    into :cbp_first_page_num, :cbp_last_page_num, :cbp_saldo_begin,
+         :cbp_saldo_end, :cbp_is_actual;
+
+    -- Проверки
+    if (cjr_saldo_begin is null) then
+    begin
+      if (cbp_saldo_begin is not null) then
+        err_text = &#x27;Ошибка: По кассе не было операций, но кассовая книга &#x27; || &#x27;напечатана&#x27;;
+      else
+        err_text = &#x27;Инфо: Нет операций&#x27;;
+    end
+    else
+    begin
+      if (cbp_saldo_begin is null) then
+        err_text = &#x27;Ошибка: Есть операции по кассе, но кассовая книга &#x27; || &#x27;не печаталась&#x27;;
+      else
+      begin
+        if (cbp_is_actual = 0) then
+          err_text = &#x27;Ошибка: После изменений в предыдущих днях актуальная &#x27; || &#x27;кассовая книга не печаталась&#x27;;
+        else
+        begin
+          -- Проверка что нумерация между днями не сбилась
+          if (prev_last_page_num is not null) then
+            if (cbp_first_page_num &lt;&gt; prev_last_page_num + 1) then
+              err_text = &#x27;Ошибка: Нумерация нарушена, последний номер &#x27; || &#x27;страницы за предыдущий день:&#x27; || prev_last_page_num || &#x27;, начальный номер страницы за текущий день:&#x27; || cbp_first_page_num;
+
+          -- Проверка, что остатки совпадают
+          if (cjr_saldo_begin &lt;&gt; cbp_saldo_begin) then
+            err_text = &#x27;Фактическое сальдо на начало не совпадает с сальдо &#x27; || &#x27;на начало в напечатанной кассовой книге.&#x27;;
+
+          if (cjr_saldo_end &lt;&gt; cbp_saldo_end) then
+            err_text = &#x27;Фактическое сальдо на конец не совпадает с сальдо &#x27; || &#x27;на конец в напечатанной кассовой книге.&#x27;;
+        end
+      end
+    end
+    suspend;
+    -- Перенос нумерации страниц
+    if (cbp_last_page_num is not null) then
+      prev_last_page_num = cbp_last_page_num;
+    cbp_date = dateadd(day, 1, cbp_date);
+  end
+
+  -- если не наступила дата запуска по ЕПС, завершаем работу
+  if (eps_cash_date_begin &gt; rep_date) then
+    exit;
+
+  cbp_date = rep_date;
+  cbp_first_page_num = null;
+  cbp_last_page_num = null;
+  err_text = &#x27;Разница в остатке Минфин и ЕПС&#x27;;
+
+  for select sab_id
+  from sys_accbalance
+  where sab_full_code starting &#x27;Деньги.Нал.Касса&#x27;
+  into sab_id
+  do
+  begin
+    for select acc_id
+    from ref_account, region_list(:rep_region_id, 1, 3, 1)
+    where acc_from_sab_id = :sab_id and
+          acc_from_reg_id = id_list
+    into acc_id
+    do
+    begin
+      cbp_saldo_begin = 0;
+      cbp_saldo_end = 0;
+      cjr_saldo_begin = 0;
+      cjr_saldo_end = 0;
+
+      cjr_saldo_begin = f_acc_bal(acc_id, cbp_date - 1);
+      cjr_saldo_end = f_acc_bal(acc_id, cbp_date);
+
+      al_id = &#x27;&#x27;;
+      select al_id
+      from acc_list
+      where al_from_acc_id = :acc_id
+      rows 1
+      into al_id;
+
+      if (al_id &lt;&gt; &#x27;&#x27;) then
+      begin
+        cbp_saldo_begin = f_al_bal(al_id, cbp_date - 1);
+        cbp_saldo_end = f_al_bal(al_id, cbp_date);
+      end
+
+      if (cjr_saldo_begin &lt;&gt; cbp_saldo_begin or cjr_saldo_end &lt;&gt; cbp_saldo_end) then
+        suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

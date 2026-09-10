@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_LOAN_OFFICERS_INFO — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_LOAN_OFFICERS_INFO: 3 входных, 7 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_LOAN_OFFICERS_INFO</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">7</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REG_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LIST_KIND</div><div class="ptype">VARCHAR(10)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">7 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_NAME_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KE_CODE</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CLIENT_COUNT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KF_COUNT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">TOTAL_BAL</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DELINQ_BAL</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_LOAN_OFFICERS_INFO(
+    REG_ID INTEGER,
+    REP_DATE DATE,
+    LIST_KIND VARCHAR(10))
+RETURNS (
+    C_ID DECIMAL(18,0),
+    C_NAME_FIO VARCHAR(100),
+    KE_CODE VARCHAR(20),
+    CLIENT_COUNT INTEGER,
+    KF_COUNT INTEGER,
+    TOTAL_BAL CURR_TYPE,
+    DELINQ_BAL CURR_TYPE)
+AS
+begin
+  if (list_kind = &#x27;DstList&#x27;) then
+  begin
+-- Возвращаем список получателей, заполняются все поля
+    for select distinct c_id, c_name_fio, ke_code
+        from krexpert, clients
+        where ke_from_p_id = c_id and
+              ke_status = 1 and
+              ke_date &lt;= :rep_date and
+              ke_date_end &gt;= :rep_date and
+              ke_is_krs &lt;= 2 and
+              ke_from_reg_id = :reg_id
+        order by c_name_fio
+        into c_id, c_name_fio, ke_code
+    do
+    begin
+-- Для каждого сотрудника получаем:
+      select count(distinct(kc_from_c_id)), -- Количество клиентов
+             count(distinct(k_from_kf_id)), -- Количество папок
+             sum(cast(kc_amount_approved as double precision) / k_amount_approved * oks_balance), -- Баланс кредитов
+             sum(iif(:rep_date &gt; oks_delinq_date, cast(kc_amount_approved as double precision) / k_amount_approved * oks_balance, 0)) -- Баланс просрочек
+      from kontract, oksummary, knaktlist, knclient
+      where k_from_kf_id = kal_from_kf_id and
+            k_id = oks_from_k_id and
+            :rep_date between oks_date_begin and oks_date_end and
+            is_delete = 0 and
+            :rep_date between kal_date and kal_date_end and
+            kal_new_kf_officer = :c_id and
+            kc_from_k_id = k_id and
+            kc_amount_approved &gt; 0 and
+            oks_close_state = 0
+      into client_count, kf_count, total_bal, delinq_bal;
+      total_bal = coalesce(total_bal, 0);
+      delinq_bal = coalesce(delinq_bal, 0);
+
+      suspend;
+    end
+  end -- if (List_Kind = &#x27;DstList&#x27;)
+
+  if (list_kind = &#x27;SrcCombo&#x27;) then
+  begin
+-- Возвращаем список передающих КС/СВЗ + Виртуальный СВЗ (Для РФ)
+-- Поля: c_id, c_name_fio, ke_code
+    for select c_id, c_name_fio, ke_code
+        from (
+-- КС/СВЗ
+        select distinct c_id, c_name_fio, ke_code
+        from krexpert, clients
+        where ke_from_p_id = c_id and
+              ke_status = 1 and
+              ke_date &lt;= :rep_date and
+              ke_date_end &gt;= :rep_date and
+              ke_is_krs &lt;= 2 and
+              ke_from_reg_id = :reg_id
+        union
+-- Виртуальный сотрудник
+        select c_id, c_name_fio, &#x27;.ВС&#x27;
+        from clients
+        where c_id = 1000000000000)
+        order by c_name_fio
+        into c_id, c_name_fio, ke_code
+    do
+      suspend;
+  end -- if (List_Kind = &#x27;SrcCombo&#x27;)
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

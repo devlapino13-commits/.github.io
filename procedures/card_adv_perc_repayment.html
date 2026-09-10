@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CARD_ADV_PERC_REPAYMENT — процедура — схема БД</title>
+<meta name="description" content="Процедура CARD_ADV_PERC_REPAYMENT: 3 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CARD_ADV_PERC_REPAYMENT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_repayment.html"><div class="to">HP_DO_REPAYMENT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_cardsync_action_exec_one.html"><div class="to">HP_CARDSYNC_ACTION_EXEC_ONE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OBJECT_KIND</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJECT_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PARENT_CS_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CARD_ADV_PERC_REPAYMENT(
+    OBJECT_KIND D_STR_100 NOT NULL,
+    OBJECT_ID D_ID NOT NULL,
+    PARENT_CS_ID D_INTEGER NOT NULL)
+AS
+declare variable acc_dt d_str_20;
+declare variable acc_kt d_str_20;
+declare variable ol_id d_id;
+declare variable c_id d_id;
+declare variable c_name_fio d_str_100;
+declare variable k_id d_id;
+declare variable k_kontract_no d_str_20;
+declare variable k_disb_date d_date;
+declare variable office_id d_integer;
+declare variable object_kind_str d_str_100;
+declare variable adv_kommis d_currency;
+declare variable un_id d_id;
+declare variable card_id d_integer;
+declare variable cca_id d_integer;
+begin
+    object_kind_str = f_objkind(object_kind, &#x27;name&#x27;);
+
+    if (object_kind_str = &#x27;kontract&#x27;) then
+        k_id = object_id;
+    else
+        exception e_message &#x27;object_kind = &#x27;||object_kind_str||&#x27; не реализован&#x27;;
+
+    select cs.cs_from_un_id, cs.cs_card_id, cs.cs_from_cca_id
+    from cardsync cs
+    where cs.cs_id = :parent_cs_id
+    into :un_id, :card_id, :cca_id;
+
+    select kont.k_last_reg_id, k_kontract_no, k_disb_date
+    from kontract kont
+    where kont.k_id = :k_id
+    into :office_id, :k_kontract_no, :k_disb_date;
+
+    acc_dt = (
+      select al_id
+      from acc_list
+      where al_from_reg_id = :office_id
+        and al_currency = &#x27;417&#x27;
+        and al_account = &#x27;20001/1&#x27;);
+    acc_kt = (
+      select al_id
+      from acc_list
+      where al_from_reg_id = :office_id
+        and al_currency = &#x27;417&#x27;
+        and al_account = &#x27;21114/11&#x27;);
+
+    select sum(ok.ok_kommis)
+    from operkred ok
+    where ok.ok_from_k_id = :k_id
+    and ok.ok_ol_is_active = 1
+    and ok.ok_type in (1,4,5,9)
+    into :adv_kommis;
+
+    select kncl.kc_from_c_id, c_name_fio
+    from knclient kncl
+      inner join clients
+        on c_id = kncl.kc_from_c_id
+    where kncl.kc_from_k_id = :k_id
+    and kncl.kc_amount_approved &gt; 0
+    into :c_id, :c_name_fio;
+    
+    if (adv_kommis &lt; 0) then
+        exception e_message &#x27;По комисии не может быть переплаты (Коммиссия = &#x27;||adv_kommis||&#x27;)&#x27;;
+    
+    if (adv_kommis = 0) then -- если по продукту нет доп. %
+        exit;
+
+    select
+      ol_id
+    from  hp_do_repayment (
+      :k_id,
+      0,                    -- c_id
+      current_date,         -- rep_date
+      :adv_kommis,   -- repay_amount
+      1,                    -- repay_to_os
+      1,                    -- repay_to_perc
+      1,                    -- repay_to_fine
+      1,                    -- repay_to_kommis
+      1,                    -- need_save
+      0,                    -- is_full_repay
+      0,                    -- is_writeoff
+      :office_id,           -- repay_fact_office_id
+      3,                    -- repay_dt_account_kind
+      :acc_dt,              -- repay_dt_account_no
+      0,                    -- repay_curr_rate
+      :un_id,        -- repay_user_id
+      :c_id,                -- repay_document_client
+      null,                 -- repay_doc_client_name_reason
+      0,                    -- repay_manager_c_id
+      0)                    -- repay_from_rd_id
+    into
+      :ol_id;
+
+    if (ol_id is not null) then
+    begin
+      update operlist set
+        ol_memo = f_format(&#x27;Кредитный дог.№%1 от %2%3%4&#x27;,
+          :k_kontract_no,
+          f_datetostr(:k_disb_date),
+          coalesce(f_format(&#x27; номер ID %1 (сч.%2) &#x27;, :card_id, :cca_id), &#x27; &#x27;),
+          :c_name_fio)
+      where ol_id = :ol_id;
+      update operbook set
+        ob_account_kt = :acc_kt,
+        ob_detail = &#x27;Комиссия за выпуск и обслуживание карты Элкарт&#x27;
+      where ob_from_ol_id = :ol_id;
+    end else exception e_message &#x27;Не удается сохранить платеж. ol_id = null&#x27;;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

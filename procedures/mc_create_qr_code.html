@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MC_CREATE_QR_CODE — процедура — схема БД</title>
+<meta name="description" content="Процедура MC_CREATE_QR_CODE: 4 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>MC_CREATE_QR_CODE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">GPS_LAT</div><div class="ptype">DOUBLE PRECISION</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">GPS_LONG</div><div class="ptype">DOUBLE PRECISION</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PHONE_UNIQ_ID</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MCL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">QR_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LABEL_HEADER</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LABEL_FOOTER</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ERR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE MC_CREATE_QR_CODE(
+    GPS_LAT D_DOUBLE,
+    GPS_LONG D_DOUBLE,
+    PHONE_UNIQ_ID D_STR_CODE,
+    MCL_ID D_ID)
+RETURNS (
+    QR_CODE D_STR_CODE,
+    LABEL_HEADER D_STR_255,
+    LABEL_FOOTER D_STR_255,
+    ERR_TEXT D_STR_255)
+AS
+declare variable qrl_id d_id;
+declare variable c_id d_id;
+begin
+  -- Процедура генерирует QR-код из МП клиента для прохождения QR-верификации
+
+  err_text = &#x27;&#x27;;
+  qr_code = &#x27;&#x27;;
+
+  if (coalesce(gps_lat, 0) = 0 or
+      coalesce(gps_long, 0) = 0 or
+      coalesce(phone_uniq_id, &#x27;&#x27;) = &#x27;&#x27;) then
+  begin
+    err_text = &#x27;Не удалось сгенерировать QR-код&#x27;;
+    suspend;
+    exit;
+  end
+
+  if (mcl_id is null) then
+    exception e_default &#x27;Неверный вызов&#x27;; -- данная процедура должна вызываться только из МП клиента
+
+  -- Защита от регистрации клиентов с одного телефона (Антифрод)
+  -- Письмо от Зары: Пт 08.10.2021 12:28
+  -- При попытке сгенерировать код для QR-верификации, будет проверка, был ли за
+  -- последний месяц вход под другим логином, но с таким же идентификатором устройства.
+  -- RFCRU-3259, дополнение, кроме логина должен отличаться c_id
+  -- RFCRU-3766
+  -- RFCRU-6057
+  if (exists(
+    select *
+    from mc_login m1, mc_loginid, mc_login m2
+    where m1.mcl_id = :mcl_id
+    and mci_from_mcl_id &lt;&gt; m1.mcl_id
+    and mci_dev_id = m1.mcl_dev_id
+    and mci_last_datetime &gt; dateadd(day, -30, current_date)
+    and mci_from_mcl_id = m2.mcl_id
+    and m2.mcl_is_delete = 0
+    and m1.mcl_from_c_id is distinct from m2.mcl_from_c_id
+    and m1.mcl_project = m2.mcl_project)) then
+  begin
+    err_text = &#x27;QR-верификация на данном устройстве недоступна, так как с него уже была проведена верификация для другого пользователя&#x27;;
+    suspend;
+    exit;
+  end
+
+  -- Обработка дедлока
+  begin
+  -- Аннулируем другие если еще не подтверждены
+  update qr_list
+  set qrl_is_delete = 1
+  where qrl_from_mcl_id = :mcl_id and
+        qrl_state = 0 and
+        qrl_is_delete = 0;
+
+  insert into qr_list (qrl_from_mcl_id, qrl_gps_lat, qrl_gps_long, qrl_phone_id)
+  values (:mcl_id, :gps_lat, :gps_long, :phone_uniq_id)
+  returning qrl_id, qrl_from_c_id
+  into :qrl_id, :c_id;
+
+  label_header = &#x27;&#x27;;
+  label_footer = f_lang(null, &#x27;Покажите экран телефона нашему сотруднику&#x27;);
+
+  if (c_id is not null) then
+  begin
+    select c_name_fio
+    from clients
+    where c_id = :c_id
+    into label_header;
+  end else
+  begin
+    select mcl_login
+    from mc_login
+    where mcl_id = :mcl_id
+    into label_header;
+  end
+
+  qr_code = f_uuid(&#x27;qr_list&#x27;, qrl_id);
+  when sqlcode -913 do
+    begin
+    -- Если ошибка дедлока
+        err_text = &#x27;Не удалось сгенерировать QR-код, повторите попытку через пару минут&#x27;;
+    end
+
+    when any do
+    begin
+        -- Обработка других ошибок
+        err_text = &#x27;Не удалось сгенерировать QR-код&#x27;;
+    end  
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

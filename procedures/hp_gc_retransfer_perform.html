@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_GC_RETRANSFER_PERFORM — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_GC_RETRANSFER_PERFORM: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_GC_RETRANSFER_PERFORM</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">IGT_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ERR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_GC_RETRANSFER_PERFORM(
+    IGT_ID D_INTEGER,
+    UN_ID D_ID)
+RETURNS (
+    ERR_TEXT D_STR_255)
+AS
+declare variable etj_id d_integer;
+declare variable igt_account_bank_id d_integer;
+declare variable igt_account d_str_20;
+declare variable igt_amount d_currency;
+declare variable obj_kind d_integer;
+declare variable request_json_check d_str_2048;
+declare variable request_json_pay d_str_2048;
+begin
+  err_text = &#x27;&#x27;;
+
+  select
+    igt_account_bank_id,
+    igt_account,
+    igt_amount
+  from ipc_gc_transfer
+  where igt_id = :igt_id
+    and igt_status = -1
+  into
+    :igt_account_bank_id,
+    :igt_account,
+    :igt_amount;
+
+  if (row_count = 1) then
+  begin
+    request_json_check =
+      &#x27;{&quot;TerminalCashInValidate&quot;:{&quot;MSISDN&quot;: &quot;0220018174&quot;, &quot;MSISDN2&quot;: &quot;%1&quot;, &quot;Token&quot;: &quot;&quot;, &quot;CultureInfo&quot;: &quot;ru-RU&quot;, &quot;Password&quot;: &quot;[pass]&quot;, &quot;InstrumentType&quot;: &quot;Wallet&quot;}}&#x27;;
+    request_json_pay =
+      &#x27;{&quot;TerminalCashInReplenish&quot;:{&quot;MSISDN&quot;: &quot;0220018174&quot;, &quot;MSISDN2&quot;: &quot;%1&quot;, &quot;Token&quot;: &quot;&quot;, &quot;CultureInfo&quot;: &quot;ru-RU&quot;, &quot;Password&quot;: &quot;[pass]&quot;, &quot;Amount&quot;: &quot;%2&quot;, &quot;ExtRefID&quot;: &quot;%3qr&quot;, &quot;InstrumentType&quot;: &quot;Wallet&quot;}}&#x27;;
+    obj_kind = f_objkind(&#x27;ipc_gc_transfer&#x27;, &#x27;id&#x27;);
+
+    update elsom_transfer_job set
+      etj_is_last = 0
+    where etj_object_id = :igt_id
+      and etj_object_kind = :obj_kind
+      and etj_is_last = 1;
+
+    etj_id = gen_id(gen_elsom_transfer_job_id, 1);
+    insert into elsom_transfer_job (
+      etj_id,
+      etj_object_kind,
+      etj_object_id,
+      etj_account_bank_id,
+      etj_account,
+      etj_amount,
+      etj_request_json_check,
+      etj_request_json_pay,
+      etj_from_un_id
+    )
+    values (
+      :etj_id,
+      :obj_kind,
+      :igt_id,
+      :igt_account_bank_id,
+      :igt_account,
+      :igt_amount,
+      f_format(:request_json_check, :igt_account),
+      f_format(:request_json_pay, :igt_account, replace(cast(:igt_amount as decimal(18,2)), &#x27;,&#x27;, &#x27;.&#x27;), :etj_id),
+      :un_id
+    );
+    update ipc_gc_transfer set
+      igt_status = 1,
+      igt_error_text = null
+    where igt_id = :igt_id;
+    post_event &#x27;new_elsom_transfer&#x27;;
+  end else err_text = &#x27;Запись для повторной отправки перевода не определена или не удовлетворяет условиям&#x27;;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

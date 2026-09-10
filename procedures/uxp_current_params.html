@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$CURRENT_PARAMS — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$CURRENT_PARAMS: 0 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$CURRENT_PARAMS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PARAM_NAME</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PARAM_VALUE</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PARAM_IS_CONSTANT</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$CURRENT_PARAMS
+RETURNS (
+    PARAM_NAME D_STR_CODE,
+    PARAM_VALUE D_STR_255,
+    PARAM_IS_CONSTANT D_BOOL)
+AS
+declare variable uf_domain d_str_code;
+declare variable uf_default d_str_100;
+declare variable sql_text d_str_long;
+declare variable edi_uuid d_uuid;
+declare variable is_error d_bool;
+declare variable edi_use_last d_bool;
+declare variable exp_calc_expr d_str_long;
+declare variable un_id d_id;
+begin
+  sql_text = &#x27;select cast((%1) as %2) from rdb$database&#x27;;
+
+  for select edi_uuid, edi_use_last
+  from ux$editor
+  into edi_uuid, edi_use_last
+  do
+  begin
+    for select uf_field_name, uf_domain, uf_default, exp_calc_expr
+    from ux$frparam
+         inner join ux$field on (ufp_uf_uuid = uf_uuid)
+         left join ux$expression on (uf_uuid = exp_ux_uuid and exp_kind = 1 and exp_calc_kind &gt;= 0)
+    where ufp_uuid = :edi_uuid
+    into param_name, uf_domain, uf_default, exp_calc_expr
+    do
+    begin
+      param_value = &#x27;&#x27;;
+      param_is_constant = 0;
+
+      if (param_name in (&#x27;current$region_id&#x27;, &#x27;current$office_id&#x27;)) then
+      begin
+        un_id = uxf$user();
+        param_value = uxf$user_reg(un_id);
+
+        suspend;
+        Continue;
+
+        when any do
+          param_value = &#x27;&#x27;;
+      end
+
+      if (exp_calc_expr is null) then
+        exp_calc_expr = &#x27;&#x27;;
+
+      if (exp_calc_expr &lt;&gt; &#x27;&#x27;) then
+      begin
+        param_is_constant = 1;
+        is_error = 0;
+  
+        begin
+          execute statement exp_calc_expr
+          into param_value;
+    
+          when any do
+            is_error = 1;
+        end
+  
+        if (is_error = 1) then
+        begin
+          is_error = 0;
+  
+          execute statement f_format(sql_text, exp_calc_expr, uf_domain)
+          into param_value;
+    
+          when any do
+            is_error = 1;
+        end
+  
+        if (is_error = 0 and param_value &lt;&gt; &#x27;&#x27;) then
+          suspend;
+      end else
+      if (edi_use_last = 1) then
+      begin
+        if (coalesce(uf_default, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+        begin
+          execute statement f_format(sql_text, uf_default, uf_domain)
+          into param_value;
+    
+          when any do
+            param_value = uf_default;
+        end
+
+        suspend;
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

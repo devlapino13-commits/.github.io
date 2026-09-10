@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_INCOME_EXPENSES_SAVE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_INCOME_EXPENSES_SAVE: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_INCOME_EXPENSES_SAVE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_objectprops_get.html"><div class="to">HP_OBJECTPROPS_GET</div></a><a class="ref-card" href="hp_objectprops_set.html"><div class="to">HP_OBJECTPROPS_SET</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_INCOME_EXPENSES_SAVE(
+    K_ID ID_TYPE)
+AS
+declare variable KC_ID ID_TYPE;
+declare variable C_ID ID_TYPE;
+declare variable OVS_VALUE STR_100;
+declare variable KPD decimal(15,2);
+declare variable I integer;
+declare variable ERROR_COD STR_100;
+declare variable NET_PROFIT decimal(15,2);
+declare variable LIVING_EXPENSES decimal(15,2);
+declare variable MONTHLY_INCOME decimal(15,2);
+--declare variable UNFORESEEN_EXPENSES decimal(15,2);
+declare variable LEGAL_DOCS_EXPENSES decimal(15,2);
+declare variable OTHER_BUSINESS_EXPENSES decimal(15,2);
+declare variable EXTRA_AMOUNT decimal(15,2);
+declare variable AMOUNT_MONTHLY_PAYMENTS decimal(15,2);
+declare variable REPAYMENT_OBLIGATIONS decimal(15,2);
+begin
+  for select knc.kc_id, knc.kc_from_c_id
+      from knclient knc
+      where knc.kc_from_k_id = :k_id and
+            knc.kc_amount_approved &gt; 0
+      into :kc_id, :c_id
+  do
+  begin
+
+------------------------------------------------------------------------------------------------
+    ovs_value = null;
+    net_profit = null;
+    select ovs_value
+    from hp_objectprops_get(0, :c_id, -1, &#x27;net_profit&#x27;, current_date)
+    into :ovs_value; -- Чистая прибыль
+    i = 1;
+    OVS_VALUE = replace(OVS_VALUE, &#x27;Значение: &#x27;, &#x27;&#x27;);
+    OVS_VALUE = replace(OVS_VALUE, &#x27;Значение&#x27;, &#x27;&#x27;);
+    if (OVS_VALUE &lt;&gt; &#x27;&#x27;) then
+    begin
+      net_profit = cast(OVS_VALUE as decimal);
+      execute procedure hp_objectprops_set(8, :kc_id, -1, &#x27;ClientIncome.NetProfit&#x27;, current_date,
+          net_profit, null, 1000000000000);
+    end
+    ----------------------------------------------------------------------------------------------------
+    ovs_value = null;
+    living_expenses = null;
+    select ovs_value
+    from hp_objectprops_get(0, :c_id, -1, &#x27;living_expenses&#x27;, current_date)
+    into :ovs_value; -- Ежемесячные семейные расходы
+    i = 2;
+    OVS_VALUE = replace(OVS_VALUE, &#x27;Значение: &#x27;, &#x27;&#x27;);
+    OVS_VALUE = replace(OVS_VALUE, &#x27;Значение&#x27;, &#x27;&#x27;);
+
+    if (OVS_VALUE &lt;&gt; &#x27;&#x27;) then
+    begin
+      living_expenses = cast(OVS_VALUE as decimal);
+      execute procedure hp_objectprops_set(8, :kc_id, -1, &#x27;ClientIncome.LivingExpenses&#x27;, current_date,
+          living_expenses, null, 1000000000000);
+    end
+
+    ---------------------------------------------------------------------------------------------------
+    ovs_value = null;
+    monthly_income = null;
+    select ovs_value
+    from hp_objectprops_get(0, :c_id, -1, &#x27;monthly_income&#x27;, current_date)
+    into :ovs_value; -- Ежемесячный основной доход
+    i = 3;
+    OVS_VALUE = replace(OVS_VALUE, &#x27;Значение: &#x27;, &#x27;&#x27;);
+    OVS_VALUE = replace(OVS_VALUE, &#x27;Значение&#x27;, &#x27;&#x27;);
+
+    if (OVS_VALUE &lt;&gt; &#x27;&#x27;) then
+    begin
+      monthly_income = cast(OVS_VALUE as decimal);
+      execute procedure hp_objectprops_set(8, :kc_id, -1, &#x27;ClientIncome.MonthlyIncome&#x27;, current_date,
+          monthly_income, null, 1000000000000);
+    end
+
+    ---------------------------------------------------------------------------------------------------
+    /*
+    ovs_value = null;
+    unforeseen_expenses = null;
+
+    select ovs_value
+    from hp_objectprops_get(0, :c_id, -1, &#x27;AnketaQuestions.unforeseen_expenses&#x27;, current_date)
+    into :ovs_value; -- Ежемесячные накопления на непредвиденные будущие расходы
+    i = 4;
+    OVS_VALUE = replace(OVS_VALUE, &#x27;Значение: &#x27;, &#x27;&#x27;);
+    OVS_VALUE = replace(OVS_VALUE, &#x27;Значение&#x27;, &#x27;&#x27;);
+
+    if (OVS_VALUE &lt;&gt; &#x27;&#x27;) then
+    begin
+      unforeseen_expenses = cast(OVS_VALUE as decimal);
+      execute procedure hp_objectprops_set(8, :kc_id, -1, &#x27;ClientIncome.UnforeseenExpenses&#x27;, current_date,
+          unforeseen_expenses, null, 1000000000000);
+    end
+    */
+    ---------------------------------------------------------------------------------------------------
+
+    ovs_value = null;
+    legal_docs_expenses = null;
+
+    select ovs_value
+    from hp_objectprops_get(0, :c_id, -1, &#x27;AnketaQuestions.legal_docs_expenses&#x27;, current_date)
+    into :ovs_value; -- Расходы на патент и соц. полис (в месяц) 
+    i = 5;
+    OVS_VALUE = replace(OVS_VALUE, &#x27;Значение: &#x27;, &#x27;&#x27;);
+    OVS_VALUE = replace(OVS_VALUE, &#x27;Значение&#x27;, &#x27;&#x27;);
+
+    if (OVS_VALUE &lt;&gt; &#x27;&#x27;) then
+    begin
+      legal_docs_expenses = cast(OVS_VALUE as decimal);
+      execute procedure hp_objectprops_set(8, :kc_id, -1, &#x27;ClientIncome.LegalDocsExpenses&#x27;, current_date,
+          legal_docs_expenses, null, 1000000000000);
+    end
+
+    ---------------------------------------------------------------------------------------------------
+
+    ovs_value = null;
+    Other_business_expenses = null;
+
+    select ovs_value
+    from hp_objectprops_get(0, :c_id, -1, &#x27;AnketaQuestions.Other_business_expenses&#x27;, current_date)
+    into :ovs_value; -- Другие ежемесячные расходы по бизнесу
+    i = 6;
+    OVS_VALUE = replace(OVS_VALUE, &#x27;Значение: &#x27;, &#x27;&#x27;);
+    OVS_VALUE = replace(OVS_VALUE, &#x27;Значение&#x27;, &#x27;&#x27;);
+
+    if (OVS_VALUE &lt;&gt; &#x27;&#x27;) then
+    begin
+      Other_business_expenses = cast(OVS_VALUE as decimal);
+      execute procedure hp_objectprops_set(8, :kc_id, -1, &#x27;ClientIncome.OtherBusinessExpenses&#x27;, current_date,
+          Other_business_expenses, null, 1000000000000);
+    end
+
+    ---------------------------------------------------------------------------------------------------
+    ovs_value = null;
+    extra_amount = null;
+
+    select ovs_value
+    from hp_objectprops_get(0, :c_id, -1, &#x27;extra_amount&#x27;, current_date)
+    into :ovs_value; -- Другие ежемесячные расходы по бизнесу
+    i = 7;
+    OVS_VALUE = replace(OVS_VALUE, &#x27;Значение: &#x27;, &#x27;&#x27;);
+    OVS_VALUE = replace(OVS_VALUE, &#x27;Значение&#x27;, &#x27;&#x27;);
+
+    if (OVS_VALUE &lt;&gt; &#x27;&#x27;) then
+    begin
+      extra_amount = cast(OVS_VALUE as decimal);
+      execute procedure hp_objectprops_set(8, :kc_id, -1, &#x27;ClientIncome.ExtraAmount&#x27;, current_date,
+          extra_amount, null, 1000000000000);
+    end
+    ---------------------------------------------------------------------------------------------------
+    ovs_value = null;
+    amount_monthly_payments = null;
+
+    select ovs_value
+    from hp_objectprops_get(0, :c_id, -1, &#x27;amount_monthly_payments&#x27;, current_date)
+    into :ovs_value; -- сумма ежемесчной выплаты
+    i = 8;
+    OVS_VALUE = replace(OVS_VALUE, &#x27;Значение: &#x27;, &#x27;&#x27;);
+    OVS_VALUE = replace(OVS_VALUE, &#x27;Значение&#x27;, &#x27;&#x27;);
+
+    if (OVS_VALUE &lt;&gt; &#x27;&#x27;) then
+    begin
+      amount_monthly_payments = cast(OVS_VALUE as decimal);
+      execute procedure hp_objectprops_set(8, :kc_id, -1, &#x27;ClientIncome.AmountMonthlyPayments&#x27;, current_date,
+          amount_monthly_payments, null, 1000000000000);
+    end
+
+    ---------------------------------------------------------------------------------------------------
+
+    ovs_value = null;
+    repayment_obligations = null;
+
+    select ovs_value
+    from hp_objectprops_get(0, :c_id, -1, &#x27;AnketaQuestions.repayment_obligations&#x27;, current_date)
+    into :ovs_value; -- Погашение других долговых обязательств
+    i = 9;
+    OVS_VALUE = replace(OVS_VALUE, &#x27;Значение: &#x27;, &#x27;&#x27;);
+    OVS_VALUE = replace(OVS_VALUE, &#x27;Значение&#x27;, &#x27;&#x27;);
+
+    if (OVS_VALUE &lt;&gt; &#x27;&#x27;) then
+    begin
+      repayment_obligations = cast(OVS_VALUE as decimal);
+      execute procedure hp_objectprops_set(8, :kc_id, -1, &#x27;ClientIncome.RepaymentObligations&#x27;, current_date,
+          repayment_obligations, null, 1000000000000);
+    end
+    ---------------------------------------------------------------------------------------------------
+    if ((:net_profit is not null) and (amount_monthly_payments is not null) and (amount_monthly_payments&gt;0)) then
+    begin
+      kpd = (net_profit*100)/amount_monthly_payments;                -- считаем КПД продукта
+      execute procedure hp_objectprops_set(8, :kc_id, -1, &#x27;ClientIncome.KPD&#x27;, current_date,
+          kpd, null, 1000000000000);
+    end
+    when any do               -- ловим ошибку связанную с вводом некорректных символов
+      begin
+        if (i = 1) then error_cod = &#x27;net_profit&#x27;;
+        if (i = 2) then error_cod = &#x27;living_expenses&#x27;;
+        if (i = 3) then error_cod = &#x27;monthly_income&#x27;;
+        --if (i = 4) then error_cod = &#x27;AnketaQuestions.unforeseen_expenses&#x27;;
+        if (i = 5) then error_cod = &#x27;AnketaQuestions.legal_docs_expenses&#x27;;
+        if (i = 6) then error_cod = &#x27;AnketaQuestions.Other_business_expenses&#x27;;
+        if (i = 7) then error_cod = &#x27;extra_amount&#x27;;
+        if (i = 8) then error_cod = &#x27;amount_monthly_payments&#x27;;
+        if (i = 9) then error_cod = &#x27;AnketaQuestions.repayment_obligations&#x27;;
+
+        exception e_default &#x27;Error: c_id = &#x27;||:c_id||&#x27; answer for question &#x27; ||error_cod|| &#x27; cant convert to int&#x27;;
+      end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MC_CHECK_LOYAL — процедура — схема БД</title>
+<meta name="description" content="Процедура MC_CHECK_LOYAL: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>MC_CHECK_LOYAL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MCL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RESULT</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE MC_CHECK_LOYAL(
+    MCL_ID D_ID)
+RETURNS (
+    RESULT D_SMALLINT)
+AS
+declare variable C_ID D_ID;
+declare variable CLOSE_DATE D_DATE;
+declare variable LAST_K_ID D_ID;
+declare variable SHOW_CLIENT_LINK D_SMALLINT;
+declare variable DATE_END D_DATE;
+begin
+  date_end = current_date;
+  if (coalesce(mcl_id, 0) &lt;= 0) then
+    exception e_default &#x27;parametr &quot;mcl_id&quot; has invalid value&#x27;;
+
+  select mcl.mcl_from_c_id
+  from mc_login mcl
+  where mcl.mcl_id = :mcl_id
+  into :c_id;
+
+  -- Условия участия в партнерской программе
+  -- Клиент должен быть активным или когда либо бравший кредит
+  show_client_link = 1;
+  close_date = null;
+  select ks_date_end, ks_from_k_id from kontstate, knclient
+  where ks_ol_is_delete = 0
+  and ks_state = 1
+  and ks_from_k_id = kc_from_k_id
+  and kc_amount_approved &gt; 0
+  and kc_from_c_id = :c_id
+  order by ks_date_end desc
+  rows 1
+  into close_date, last_k_id;
+  if (close_date is null) then show_client_link = 0; -- если не имеется кр. история то отменяется
+  else
+  if (dateadd(month, -6, :date_end) &gt; :close_date) then show_client_link = 0; -- если после закрытия последнего контракта прошло более 6 мес.
+  else
+  if (exists(select * from moratory
+    where m_is_black = 2
+    and m_is_active = 1
+    and m_from_c_id = :c_id)) then show_client_link = 0; -- если в Стоп-листе
+  else
+  if (exists(select * from oksummary
+      where oks_from_k_id = :last_k_id
+      and oks_close_state = 0
+      and ((oks_delinq_day &gt; 30 and oks_date_begin &lt;= cast(:date_end as date))
+           or (:date_end between oks_date_begin and oks_date_end
+               and cast(:date_end as date) - oks_delinq_date &gt; 30))
+      )) then show_client_link = 0;
+  result = show_client_link;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DO_DISBURSEMENT_FPS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DO_DISBURSEMENT_FPS: 3 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DO_DISBURSEMENT_FPS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_disbursement_card.html"><div class="to">HP_DO_DISBURSEMENT_CARD</div></a><a class="ref-card" href="hp_fps_unlock_kontract.html"><div class="to">HP_FPS_UNLOCK_KONTRACT</div></a><a class="ref-card" href="hp_send_quick_message.html"><div class="to">HP_SEND_QUICK_MESSAGE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PAYMENT_ID</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ERROR_TEXT</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DO_DISBURSEMENT_FPS(
+    K_ID D_ID,
+    PAYMENT_ID D_STR_CODE,
+    UN_ID D_ID)
+RETURNS (
+    ERROR_TEXT D_STR_8100)
+AS
+begin
+  if (exists(select *
+             from kontract
+             inner join product on pr_id = k_from_pr_id
+             where k_id = :k_id
+             and pr_code containing &#x27;.zalog.&#x27;)) then
+  begin
+    if (f_edoc_status(&#x27;loan.collateral&#x27;, :k_id, current_date) &lt;&gt; &#x27;signed&#x27;) then
+    begin
+      -- 16.07.2026, aschegolskiy. Добавил отправку ошибки на почту, чтобы
+      -- убедиться что код НЕ срабатывает. Время хранения писем - 365 дней.
+      -- Если за год не будет ни одного письма в fsrobot_msgbox,
+      -- весь этот блок можно выпилить.
+      in autonomous transaction do
+        execute procedure hp_send_quick_message(&#x27;email&#x27;, &#x27;ru.finstart@mbfplanet.com&#x27;,
+        &#x27;Попытка выдачи без подписанного договора залога.&#x27;,
+        f_format(&#x27;Здравствуйте&lt;br&gt;&lt;br&gt; Договор залога не подписан, k_id:%1&lt;br&gt;&lt;br&gt;&#x27;, k_id),
+        &#x27;hp_do_disbursement_fps&#x27;, 365, 1000000000000);
+
+      error_text = &#x27;Договор залога не подписан. НЕ повторяйте попытку выдачи, сообщите номер договора на ru.finstart@molbulak.com&#x27;;
+      suspend;
+      exit;
+    end
+  end
+
+  -- Контрольная проверка, в fps_locks обязательно должна быть запись
+  if (not exists(select * from fps_locks where fpl_from_k_id = :k_id)) then
+  begin
+    error_text = &#x27;Ошибка получения блокировки договора, обратитесь к разработчикам.&#x27;;
+    suspend;
+    exit;
+  end
+  -- Сохраняем платежный идентификатор
+  update fps_locks
+  set fpl_payment_id = :payment_id
+  where fpl_from_k_id = :k_id;
+
+  select error_text
+  from hp_do_disbursement_card(:k_id, :un_id)
+  into :error_text;
+
+  -- Разблокируем контракт
+  execute procedure hp_fps_unlock_kontract(:k_id);
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

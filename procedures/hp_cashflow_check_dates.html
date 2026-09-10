@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CASHFLOW_CHECK_DATES — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CASHFLOW_CHECK_DATES: 3 входных, 6 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CASHFLOW_CHECK_DATES</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEED_UPDATE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">KOB_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KOB_OL_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KOB_FROM_OL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KOB_CASHFLOW_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CASH_DATE</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_STATUS</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CASHFLOW_CHECK_DATES(
+    REP_DATE_BEGIN D_DATE,
+    REP_DATE_END D_DATE,
+    NEED_UPDATE D_BOOL = 0)
+RETURNS (
+    KOB_ID D_ID,
+    KOB_OL_DATE D_DATE,
+    KOB_FROM_OL_ID D_ID,
+    KOB_CASHFLOW_DATE D_DATE,
+    CASH_DATE D_STR_LONG,
+    RES_STATUS D_STR_255)
+AS
+declare variable cash_acc_id d_id;
+begin
+  if (need_update is null) then
+    need_update = 0;
+
+  for select acc_id
+  from ref_account, sys_accbalance
+  where sab_full_code = &#x27;ПлатСистемы.Погашено&#x27; and
+        acc_from_sab_id = sab_id
+  into cash_acc_id
+  do
+  begin
+    for select kob_id, kob_from_ol_id, kob_ol_date, kob_cashflow_date
+    from kn_operbook
+    where kob_ol_date between :rep_date_begin and :rep_date_end and
+          kob_ol_is_active = 1 and
+          kob_acc_dt = :cash_acc_id
+    plan (kn_operbook index (kn_operbook_acc_dt_kt, kn_operbook_date))
+    into kob_id, kob_from_ol_id, kob_ol_date, kob_cashflow_date
+    do
+    begin
+      cash_date = &#x27;&#x27;;
+      res_status = &#x27;&#x27;;
+      select list(distinct f_datetostr(kob_ol_date))
+      from operperiod, kn_operbook, ref_account, sys_accbalance
+      where :kob_ol_date between olp_date_begin and olp_date_end and
+            kob_ol_is_active = 1 and
+            olp_from_ol_id = kob_from_ol_id and
+            kob_acc_kt + 0 = :cash_acc_id and
+            kob_acc_dt = acc_id and
+            acc_from_sab_id = sab_id and
+            sab_full_code starting &#x27;Деньги.Безнал.Банк.&#x27;
+      into cash_date;
+  
+      if (cash_date not containing f_datetostr(kob_cashflow_date)) then
+      begin
+        if (need_update = 1) then
+        begin
+          update kn_operbook
+          set kob_from_rml_id = -2
+          where kob_id = :kob_id;
+
+          res_status = &#x27;Дата ДДС исправлена&#x27;;
+        end
+
+        suspend;
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

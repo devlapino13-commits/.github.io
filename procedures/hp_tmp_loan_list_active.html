@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_TMP_LOAN_LIST_ACTIVE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_TMP_LOAN_LIST_ACTIVE: 3 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_TMP_LOAN_LIST_ACTIVE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_staff_changer_list.html"><div class="to">HP_STAFF_CHANGER_LIST</div></a><a class="ref-card" href="region_list.html"><div class="to">REGION_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_user_loan_list.html"><div class="to">HP_USER_LOAN_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ONLY_OWN_LOANS</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_IS_OWN</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_TMP_LOAN_LIST_ACTIVE(
+    REP_DATE D_DATE NOT NULL,
+    ONLY_OWN_LOANS D_BOOL NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_K_ID D_ID,
+    RES_DATE_BEGIN D_DATE,
+    RES_IS_OWN D_BOOL)
+AS
+declare variable reg_id d_integer;
+declare variable c_id d_id;
+declare variable lml_id d_integer;
+declare variable jk_system_code d_str_code;
+declare variable lmk_from_lml_id d_integer;
+declare variable rep_region_id d_integer;
+declare variable need_region_suspend d_bool;
+declare variable orig_c_id d_id;
+begin
+  select un_from_c_id
+  from username
+  where un_id = :un_id
+  into orig_c_id;
+
+  for select res_c_id
+  from hp_staff_changer_list(:un_id, iif(:only_own_loans = 1, -1, 1))
+  into :c_id
+  do
+  begin
+    res_is_own = 0;
+    if (c_id = orig_c_id) then
+      res_is_own = 1;
+
+    need_region_suspend = 1;
+
+    select ps_from_reg_id, jk_system_code
+    from hr_pstatus, joblist, jobkind
+    where ps_from_c_id = :c_id and
+          ps_is_working = 1 and
+          ps_date_begin &lt;= :rep_date and
+          ps_date_end &gt;= :rep_date and
+          ps_from_jl_id = jl_id and
+          jl_kind = jk_id
+    into rep_region_id, jk_system_code;
+  
+    if (row_count = 0) then
+      Continue;
+
+    if (jk_system_code in (&#x27;JobSystem.LO_Standart&#x27;, &#x27;JobSystem.LO_Partner&#x27;, &#x27;JobSystem.Specialist_Expert&#x27;)) then
+    begin
+      -- Кредитный специалист
+      for select oks_from_k_id, oks_date_begin
+      from oksummary
+      where oks_kc_id = :c_id and
+            oks_date_begin + 0 &lt;= :rep_date and -- Искуственно отключаем использование индекса
+            oks_date_end &gt;= :rep_date and
+            oks_close_state = 0
+      into res_k_id, res_date_begin
+      do
+        suspend;
+  
+      need_region_suspend = 0;
+    end else
+    begin
+      lml_id = null;
+
+      select lml_id
+      from loanmgrlist
+      where lml_from_c_id = :c_id and
+            lml_date_begin &lt;= :rep_date and
+            lml_date_end &gt;= :rep_date
+      into lml_id;
+  
+      if (lml_id is not null) then
+      begin
+        -- Менеджер мега-офиса, получаем список подчиненных специалистов
+        for select ke_from_p_id, ke_from_reg_id
+        from krexpert
+        where ke_from_lml_id = :lml_id and
+              ke_date &lt;= :rep_date and
+              ke_date_end &gt;= :rep_date
+        into c_id, reg_id
+        do
+        begin
+          for select oks_from_k_id, oks_date_begin
+          from oksummary
+          where oks_kc_id = :c_id and
+                oks_region_id + 0 = :reg_id and     -- Искуственно отключаем использование индекса
+                oks_date_begin + 0 &lt;= :rep_date and -- Искуственно отключаем использование индекса
+                oks_date_end &gt;= :rep_date and
+                oks_close_state = 0
+          into res_k_id, res_date_begin
+          do
+            suspend;
+        end
+  
+        for select distinct lmk_from_k_id
+        from loanmgrkont
+        where lmk_from_lml_id = :lml_id and
+              lmk_date_begin &lt;= :rep_date
+        into res_k_id
+        do
+        begin
+          res_date_begin = null;
+          select oks_date_begin
+          from oksummary
+          where oks_from_k_id = :res_k_id and
+                oks_date_begin &lt;= :rep_date and
+                oks_date_end &gt;= :rep_date and
+                oks_kc_id = 1000000000004 and -- КЦ Сирена
+                oks_close_state = 0
+          into res_date_begin;
+  
+          if (res_date_begin is not null) then
+          begin
+            select lmk_from_lml_id
+            from loanmgrkont
+            where lmk_from_k_id = :res_k_id and
+                  lmk_date_begin &lt;= :rep_date
+            order by lmk_date_begin desc
+            rows 1
+            into lmk_from_lml_id;
+  
+            if (lmk_from_lml_id = lml_id) then
+              suspend;
+          end
+        end
+  
+        need_region_suspend = 0;
+      end else
+      begin
+        -- Если не сотрудник фронт-офиса, завершаем работу
+        if (jk_system_code not in (&#x27;JobSystem.Region_Director&#x27;, &#x27;JobSystem.Region_KM&#x27;, &#x27;JobSystem.Specialist_SB&#x27;)) then
+          need_region_suspend = 0;
+      end
+    end
+
+    if (need_region_suspend = 1) then
+    begin
+      -- Список займов в офисе.
+      for select id_list
+      from region_list(:rep_region_id, 1, 3, 1)
+      into reg_id
+      do
+      begin
+        for select oks_from_k_id, oks_date_begin
+        from oksummary
+        where oks_region_id = :reg_id and
+              oks_date_begin &lt;= :rep_date and
+              oks_date_end &gt;= :rep_date and
+              oks_close_state = 0
+        into res_k_id, res_date_begin
+        do
+          suspend;
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

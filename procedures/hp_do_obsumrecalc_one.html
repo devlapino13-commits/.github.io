@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DO_OBSUMRECALC_ONE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DO_OBSUMRECALC_ONE: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DO_OBSUMRECALC_ONE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_obsumrecalc_all.html"><div class="to">HP_DO_OBSUMRECALC_ALL</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RECALC_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RECALC_AL_ID</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DO_OBSUMRECALC_ONE(
+    RECALC_DATE D_DATE,
+    RECALC_AL_ID D_STR_20)
+AS
+declare variable dt_ekv d_currency;
+declare variable kt_ekv d_currency;
+declare variable dt_val d_currency;
+declare variable kt_val d_currency;
+declare variable obs_date d_date;
+declare variable obs_dt_ekv d_currency;
+declare variable obs_kt_ekv d_currency;
+declare variable obs_dt_val d_currency;
+declare variable obs_kt_val d_currency;
+begin
+  dt_ekv = 0;
+  kt_ekv = 0;
+  dt_val = 0;
+  kt_val = 0;
+
+  in autonomous transaction do
+  begin
+    update obsumrecalc
+    set osc_in_process = 1
+    where osc_date = :recalc_date and
+          osc_from_al_id = :recalc_al_id and
+          osc_in_process = 0;
+
+    when gdscode unique_key_violation do
+    begin
+      -- Не смогли обновить из-за того что запись уже есть
+      -- игнорируем только данную ошибку: Violation of PRIMARY or UNIQUE KEY constraint &quot;@1&quot; on table &quot;@2&quot;
+    end
+  end
+
+  in autonomous transaction do
+  begin
+    select sum(ob_summa), sum(ob_summa_val)
+    from operbook
+    where ob_ol_date = :recalc_date and
+          ob_account_dt = :recalc_al_id and
+          ob_ol_is_active = 1
+    into dt_ekv, dt_val;
+  
+    if (dt_ekv is null) then
+      dt_ekv = 0;
+  
+    if (dt_val is null) then
+      dt_val = 0;
+  
+    select sum(ob_summa), sum(ob_summa_val)
+    from operbook
+    where ob_ol_date = :recalc_date and
+          ob_account_kt = :recalc_al_id and
+          ob_ol_is_active = 1
+    into kt_ekv, kt_val;
+  
+    if (kt_ekv is null) then
+      kt_ekv = 0;
+  
+    if (kt_val is null) then
+      kt_val = 0;
+  
+    select obs_date, obs_dt_ekv, obs_kt_ekv, obs_dt_val, obs_kt_val
+    from obsummary
+    where obs_from_al_id = :recalc_al_id and
+          obs_date &lt;= :recalc_date
+    order by obs_from_al_id desc, obs_date desc
+    rows 1
+    into obs_date, obs_dt_ekv, obs_kt_ekv, obs_dt_val, obs_kt_val;
+
+    if (obs_date is null or obs_date &lt; recalc_date) then
+    begin
+      insert into obsummary (obs_from_al_id, obs_date, obs_dt_ekv, obs_kt_ekv, obs_dt_val, obs_kt_val)
+      values (:recalc_al_id, :recalc_date, :dt_ekv, :kt_ekv, :dt_val, :kt_val);
+    end else
+    begin
+      if (obs_dt_ekv &lt;&gt; :dt_ekv or obs_kt_ekv &lt;&gt; :kt_ekv or obs_dt_val &lt;&gt; :dt_val or obs_kt_val &lt;&gt; :kt_val) then
+      begin
+        update obsummary
+        set obs_dt_ekv = :dt_ekv,
+            obs_kt_ekv = :kt_ekv,
+            obs_dt_val = :dt_val,
+            obs_kt_val = :kt_val
+        where obs_from_al_id = :recalc_al_id and
+              obs_date = :recalc_date;
+      end
+    end
+
+    delete from obsumrecalc
+    where osc_date = :recalc_date and
+          osc_from_al_id = :recalc_al_id and
+          osc_in_process = 1;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

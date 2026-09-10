@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_PUT_CLIENT_INTO_MORAPPLIST — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_PUT_CLIENT_INTO_MORAPPLIST: 4 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_PUT_CLIENT_INTO_MORAPPLIST</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_fio_clear.html"><div class="to">HP_FIO_CLEAR</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REQ_COMMENT</div><div class="ptype">VARCHAR(512)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REG_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MAL_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MAL_REQ_DATETIME</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_PUT_CLIENT_INTO_MORAPPLIST(
+    C_ID DECIMAL(18,0),
+    REQ_COMMENT VARCHAR(512),
+    REG_ID INTEGER,
+    UN_ID DECIMAL(18,0))
+RETURNS (
+    MAL_ID INTEGER,
+    MAL_REQ_DATETIME TIMESTAMP)
+AS
+declare variable m_id decimal(18,0);
+declare variable m_number integer;
+declare variable c_name_fio d_str_100;
+declare variable tmp_c_name_fio d_str_100;
+declare variable c_birth_date d_date;
+begin
+  mal_id = 0;
+
+  select mal_req_datetime
+  from morapprlist, moratory
+  where mal_appr_status = 0 and
+        mal_req_state = 0 and
+        mal_from_m_id = m_id and
+        mal_from_m_number = m_number and
+        m_from_c_id = :c_id
+  order by mal_req_datetime desc
+  rows 1
+  into mal_req_datetime;
+  if (mal_req_datetime is not null) then
+  begin
+    mal_id = -1;
+    suspend;
+    exit;
+  end
+
+  c_name_fio = &#x27;&#x27;;
+
+  select c_name_fio, c_birth_date
+  from clients
+  where c_id = :c_id
+  into c_name_fio, c_birth_date;
+
+  for select m_id, m_number
+      from moratory
+      where m_from_c_id = :c_id and
+            m_is_active = 1 and
+            m_is_black in (1, 2) -- отказники + Стоп-лист
+      union all
+      -- Чтобы поймать импортированных из других стран
+      select m_id, m_number
+      from moratory
+      where cast(m_from_c_id as id_type) is null -- чтобы отключить индекс
+            and
+            m_is_active = 1 and
+            m_is_black in (1, 2) -- Отказники + Стоп-лист
+            and
+            m_client_fio = :c_name_fio
+      into m_id, m_number
+  do
+  begin
+    if (m_id is not null) then
+    begin
+      insert into morapprlist (mal_id, mal_from_m_id, mal_from_m_number, mal_req_state, mal_req_user, mal_req_comment,
+                               mal_from_reg_id)
+      values (-1, :m_id, :m_number, 0, :un_id, :req_comment, :reg_id)
+      returning mal_id
+      into mal_id;
+    end
+  end
+
+  if (m_id is null) then
+  begin
+    -- Нечеткий поиск. На случай, если совпадение с черным списком по ФИО было частичным
+
+    select full_text
+    from hp_fio_clear(:c_name_fio)
+    into tmp_c_name_fio;
+
+    for select m_id, m_number
+        from moratory
+        where cast(m_from_c_id as id_type) is null -- чтобы отключить индекс
+              and
+              m_is_active = 1 and
+              m_is_black in (1, 2) and -- Отказники + Стоп-лист
+              m_client_birth_date = :c_birth_date and
+              f_levenstain_is_same(m_client_fio, :tmp_c_name_fio) = 1 and
+              coalesce(m_client_fio, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;
+        into m_id, m_number
+    do
+    begin
+      if (m_id is not null) then
+      begin
+        insert into morapprlist (mal_id, mal_from_m_id, mal_from_m_number, mal_req_state, mal_req_user, mal_req_comment,
+                                 mal_from_reg_id)
+        values (-1, :m_id, :m_number, 0, :un_id, :req_comment, :reg_id)
+        returning mal_id
+        into :mal_id;
+      end
+    end
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

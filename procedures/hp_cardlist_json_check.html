@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CARDLIST_JSON_CHECK — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CARDLIST_JSON_CHECK: 4 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CARDLIST_JSON_CHECK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_cardrange_crossingcheck.html"><div class="to">HP_CARDRANGE_CROSSINGCHECK</div></a><a class="ref-card" href="hp_get_cardrange_list.html"><div class="to">HP_GET_CARDRANGE_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CARDPLACE_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CARD_LIST</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CARD_COUNT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">IS_CARD</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CARDLIST_JSON_CHECK(
+    CARDPLACE_ID D_INTEGER NOT NULL,
+    CARD_LIST D_STR_8100 NOT NULL,
+    CARD_COUNT D_INTEGER NOT NULL,
+    IS_CARD D_BOOL = 1)
+RETURNS (
+    RES_TEXT D_STR_255)
+AS
+declare variable real_count d_integer;
+declare variable first_card d_integer;
+declare variable last_card d_integer;
+declare variable fact_count d_integer;
+declare variable item_count d_integer;
+declare variable item_id d_integer;
+declare variable first_card_id d_integer;
+declare variable last_card_id d_integer;
+declare variable total_card d_integer;
+declare variable array_card_count d_integer;
+declare variable first_len d_integer;
+declare variable last_len d_integer;
+begin
+  -- Процедура проверяет наличие необходимого количества
+  -- карты в указанном месте и диапазоне номеров
+  res_text = &#x27;&#x27;;
+  if (is_card = 0) then
+  begin
+    suspend;
+    exit;
+  end
+
+  -- Проверка на пересечение диапазонов в списке карт
+  res_text = (select err_text from hp_cardrange_crossingcheck(:card_list));
+  if (res_text &lt;&gt; &#x27;&#x27;) then
+  begin
+    suspend;
+    exit;
+  end
+
+  select count(*)
+  from cardlist
+  where cal_last_cpl_id = :cardplace_id
+  into real_count;
+
+  if (res_text = &#x27;&#x27; and real_count = 0) then
+    res_text = &#x27;В указанном местонахождении - карты отсутствуют.&#x27;;
+
+  if (card_list = &#x27;&#x27;) then
+    res_text = &#x27;Не указан список карт.&#x27;;
+
+  if (res_text = &#x27;&#x27;) then
+  begin
+    item_count = f_json_str_get_count(card_list, &#x27;cards&#x27;);
+    item_id = 0;
+    total_card = 0;
+    while (res_text = &#x27;&#x27; and item_id &lt; item_count) do
+    begin
+      first_card = f_json_str_get_value(card_list, &#x27;cards[&#x27; || item_id || &#x27;].b&#x27;, null);
+      first_len = char_length(first_card);
+
+      last_card = f_json_str_get_value(card_list, &#x27;cards[&#x27; || item_id || &#x27;].e&#x27;, null);
+      last_len = char_length(last_card);
+
+      if (first_card is null or last_card is null) then
+      begin
+        res_text = &#x27;Элемент массива не найден.&#x27;;
+        suspend;
+        exit;
+      end
+      if (first_len &lt; 4 or last_len &lt; 4) then
+      begin
+        res_text = f_format(&#x27;Номер карты [%1] должен содержать более 3-х знаков.&#x27;, iif(first_len &lt; 4, first_card, last_card));
+        suspend;
+        exit;
+      end
+
+      array_card_count = cast(left(last_card, last_len - 1) as integer) -
+                         cast(left(first_card, first_len - 1) as integer) + 1;
+
+      fact_count = 0;
+      for select first_card_id, last_card_id, card_count
+      from hp_get_cardrange_list(:cardplace_id, :first_card, :last_card)
+      into :first_card_id, :last_card_id, :fact_count
+      do
+      begin
+        if (res_text = &#x27;&#x27; and first_card &lt;&gt; first_card_id) then
+          res_text = f_format(&#x27;Первая карта %1 отсутствует в указанном месте.&#x27;, first_card);
+
+        if (res_text = &#x27;&#x27; and last_card &lt;&gt; last_card_id) then
+          res_text = f_format(&#x27;Последняя карта %1 отсутствует в указанном месте.&#x27;, last_card);
+
+        if (res_text = &#x27;&#x27; and array_card_count &lt;&gt; fact_count) then
+          res_text = f_format(&#x27;В указанном диапазоне номеров [%1-%2] количество не совпадает [%3].&#x27;, first_card, last_card, fact_count);
+      end
+  
+      if (res_text = &#x27;&#x27; and fact_count = 0) then
+        res_text = f_format(&#x27;В указанном диапазоне номеров [%1-%2] карты отсутствуют.&#x27;, first_card, last_card);
+
+      if (res_text = &#x27;&#x27;) then
+        total_card = total_card + fact_count;
+
+      item_id = item_id + 1;
+    end
+
+    if (res_text = &#x27;&#x27; and total_card &lt;&gt; card_count) then
+      res_text = f_format(&#x27;Списочное количество карт [%1] и введеное [%2] не совпадает.&#x27;, total_card, card_count) ;
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

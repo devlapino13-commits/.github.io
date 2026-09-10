@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FP_FILL_ANKETA — процедура — схема БД</title>
+<meta name="description" content="Процедура FP_FILL_ANKETA: 3 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FP_FILL_ANKETA</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fp_anketa_tmp.html"><div class="to">FP_ANKETA_TMP</div></a><a class="ref-card" href="hp_fp_anketa_ins_upd.html"><div class="to">HP_FP_ANKETA_INS_UPD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fp_anketa_pocket_fill.html"><div class="to">FP_ANKETA_POCKET_FILL</div></a><a class="ref-card" href="fp_kont_fill_anketa.html"><div class="to">FP_KONT_FILL_ANKETA</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FP_FILL_ANKETA(
+    REP_C_ID ID_TYPE,
+    REP_DATE DATE,
+    REP_UN_ID ID_TYPE)
+AS
+declare variable c_id id_type;
+declare variable fpa_city id_type;
+declare variable fpa_client_fio str_255;
+declare variable fpa_citizen integer;
+declare variable fpa_date_place_birth str_255;
+declare variable fpa_pass_kind integer;
+declare variable fpa_pass_props str_255;
+declare variable fpa_mcard_props str_255;
+declare variable fpa_acard_props str_255;
+declare variable fpa_inn str_255;
+declare variable fpa_address_legal str_255;
+declare variable fpa_rel_start date;
+declare variable fpa_ank_resp id_type;
+declare variable ank_date date;
+declare variable fpa_id id_type;
+declare variable fpa_date_check date;
+declare variable fpa_cell_no str_20;
+declare variable fpa_email str_100;
+declare variable fpa_snils str_100;
+begin
+  if (rep_c_id is null) then
+    rep_c_id = 0;
+  if (rep_c_id = 0) then -- Если по всем активным клиентам
+  begin
+    for select distinct c_id
+    from
+    (   -- клиенты активных кредитов
+        select kc_from_c_id as c_id
+        from kontstate, knclient
+        where ks_ol_is_delete = 0 and
+              ks_state = 1 and
+              :rep_date between ks_date_begin and ks_date_end and
+              ks_from_k_id = kc_from_k_id and
+              kc_amount_approved &gt; 0
+        union all
+        -- залогодатели активных кредитов
+        select zal.z_from_c_id as c_id
+        from kontstate ks, zalog zal
+        where ks_ol_is_delete = 0 and
+              ks_state = 1 and
+              :rep_date between ks_date_begin and ks_date_end and
+              zal.z_from_k_id  = ks.ks_from_k_id and
+              zal.z_from_c_id is not null and
+              :rep_date between coalesce(zal.z_date_begin, &#x27;01.01.1900&#x27;) and coalesce(zal.z_date_end, &#x27;31.12.9999&#x27;) and 
+              zal.z_is_ready = 1
+    ) A
+    into :c_id
+    do
+    begin
+      select fpa_city, fpa_client_fio, fpa_citizen, fpa_date_place_birth, fpa_pass_kind, fpa_pass_props,
+             fpa_mcard_props, fpa_acard_props, fpa_inn, fpa_address_legal, fpa_rel_start, fpa_ank_resp, fpa_date_check,
+             fpa_cell_no, fpa_email, fpa_snils
+      from fp_anketa_tmp(:rep_date, :c_id)
+      into :fpa_city, :fpa_client_fio, :fpa_citizen, :fpa_date_place_birth, :fpa_pass_kind, :fpa_pass_props,
+           :fpa_mcard_props, :fpa_acard_props, :fpa_inn, :fpa_address_legal, :fpa_rel_start, :fpa_ank_resp,
+           :fpa_date_check, :fpa_cell_no, :fpa_email, :fpa_snils;
+
+      fpa_id = 0;
+      ank_date = null;
+
+      select fp.fpa_id, fp.fpa_date
+      from fp_anketa_cl fp
+      where fp.fpa_c_id = :c_id
+      order by fp.fpa_date desc
+      rows 1
+      into :fpa_id, :ank_date;
+
+      ank_date = coalesce(ank_date, &#x27;01.05.2014&#x27;);
+      if (abs(datediff(day, cast(:ank_date as date), cast(:rep_date as date))) &gt; 3) then
+        fpa_id = 0;
+
+      execute procedure hp_fp_anketa_ins_upd(:fpa_id, :c_id, :rep_date, :rep_un_id, 0, :fpa_city, :fpa_client_fio,
+          :fpa_citizen, :fpa_date_place_birth, :fpa_pass_kind, :fpa_pass_props, :fpa_mcard_props, :fpa_acard_props,
+          :fpa_inn, :fpa_address_legal, :fpa_rel_start, :fpa_ank_resp, :fpa_date_check, :fpa_cell_no, :fpa_email,
+          :fpa_snils, 0);
+    end
+  end
+  else
+  begin
+    select fpa_city, fpa_client_fio, fpa_citizen, fpa_date_place_birth, fpa_pass_kind, fpa_pass_props, fpa_mcard_props,
+           fpa_acard_props, fpa_inn, fpa_address_legal, fpa_rel_start, fpa_ank_resp, fpa_date_check, fpa_cell_no,
+           fpa_email, fpa_snils
+    from fp_anketa_tmp(:rep_date, :rep_c_id)
+    into :fpa_city, :fpa_client_fio, :fpa_citizen, :fpa_date_place_birth, :fpa_pass_kind, :fpa_pass_props,
+         :fpa_mcard_props, :fpa_acard_props, :fpa_inn, :fpa_address_legal, :fpa_rel_start, :fpa_ank_resp,
+         :fpa_date_check, :fpa_cell_no, :fpa_email, :fpa_snils;
+
+    fpa_id = 0;
+    ank_date = null;
+
+    select fp.fpa_date, fp.fpa_id
+    from fp_anketa_cl fp
+    where fp.fpa_c_id = :rep_c_id
+    order by fp.fpa_date desc
+    rows 1
+    into :ank_date, :fpa_id;
+
+    ank_date = coalesce(ank_date, &#x27;01.05.2014&#x27;);
+    if (abs(datediff(day, cast(:ank_date as date), cast(:rep_date as date))) &gt; 3) then
+      fpa_id = 0;
+
+    execute procedure hp_fp_anketa_ins_upd(:fpa_id, :rep_c_id, :rep_date, :rep_un_id, 1, :fpa_city, :fpa_client_fio,
+        :fpa_citizen, :fpa_date_place_birth, :fpa_pass_kind, :fpa_pass_props, :fpa_mcard_props, :fpa_acard_props,
+        :fpa_inn, :fpa_address_legal, :fpa_rel_start, :fpa_ank_resp, :fpa_date_check, :fpa_cell_no, :fpa_email,
+        :fpa_snils, 0);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_HTML_CLIENT_REASON_WRITEOFF — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_HTML_CLIENT_REASON_WRITEOFF: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_HTML_CLIENT_REASON_WRITEOFF</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_html_client_info.html"><div class="to">FM_HTML_CLIENT_INFO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_HTML_CLIENT_REASON_WRITEOFF(
+    C_ID D_ID,
+    REP_DATE D_DATE)
+RETURNS (
+    RES_TEXT BLOB SUB_TYPE TEXT SEGMENT SIZE 80)
+AS
+declare variable reason_writeoff d_str_255;
+declare variable kontract_no d_str_20;
+declare variable is_vu d_smallint;
+declare variable k_id d_id;
+declare variable rd_id d_id;
+declare variable writeoff blob sub_type 1 segment size 80;
+begin
+  res_text = (select res_style
+              from fm_html_styles) || &#x27;&lt;body&gt;&#x27;;
+
+  res_text = BLOB_APPEND(res_text, f_format(&#x27;&lt;br&gt;&lt;b&gt;%1 %2&lt;/b&gt;&lt;br&gt;&lt;br&gt;&#x27;, &#x27;Списания клиента&#x27;, &#x27;&#x27;));
+
+  writeoff = &#x27;&#x27;;
+
+  for select oks.oks_from_k_id, k.k_kontract_no
+      from oksummary oks
+      inner join kontract k on oks.oks_from_k_id = k.k_id
+      inner join knclient kc on oks.oks_from_k_id = kc.kc_from_k_id and
+            kc.kc_amount_approved &gt; 0 and
+            kc.kc_from_c_id = :c_id
+      where oks.oks_close_state in (0, 1) and
+            :rep_date between oks.oks_date_begin and oks.oks_date_end
+      into :k_id, :kontract_no
+  do
+  begin
+    if (exists(select *
+               from operkroff oko
+               where oko.oko_from_k_id = :k_id and
+                     oko.oko_from_c_id = :c_id and
+                     oko.oko_ol_is_active = 1)) then
+    begin
+      for select ol.ol_from_rd_id
+          from operkroff oko
+          inner join operlist ol on oko.oko_from_ol_id = ol.ol_id
+          where oko.oko_from_k_id = :k_id and
+                oko.oko_from_c_id = :c_id and
+                oko.oko_ol_is_active = 1 and
+                oko.oko_ol_date &lt;= :rep_date
+          order by oko.oko_ol_date desc
+          into :rd_id
+      do
+      begin
+        if (rd_id is null) then continue;
+      end
+
+      reason_writeoff = &#x27;&#x27;;
+
+      select rd.rd_name
+      from refdata rd
+      where rd.rd_id = :rd_id
+      into :reason_writeoff;
+
+      if (reason_writeoff containing &#x27;Не заполнен&#x27;) then reason_writeoff = &#x27;Внесистемный учет&#x27;;
+
+      writeoff = BLOB_APPEND(writeoff, &#x27;&lt;tr&gt;&#x27; || &#x27;&lt;td align=&quot;center&quot;&gt;&#x27; || reason_writeoff || &#x27;&lt;/td&gt;&#x27; || --
+      &#x27;&lt;td align=&quot;center&quot;&gt;&#x27; || kontract_no || &#x27;&lt;/td&gt;&#x27; || &#x27;&lt;/tr&gt;&#x27;);
+    end
+  end
+
+  res_text = BLOB_APPEND(res_text, &#x27;&lt;table width=&quot;100%&quot;&gt;
+               &lt;col width=&quot;50%&quot;&gt;
+               &lt;col width=&quot;50%&quot;&gt;
+               &lt;tr&gt;
+               &lt;th&gt;&#x27; || &#x27;Причина списания&#x27; || &#x27;&lt;/th&gt;&#x27; || &#x27;&lt;th&gt;&#x27; || &#x27;Номер договора&#x27; || &#x27;&lt;/th&gt;&#x27; || &#x27;&lt;/tr&gt;&#x27;, writeoff);
+
+  res_text = BLOB_APPEND(res_text, &#x27;&lt;/table&gt;&#x27;);
+
+  if (reason_writeoff is null) then
+  begin
+    res_text = BLOB_APPEND(res_text, &#x27;&#x27;);
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

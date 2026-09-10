@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$UXUNITFRAME_SET_ITEM — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$UXUNITFRAME_SET_ITEM: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$UXUNITFRAME_SET_ITEM</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UNI_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UNF_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$UXUNITFRAME_SET_ITEM(
+    UNI_UUID D_UUID,
+    UNF_UUID D_UUID)
+AS
+declare variable unt_uuid d_uuid;
+declare variable tmp_uuid d_uuid;
+declare variable is_root d_bool;
+declare variable uni_kind d_smallint;
+declare variable uni_control d_str_code;
+begin
+  select uni_unt_uuid, uni_kind, uni_control, iif(uni_parent_uuid is null, 1, 0)
+  from ux$unititem
+  where uni_uuid = :uni_uuid
+  into unt_uuid, uni_kind, uni_control, is_root;
+
+  if (unt_uuid is null) then
+    exception e_default &#x27;Ветка структуры не найдена&#x27;;
+
+  update ux$unitframe
+  set unf_uni_uuid = null
+  where unf_uni_uuid = :uni_uuid;
+
+  if (unf_uuid is not null) then
+  begin
+    if (is_root = 1) then
+      exception e_message &#x27;Нельзя прикреплять в фрейм на корневую ветку, это форма.&#x27;;
+
+    if (uni_kind &lt;&gt; -1 or uni_control &lt;&gt; &#x27;group&#x27;) then
+      exception e_message &#x27;Фрейм можно прикреплять только к контейнеру (группе)&#x27;;
+
+    tmp_uuid = uni_uuid;
+    while (tmp_uuid is not null) do
+    begin
+      select uni_parent_uuid
+      from ux$unititem
+      where uni_uuid = :tmp_uuid
+      into tmp_uuid;
+
+      if (exists(select * from ux$unitframe
+      where unf_uni_uuid = :tmp_uuid)) then
+        exception e_message &#x27;Фрейм не должен быть внутри другого фрейма, имеется прикрепленный фрейм в родительских ветках&#x27;;
+    end
+
+    for select unf_uni_uuid
+    from ux$unitframe
+    where unf_owner = :unt_uuid and
+          unf_uni_uuid is not null
+    into tmp_uuid
+    do
+    begin
+      while (tmp_uuid is not null) do
+      begin
+        select uni_parent_uuid
+        from ux$unititem
+        where uni_uuid = :tmp_uuid
+        into tmp_uuid;
+
+        if (tmp_uuid = uni_uuid) then
+          exception e_message &#x27;Фрейм не должен быть внутри другого фрейма, имеется прикрепленный фрейм в дочерних ветках&#x27;;
+      end
+    end
+
+    update ux$unitframe
+    set unf_uni_uuid = :uni_uuid
+    where unf_uuid = :unf_uuid;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

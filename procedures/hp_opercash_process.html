@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_OPERCASH_PROCESS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_OPERCASH_PROCESS: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_OPERCASH_PROCESS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_opercash_book_process.html"><div class="to">HP_OPERCASH_BOOK_PROCESS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_OPERCASH_PROCESS
+AS
+declare variable OPC_ID D_INTEGER;
+declare variable ERR_TEXT D_BLOB_TEXT;
+declare variable ERR_MAILTO D_STR_255;
+declare variable DB_ID D_INTEGER;
+declare variable ONE_ERR_TEXT D_STR_8100;
+declare variable UN_ID D_ID;
+declare variable RES_IS_ERROR D_SMALLINT;
+declare variable ERR_MSG D_STR_255;
+declare variable TMP_DATETIME D_DATETIME;
+begin
+  -- Обработка кассовых операций поступающие через новый модуль РМК Кассира
+
+  db_id = f_get_db_id();
+
+  if (db_id &lt;&gt; 41701) then
+    exit;
+
+  -- Общие настройки, зависящие от Страны
+  err_mailto = &#x27;finstart@mbfplanet.com&#x27;;
+
+  err_msg = &#x27;Ошибка проведения, OPC_ID:&#x27;;
+  err_text = &#x27;&#x27;; -- Список доступных проектов
+
+  for select cpr_from_opc_id, cpr_from_un_id
+  from cashprocess
+  where coalesce(cpr_error_text, &#x27;&#x27;) = &#x27;&#x27;
+  order by cpr_from_opc_id
+  into :opc_id, un_id
+  do
+  begin
+    one_err_text = &#x27;&#x27;;
+    res_is_error = 0;
+
+    in autonomous transaction do
+    begin
+      tmp_datetime = cast(&#x27;NOW&#x27; as timestamp);
+
+      select res_text
+      from hp_opercash_book_process(:opc_id, :un_id)
+      into :one_err_text;
+
+      one_err_text = &#x27;&#x27;;
+
+      insert into cashproclog (cpl_from_opc_id, cpl_started, cpl_finished, cpl_duration_ms, cpl_error)
+      values (:opc_id, :tmp_datetime, cast(&#x27;NOW&#x27; as timestamp), datediff(millisecond, :tmp_datetime, cast(&#x27;NOW&#x27; as timestamp)), &#x27;&#x27;);
+
+      -- Ошибки блокировки пропускаем молча
+      when gdscode lock_conflict, gdscode update_conflict, gdscode deadlock do
+      begin
+      end
+
+      -- В остальных случаях фиксируем
+      when any do
+      begin
+        one_err_text = rdb$get_context(&#x27;USER_TRANSACTION&#x27;, &#x27;Opercash_error_text&#x27;);
+        if (coalesce(one_err_text, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+          res_is_error = 1; -- пользовательская ошибка
+        else
+          one_err_text = err_msg || &#x27; &#x27; || opc_id || &#x27;, gdscode: &#x27; || gdscode;
+
+        update cashprocess
+        set cpr_error_text = :one_err_text
+        where cpr_from_opc_id = :opc_id;
+
+        insert into cashproclog (cpl_from_opc_id, cpl_started, cpl_finished, cpl_duration_ms, cpl_error)
+        values (:opc_id, :tmp_datetime, cast(&#x27;NOW&#x27; as timestamp), datediff(millisecond, :tmp_datetime, cast(&#x27;NOW&#x27; as timestamp)), :one_err_text);
+      end
+    end
+
+    if (one_err_text &lt;&gt; &#x27;&#x27; and res_is_error = 0) then
+      err_text = blob_append(err_text, one_err_text); -- другие отправляем по почте
+  end
+
+  -- Если в ходе обработки появились ошибки, отправляем разработчикам и ответственным лицам
+  if (err_text &lt;&gt; &#x27;&#x27;) then
+  begin
+    insert into fsrobot_msgbox (msg_type, msg_mail_to, msg_subject, msg_body,
+                                msg_lifetime_days, msg_from_un_id,
+                                msg_command_kind)
+    values (0, :err_mailto, &#x27;Opercash online process&#x27;, :err_text, 30, 1000000000000,
+            &#x27;opercash&#x27;); -- RefData.RD_Code=:MSG_Command_Kind
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0031_SQL — процедура — схема БД</title>
+<meta name="description" content="Проверка кредитных продуктов Семья и Баракат(на уровне заявки)">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0031_SQL</code></h1>
+<p class="desc">Проверка кредитных продуктов Семья и Баракат(на уровне заявки)</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_kontstate_loan_status.html"><div class="to">HP_KONTSTATE_LOAN_STATUS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0031_SQL(
+    MA_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare kf_disb_date d_date;
+declare variable k_kolich_repay integer;
+declare variable pr_code varchar(100);
+declare variable kol_cli_group integer;
+declare variable pr_id integer;
+declare variable k_percent perc_type;
+declare variable ma_number integer;
+declare variable C_CURR_BONUS_STATUS integer;
+declare variable PRL_PERCENT_MAX perc_type;
+begin
+  for
+  select ma_kolich_repay,
+         pr_code,
+         ma_date_oper,
+         ma_kolich_client,
+         pr_id,
+         ma_percent,
+         ma_number
+  from product, miniapp
+  where ma_id = :ma_id
+  and ma_from_pr_id = pr_id
+  and pr_code similar to &#x27;%(.FAMILY.|.FAMILY PLUS.|.BARAKAT.|.BARAKAT PLUS.)%&#x27;
+  and ma_date_end = &#x27;31.12.9999&#x27;
+--  order by ma_number desc
+  rows 1
+  into k_kolich_repay,
+       pr_code,
+       kf_disb_date,
+       kol_cli_group,
+       pr_id,
+       k_percent,
+       ma_number
+  do
+  begin
+    C_CURR_BONUS_STATUS = null;
+    select C_CURR_BONUS_STATUS
+    from HP_KONTSTATE_LOAN_STATUS(0, 0, :ma_id, :kf_disb_date, null)
+    into C_CURR_BONUS_STATUS;
+    if (C_CURR_BONUS_STATUS is null) then C_CURR_BONUS_STATUS = 0;
+    PRL_PERCENT_MAX = null;
+    select max(PRL_PERCENT_MAX)
+    from prodlogic
+    where prl_from_pr_id = :pr_id
+    and :kf_disb_date between prl_date_begin and prl_date_end
+    and :kol_cli_group between prl_kolich_min and prl_kolich_max
+    and :k_kolich_repay between prl_repay_min and prl_repay_max
+    into PRL_PERCENT_MAX;
+    if (PRL_PERCENT_MAX is null) then PRL_PERCENT_MAX = 100;
+    if (K_Percent &lt; (PRL_PERCENT_MAX - C_CURR_BONUS_STATUS * 0.2)) then
+    begin
+       res_error_text = &#x27;Процентная ставка не правильно указано!&#x27;;
+       res_error_is_critical = 2;
+       suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PKB_SIGN_CHECK_SAVE_RES — процедура — схема БД</title>
+<meta name="description" content="Процедура PKB_SIGN_CHECK_SAVE_RES: 3 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>PKB_SIGN_CHECK_SAVE_RES</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CSC_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REQUEST_JSON</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ANSWER_JSON</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE PKB_SIGN_CHECK_SAVE_RES(
+    CSC_ID D_ID,
+    REQUEST_JSON D_STR_8100,
+    ANSWER_JSON D_STR_8100)
+AS
+declare variable ESM_ID D_ID;
+declare variable EDS_ID D_ID;
+declare variable EDL_ID D_ID;
+declare variable C_ID D_ID;
+begin
+  select csc.csc_from_eds_id, edl.edl_id, eds.eds_from_c_id
+  from ces_sign_check csc
+  inner join edoc_sign eds on eds.eds_id = csc.csc_from_eds_id
+  inner join edoc_list edl on edl.edl_id = eds.eds_from_edl_id
+  where csc.csc_id = :csc_id
+  and csc.csc_status = 1
+  into eds_id, edl_id, c_id;
+
+  insert into extsysmain (esm_trans_id, esm_project, esm_action, esm_date, esm_account, esm_object_kind, esm_object_id, esm_datetime,
+                          esm_status, esm_full_source)
+  values (:eds_id, &#x27;pkb&#x27;, &#x27;sign_check&#x27;, current_date, :edl_id, 0, :c_id, current_timestamp, 1, :request_json)
+  returning esm_id
+  into esm_id;
+
+  insert into extsysanswer (esa_from_esm_id, esa_message)
+  values (:esm_id, :answer_json);
+
+  -- RFCKG-3160
+  if (lower(:answer_json) like &#x27;%error%&#x27;) then
+    update ces_sign_check
+    set csc_status = -1,
+        csc_from_esm_id = :esm_id
+    where csc_id = :csc_id;
+  else
+    update ces_sign_check
+    set csc_status = 1,
+        csc_from_esm_id = :esm_id
+    where csc_id = :csc_id;  
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

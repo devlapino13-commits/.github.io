@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_SELCLI_CASHARRIVAL — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_SELCLI_CASHARRIVAL: 2 входных, 6 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_SELCLI_CASHARRIVAL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="clt_get_price_for_consultation.html"><div class="to">CLT_GET_PRICE_FOR_CONSULTATION</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_html_get_loan_status.html"><div class="to">HP_HTML_GET_LOAN_STATUS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DT</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_NAME_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PREPAYMENT_SUMMA</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">IPF_COMMISSION</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AMOUNT_CONSULTING</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SIGN_CONSULTING</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_SELCLI_CASHARRIVAL(
+    K_ID D_ID,
+    DT D_DATE = current_date)
+RETURNS (
+    C_ID D_ID,
+    C_NAME_FIO D_STR_100,
+    PREPAYMENT_SUMMA D_CURRENCY,
+    IPF_COMMISSION D_CURRENCY,
+    AMOUNT_CONSULTING D_CURRENCY,
+    SIGN_CONSULTING D_BOOL)
+AS
+declare variable is_ipf d_bool;
+declare variable kc_id d_id;
+declare variable kc_status d_integer;
+begin
+  for
+    select
+      iif(pr_code containing &#x27;.ipf.&#x27;, 1, 0),
+      coalesce(k_prepayment_summa,0),
+      coalesce(pr_ipf_commission,0)
+    from kontract
+      inner join product
+        on pr_id = k_from_pr_id
+    where k_id = :k_id
+  into
+    :is_ipf,
+    :prepayment_summa,
+    :ipf_commission
+  do
+  begin
+    for
+      select
+        kc_id,
+        kc_status,
+        c_id,
+        c_name_fio
+      from knclient
+        inner join clients
+          on c_id = kc_from_c_id
+      where kc_from_k_id = :k_id
+        and kc_amount_approved &gt; 0
+    into
+      :kc_id,
+      :kc_status,
+      :c_id,
+      :c_name_fio
+    do
+    begin
+      if (is_ipf = 1) then
+      begin
+        amount_consulting = 0;
+        sign_consulting = 0;
+        if (kc_status &lt;&gt; 2) then continue;
+      end else
+      begin
+        amount_consulting =
+          (select price from clt_get_price_for_consultation(:kc_id));
+        sign_consulting = iif(f_edoc_status(&#x27;consulting.agreement&#x27;, :kc_id, :dt) = &#x27;signed&#x27;, 1, 0);  -- RFCKG-4363
+
+        if (sign_consulting = 0) then
+        begin
+            if (not exists(select * from hp_db_is_actual)) then
+                sign_consulting = 1; -- если БД тестовая, тогда не проверяю подписан ли договор на оказание консультационных услуг или нет.
+        end
+      end
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

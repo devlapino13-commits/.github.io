@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CREDITOR_REP_DELINQ_SMS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CREDITOR_REP_DELINQ_SMS: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CREDITOR_REP_DELINQ_SMS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_edoc_ins.html"><div class="to">HP_EDOC_INS</div></a><a class="ref-card" href="print_kont_dopinfo.html"><div class="to">PRINT_KONT_DOPINFO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CREDITOR_REP_DELINQ_SMS
+AS
+declare variable k_id d_id;
+  declare variable edl_id d_id;
+  declare variable res_text d_str_255;
+
+  declare variable v_tz_offset integer;
+  declare variable v_hour integer;
+  declare variable v_local_hour integer;
+BEGIN
+  if (f_get_db_id() &lt;&gt; 81001) then
+    exit;
+
+  for
+    select t.cr_k_id,
+           t.cr_tz_offset
+    from creditor_rep_list t
+    where t.cr_status = 1
+      and not exists (
+      select 1
+      from edoc_list edl
+      inner join edoc_cfg edc on edl.edl_from_edc_id = edc.edc_id
+      where edl.edl_object_id = t.cr_k_id
+        and edl.edl_object_kind = f_objkind(&#x27;kontract&#x27;,&#x27;id&#x27;)
+        and edc.edc_code = &#x27;loan.creditor_rep&#x27;)
+
+       -- проверка сумм
+    and not exists (
+      select 1
+      from print_kont_dopinfo(t.cr_k_id) p
+      where abs(coalesce(t.cr_sum_os,0) - coalesce(p.kdi_zad_os_now,0)) &gt; 0.01
+         or abs(coalesce(t.cr_sum_perc,0) - coalesce(p.kdi_calc_perc_now,0)) &gt; 0.01
+         or abs(coalesce(t.cr_sum_all,0) - coalesce(p.kdi_sum_total_now,0)) &gt; 0.01)
+      into :k_id, :v_tz_offset
+  do
+  begin
+    -- текущее время сервера
+    v_hour = extract(hour from current_timestamp);
+
+    -- локальное время клиента
+    v_local_hour = mod((v_hour + (coalesce(v_tz_offset, 3) - 3) + 24), 24);
+
+    --  отправляем только в &quot;разрешённое окно&quot;
+    if (v_local_hour between 10 and 18) then
+    begin
+      select edl_id, res_text
+      from hp_edoc_ins(&#x27;loan.creditor_rep&#x27;, f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;), :k_id, 1000000000000)
+      into :edl_id, :res_text;
+    end
+  end
+END</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

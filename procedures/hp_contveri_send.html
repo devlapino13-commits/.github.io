@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CONTVERI_SEND — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CONTVERI_SEND: 5 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CONTVERI_SEND</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_contkind_info.html"><div class="to">HP_CONTKIND_INFO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_contveri_update.html"><div class="to">HP_CONTVERI_UPDATE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CONT_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CONT_VALUE</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CONT_IS_MAIN</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_IS_ERROR</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CONTVERI_SEND(
+    C_ID D_ID,
+    CONT_KIND D_STR_CODE,
+    CONT_VALUE D_STR_100,
+    CONT_IS_MAIN D_SMALLINT,
+    UN_ID D_ID)
+RETURNS (
+    RES_IS_ERROR D_SMALLINT,
+    RES_TEXT D_STR_255)
+AS
+declare variable RD_ID integer;
+declare variable LAST_DATETIME timestamp;
+declare variable CV_ID decimal(18,0);
+declare variable CV_PASSWORD_ENCODED varchar(255);
+declare variable MSG_BODY D_STR_8100;
+declare variable C_NAME_FIO D_STR_100;
+declare variable DB_ID D_INTEGER;
+declare variable C_SEX D_SMALLINT;
+declare variable MSG_SUBJECT D_STR_255;
+declare variable LINK_PARAMS D_STR_255;
+declare variable MSG_ID D_INTEGER;
+declare variable EDS_UUID D_STR_CODE;
+declare variable CONT_KIND_CODE D_STR_CODE;
+declare variable PIN_CODE D_STR_CODE;
+declare variable CDA_ID D_ID;
+declare variable CVR_ID D_INTEGER;
+declare variable CLT_ID D_INTEGER;
+declare variable IS_NEW_CONTDATA D_SMALLINT;
+declare variable CDA_STATUS D_SMALLINT;
+declare variable OTHER_CLIENT_COUNT D_INTEGER;
+begin
+  -- Процедура отправляет контактную информация на верификацию
+
+  res_is_error = 1;
+  res_text = &#x27;&#x27;;
+
+  if (coalesce(cont_value, &#x27;&#x27;) = &#x27;&#x27;) then
+  begin
+    res_text = &#x27;Контактная информация не заполнена&#x27;;
+    suspend;
+    exit;
+  end
+
+  is_new_contdata = f_get_const(&#x27;new_contdata&#x27;);
+
+  is_new_contdata = 2;
+
+  -- если тип объекта передан через название, определяем числовой код
+  db_id = f_get_db_id();
+
+  -- cont_kind могут передаваться как старый, так и новый вариант кодовых названий
+  -- поэтому конверетируем их между собой
+  select rd_id, cont_kind_code, cont_kind_id, cont_is_main
+  from hp_contkind_info(:cont_kind)
+  into :rd_id, :cont_kind_code, :cont_kind, cont_is_main;
+
+  -- если ранее успешно выслан код, уточняем время отправки.
+  -- Ниже в коде понадобиться
+  if (is_new_contdata in (0, 2)) then -- если работаем по старому
+  begin
+    select cv_datetime
+    from contverify
+    where cv_object_kind = f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;) and
+          cv_object_id = :c_id and
+          cv_from_rd_id = :rd_id and
+          cv_contact_value = :cont_value and
+          cv_status = 0
+    order by cv_id desc
+    rows 1
+    into :last_datetime;
+  end
+
+  if (is_new_contdata in (1, 2)) then -- если работаем по новому
+  begin
+    clt_id = f_cont_id(cont_value, &#x27;null&#x27;);
+
+    if (clt_id is not null) then
+    begin
+      select cda_id, cda_status
+      from contdata
+      where cda_from_c_id = :c_id and
+            cda_from_clt_id = :clt_id and
+            cda_cont_kind = :cont_kind and
+            cda_is_main = :cont_is_main
+      into cda_id, cda_status;
+    end
+
+    if (f_get_const(&#x27;new_contdata&#x27;) = 1) then -- если работаем по новому
+    begin
+      if (cda_id is null)
+      then res_text = &#x27;Указанная контактная информация не прикреплена&#x27;;
+      else
+      begin
+        -- если это основной номер и он уже подтвержден, не разрешаем отправлять СМС
+        if (cda_status = 1 and f_enum(&#x27;cont_kind&#x27;, cont_kind, &#x27;code&#x27;) = &#x27;cell&#x27;) then
+          res_text = &#x27;Данный номер ранее уже подтвержлен&#x27;;
+      end
+    end
+    if (is_new_contdata = 1 and res_text = &#x27;&#x27;) then
+    begin
+      select cvr_datetime
+      from contveri
+      where cvr_from_cda_id = :cda_id and
+            cvr_status = 0
+      order by cvr_id desc
+      rows 1
+      into :last_datetime;
+    end
+  end
+
+  if (res_text = &#x27;&#x27; and last_datetime is not null and
+      datediff(minute, last_datetime, current_timestamp) &lt; 3) then
+    res_text = &#x27;После последней отправки кода еще не прошло 3 минуты&#x27;;
+
+  -- Если была ошибка, завершаем работу
+  if (res_text &lt;&gt; &#x27;&#x27;) then
+  begin
+    suspend;
+    exit;
+  end
+
+  -- Добавляем проверку для email: если уже верифицирован у другого клиента
+  other_client_count = 0;
+
+  if (cont_kind_code = &#x27;email&#x27; and db_id in (81001, 39801)) then
+  begin
+    if (is_new_contdata in (0, 2)) then -- старый способ
+    begin
+      select count(*)
+      from contverify
+      where cv_object_kind = f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;) and
+            cv_from_rd_id = :rd_id and
+            cv_contact_value = :cont_value and
+            cv_status &gt; 0 and
+            cv_object_id &lt;&gt; :c_id
+      into :other_client_count;
+    end
+    if (is_new_contdata in (1, 2)) then -- новый способ
+    begin
+      clt_id = f_cont_id(cont_value, &#x27;null&#x27;);
+      if (clt_id is not null) then
+      begin
+        select count(*)
+        from contdata
+        where cda_from_clt_id = :clt_id and
+              cda_cont_kind = :cont_kind and
+              cda_status = 1 and
+              cda_is_delete = 0 and
+              cda_from_c_id &lt;&gt; :c_id
+        into :other_client_count;
+      end
+    end
+    if (other_client_count &gt; 0) then
+    begin
+      res_text = &#x27;Данный e-mail верифицирован у другого клиента. Измените e-mail&#x27;;
+      suspend;
+      exit;
+    end
+  end
+
+  -- Регистрация нового пароля для будущего подтверждения
+  pin_code = right(&#x27;0000&#x27; || cast(trunc(rand() * 100000) as integer), 4);
+  cv_password_encoded = f_coder_pass(pin_code);
+
+  if (is_new_contdata in (0, 2)) then -- если работаем по старому
+  begin
+    insert into contverify (cv_object_kind, cv_object_id, cv_from_rd_id, cv_contact_value, cv_password, cv_status,
+                            cv_from_un_id)
+    values (f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;), :c_id, :rd_id, :cont_value, :cv_password_encoded, 0, :un_id)
+    returning (cv_id)
+    into cv_id;
+
+    eds_uuid = f_uuid(&#x27;contverify&#x27;, cv_id);
+  end
+
+  if (is_new_contdata in (1, 2)) then -- если работаем по новому
+  begin
+    insert into contveri (cvr_from_cda_id, cvr_hash_pin, cvr_status, cvr_sign_kind, cvr_from_un_id)
+    values (:cda_id, :cv_password_encoded, 0, 0, :un_id)
+    returning (cvr_id)
+    into cvr_id;
+
+    if (is_new_contdata = 1) then
+      eds_uuid = f_uuid(&#x27;contveri&#x27;, cvr_id);
+  end
+
+  msg_id = next value for gen_fsrobot_msgbox_id;
+
+  -- отправляем сообщение сразу
+  msg_subject = &#x27;&#x27;;
+  msg_body = &#x27;&#x27;;
+  c_name_fio = &#x27;&#x27;;
+  c_sex = 2;
+
+  link_params = case db_id
+    when 81001 then &#x27;https://edoc.molbulak.ru/&#x27;
+    when 41701 then &#x27;https://edoc.molbulak.kg/&#x27;
+    when 94401 then &#x27;https://edoc.molbulak.com/&#x27;
+    when 39801 then &#x27;https://edoc.mbulak.kz/&#x27;
+  end;
+  link_params = trim(link_params);
+
+  link_params = link_params || eds_uuid || &#x27;/&#x27; || iif(db_id = 39801, &#x27;check-pin-code&#x27;, msg_id || &#x27;/&#x27;);
+  if (cont_kind_code = &#x27;email&#x27;) then
+    link_params = &#x27;&lt;a href=&quot;&#x27; || link_params || &#x27;&quot;&gt;&#x27; || link_params || &#x27;&lt;/a&gt;&#x27;;
+
+  if (cont_kind_code = &#x27;cell&#x27;) then
+  begin
+    if (db_id &lt;&gt; 94401)
+    then msg_body = &#x27;Podtverdite nomer telefona otpraviv kod &#x27; || pin_code || &#x27; na nomer &#x27; || f_get_const(&#x27;company_cell&#x27;) || &#x27; ili najmite &#x27; || link_params;
+    else msg_body = &#x27;Nomreni tesdiqlemek uchun &#x27; || pin_code || &#x27; kodunu &#x27; || f_get_const(&#x27;company_cell&#x27;) || &#x27; nomresine gonderin ve ya linki achin: &#x27; || link_params;
+  end
+
+  if (cont_kind_code = &#x27;email&#x27;) then
+  begin
+    select c_name_fio, c_sex
+    from clients
+    where c_id = :c_id
+    into c_name_fio, c_sex;
+
+    if (db_id &lt;&gt; 94401) then
+    begin
+      msg_subject = &#x27;Подтвердить адрес электронной почты&#x27;;
+
+      if (c_name_fio &lt;&gt; &#x27;&#x27;) then
+      begin
+        if (c_sex = 0)
+        then msg_body = &#x27;Уважаемая &#x27; || c_name_fio || &#x27;,&lt;br&gt;&lt;br&gt;&#x27;;
+        else msg_body = &#x27;Уважаемый &#x27; || c_name_fio || &#x27;,&lt;br&gt;&lt;br&gt;&#x27;;
+      end
+
+      msg_body = msg_body || &#x27;Компания M Bulak просит подтвердить ваш электронный адрес. &lt;br&gt;&#x27;;
+      msg_body = msg_body || &#x27;Ваш код для подтверждения email: &lt;strong&gt;&#x27; || pin_code || &#x27;&lt;/strong&gt;&lt;br&gt;&#x27;;
+      msg_body = msg_body || &#x27;Пройдите по ссылке и подтвердите email: &#x27; || link_params || &#x27;&lt;br&gt;&lt;br&gt;&#x27;;
+      msg_body = msg_body || &#x27;Если Вы подключены к сети компании, также можете подтвердить ваш электронный адрес перейдя по данной &#x27;;
+      msg_body = msg_body || &#x27;&lt;br&gt;Если Вы это сообщение получили ошибочно, просим проигнорировать или связаться с представителем компании.&#x27;;
+    end else
+    begin
+      msg_subject = &#x27;Email təsdiqlənməsi&#x27;;
+
+      if (c_name_fio &lt;&gt; &#x27;&#x27;) then
+        msg_body = &#x27;Hörmətli &#x27; || c_name_fio || &#x27;,&lt;br&gt;&lt;br&gt;&#x27;;
+
+      msg_body = msg_body || &#x27;M Bulak BOKT elektron poçt ünvanını təsdiq etməyinizi xahiş edir. &lt;br&gt;&#x27;;
+      msg_body = msg_body || &#x27;Poçt ünvanın təsdiqi üçün şifrəniz: &lt;strong&gt;&#x27; || pin_code || &#x27;&lt;/strong&gt;&lt;br&gt;&#x27;;
+      msg_body = msg_body || &#x27;Linke keçin və email təsdiqləyin: &#x27; || link_params || &#x27;&lt;br&gt;&lt;br&gt;&#x27;;
+      msg_body = msg_body || &#x27;Əgər təşkilatın internet şəbəkəsinə qoşulusunuz, elektron poçt ünvanınızı qeyd olunan &#x27;;
+      msg_body = msg_body || &#x27;&lt;br&gt;Əgər bu mesaj səhvən göndərilib, nəzərə almamağınız xahiş olunur və ya təşkilatın əməkdaşı ilə əlaqə saxlıyın.&lt;br&gt;&lt;br&gt;&#x27;;
+    end
+  end
+
+  if (msg_body &lt;&gt; &#x27;&#x27;) then
+  begin
+    insert into fsrobot_msgbox (
+      msg_id, msg_type, msg_mail_to, msg_subject, msg_body, msg_lifetime_days,
+      msg_from_un_id, msg_command_kind, msg_object_kind, msg_object_id,
+      msg_sender)
+    values (:msg_id, iif(:cont_kind_code = &#x27;email&#x27;, 4, 3), :cont_value,
+      :msg_subject, :msg_body, 7, :un_id, &#x27;hp_contveri_send&#x27;,
+      f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;), :c_id, 2);
+  end
+
+  res_is_error = 0; -- если дошли до этой точки, значит нет ошибок
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

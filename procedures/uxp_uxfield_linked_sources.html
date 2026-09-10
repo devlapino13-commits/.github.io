@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$UXFIELD_LINKED_SOURCES — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$UXFIELD_LINKED_SOURCES: 2 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$UXFIELD_LINKED_SOURCES</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UF_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SHOW_ALL</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ID</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$UXFIELD_LINKED_SOURCES(
+    UF_UUID D_UUID,
+    SHOW_ALL D_BOOL = 0)
+RETURNS (
+    ID D_STR_CODE,
+    TEXT D_STR_255)
+AS
+declare variable uf_source d_str_code;
+declare variable field_name d_str_code;
+declare variable source_name d_str_code;
+declare variable is_found d_integer;
+declare variable uf_origin_uf_uuid d_uuid;
+begin
+  uf_source = uxf$owner(uf_uuid, &#x27;code&#x27;);
+  field_name = uxf$code(uf_uuid, &#x27;code&#x27;);
+
+  if (show_all is null) then
+    show_all = 0;
+
+  is_found = 0;
+  for select us_code, iif(us_code = us_name, us_code, us_code || &#x27;    - &#x27; || us_name)
+  from ux$index, ux$source
+  where uix_source = :uf_source and
+        uix_fields = :field_name and
+        uix_fk_source = us_code and
+        coalesce(us_lookup_text, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;
+  into id, text
+  do
+  begin
+    is_found = 1;
+    suspend;
+
+    source_name = id;
+
+    for select us_code, iif(us_code = us_name, us_code, us_code || &#x27;    - &#x27; || us_name)
+    from ux$source
+    where us_main_table = :source_name and
+          coalesce(us_lookup_text, &#x27;&#x27;) &lt;&gt; &#x27;&#x27; and
+          us_kind &lt;&gt; -1 -- кроме SQL
+    into id, text
+    do
+      suspend;
+  end
+
+  select uf_origin_uf_uuid
+  from ux$field
+  where uf_uuid = :uf_uuid and
+        uf_origin_uf_uuid is not null
+  into uf_origin_uf_uuid;
+
+  if (uf_origin_uf_uuid is not null) then
+  begin
+    select us_code, uf_field_name
+    from ux$field, ux$source
+    where uf_uuid = :uf_origin_uf_uuid and
+          uf_owner = us_uuid
+    into uf_source, field_name;
+
+    if (row_count = 1) then
+    begin
+      for select us_code, iif(us_code = us_name, us_code, us_code || &#x27;    - &#x27; || us_name)
+      from ux$index, ux$source
+      where uix_source = :uf_source and
+            uix_fields = :field_name and
+            uix_fk_source = us_code and
+            coalesce(us_lookup_text, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;
+      into id, text
+      do
+      begin
+        is_found = 1;
+        suspend;
+      end
+    end
+  end
+
+  if (is_found = 0 and show_all = 1) then
+  begin
+    for select us_code, us_name
+    from uxp$uxsource_list(0, &#x27;source&#x27;)
+    into :id, :text
+    do
+      suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

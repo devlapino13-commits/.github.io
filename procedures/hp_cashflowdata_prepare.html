@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CASHFLOWDATA_PREPARE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CASHFLOWDATA_PREPARE: 1 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CASHFLOWDATA_PREPARE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_moneyoper_eps_list.html"><div class="to">AAREP_MONEYOPER_EPS_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_cashflowdata_do_prepare.html"><div class="to">HP_CASHFLOWDATA_DO_PREPARE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_IS_ERROR</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CASHFLOWDATA_PREPARE(
+    REP_DATE D_DATE)
+RETURNS (
+    RES_IS_ERROR D_BOOL,
+    RES_TEXT D_STR_255)
+AS
+declare variable del_count d_integer;
+declare variable ins_count d_integer;
+declare variable zero_count d_integer;
+begin
+  res_is_error = 0;
+  ins_count = 0;
+  del_count = 0;
+
+  select count(*)
+  from kn_operbook
+  where kob_cashflow_date = :rep_date and
+        kob_ol_is_active = 1 and
+        coalesce(kob_from_rml_id, 0) = 0 and
+        kob_summa &lt;&gt; 0 and
+        (kob_acc_dt + 0 &lt;&gt; 0 and kob_acc_kt + 0 &lt;&gt; 0)
+  into zero_count;
+
+  if (zero_count &gt; 0) then
+  begin
+    res_is_error = 1;
+    res_text = &#x27;Имеются проводки без кода ДДС&#x27;;
+    suspend;
+    exit;
+  end
+
+  delete from cashflowdata
+  where cfd_date = :rep_date;
+
+  del_count = row_count;
+
+  insert into cashflowdata (cfd_date, cfd_doc_name, cfd_bank_id, cfd_is_bank, cfd_oper_sign, cfd_dds_code,
+                            cfd_bal_code_dt, cfd_bal_code_kt, cfd_add_code_dt, cfd_add_code_kt, cfd_acc_code_dt, cfd_acc_code_kt, 
+                            cfd_summa, cfd_currency, cfd_dds_is_resident, cfd_client_residency,
+                            cfd_client_country, cfd_client_type, cfd_client_name, cfd_client_id, cfd_client_date, cfd_dds_is_law,
+                            cfd_from_kc_id, cfd_kontract_no, cfd_acc_code, cfd_doc_no_str, cfd_ol_memo, cfd_kob_id,
+                            cfd_ol_id, cfd_ol_date)
+  select kob_ol_date, res_doc_name, res_bank_id, res_is_bank, res_oper_sign, res_dds_code, 
+         kob_bal_code_dt, kob_bal_code_kt, kob_add_code_dt, kob_add_code_kt, kob_acc_code_dt, kob_acc_code_kt, 
+         kob_summa, kob_currency, res_dds_is_resident, res_client_resident,
+         res_client_country, res_client_type, res_client_name, res_client_id, res_client_date, res_dds_is_law,
+         kob_from_kc_id, res_kontract_no, res_acc_code, ol_doc_no_str, ol_memo, kob_id,
+         kob_from_ol_id, res_ol_date
+  from aarep_moneyoper_eps_list(:rep_date, :rep_date, 0, null);
+
+  ins_count = row_count;
+
+  update or insert into cashflowlist (cfl_date, cfl_data_count)
+  values (:rep_date, :ins_count)
+  matching (cfl_date);
+
+  res_text = &#x27;Добавлены: &#x27; || ins_count || &#x27;, удалены старые: &#x27; || del_count;
+
+  select count(*)
+  from kn_operbook
+  where kob_cashflow_date = :rep_date and
+        kob_ol_is_active = 1 and
+        kob_from_rml_id &gt; 0
+  into ins_count;
+
+  update or insert into cashflowlist (cfl_date, cfl_book_count)
+  values (:rep_date, :ins_count)
+  matching (cfl_date);
+
+  select count(*)
+  from kn_operbook
+  where kob_cashflow_date = :rep_date and
+        kob_ol_is_active = 1 and
+        kob_from_rml_id = 0
+  into ins_count;
+
+  update or insert into cashflowlist (cfl_date, cfl_book_zero)
+  values (:rep_date, :ins_count)
+  matching (cfl_date);
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

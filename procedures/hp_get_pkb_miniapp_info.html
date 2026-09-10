@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_GET_PKB_MINIAPP_INFO — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_GET_PKB_MINIAPP_INFO: 0 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_GET_PKB_MINIAPP_INFO</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_schedule_list.html"><div class="to">FM_SCHEDULE_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">JSON_VALUE</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PMI_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PROJECT</div><div class="ptype">VARCHAR(10)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_GET_PKB_MINIAPP_INFO
+RETURNS (
+    JSON_VALUE D_BLOB_TEXT,
+    PMI_ID D_ID,
+    PROJECT D_STR_10)
+AS
+declare variable MA_ID D_ID;
+declare variable C_ID D_ID;
+declare variable STATUS D_SMALLINT;
+declare variable REP_TYPE D_SMALLINT;
+declare variable PMI_SUM D_CURRENCY;
+declare variable MA_SH_PAYMENT D_CURRENCY;
+declare variable CELL_NO D_STR_100;
+declare variable INN D_STR_20;
+declare variable PMI_PROJECT D_INTEGER;
+declare variable APPLICATION_TIMESTAMP varchar(30);
+declare variable TEMP_DATETIME D_STR_20;
+declare variable LOAN_APP_SUB_DATE varchar(30);
+declare variable PMI_CREATE_DATETIME varchar(30);
+declare variable KRL_DATETIME varchar(30);
+begin
+  for select pmi.pmi_id, pmi.pmi_from_ma_id, pmi.pmi_from_c_id, pmi.pmi_status,
+             pmi.pmi_sum, pmi.pmi_rep_type, pmi.pmi_project, f_datetimetostr(pmi.pmi_create_datetime),
+             iif(pmi_project =f_get_rd_id(&#x27;cib.pkb&#x27;),
+                 substring(replace(cast(pmi.pmi_create_datetime as varchar(50)), &#x27; &#x27;, &#x27;T&#x27;) from 1 for 23)|| &#x27;+05:00&#x27;,
+                 substring(replace(cast(pmi.pmi_create_datetime as varchar(50)), &#x27; &#x27;, &#x27;T&#x27;) from 1 for 19))
+  from pkb_miniapp_info pmi
+  where pmi_is_sent in (0, -1)
+        and not (
+            pmi.pmi_project = f_get_rd_id(&#x27;cib.gkb&#x27;)
+            and f_datetimetostr(pmi.pmi_create_datetime) = &#x27;28.04.2026 13:42&#x27;
+        )
+  into :pmi_id, :ma_id, :c_id, :status,
+       :pmi_sum, :rep_type, :pmi_project, :temp_datetime, :pmi_create_datetime
+  do
+  begin
+    select cl.c_inn
+    from clients cl
+    where cl.c_id = :c_id
+    into :inn;
+
+    if (status in (3, 5)) then
+      select sum(sh_all_with_tax) / max(sh_id)
+      from fm_schedule_list(11, :ma_id)
+      where sh_id &lt;&gt; 0
+      into :ma_sh_payment;
+
+    if (pmi_project = f_get_rd_id(&#x27;cib.pkb&#x27;)) then
+    begin
+      project = &#x27;pkb&#x27;;
+
+      if (:rep_type = 2 and :status = 1) then  -- Этап №2.1 Первая передача данных о заявке на кредит
+      begin
+        cell_no = f_cont_info(&#x27;clients&#x27;, :c_id, &#x27;cell_main&#x27;, &#x27;ok&#x27;);
+        select substring(replace(cast(eds.eds_status_datetime as varchar(50)), &#x27; &#x27;, &#x27;T&#x27;) from 1 for 23)|| &#x27;+05:00&#x27;
+        from edoc_list edl
+        inner join edoc_sign eds on eds.eds_from_edl_id = edl.edl_id
+        where edl.edl_object_kind = f_objkind(&#x27;miniapp&#x27;, &#x27;id&#x27;) and
+              edl.edl_object_id = :ma_id and
+              edl.edl_from_edc_id = 2
+        into :loan_app_sub_date;
+
+        json_value = &#x27;{&#x27; || f_json_make_pair(&#x27;iin&#x27;, :inn, &#x27;str&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;rep_type&#x27;, :rep_type, &#x27;num&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;phone_number&#x27;, :cell_no, &#x27;str&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;sum&#x27;, :pmi_sum, &#x27;num&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;status&#x27;, :status, &#x27;num&#x27;)  || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;loan_object&#x27;, 10, &#x27;num&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;loan_purpose&#x27;, 9, &#x27;num&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;consent_confirmed&#x27;, 1, &#x27;num&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;id_app&#x27;, :ma_id, &#x27;str&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;loan_app_sub_date&#x27;, :loan_app_sub_date, &#x27;str&#x27;) || &#x27;}&#x27;;
+      end
+      else if (:rep_type = 1 and :status = 1) then  -- Этап №2.4 Обновление данных о заявке на кредит при редактировании заявки
+      begin
+        json_value = &#x27;{&#x27; || f_json_make_pair(&#x27;id_app&#x27;, :ma_id, &#x27;str&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;status&#x27;, :status, &#x27;num&#x27;)  || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;sum&#x27;, :pmi_sum, &#x27;num&#x27;) || &#x27;}&#x27;;
+      end
+      else if (:status = 3) then  -- Этап №2.2 Обновление данных о заявке на кредит после утверждения договора менеджером
+      begin
+        json_value = &#x27;{&#x27; || f_json_make_pair(&#x27;id_app&#x27;, :ma_id, &#x27;str&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;status&#x27;, :status, &#x27;num&#x27;)  || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;loan_app_decision_date&#x27;, :pmi_create_datetime, &#x27;str&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;loan_app_approved_amount&#x27;, :pmi_sum, &#x27;num&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;loan_app_approved_instalment_amount&#x27;, :ma_sh_payment, &#x27;num&#x27;) || &#x27;}&#x27;;
+      end
+      else if (:status = 5) then  -- Этап №2.5 Обновление данных о заявке на кредит после выдачи
+      begin
+        json_value = &#x27;{&#x27; || f_json_make_pair(&#x27;id_app&#x27;, :ma_id, &#x27;str&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;status&#x27;, :status, &#x27;num&#x27;)  || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;loan_app_issue_date&#x27;, :pmi_create_datetime, &#x27;str&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;loan_app_issue_amount&#x27;, :pmi_sum, &#x27;num&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;loan_app_issue_instalment_amount&#x27;, :ma_sh_payment, &#x27;num&#x27;) || &#x27;}&#x27;;
+      end
+      else if (:status = 2) then  -- Этап №2.3 Обновление данных о заявке на кредит при отказе
+      begin
+        select substring(replace(cast(ktl.krl_datetime as varchar(50)), &#x27; &#x27;, &#x27;T&#x27;) from 1 for 23)|| &#x27;+05:00&#x27;
+        from kontreslist ktl
+        where ktl.krl_ma_id = :ma_id
+          and ktl.krl_from_kr_id &lt;&gt; 1
+        into :krl_datetime;
+
+        json_value = &#x27;{&#x27; || f_json_make_pair(&#x27;id_app&#x27;, :ma_id, &#x27;str&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;status&#x27;, :status, &#x27;num&#x27;)  || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;loan_app_decision_date&#x27;, :krl_datetime, &#x27;str&#x27;) || &#x27;}&#x27;;
+
+      end  
+      else if (:status = 4) then  -- Этап №2.4 Обновление данных о заявке на кредит при отказе
+      begin
+        json_value = &#x27;{&#x27; || f_json_make_pair(&#x27;id_app&#x27;, :ma_id, &#x27;str&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;status&#x27;, :status, &#x27;num&#x27;) || &#x27;}&#x27;;
+      end
+    end
+    else
+    begin
+      project = &#x27;gkb&#x27;;
+
+      select substring(replace(cast(ma.ma_date_save as varchar(50)), &#x27; &#x27;, &#x27;T&#x27;) from 1 for 19)
+      from miniapp ma
+      where ma.ma_id = :ma_id and
+            ma.ma_date_end = &#x27;31.12.9999&#x27; rows 1
+      into :application_timestamp;
+
+      if (:rep_type = 2 and :status = 1) then  -- Этап №2.1 Первая передача данных о заявке на кредит и Этап №2.1 Обновление данных о заявке на кредит при редактировании заявки
+      begin
+        json_value = &#x27;{&#x27; || f_json_make_pair(&#x27;iin&#x27;, :inn, &#x27;str&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;sum&#x27;, :pmi_sum, &#x27;num&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;loan_purpose&#x27;, 9, &#x27;num&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;loan_object&#x27;, 10, &#x27;num&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;creditor_application_id&#x27;, :ma_id, &#x27;str&#x27;)  || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;application_timestamp&#x27;, :application_timestamp, &#x27;str&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;application_status&#x27;, :status, &#x27;num&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;credit_type_id&#x27;, :rep_type, &#x27;num&#x27;) || &#x27;}&#x27;;
+      end
+      else if (:status = 3) then  -- Этап №2.2 Обновление данных о заявке на кредит после утверждения договора менеджером
+      begin
+        json_value = &#x27;{&#x27; || f_json_make_pair(&#x27;iin&#x27;, :inn, &#x27;str&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;sum&#x27;, :pmi_sum, &#x27;num&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;creditor_application_id&#x27;, :ma_id, &#x27;str&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;application_status&#x27;, :status, &#x27;num&#x27;)  || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;application_timestamp&#x27;, :application_timestamp, &#x27;str&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;approved_amount&#x27;, :pmi_sum, &#x27;num&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;approved_pay&#x27;, :ma_sh_payment, &#x27;num&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;denied_or_approved_timestamp&#x27;, :pmi_create_datetime, &#x27;str&#x27;) || &#x27;}&#x27;;
+      end
+      else if (:status = 5) then  -- Этап №2.5 Обновление данных о заявке на кредит после выдачи
+      begin
+        json_value = &#x27;{&#x27; || f_json_make_pair(&#x27;iin&#x27;, :inn, &#x27;str&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;sum&#x27;, :pmi_sum, &#x27;num&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;creditor_application_id&#x27;, :ma_id, &#x27;str&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;application_status&#x27;, :status, &#x27;num&#x27;)  || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;application_timestamp&#x27;, :application_timestamp, &#x27;str&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;approved_amount&#x27;, :pmi_sum, &#x27;num&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;approved_pay&#x27;, :ma_sh_payment, &#x27;num&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;issued_amount&#x27;, :pmi_sum, &#x27;num&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;issued_pay&#x27;, :ma_sh_payment, &#x27;num&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;issue_timestamp&#x27;, :pmi_create_datetime, &#x27;str&#x27;) || &#x27;}&#x27;;
+      end
+      else if (:status = 2) then  -- Этап №2.3 Обновление данных о заявке на кредит при отказе
+      begin
+        select substring(replace(cast(ktl.krl_datetime as varchar(50)), &#x27; &#x27;, &#x27;T&#x27;) from 1 for 19)
+        from kontreslist ktl
+        where ktl.krl_ma_id = :ma_id
+          and ktl.krl_from_kr_id &lt;&gt; 1
+        into :krl_datetime;
+
+        json_value = &#x27;{&#x27; || f_json_make_pair(&#x27;iin&#x27;, :inn, &#x27;str&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;sum&#x27;, :pmi_sum, &#x27;num&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;creditor_application_id&#x27;, :ma_id, &#x27;str&#x27;)  || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;application_status&#x27;, :status, &#x27;num&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;application_timestamp&#x27;, :application_timestamp, &#x27;str&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;denied_or_approved_timestamp&#x27;, :krl_datetime, &#x27;str&#x27;) || &#x27;}&#x27;;
+      end  
+      else if (:status = 4) then  -- Этап №2.3 Обновление данных о заявке на кредит при отказе
+      begin
+        json_value = &#x27;{&#x27; || f_json_make_pair(&#x27;iin&#x27;, :inn, &#x27;str&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;sum&#x27;, :pmi_sum, &#x27;num&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;creditor_application_id&#x27;, :ma_id, &#x27;str&#x27;)  || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;application_timestamp&#x27;, :application_timestamp, &#x27;str&#x27;) || &#x27;, &#x27;
+                         || f_json_make_pair(&#x27;application_status&#x27;, :status, &#x27;num&#x27;) || &#x27;}&#x27;;
+      end
+    end
+
+    suspend;
+  end
+end
+/*
+applicationStatus - Статус заявки (статус = 3, &quot;Одобрено&quot;)
+approved_amount - Одобренная сумма
+approved_pay - Ежемесячный платеж по одобренной сумме
+deniedOrApprovedTimestamp - Дата и время одобрения (статус = 3)
+deniedOrApprovedTimestamp - Дата и время отказа (статус = 2)  */</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

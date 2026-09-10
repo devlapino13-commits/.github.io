@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_JOIN_DOUBLE_CLIENT_CONTDATA — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_JOIN_DOUBLE_CLIENT_CONTDATA: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_JOIN_DOUBLE_CLIENT_CONTDATA</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_contdata_delete.html"><div class="to">HP_CONTDATA_DELETE</div></a><a class="ref-card" href="hp_contveri_set_ok.html"><div class="to">HP_CONTVERI_SET_OK</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_join_double_client_add_3.html"><div class="to">HP_JOIN_DOUBLE_CLIENT_ADD_3</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_STAY</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_REMOVE</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_JOIN_DOUBLE_CLIENT_CONTDATA(
+    C_STAY D_ID,
+    C_REMOVE D_ID)
+AS
+declare variable cda_id_remove d_id;
+declare variable cda_id_stay d_id;
+declare variable cda_cont_kind d_integer;
+declare variable cda_from_clt_id d_integer;
+declare variable cda_date_remove d_date;
+declare variable cda_is_main d_smallint;
+declare variable cda_is_delete_remove d_smallint;
+declare variable cda_is_delete_stay d_smallint;
+declare variable cda_status_remove d_smallint;
+declare variable cda_date_stay d_date;
+declare variable un_id d_id;
+declare variable cda_status_stay d_smallint;
+declare variable un_name d_str_code;
+begin
+  -- Процедура переносит контактные данные удаляемого клиента на нового клиента
+
+  un_name = rdb$get_context(&#x27;USER_SESSION&#x27;, &#x27;FINSTART_USER_LOGIN&#x27;);
+
+  select un_id
+  from username
+  where un_name = :un_name
+  into un_id;
+
+  -- Предварительный цикл. Поиск и удаление старых (по дате обновления) контактных данных.
+  -- Сравниваем все неудаленные, одинаковые по типу контакты, но отличающиеся значениями
+  for select cda_id, cda_cont_kind, cda_from_clt_id, cda_date, cda_is_main, cda_status
+  from contdata
+  where cda_from_c_id = :c_remove and
+        cda_is_delete = 0
+  into cda_id_remove, cda_cont_kind, cda_from_clt_id, cda_date_remove, cda_is_main, cda_status_remove
+  do
+  begin
+    cda_id_stay = null;
+    for select cda_id, cda_date, cda_status
+    from contdata
+    where cda_from_c_id = :c_stay and
+          cda_cont_kind = :cda_cont_kind and
+          cda_is_main = :cda_is_main and
+          cda_from_clt_id &lt;&gt; :cda_from_clt_id and
+          cda_is_delete = 0
+    into cda_id_stay, cda_date_stay, cda_status_stay
+    do
+    begin
+      -- Устанавливаем признак удаления более старым контактам с совпадающим или неподтвержденным статусом
+      if (cda_id_stay is not null) then
+      begin
+        if (cda_date_stay &gt;= cda_date_remove) then
+        begin
+          if (cda_status_stay &gt;= cda_status_remove) then
+            execute procedure hp_contdata_delete(:cda_id_remove, &#x27;joined&#x27;, null, :un_id);
+        end else
+        begin
+          if (cda_status_remove &gt;= cda_status_stay) then
+            execute procedure hp_contdata_delete(:cda_id_stay, &#x27;joined&#x27;, null, :un_id);
+        end
+      end
+    end
+  end
+
+  -- Основной цикл. Обрабатываются совпадающие по типу и значению контактные данные
+  -- Если нет совпадений, заменяем ссылку на клиента, через cda_from_c_id
+  -- Если совпадения есть, объединяем логи, переносим ссылки на cda_id
+  for select cda_id, cda_cont_kind, cda_from_clt_id, cda_date, cda_is_main,
+             cda_is_delete, cda_status, cda_from_un_id
+  from contdata
+  where cda_from_c_id = :c_remove
+  into cda_id_remove, cda_cont_kind, cda_from_clt_id, cda_date_remove, cda_is_main,
+        cda_is_delete_remove, cda_status_remove, un_id
+  do
+  begin
+    cda_id_stay = null;
+    select cda_id, cda_is_delete, cda_status, cda_date
+    from contdata
+    where cda_from_c_id = :c_stay and
+          cda_cont_kind = :cda_cont_kind and
+          cda_from_clt_id = :cda_from_clt_id and
+          cda_is_main = :cda_is_main
+    into cda_id_stay, cda_is_delete_stay, cda_status_stay, cda_date_stay;
+
+    if (cda_id_stay is null) then
+    begin
+      update contdata
+      set cda_from_c_id = :c_stay
+      where cda_id = :cda_id_remove;
+    end else
+    begin
+      update contlog set clg_from_cda_id = :cda_id_stay
+      where clg_from_cda_id = :cda_id_remove;
+
+      if (cda_is_delete_stay = 1 and
+          cda_is_delete_remove = 0) then
+      begin
+        -- Восстанавливаем контактные данные у &quot;оставляемого&quot; клиента
+        -- Статус верификации восстановим позже
+        delete from contdelete
+        where cdl_from_cda_id = :cda_id_stay;
+      end
+
+      -- Копируем/переносим ссылки с &quot;удаляемых&quot; на &quot;оставляемые&quot; контактные данные
+      insert into contveri (cvr_from_cda_id, cvr_hash_pin, cvr_status, cvr_sign_kind, cvr_from_un_id, cvr_datetime)
+      select :cda_id_stay, cvr_hash_pin, cvr_status, cvr_sign_kind, cvr_from_un_id, cvr_datetime
+      from contveri
+      where cvr_from_cda_id = :cda_id_remove
+      order by cvr_id;
+
+      update edoc_msg
+      set edm_from_cda_id = :cda_id_stay
+      where edm_from_cda_id = :cda_id_remove;
+
+      update contdata
+      set cda_date = maxvalue(:cda_date_stay, :cda_date_remove)
+      where cda_id = :cda_id_stay;
+
+      -- Если на оставляемые контактные данные есть ссылка в contdelete
+      -- Тогда ссылки на удаляемые контактные данные чистим
+      -- Иначе перепривязываем на оставляемые контактные данные
+      -- Update&#x27;ы ниже требуются, для исключения случайного восстановления
+      -- удаленных контактных данных, если в contdelete.base_cda_id будет
+      -- ссылка на удаляемую contdata
+      if (exists(
+        select count(*) from contdelete
+        where cdl_base_cda_id = :cda_id_stay))
+      then
+        update contdelete
+        set cdl_base_cda_id = null
+        where cdl_base_cda_id = :cda_id_remove;
+      else
+        update contdelete
+        set cdl_base_cda_id = :cda_id_stay
+        where cdl_base_cda_id = :cda_id_remove;
+
+      delete from contdata
+      where cda_id = :cda_id_remove;
+
+      -- Восстанавливаем статус верификации, т.к. старые контактные данные были подтверждены
+      if (cda_status_remove = 1 and
+          cda_is_delete_remove = 0 and
+          cda_status_stay = 0) then
+        execute procedure hp_contveri_set_ok(:cda_id_stay, :un_id, minvalue(:cda_date_stay, :cda_date_remove));
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

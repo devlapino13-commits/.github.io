@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_ONLINE_LOAN_DO_PROCESS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_ONLINE_LOAN_DO_PROCESS: 3 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_ONLINE_LOAN_DO_PROCESS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">4 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_check_loan_konditions_update.html"><div class="to">HP_CHECK_LOAN_KONDITIONS_UPDATE</div></a><a class="ref-card" href="hp_do_expressapp_action.html"><div class="to">HP_DO_EXPRESSAPP_ACTION</div></a><a class="ref-card" href="hp_edoc_insert.html"><div class="to">HP_EDOC_INSERT</div></a><a class="ref-card" href="hp_miniapp_status_change.html"><div class="to">HP_MINIAPP_STATUS_CHANGE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_online_loan_list.html"><div class="to">HP_ONLINE_LOAN_LIST</div></a><a class="ref-card" href="mc_online_app_approve_disb.html"><div class="to">MC_ONLINE_APP_APPROVE_DISB</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OA_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">EXA_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">IS_DISB</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_ONLINE_LOAN_DO_PROCESS(
+    OA_ID D_INTEGER,
+    EXA_ID D_ID,
+    IS_DISB D_SMALLINT = 0)
+AS
+declare variable un_id d_id;
+declare variable curr_exc_id d_integer;
+declare variable wait_status d_smallint;
+declare variable exc_id d_integer;
+declare variable exc_obj_kind d_integer;
+declare variable exc_action_kind d_str_code;
+declare variable exc_action_code d_str_code;
+declare variable ma_id d_id;
+declare variable k_id d_id;
+declare variable obj_id d_id;
+declare variable obj_code d_str_code;
+declare variable k_disb_date d_date;
+declare variable k_status d_integer;
+declare variable res_txt d_str_255;
+declare variable c_id d_id;
+declare variable list_exc_id d_str_100;
+declare variable error_txt d_str_255;
+begin
+
+  list_exc_id = (select &#x27;.&#x27; || list(exc.exc_id, &#x27;.&#x27;) || &#x27;.&#x27;
+                 from expresscfg exc
+                 where exc.exc_action_code in (&#x27;data_check&#x27;,
+                                               &#x27;send_to_kib&#x27;,
+                                               &#x27;application_send&#x27;,
+                                               &#x27;kk.send&#x27;,
+                                               &#x27;kk.wait&#x27;,
+                                               &#x27;consult_send&#x27;,
+                                               &#x27;consulting.agreement&#x27;,
+                                               &#x27;loan_send&#x27;,
+                                               &#x27;mc_purchase.agreement_autosign&#x27;));
+
+  wait_status = 0;
+
+  while (wait_status = 0) do
+  begin
+    select exa_from_exc_id, exa_from_ma_id, exa_from_k_id, exc_obj_kind, exc_action_kind,
+           exc_action_code, exa_from_un_id, exa_from_c_id
+    from expressapp, expresscfg
+    where exa_id = :exa_id and
+          exa_from_exc_id = exc_id and
+          exa_final_status in (0, 1)
+    into curr_exc_id, ma_id, k_id, exc_obj_kind, exc_action_kind, exc_action_code, un_id, c_id;
+
+    if (row_count = 0 or -- Если exa_final_status not in (0, 1) завершаем работу
+        curr_exc_id = 0) then -- Если экспресс-заявке не дан старт, завершаем работу
+      exit;
+
+    --Дошли до момента когда уже можно выдавать кредит
+    --Не создаём проводки пока is_disb не передастся со значением 1 (процедура mc_online_app_approve_disb)
+    if (is_disb = 0 and exc_action_code = &#x27;do_disbursement&#x27;) then
+    begin
+      update online_app oa
+      set oa.oa_status = 2
+      where oa.oa_id = :oa_id;
+      exit;
+    end 
+
+    if (exc_action_code = &#x27;finish&#x27;) then
+    begin
+      update expressapp exa
+      set exa.exa_final_status = 2
+      where exa.exa_id = :exa_id;
+      exit;
+    end 
+
+    wait_status = 0; -- Предположим что все нрмально
+
+    obj_code = f_objkind(exc_obj_kind, &#x27;code&#x27;);
+
+    obj_id = null;
+
+    if (obj_code = &#x27;expressapp&#x27;) then
+      obj_id = exa_id;
+
+    if (obj_code = &#x27;miniapp&#x27;) then
+      obj_id = ma_id;
+
+    if (obj_code = &#x27;kontract&#x27;) then
+      obj_id = k_id;
+
+    if (obj_code = &#x27;clients&#x27;) then
+      obj_id = c_id;
+
+    if (obj_id is null and
+        exc_action_kind in (&#x27;edoc&#x27;, &#x27;check&#x27;)) then
+      exception e_default &#x27;Unknown obj_id&#x27;;
+
+    if (exc_action_kind = &#x27;action&#x27;) then
+    begin
+      -- Нужно выполнить некие действия, например создать Miniapp и т.д.
+      -- Всевозможные действия должны быть автоматизированы внутри нижеуказанной процедуры
+      select res_status
+      from hp_do_expressapp_action(:exa_id, :exc_action_code)
+      into :wait_status;
+    end
+
+    if (exc_action_kind = &#x27;check&#x27;) then
+    begin
+      -- Запуск CheckLoanCondition
+      select res_is_error
+      from hp_check_loan_konditions_update(:exc_obj_kind, :obj_id, :exc_action_code, 0, :un_id)
+      into :wait_status;
+    end
+
+    if (exc_action_kind = &#x27;edoc&#x27;) then
+    begin
+      -- Создаем новый электронный документ
+      select res_text
+      from hp_edoc_insert(:exc_action_code, :obj_code, :obj_id, :un_id)
+      into error_txt;
+
+      if (error_txt &lt;&gt; &#x27;&#x27;) then
+        wait_status = -1;
+    end
+
+    if (wait_status = 0) then
+    begin
+      -- Если дошли до этого момента, значит этап завершился нормально
+      -- Устанавливаем следующий этап и оставляем wait_status = 0 чтобы не выйти из цикла
+      exc_id = null;
+      select exc_id
+      from expresscfg
+      where exc_id &gt; :curr_exc_id and
+            :list_exc_id not containing &#x27;.&#x27; || exc_id || &#x27;.&#x27;
+      order by exc_id
+      rows 1
+      into :exc_id;
+
+      if (row_count = 0) then -- Если запрос выше ничего не вернул, значит дошли до конца
+      begin
+        update online_app oa
+        set oa.oa_status = 2
+        where oa.oa_id = :oa_id;
+        exit;
+      end
+      else
+      begin
+        -- устанавливаем следующий этап, цикл отработает повторно
+        update expressapp
+        set exa_from_exc_id = :exc_id
+        where exa_id = :exa_id;
+      end
+    end
+    else
+    begin -- если wait_status &lt;&gt; 0, фиксируем результат, завершается работа процедуры
+
+      -- Инсертим запись в kontreslist со значением &quot;Перерегистрация клиента&quot;
+      insert into kontreslist (krl_id, krl_from_kr_id, krl_from_un_id, krl_from_k_id, krl_ma_reg_id, krl_ma_id,
+                               krl_datetime, krl_date_old, krl_date_new, krl_from_fs)
+      values (-1, 89, :un_id, null, 0, :ma_id, current_timestamp, current_date, current_date, 0);
+      execute procedure hp_miniapp_status_change(:ma_id, :un_id, 0);
+
+      k_id = null;
+      select kt.k_id
+      from kontract kt
+      where kt.k_from_ma_app_id = :ma_id
+      into k_id;
+
+      update edoc_list edl
+      set edl.edl_status = -1
+      where edl.edl_object_kind = f_objkind(&#x27;miniapp&#x27;, &#x27;id&#x27;) and
+            edl.edl_object_id = :ma_id;
+
+      update edoc_list edl
+      set edl.edl_status = -1
+      where edl.edl_object_kind = f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;) and
+            edl.edl_object_id = :k_id;
+
+      if (coalesce(k_id, 0) &gt; 0) then
+      begin
+        --Таблица kontlog автоматически обновиться со статусом -1
+        update kontract kt
+        set kt.k_status = -1
+        where kt.k_id = :k_id;
+      end
+
+      update expressapp exa
+      set exa.exa_final_status = -1,
+          exa.exa_from_exc_id = :curr_exc_id,
+          exa_try_count = exa_try_count + 1,
+          exa_wait_status = :wait_status
+      where exa.exa_id = :exa_id;
+
+      update online_app oa
+      set oa.oa_status = -2
+      where oa.oa_id = :oa_id;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

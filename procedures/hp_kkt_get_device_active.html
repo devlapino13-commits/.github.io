@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_KKT_GET_DEVICE_ACTIVE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_KKT_GET_DEVICE_ACTIVE: 2 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_KKT_GET_DEVICE_ACTIVE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REG_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OPER_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MODE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_PRINT_MODE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DEVICE_LIST</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_KKT_GET_DEVICE_ACTIVE(
+    REG_ID D_INTEGER,
+    OPER_DATE D_DATE)
+RETURNS (
+    MODE D_SMALLINT,
+    REP_PRINT_MODE D_BOOL,
+    DEVICE_LIST D_STR_255)
+AS
+declare variable test_device d_str_20;
+begin
+  -- (вызывается в Финстарте в окне погашения)
+  -- процедура возвращает режим работы и список заводских номеров касс прикрепленных к офису
+  -- mode:
+  --    0 - работать без ККТ (по старому)
+  --    1 - если ККТ подключена и есть в списке, то работать с ККТ, иначе работать без ККТ (по старому)
+  --    2 - работать только с ККТ из списка. Если ККТ не подключена или ККТ в списке не найдена, то запрещено работать
+  -- rep_print_mode: 0 - не печатать бумажные отчеты, 1 - печатать
+
+  test_device = &#x27;00109324659314&#x27;; -- тестовая касса, доступна везде
+
+  if (f_get_db_id() &lt;&gt; 81001
+    or f_get_const(&#x27;kkt&#x27;) &lt;&gt; 1)
+  then
+  begin
+    mode = 0;
+    device_list = &#x27;&#x27;;
+
+    suspend;
+    exit;
+  end
+
+  rep_print_mode = f_get_const(&#x27;kkt_print_mode&#x27;);
+
+  -- если тестовая база или тестовый период, то работать только с тестовой ККТ или без ККТ (по старому)
+  if (not exists(select * from hp_db_is_actual)
+    or oper_date &lt; &#x27;04.09.2023&#x27;)
+  then
+  begin
+    mode = 1;
+    device_list = test_device;
+
+    suspend;
+    exit;
+  end 
+
+  -- в боевой базе в боевом периоде можно работать только с боевыми ККТ
+  mode = 2;
+
+  select coalesce(list(kkd_code), &#x27;&#x27;)
+  from kkt_devices
+  where kkd_from_reg_id = :reg_id
+    and :oper_date between kkd_date_begin and kkd_date_end
+    and kkd_code &lt;&gt; :test_device
+  into device_list;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

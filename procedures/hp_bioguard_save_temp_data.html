@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_BIOGUARD_SAVE_TEMP_DATA — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_BIOGUARD_SAVE_TEMP_DATA: 4 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_BIOGUARD_SAVE_TEMP_DATA</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_parse_docrecog_json.html"><div class="to">HP_PARSE_DOCRECOG_JSON</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SESSION_ID</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PASSPORT_PHOTO1</div><div class="ptype">BLOB SUB_TYPE BINARY SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PASSPORT_PHOTO2</div><div class="ptype">BLOB SUB_TYPE BINARY SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DOCRECOG_JSON</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_BIOGUARD_SAVE_TEMP_DATA(
+    SESSION_ID D_STR_100 NOT NULL,
+    PASSPORT_PHOTO1 D_BLOB_BINARY NOT NULL,
+    PASSPORT_PHOTO2 D_BLOB_BINARY NOT NULL,
+    DOCRECOG_JSON D_BLOB_TEXT NOT NULL)
+RETURNS (
+    RES_CODE D_STR_CODE,
+    RES_TEXT D_STR_255)
+AS
+declare variable DOCUMENT_TYPE D_STR_CODE; /* Тип распознанного документа */
+declare variable DOC_NUMBER_VALUE D_STR_CODE; /* Распознанное значения для поля &quot;Номер документа&quot; */
+declare variable TIN_VALUE D_STR_20; /* Распознанное значения для поля &quot;ИИН&quot; */
+begin
+    /*
+        RFCKZ-267
+        Была добавлена проверка, что клиент при регистрации загрузил фото лицевой и обратной стороны паспорта. Если не делать эту проверку,
+        клиент может прикрепить две лицевые или две обратные стороны паспорта и успешно зарегистрироваться, что некорректно.
+
+        Проверка осуществляется следующим образом:
+        С КМП в метод передается JSON с распозанными значенями полей, в данном методе проверяется, что в переданном JSON есть поля: номер документа и ИИН
+        Поле ИИН находится только на лицевой строне удостоверения личности, а номер документа только на обратной. Таким образом мы можем проверить, были ли
+        прикреплены обе стороны документа, либо только одна
+    */
+
+    res_code = &#x27;success&#x27;;
+    res_text = &#x27;&#x27;;
+
+    document_type = f_json_blob_get_value(docrecog_json, &#x27;result.document_type&#x27;, &#x27;&#x27;);
+    if (coalesce(document_type, &#x27;&#x27;) not in (&#x27;kaz.id.type1&#x27;, &#x27;kaz.id.type2&#x27;)) then
+    begin
+        res_code = &#x27;error&#x27;;
+        res_text = &#x27;Прикреплен неизвестный документ. Пожалуйста, прикпрепите удостоверение личности&#x27;;
+        suspend;
+        exit;
+    end
+
+    select
+        max(iif(field_code = &#x27;tin&#x27;, field_value, null)),
+        max(iif(field_code = &#x27;number&#x27;, field_value, null))
+    from hp_parse_docrecog_json(:docrecog_json)
+    where field_code in (&#x27;tin&#x27;, &#x27;number&#x27;)
+    into
+        :tin_value,
+        :doc_number_value;
+
+    if (res_code = &#x27;success&#x27; and (coalesce(:tin_value, &#x27;&#x27;) = &#x27;&#x27; or char_length(:tin_value) &lt;&gt; 12)) then
+    begin
+        res_code = &#x27;error&#x27;;
+        res_text = &#x27;Не удалось обнаружить ИИН. Пожалуйста проверьте, что вы прикрепляли лицевую сторону документа&#x27;;
+    end
+
+    if (res_code = &#x27;success&#x27; and (coalesce(:doc_number_value, &#x27;&#x27;) = &#x27;&#x27; or char_length(:doc_number_value) &lt;&gt; 9)) then
+    begin
+        res_code = &#x27;error&#x27;;
+        res_text = &#x27;Не удалось обнаружить номер документа. Пожалуйста проверьте, что вы прикрепляли обратную сторону документа&#x27;;
+    end
+
+    if (:res_code = &#x27;success&#x27;) then
+        insert into bioguard_temp_data (btd_session_id, btd_create_datetime, btd_passport_photo1, btd_passport_photo2, btd_docrecog_json)
+        values (:session_id, current_timestamp, :passport_photo1, :passport_photo2, :docrecog_json);
+
+    suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

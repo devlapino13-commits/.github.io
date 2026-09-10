@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_ACTIONLIST_GET_CONTACT_LINK — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_ACTIONLIST_GET_CONTACT_LINK: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_ACTIONLIST_GET_CONTACT_LINK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_client_relation_list.html"><div class="to">HP_CLIENT_RELATION_LIST</div></a><a class="ref-card" href="hp_contdata_find_object.html"><div class="to">HP_CONTDATA_FIND_OBJECT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_actionlist_get_1.html"><div class="to">HP_ACTIONLIST_GET_1</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_OBJECT_DETAIL</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_ACTIONLIST_GET_CONTACT_LINK(
+    REP_C_ID DECIMAL(18,0))
+RETURNS (
+    RES_OBJECT_DETAIL BLOB SUB_TYPE TEXT SEGMENT SIZE 80)
+AS
+declare variable c_name_fio varchar(255);
+declare variable c_cell_no varchar(100);
+declare variable loan_active_count integer;
+declare variable loan_delinq_count integer;
+declare variable loan_total_count integer;
+declare variable contact_fio varchar(255);
+declare variable countact_count integer;
+declare variable c_id decimal(18,0);
+declare variable k_id decimal(18,0);
+declare variable c_cell_no_tmp varchar(100);
+declare variable i integer;
+declare variable rel_c_id decimal(18,0);
+declare variable rel_name varchar(100);
+declare variable loan_special_count integer;
+declare variable reason_writeoff varchar(4096);
+declare variable reason_writeoff_tmp d_str_100;
+declare variable db_id d_integer;
+declare variable cc_status d_str_100;
+begin
+  db_id = f_get_db_id();
+  res_object_detail = &#x27;&#x27;;
+
+  for select crel_other_c_id, c_name_fio, rel_name, c_plastcard_no
+      from hp_client_relation_list(:rep_c_id, 0)
+      union
+      select null, coalesce(cc_name, &#x27;&#x27;), coalesce(cc_status, &#x27;Контактное лицо&#x27;),
+             coalesce(contacts.cc_cell_no, &#x27;&#x27;)
+      from contacts
+      where cc_from_c_id = :rep_c_id and
+            coalesce(cc_is_old_contact, 0) = 0
+      into :rel_c_id, :contact_fio, :rel_name, :c_cell_no_tmp
+  do
+  begin
+    c_cell_no = &#x27;&#x27;;
+    if (rel_c_id is null) then
+    begin
+      i = 0;
+      while (i &lt; char_length(c_cell_no_tmp)) do
+      begin
+        i = i + 1;
+        if (substring(c_cell_no_tmp from i for 1) in (&#x27;0&#x27;, &#x27;1&#x27;, &#x27;2&#x27;, &#x27;3&#x27;, &#x27;4&#x27;, &#x27;5&#x27;, &#x27;6&#x27;, &#x27;7&#x27;, &#x27;8&#x27;, &#x27;9&#x27;)) then
+          c_cell_no = c_cell_no || substring(c_cell_no_tmp from i for 1);
+      end
+    end
+    else
+      c_cell_no = coalesce(c_cell_no_tmp, &#x27;&#x27;);
+    if (c_cell_no = &#x27;&#x27;) then
+      c_cell_no = &#x27;XXX--XXX&#x27;;
+
+    res_object_detail = BLOB_APPEND(res_object_detail, &#x27;&lt;br&gt;&#x27; || :rel_name || &#x27;: &lt;b&gt;&#x27; || contact_fio || &#x27;&lt;/b&gt;&#x27; || &#x27;, тел.&#x27; || :c_cell_no || &#x27;&lt;br&gt;&#x27;);
+    if (c_cell_no &lt;&gt; &#x27;&#x27; or rel_c_id is not null) then
+    begin
+      countact_count = 0;
+      -- Кредитная история самого контакт (по совпадению с номером телефона
+      for select distinct res_object_id, c_name_fio
+          from hp_contdata_find_object(:c_cell_no, &#x27;cell&#x27;), clients
+          where res_object_kind = 0 and
+                res_object_id = c_id
+          union
+          select c_id, c_name_fio
+          from clients
+          where c_id = :rel_c_id
+          into :c_id, c_name_fio
+      do
+      begin
+        loan_active_count = 0;
+        loan_delinq_count = 0;
+        loan_total_count = 0;
+        countact_count = countact_count + 1;
+        res_object_detail = BLOB_APPEND(res_object_detail, &#x27;ФИО в базе: &#x27; || c_name_fio || &#x27;&lt;br&gt;&#x27;);
+
+        for select distinct kc_from_k_id
+            from knclient, kontstate
+            where ks_from_k_id = kc_from_k_id and
+                  kc_from_c_id = :c_id and
+                  kc_amount_approved &gt; 0 and
+                  ks_state = 1 and
+                  ks_date_begin &lt;= current_date and
+                  ks_date_end &gt;= &#x27;31.12.2999&#x27; and
+                  ks_ol_is_delete = 0
+            into :k_id
+        do
+        begin
+          loan_active_count = loan_active_count + 1;
+          loan_total_count = loan_total_count + 1;
+          if (exists(select *
+                     from oksummary
+                     where oks_from_k_id = :k_id and
+                           oks_date_begin &lt;= current_date and
+                           oks_date_end &gt;= current_date and
+                           oks_delinq_date &lt; (current_date - 7) and
+                           oks_close_state = 0)) then
+            loan_delinq_count = loan_delinq_count + 1;
+        end
+
+        for select distinct kc_from_k_id
+            from knclient, kontstate
+            where ks_from_k_id = kc_from_k_id and
+                  kc_from_c_id = :c_id and
+                  kc_amount_approved &gt; 0 and
+                  ks_state = 2 and
+                  ks_date_begin &lt;= current_date and
+                  ks_date_end &gt;= &#x27;31.12.2999&#x27; and
+                  ks_ol_is_delete = 0
+            into :k_id
+        do
+        begin
+          loan_total_count = loan_total_count + 1;
+        end
+
+        --S.K. 11.12.2018
+        loan_special_count = coalesce((select count(*)
+                                       from (select distinct oko_from_k_id
+                                             from operkroff
+                                             where oko_from_c_id = :c_id and
+                                                   oko_ol_is_active = 1 and
+                                                   oko_ol_date &lt;= current_date
+                                             group by oko_from_k_id
+                                             having sum(oko_os + oko_perc + oko_sh_os + oko_sh_perc) &gt; 0)), 0);
+        --
+        if (db_id in (39801, 41701)) then
+        begin
+          reason_writeoff = &#x27;&#x27;;
+          for select distinct rd.rd_name
+              from operkroff oko
+              inner join operlist ol on oko.oko_from_ol_id = ol.ol_id
+              inner join refdata rd on ol.ol_from_rd_id = rd.rd_id
+              where oko.oko_ol_is_active = 1 and
+                    oko.oko_from_c_id = :c_id and
+                    oko.oko_ol_date &lt;= current_date and
+                    rd.rd_main_code = &#x27;Reason_WriteOff&#x27;
+              into :reason_writeoff_tmp
+          do
+          begin
+            reason_writeoff = reason_writeoff || &#x27;&lt;br&gt;&#x27; || &#x27;   &lt;font color=&quot;red&quot;&gt;- причина списания: &#x27; || reason_writeoff_tmp || &#x27;&lt;/font&gt;&lt;br&gt;&#x27;;
+          end
+        end
+
+        if (loan_total_count = 0) then
+        begin
+          res_object_detail = BLOB_APPEND(res_object_detail, &#x27;Данный контакт не получал кредит нашей компании.&lt;br&gt;&#x27;);
+        end
+        else
+        begin
+          res_object_detail = BLOB_APPEND(res_object_detail, &#x27;  Кредитная история контакта:&lt;br&gt;&#x27;);
+          res_object_detail = BLOB_APPEND(res_object_detail, &#x27;    - всего получено: &#x27; || loan_total_count || &#x27;&lt;br&gt;&#x27;);
+          res_object_detail = BLOB_APPEND(res_object_detail, &#x27;    &lt;font color=&quot;green&quot;&gt;- из них активных: &#x27; ||(loan_active_count + loan_special_count) || &#x27;&lt;/font&gt;&lt;br&gt;&#x27;);
+          if (loan_delinq_count &lt;&gt; 0) then
+            res_object_detail = BLOB_APPEND(res_object_detail, &#x27;    &lt;font color=&quot;red&quot;&gt;  в просрочке более 7 дней: &#x27; || loan_delinq_count || &#x27;&lt;/font&gt;&lt;br&gt;&#x27;);
+          if (loan_special_count &gt; 0) then
+            res_object_detail = BLOB_APPEND(res_object_detail, &#x27;    &lt;font color=&quot;red&quot;&gt;- из них на спец.учёте: &#x27; || loan_special_count || &#x27;&lt;/font&gt;&#x27; || iif(db_id in (39801, 41701), reason_writeoff, &#x27;&#x27;));
+        end
+      end
+      if (countact_count = 0) then
+      begin
+        res_object_detail = BLOB_APPEND(res_object_detail, &#x27;В базе нет клиента с таким номером.&lt;br&gt;&#x27;);
+      end
+
+      if (rel_c_id is null and
+          c_cell_no &lt;&gt; &#x27;&#x27;) then
+      begin
+        countact_count = 0;
+        -- Кредитная история лиц, где он также является контактом (по совпадению с номером телефона
+        for select distinct c_id, c_name_fio, lower(cc_status)
+            from contacts, clients
+            where contacts.cc_cell_no = :c_cell_no and
+                  cc_from_c_id = c_id and
+                  c_id &lt;&gt; :rep_c_id
+            into :c_id, c_name_fio, cc_status
+        do
+        begin
+          loan_active_count = 0;
+          loan_delinq_count = 0;
+          loan_total_count = 0;
+          countact_count = countact_count + 1;
+          cc_status = coalesce(cc_status, &#x27;&lt;нет данных&gt;&#x27;);
+          res_object_detail = BLOB_APPEND(res_object_detail, &#x27;Общий контакт с клиентом: &#x27; || c_name_fio || &#x27;, у которого указан как &lt;b&gt;&#x27; || cc_status || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;);
+
+          for select distinct kc_from_k_id
+              from knclient, kontstate
+              where ks_from_k_id = kc_from_k_id and
+                    kc_from_c_id = :c_id and
+                    kc_amount_approved &gt; 0 and
+                    ks_state = 1 and
+                    ks_date_begin &lt;= current_date and
+                    ks_date_end &gt;= &#x27;31.12.2999&#x27; and
+                    ks_ol_is_delete = 0
+              into :k_id
+          do
+          begin
+            loan_active_count = loan_active_count + 1;
+            loan_total_count = loan_total_count + 1;
+            if (exists(select *
+                       from oksummary
+                       where oks_from_k_id = :k_id and
+                             oks_date_begin &lt;= current_date and
+                             oks_date_end &gt;= current_date and
+                             oks_delinq_date &lt; (current_date - 7) and
+                             oks_close_state = 0)) then
+              loan_delinq_count = loan_delinq_count + 1;
+          end
+
+          for select distinct kc_from_k_id
+              from knclient, kontstate
+              where ks_from_k_id = kc_from_k_id and
+                    kc_from_c_id = :c_id and
+                    kc_amount_approved &gt; 0 and
+                    ks_state = 2 and
+                    ks_date_begin &lt;= current_date and
+                    ks_date_end &gt;= &#x27;31.12.2999&#x27; and
+                    ks_ol_is_delete = 0
+              into :k_id
+          do
+          begin
+            loan_total_count = loan_total_count + 1;
+          end
+
+          --S.K. 11.12.2018
+          loan_special_count = coalesce((select count(*)
+                                         from (select distinct oko_from_k_id
+                                               from operkroff
+                                               where oko_from_c_id = :c_id and
+                                                     oko_ol_is_active = 1 and
+                                                     oko_ol_date &lt;= current_date
+                                               group by oko_from_k_id
+                                               having sum(oko_os + oko_perc + oko_sh_os + oko_sh_perc) &gt; 0)), 0);
+          --
+          if (db_id in (39801, 41701)) then
+          begin
+            reason_writeoff = &#x27;&#x27;;
+            for select distinct rd.rd_name
+                from operkroff oko
+                inner join operlist ol on oko.oko_from_ol_id = ol.ol_id
+                inner join refdata rd on ol.ol_from_rd_id = rd.rd_id
+                where oko.oko_ol_is_active = 1 and
+                      oko.oko_from_c_id = :c_id and
+                      oko.oko_ol_date &lt;= current_date and
+                      rd.rd_main_code = &#x27;Reason_WriteOff&#x27;
+                into :reason_writeoff_tmp
+            do
+            begin
+              reason_writeoff = reason_writeoff || &#x27;&lt;br&gt;&#x27; || &#x27;   &lt;font color=&quot;red&quot;&gt;- причина списания: &#x27; || reason_writeoff_tmp || &#x27;&lt;/font&gt;&lt;br&gt;&#x27;;
+            end
+          end
+
+          if (loan_total_count = 0) then
+          begin
+            res_object_detail = BLOB_APPEND(res_object_detail, &#x27;Данный клиент не получал кредит нашей компании.&lt;br&gt;&#x27;);
+          end
+          else
+          begin
+            res_object_detail = BLOB_APPEND(res_object_detail, &#x27;  Кредитная история клиента:&lt;br&gt;&#x27;);
+            res_object_detail = BLOB_APPEND(res_object_detail, &#x27;    - всего получено: &#x27; || loan_total_count || &#x27;&lt;br&gt;&#x27;);
+            res_object_detail = BLOB_APPEND(res_object_detail, &#x27;    &lt;font color=&quot;green&quot;&gt;- из них активных: &#x27; ||(loan_active_count + loan_special_count) || &#x27;&lt;/font&gt;&lt;br&gt;&#x27;);
+            if (loan_delinq_count &lt;&gt; 0) then
+              res_object_detail = BLOB_APPEND(res_object_detail, &#x27;    &lt;font color=&quot;red&quot;&gt;  в просрочке более 7 дней: &#x27; || loan_delinq_count || &#x27;&lt;/font&gt;&lt;br&gt;&#x27;);
+            if (loan_special_count &gt; 0) then
+              res_object_detail = BLOB_APPEND(res_object_detail, &#x27;    &lt;font color=&quot;red&quot;&gt;- из них на спец.учёте: &#x27; || loan_special_count || &#x27;&lt;/font&gt;&#x27; || iif(db_id in (39801, 41701), reason_writeoff, &#x27;&#x27;));
+          end
+        end
+        res_object_detail = BLOB_APPEND(res_object_detail, &#x27;  Всего клиентов с общим контактом: &#x27; || :countact_count || &#x27;&lt;br&gt;&#x27;);
+      end
+    end
+    else
+    begin
+      res_object_detail = BLOB_APPEND(res_object_detail, &#x27;Номер не указан, невозможно получить связи.&lt;br&gt;&lt;br&gt;&#x27;);
+    end
+  end
+  if (res_object_detail = &#x27;&#x27;) then
+    res_object_detail = &#x27;Нет контактных лиц&#x27;;
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

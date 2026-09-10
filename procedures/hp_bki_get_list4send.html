@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_BKI_GET_LIST4SEND — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_BKI_GET_LIST4SEND: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_BKI_GET_LIST4SEND</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_bki_corr_get_xml_equifax.html"><div class="to">HP_BKI_CORR_GET_XML_EQUIFAX</div></a><a class="ref-card" href="hp_bki_get_xml4send_equifax5.html"><div class="to">HP_BKI_GET_XML4SEND_EQUIFAX5</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PACKET_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_STR</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_BKI_GET_LIST4SEND(
+    PACKET_ID D_ID)
+RETURNS (
+    RES_STR D_STR_8100)
+AS
+declare variable bkc_id d_id;
+declare variable bev_id d_id;
+declare variable bkk_code d_str_code;
+declare variable packet_name d_str_code;
+declare variable packet_datetime d_datetime;
+declare variable subjects_count d_integer;
+declare variable records_count d_integer;
+declare variable bkp_number d_integer;
+declare variable bkp_status d_integer;
+declare variable rec_no d_integer;
+declare variable reset_rec_no d_integer;
+declare variable event_id d_integer;
+declare variable bkt_action_code d_str_code;
+declare variable xml_version_id d_integer;
+declare variable schema_version d_str_10;
+declare variable event_code d_str_code;
+declare variable bkc_add d_str_long;
+declare variable uid d_str_code;
+declare variable object_kind d_integer;
+declare variable object_id d_id;
+declare variable k_disb_date d_date;
+declare variable jso d_integer;
+declare variable bkt_format d_smallint;
+begin
+  xml_version_id = null;
+
+  select bxv_id, bxv_schema_version
+  from bki_xml_version
+  where bxv_date_begin &lt;= current_date
+  order by bxv_date_begin desc
+  rows 1
+  into xml_version_id, schema_version;
+
+  select bkk_code, bkp_code, bkp_send_datetime, bkp_number, bkp_status, f_enum(&#x27;bki_packet_action&#x27;, bkt_action, &#x27;code&#x27;), bkt_format
+  from bki_packet, bki_kind, bki_packet_type
+  where bkp_id = :packet_id
+    and bkk_id = bkp_from_bkk_id
+    and bkt_id = bkp_from_bkt_id
+  into bkk_code, packet_name, packet_datetime, bkp_number, bkp_status, bkt_action_code, bkt_format;
+
+  -- шапка
+  subjects_count = 0;
+  records_count = 0;
+
+  select count(distinct bkc_from_c_id), count(bev_id)
+  from bki_loans, bki_clients, bki_events
+  where bkl_from_bkp_id = :packet_id
+    and bkc_from_bkl_id = bkl_id
+    and bev_from_bkc_id = bkc_id
+    and bev_status = 1
+    and bev_event_id is not null
+  into subjects_count, records_count;
+
+  -- при переотправке (3.2), для какждого субъекта по одному события 3.2
+  if (bkt_action_code in (&#x27;reset&#x27;, &#x27;recreate&#x27;)) then
+    records_count = subjects_count;
+
+  res_str = &#x27;&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;&#x27; ||
+            &#x27;&lt;Document &#x27; ||
+              f_format(&#x27;schemaVersion=&quot;%1&quot; &#x27;, schema_version) ||
+              &#x27;inn=&quot;7728744752&quot; ogrn=&quot;1107746627779&quot; &#x27; ||
+              f_format(&#x27;sourceID=&quot;%1&quot; &#x27;, trim(iif(bkk_code = &#x27;ru.equifax&#x27;, &#x27;47L&#x27;, &#x27;P701NN000001&#x27;)))||
+              f_format(&#x27;regNumberDoc=&quot;%1&quot; &#x27;, trim(iif(bkk_code = &#x27;ru.equifax&#x27;, lpad(bkp_number, 4, &#x27;0&#x27;), packet_name))) ||
+              f_format(&#x27;dateTimeDoc=&quot;%1&quot; &#x27;, f_bki_datetime_to_str(packet_datetime, 3)) ||
+              f_format(&#x27;subjectsCount=&quot;%1&quot; groupBlocksCount=&quot;%2&quot;&gt;&#x27;, subjects_count, records_count) ||
+            &#x27;&lt;Source&gt;&lt;FL_46_UL_36_OrgSource&gt;&lt;sourceCode&gt;2&lt;/sourceCode&gt;&lt;sourceRegistrationFact_1&gt;&lt;/sourceRegistrationFact_1&gt;&#x27; ||
+            &#x27;&lt;fullName&gt;ОБ�©ЕСТВО С ОГРАНИЧЕННОЙ ОТВЕТСТВЕННОСТЬЮ «МИКРОКРЕДИТНАЯ КОМПАНИЯ М БУЛАК»&lt;/fullName&gt;&#x27; ||
+            &#x27;&lt;shortName&gt;ООО «МКК М БУЛАК»&lt;/shortName&gt;&lt;sourceDateStart&gt;2010-08-09&lt;/sourceDateStart&gt;&lt;regNum&gt;1107746627779&lt;/regNum&gt;&#x27; ||
+            &#x27;&lt;TaxNum_group_FL_46_UL_36_OrgSource&gt;&lt;taxCode&gt;1&lt;/taxCode&gt;&lt;taxNum&gt;7728744752&lt;/taxNum&gt;&lt;/TaxNum_group_FL_46_UL_36_OrgSource&gt;&#x27; ||
+            f_format(&#x27;&lt;sourceCreditInfoDate&gt;%1&lt;/sourceCreditInfoDate&gt;&#x27;, cast(packet_datetime as date)) ||
+            &#x27;&lt;/FL_46_UL_36_OrgSource&gt;&lt;/Source&gt;&#x27; || trim(iif(bkt_format = 2, &#x27;&lt;Data_AF&gt;&#x27;, &#x27;&lt;Data&gt;&#x27;));
+  suspend;
+
+  -- тело
+  rec_no = 0;
+  reset_rec_no = 0;
+
+  for select distinct bkc_id, bkc_add, bkl_object_kind, bkl_object_id, f_bki_data_text(bkc_uid_bkd_id)
+  from bki_loans, bki_clients, bki_events
+  where bkl_from_bkp_id = :packet_id
+    and bkc_from_bkl_id = bkl_id
+    and bev_from_bkc_id = bkc_id
+    and bev_status = 1
+    and bev_event_id is not null
+  order by bkl_id, bkc_id
+  into bkc_id, bkc_add, object_kind, object_id, uid
+  do
+  begin
+    -- Титульная часть
+    reset_rec_no = reset_rec_no + 1;
+    res_str = &#x27;&lt;Subject_FL&gt;&#x27; || (select res_xml from hp_bki_get_xml4send_equifax5(:xml_version_id, 1, :bkc_id, &#x27;Title&#x27;, 0));
+    res_str = res_str || &#x27;&lt;Events&gt;&#x27;;
+
+    if (bkt_action_code in (&#x27;reset&#x27;, &#x27;recreate&#x27;)) then
+    begin
+      -- запишем номер корректировочной записи
+      jso = iif(coalesce(bkc_add, &#x27;&#x27;) = &#x27;&#x27;, json.obj_create(), json.parse(bkc_add));
+      json.obj_set_s(jso, &#x27;orderNum&#x27;, reset_rec_no);
+      bkc_add = json.obj_to_json(jso);
+  
+      update bki_clients
+      set bkc_add = :bkc_add
+      where bkc_id = :bkc_id;
+
+      if (object_kind = f_objkind(&#x27;miniapp&#x27;, &#x27;id&#x27;)) then
+        select k_disb_date
+        from kontract
+        where k_from_ma_app_id = :object_id
+        order by k_status desc
+        rows 1
+        into k_disb_date;
+      else
+        select k_disb_date
+        from kontract
+        where k_id = :object_id
+        into k_disb_date;
+
+      res_str = res_str || f_format(&#x27;&lt;FL_Event_3_2 operationCode=&quot;C.1&quot; orderNum=&quot;%1&quot; eventDateTime=&quot;%2&quot;&#x27;, reset_rec_no, f_bki_datetime_to_str(packet_datetime, 3));
+      if (bkt_action_code = &#x27;reset&#x27;) then
+         res_str = res_str || f_format(&#x27; startDateTime=&quot;%1T00:00:00+03:00&quot;&#x27;, json.obj_get_val(jso, &#x27;start_date&#x27;, &#x27;&#x27;));
+
+      res_str = res_str || f_format(&#x27; changeReason=&quot;%1&quot;&#x27;, json.obj_get_val(jso, &#x27;change_reason&#x27;, &#x27;1&#x27;));
+      res_str = res_str || &#x27;&gt;&#x27;;
+
+      res_str = res_str || f_format(&#x27;&lt;FL_17_DealUid&gt;&lt;uid&gt;%1&lt;/uid&gt;&lt;openDate&gt;%2&lt;/openDate&gt;&lt;/FL_17_DealUid&gt;&#x27;, uid, k_disb_date);
+    end
+
+    suspend;
+
+    insert into bki_send_data (bsd_id, bsd_from_bkd_id, bsd_from_bfv_id, bsd_obj_kind, bsd_obj_id, bsd_number)
+    select bsd_id, bsd_from_bkd_id, bsd_from_bfv_id, bsd_obj_kind, bsd_obj_id, bsd_number
+    from bki_send_data_oper
+    where bsd_obj_kind = 1
+      and bsd_obj_id = :bkc_id;
+
+    -- События
+    for select bev_event_id, bev_id
+    from bki_events
+    where bev_from_bkc_id = :bkc_id
+      and bev_status = 1
+      and bev_event_id is not null
+    order by bev_event_date, bev_id
+    into event_id, bev_id
+    do
+    begin
+      rec_no = rec_no + 1;
+
+      update bki_events
+      set bev_rec_no = :rec_no
+      where bev_id = :bev_id;
+
+      event_code = f_enum(&#x27;bki_event&#x27;, event_id, &#x27;code&#x27;);
+      event_code = left(event_code, position(&#x27;_&#x27;, event_code) - 1);
+
+      if (event_code in (&#x27;3.1&#x27;)) then
+        res_str = (select res_xml from hp_bki_corr_get_xml_equifax(:xml_version_id, :bev_id, &#x27;Event_&#x27; || :event_code, :rec_no));
+      else
+        res_str = (select res_xml from hp_bki_get_xml4send_equifax5(:xml_version_id, 2, :bev_id, &#x27;Event_&#x27; || :event_code, :rec_no));
+
+      insert into bki_send_data (bsd_id, bsd_from_bkd_id, bsd_from_bfv_id, bsd_obj_kind, bsd_obj_id, bsd_number)
+      select bsd_id, bsd_from_bkd_id, bsd_from_bfv_id, bsd_obj_kind, bsd_obj_id, bsd_number
+      from bki_send_data_oper
+      where bsd_obj_kind = 2
+        and bsd_obj_id = :bev_id;
+  
+      if (bkp_status = 1) then
+        update bki_events
+        set bev_status = 2
+        where bev_id = :bev_id;
+
+      suspend;
+    end
+
+    res_str = &#x27;&#x27;;
+    if (bkt_action_code in (&#x27;reset&#x27;, &#x27;recreate&#x27;)) then
+      res_str = res_str || &#x27;&lt;/FL_Event_3_2&gt;&#x27;;
+
+    res_str = res_str || &#x27;&lt;/Events&gt;&lt;/Subject_FL&gt;&#x27;;
+    suspend;
+  end
+  res_str =  trim(iif(bkt_format = 2, &#x27;&lt;/Data_AF&gt;&#x27;, &#x27;&lt;/Data&gt;&#x27;)) || &#x27;&lt;/Document&gt;&#x27;;
+  suspend;
+
+  -- пакет забран
+  if (bkp_status = 1) then
+    update bki_packet bkp
+    set bkp.bkp_status = 2,
+        bkp.bkp_result_status = &#x27;Taken&#x27;
+    where bkp.bkp_id = :packet_id;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

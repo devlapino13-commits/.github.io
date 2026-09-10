@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_KONT_CARD_DISB_STATUS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_KONT_CARD_DISB_STATUS: 1 входных, 6 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_KONT_CARD_DISB_STATUS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">3</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_client_bank_card.html"><div class="to">HP_CLIENT_BANK_CARD</div></a><a class="ref-card" href="hp_fps_get_loan_bank.html"><div class="to">HP_FPS_GET_LOAN_BANK</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_html_bank_card_status.html"><div class="to">FM_HTML_BANK_CARD_STATUS</div></a><a class="ref-card" href="hp_kontracts_for_card_disb.html"><div class="to">HP_KONTRACTS_FOR_CARD_DISB</div></a><a class="ref-card" href="hp_kontracts_for_card_disb1.html"><div class="to">HP_KONTRACTS_FOR_CARD_DISB1</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">STATUS</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DESCRIPTION</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CLIENT_TOTAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CLIENT_DONE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CLIENT_ERROR</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CLIENT_CARDS</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_KONT_CARD_DISB_STATUS(
+    K_ID D_ID)
+RETURNS (
+    STATUS D_INTEGER,
+    DESCRIPTION D_STR_8100,
+    CLIENT_TOTAL D_INTEGER,
+    CLIENT_DONE D_INTEGER,
+    CLIENT_ERROR D_INTEGER,
+    CLIENT_CARDS D_SMALLINT)
+AS
+declare variable ESM_STATUS D_INTEGER;
+declare variable ESM_ID D_ID;
+declare variable C_ID D_ID;
+declare variable C_NAME_FIO D_STR_100;
+declare variable ERR_CODE D_STR_255;
+declare variable ESM_ACTION D_STR_CODE;
+declare variable ESM_FOUND D_SMALLINT;
+declare variable DB_ID D_INTEGER;
+declare variable PAY_PROJECT D_STR_100;
+declare variable ESM_ACCOUNT D_STR_CODE;
+declare variable K_DISB_KIND D_SMALLINT;
+begin
+  status = 2; -- нет строк на исполнение (&quot;перевести деньги на карту&quot; была создана)
+  description = &#x27;&#x27;;
+
+  client_total = 0; -- всего клиентов
+  client_done = 0;  -- скольким успешно отправлены
+  client_error = 0; -- сколько с ошибками
+  client_cards = 0; -- сколько с картами
+
+  db_id = f_get_db_id();
+
+  pay_project = (case db_id when 41701 then &#x27;elcard_disb&#x27;
+                            when 39801 then &#x27;elcard_disb&#x27;
+                 end);
+
+  select k_disb_kind from kontract
+  where k_id = :k_id
+  into k_disb_kind;
+
+  for select kncl.kc_from_c_id, cl.c_name_fio
+      from knclient kncl
+      inner join clients cl on cl.c_id = kncl.kc_from_c_id
+      where kncl.kc_amount_approved &gt; 0 and
+            kncl.kc_from_k_id = :k_id
+      into :c_id, :c_name_fio
+  do
+  begin
+    esm_found = 0; -- возможно нет записи в ExtSysMain
+    client_total = client_total + 1;
+
+    if (db_id = 81001 and k_disb_kind = 7) then
+    begin
+      if ((select coalesce(fpb_code, &#x27;&#x27;)
+      from hp_fps_get_loan_bank(:k_id, :c_id)) &lt;&gt; &#x27;&#x27;) then
+          client_cards = client_cards + 1;
+    end
+    else
+    begin
+      if ((select coalesce(token, &#x27;&#x27;)
+           from hp_client_bank_card(:c_id)) &lt;&gt; &#x27;&#x27;) then
+          client_cards = client_cards + 1;
+    end
+
+    -- ищу задачу связанную с переводом денег на карту
+    for select em.esm_status, em.esm_id, em.esm_action, em.esm_account
+    from extsysmain em
+    where em.esm_from_k_id = :k_id and
+          em.esm_object_kind = f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;) and
+          em.esm_object_id = :c_id and
+          (
+            (:db_id = 81001 and em.esm_project in (&#x27;moneta_disb&#x27;, &#x27;wirebank_disb&#x27;)) or
+            (:db_id &lt;&gt; 81001 and em.esm_project = :pay_project)
+          )
+    order by esm_id desc
+    rows 1
+    into :esm_status, :esm_id, :esm_action, :esm_account
+    do
+    begin
+      esm_found = 1; -- Запись найден
+      status = minvalue(status, esm_status); -- как обший статус берем наименьшое значение среди всех клиентов
+
+      if ((esm_status = 1) and (esm_action in (&#x27;CardDisb&#x27;, &#x27;PhoneDisb&#x27;))) then
+         client_done = client_done + 1;
+
+      if (esm_status &lt;&gt; -1) then -- если не ошибка, выходим из этого for select
+        Break;
+
+      err_code = &#x27;&#x27;;
+      client_error = client_error + 1;
+
+      select left(trim(replace(ea.esa_message, &#x27;error:&#x27;, &#x27;&#x27;)), 255)
+      from extsysanswer ea
+      where ea.esa_from_esm_id = :esm_id and
+            ea.esa_message like &#x27;%error:%&#x27;
+      into :err_code;
+
+      if (description &lt;&gt; &#x27;&#x27;) then
+        description = description || ascii_char(10) || ascii_char(13); -- перенос строки
+
+      if (db_id in (39801, 41701)) then
+      begin
+        description = description || &#x27;[&#x27; || c_name_fio || &#x27;] &#x27; ||
+          &#x27;карта: &#x27; || esm_account || &#x27;; &#x27; ||
+          &#x27;код ошибки: &#x27; || err_code || &#x27;; &#x27; ||
+          trim(iif(esm_action = &#x27;CardDisb&#x27;, &#x27;Ошибка на этапе выдачи:&#x27;, &#x27;Ошибка на этапе проверки:&#x27;));
+        description = description || &#x27; &#x27; || (case err_code
+                                         when &#x27;100&#x27; then &#x27;Произошла недокументированная ошибка&#x27; ||
+                                                         &#x27; (&#x27; ||
+                                                         (select first 1
+                                                            f_json_str_get_value(replace(esa_message, &#x27;answer:&#x27;, &#x27;&#x27;), &#x27;message&#x27;, &#x27;&#x27;)
+                                                          from extsysanswer where esa_from_esm_id = :esm_id
+                                                            and esa_message starting &#x27;answer:&#x27;
+                                                         ) || &#x27;)&#x27;
+                                         when &#x27;101&#x27; then &#x27;Произошла внутренняя ошибка&#x27;
+                                         when &#x27;102&#x27; then &#x27;Сервис временно недоступен&#x27;
+                                         when &#x27;103&#x27; then &#x27;Ошибка соединения с провайдером&#x27;
+                                         when &#x27;104&#x27; then &#x27;Доступ запрещен&#x27;
+                                         when &#x27;201&#x27; then &#x27;Абонент не найден&#x27;
+                                         when &#x27;202&#x27; then &#x27;Недостаточно средств на счете&#x27;
+                                         when &#x27;203&#x27; then &#x27;Превышена сумма платежа&#x27;
+                                         when &#x27;204&#x27; then &#x27;Услуга временно недоступна&#x27;
+                                         when &#x27;205&#x27; then &#x27;Неверный формат суммы&#x27;
+                                         when &#x27;301&#x27; then &#x27;Неверный идентификатор платежного поручения&#x27;
+                                         else &#x27;Техническая ошибка&#x27;
+                                       end) || &#x27;; &#x27;;
+      end
+      else
+      begin
+        description = description || &#x27;[&#x27; || c_name_fio || &#x27;] &#x27; ||
+          trim(iif(esm_action = &#x27;CardDisb&#x27;, &#x27;Ошибка на этапе выдачи:&#x27;, &#x27;Ошибка на этапе проверки:&#x27;)) || &#x27; &#x27; || :err_code;
+      end
+    end
+
+    if (esm_found = 0) then
+    begin
+      if (description &lt;&gt; &#x27;&#x27;) then
+        description = description || ascii_char(10) || ascii_char(13); -- перенос строки
+
+      description = description || &#x27;[&#x27; || c_name_fio || &#x27;] Нет записи об оплате&#x27;;
+    end
+  end
+
+  if (status = 2) then -- если по всем клиентам отсутствует запись в ExtSysMain, убираем описание
+    description = &#x27;&#x27;;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

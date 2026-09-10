@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_UXFRITEM_JOIN_SELECTED — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_UXFRITEM_JOIN_SELECTED: 3 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_UXFRITEM_JOIN_SELECTED</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_split_str.html"><div class="to">HP_SPLIT_STR</div></a><a class="ref-card" href="hp_uxfritem_aux_add.html"><div class="to">HP_UXFRITEM_AUX_ADD</div></a><a class="ref-card" href="hp_uxfritem_move.html"><div class="to">HP_UXFRITEM_MOVE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UX_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SELECTED_UFI_LIST</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PARENT_CODE</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_UXFRITEM_JOIN_SELECTED(
+    UX_CODE D_STR_CODE,
+    SELECTED_UFI_LIST D_STR_8100,
+    PARENT_CODE D_STR_100)
+AS
+declare variable new_group d_str_100;
+declare variable ufi_code d_str_100;
+declare variable ufi_position d_integer;
+declare variable new_position d_integer;
+begin
+  if (coalesce(selected_ufi_list, &#x27;&#x27;) = &#x27;&#x27;) then
+    Exit;
+
+  if (coalesce(parent_code, &#x27;&#x27;) = &#x27;&#x27;) then
+    Exit;
+
+  -- Проверяем что все эелементы в одной ветке
+  -- Заодно проверяем минимальную позицию чтобы вставить новую группу в эту позицию
+  new_position = null;
+  for select trim(res_str)
+  from hp_split_str(:selected_ufi_list, &#x27;,&#x27;)
+  into :ufi_code
+  do
+  begin
+    select ufi_position
+    from uxfritem
+    where ufi_ux_code = :ux_code and
+          ufi_code = :ufi_code and
+          ufi_parent_code = :parent_code
+    into ufi_position;
+
+    if (ufi_position is null) then
+      exception e_message &#x27;Не все выдаленные элементы в одной группе.&#x27;;
+
+    if (new_position is null or new_position &gt; ufi_position) then
+      new_position = ufi_position;
+  end
+
+  select ufi_code
+  from hp_uxfritem_aux_add(:ux_code, &#x27;group&#x27;, &#x27;group&#x27;, :ufi_code)
+  into :new_group;
+
+  if (coalesce(new_group, &#x27;&#x27;) = &#x27;&#x27;) then
+    exception e_message &#x27;Не удалось создать новую группу&#x27;;
+
+  update uxfritem
+  set ufi_position = :new_position
+  where ufi_code = :new_group;
+
+  new_position = 0;
+  for select trim(res_str)
+  from hp_split_str(:selected_ufi_list, &#x27;,&#x27;)
+  into :ufi_code
+  do
+  begin
+    execute procedure hp_uxfritem_move(:ufi_code, :new_group, :new_position);
+    new_position = new_position + 1;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

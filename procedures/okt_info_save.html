@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OKT_INFO_SAVE — процедура — схема БД</title>
+<meta name="description" content="Процедура OKT_INFO_SAVE: 3 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>OKT_INFO_SAVE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fsrobot_insert_event.html"><div class="to">FSROBOT_INSERT_EVENT</div></a><a class="ref-card" href="hp_actionlist_timer.html"><div class="to">HP_ACTIONLIST_TIMER</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ACL_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PARAMS</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE OKT_INFO_SAVE(
+    ACL_ID ID_TYPE,
+    UN_ID ID_TYPE,
+    PARAMS BLOB SUB_TYPE TEXT SEGMENT SIZE 80)
+RETURNS (
+    RES SMALLINT)
+AS
+declare variable al_project str_255;
+declare variable t integer;
+declare variable nextpos integer;
+declare variable field_value str_255;
+declare variable res_timer integer;
+declare variable default_un_id id_type;
+begin
+  /*
+  OKTELL
+
+  На данный момент, процедура предназначена для сохранения длительности диалога между оператором и абонентом (Duration=...)
+  В будущем, может использоваться для сохранения каких-либо дополнительных значений.
+
+  */
+
+  select rd.rd_code
+  from actionlist al
+  inner join refdata rd on al.acl_from_rd_id = rd.rd_id
+  where al.acl_id = :acl_id
+  into :al_project;
+
+  field_value = null;
+
+  if (al_project containing (&#x27;OKTELL.&#x27;)) then
+  begin
+    t = position(&#x27;Duration=&#x27;, params); -- продолжительность диалога в секундах
+    if (t &lt;&gt; 0) then
+    begin
+      nextpos = position(&#x27;&amp;&#x27;, params, t + 1);
+      if (nextpos = 0) then
+        field_value = substring(params from t + 9 for char_length(params) - t - 8);
+      else
+        field_value = substring(params from t + 9 for nextpos - t - 9);
+    end
+    field_value = coalesce(field_value, &#x27;&#x27;);
+
+    if (field_value &lt;&gt; &#x27;&#x27;) then
+    begin
+      select res_timer
+      from hp_actionlist_timer(:acl_id, cast(:field_value as integer), &#x27;set&#x27;)
+      into :res_timer;
+    end
+
+    if (al_project containing (&#x27;OKTELL.Projects.WebSite&#x27;)) then -- звонки по заявкам с сайта для мигрантов
+    begin
+      select un.un_id
+      from username un
+      where un.un_name = &#x27;IGUSEV&#x27;
+      into :default_un_id;
+
+      execute procedure fsrobot_insert_event(&#x27;DoMailing&#x27;, &#x27;OKTELL_MAILING&#x27;, :acl_id, :default_un_id);
+    end
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

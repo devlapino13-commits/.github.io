@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_COPY_ROLE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_COPY_ROLE: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_COPY_ROLE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_uniqtable_id.html"><div class="to">HP_GET_UNIQTABLE_ID</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RN_ID_NEW</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_COPY_ROLE(
+    RN_ID DECIMAL(18,0),
+    UN_ID DECIMAL(18,0))
+RETURNS (
+    RN_ID_NEW DECIMAL(18,0))
+AS
+declare variable rn_name varchar(30);
+declare variable rn_memo varchar(2048);
+declare variable uniqtab_rolename integer;
+begin
+-- Копирование роли
+  select ukt_id
+  from hp_get_uniqtable_id(&#x27;Rolename&#x27;)
+  into :uniqtab_rolename;
+
+  select rn_name, rn_memo
+  from rolename
+  where rn_id = :rn_id
+  into :rn_name, :rn_memo;
+  rn_name = rn_name || &#x27; копия&#x27;;
+
+-- Вставтяем новую роль
+  insert into rolename (rn_id, rn_name, rn_is_active, rn_registered_user, rn_memo)
+  values (-1, :rn_name, 1, :un_id, :rn_memo)
+  returning rn_id
+  into :rn_id_new;
+
+-- Очищаем доступы новой роли по таблицам
+  delete from roletab
+  where rt_from_rn_id = :rn_id_new;
+
+-- Копируем доступы по таблицам
+  insert into roletab (rt_from_rn_id, rt_from_ds_id, rt_can_update, rt_can_insert, rt_can_delete)
+  select :rn_id_new, rt_from_ds_id, rt_can_update, rt_can_insert, rt_can_delete
+  from roletab
+  where rt_from_rn_id = :rn_id;
+
+-- Очищаем доступы новой роли по меню (старая схема)
+  delete from rolemenu
+  where rm_from_rn_id = :rn_id_new;
+
+-- Копируем доступы по меню (старая схема)
+  insert into rolemenu (rm_from_rn_id, rm_menu_name)
+  select :rn_id_new, rm_menu_name
+  from rolemenu
+  where rm_from_rn_id = :rn_id;
+
+  insert into permissions (pm_id, pm_object_kind, pm_object_id, pm_subject_kind, pm_subject_id, pm_date_begin,
+                           pm_date_end, pm_access_kind, pm_is_delete, pm_from_un_id)
+  select -1, 1, :rn_id_new, pm_subject_kind, pm_subject_id, pm_date_begin, pm_date_end, pm_access_kind, pm_is_delete,
+         :un_id
+  from permissions
+  where pm_object_kind = :uniqtab_rolename and
+        pm_object_id = :rn_id and
+        pm_is_delete = 0;
+
+  suspend;
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

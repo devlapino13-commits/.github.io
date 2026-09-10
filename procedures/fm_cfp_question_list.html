@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_CFP_QUESTION_LIST — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_CFP_QUESTION_LIST: 3 входных, 5 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_CFP_QUESTION_LIST</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MAC_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">POSITION_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NAME</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DEFAULT_VALUE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MIN_VALUE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MAX_VALUE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_CFP_QUESTION_LIST(
+    MAC_ID D_INTEGER,
+    UN_ID D_ID,
+    POSITION_ID D_INTEGER)
+RETURNS (
+    ID D_INTEGER,
+    NAME D_STR_255,
+    DEFAULT_VALUE D_INTEGER,
+    MIN_VALUE D_INTEGER,
+    MAX_VALUE D_INTEGER)
+AS
+declare variable C_ID D_ID;
+declare variable CA_ID D_ID;
+declare variable LANG D_STR_CODE;
+declare variable CIB_IS_WORKING D_BOOL;
+declare variable CQ_CODE_NAME D_STR_255;
+declare variable DB_ID D_INTEGER;
+declare variable KPD D_CURRENCY;
+declare variable PENSION_INCOME D_CURRENCY;
+declare variable ASP_INCOME D_CURRENCY;
+declare variable SALARY_INCOME D_CURRENCY;
+declare variable SALARY_STATEMENT D_CURRENCY;
+declare variable MA_ID D_ID;
+declare variable ACL_ID D_ID;
+begin
+  db_id = f_get_db_id();
+
+  if(coalesce(mac_id, 0) &lt; 0) then    -- RFCKG-5565
+  begin
+    acl_id = mac_id * -1;
+
+    select acl.acl_object_id
+    from actionlist acl
+    where acl.acl_id = :acl_id
+    into mac_id;
+  end
+
+  for select mac.mac_from_c_id,  mac.mac_from_ma_id
+      from miniappclient mac
+      where mac.mac_id = :mac_id and
+            mac.mac_amount &gt; 0
+      into c_id, ma_id
+  do
+  begin
+    if (db_id = 41701) then
+    begin
+        lang = &#x27;kg&#x27;;
+        select c.c_blank_lang
+        from clients c
+        where c.c_id = :c_id
+        into lang;
+    
+        select is_working
+        from cib_working_status
+        into cib_is_working;
+    
+        select ca.ca_id
+        from cfp_anketa ca
+        where ca.ca_from_c_id = :c_id and
+              ca.ca_object_kind = f_objkind(&#x27;miniappclient&#x27;, &#x27;id&#x27;) and
+              ca.ca_object_id = :mac_id and
+              ca.ca_from_cp_id = :position_id and
+              (
+                coalesce(:acl_id, 0) = 0
+                or ca.ca_from_acl_id = :acl_id
+              ) and
+              (
+                coalesce(:acl_id, 0) &lt;&gt; 0
+                or ca.ca_from_acl_id is null
+              )
+        into ca_id;
+        if (coalesce(:ca_id, 0) &gt; 0) then
+        begin
+          for select cq.cq_id, --
+                     caa.caa_value, --
+                     iif(:lang = &#x27;kg&#x27;, cq.cq_name_kg, cq.cq_name_ru), --
+                     cq.cq_min_val, --
+                     cq.cq_max_val, --
+                     cq.cq_code_name
+              from cfp_anketa_answers caa
+              inner join cfp_questions cq on cq.cq_id = caa.caa_from_cq_id and
+                    cq.cq_is_delete = 0
+              where caa.caa_from_ca_id = :ca_id
+              order by cq.cq_basic_incom desc, cq.cq_id
+              into id, --
+                   default_value, --
+                   name, --
+                   min_value, --
+                   max_value, --
+                   cq_code_name
+          do
+          begin
+            if (cq_code_name = &#x27;salary_certificate&#x27;) then
+            begin
+              if (exists(select * from extinfolist eil
+                         where eil.eil_from_eic_id = 10 and
+                               eil.eil_from_c_id = :c_id and
+                               eil.eil_is_json = 1 and
+                               eil.eil_status = 2 and
+                               coalesce(eil.eil_from_un_id, 0) = 0)) then
+                continue;
+            end
+            suspend;
+          end
+        end
+        else
+        begin
+          for select cq.cq_id, --
+                     cq.cq_default_val, --
+                     iif(:lang = &#x27;kg&#x27;, cq.cq_name_kg, cq.cq_name_ru), --
+                     cq.cq_min_val, --
+                     cq.cq_max_val
+              from cfp_qgroup_link cql
+              inner join cfp_questions cq on cq.cq_id = cql.cql_from_cq_id and
+                    cq.cq_is_delete = 0
+              inner join cfp_position_qgroups cpq on cpq.cpg_from_cg_id = cql.cql_from_cg_id and
+                    cpq.cpg_from_cp_id = :position_id and
+                    cpq.cpg_is_delete = 0
+              order by cq.cq_basic_incom desc, cq.cq_id
+              into id, --
+                   default_value, --
+                   name, --
+                   min_value, --
+                   max_value
+          do
+          begin
+          if (cq_code_name = &#x27;salary_certificate&#x27;) then
+            begin
+              if (exists(select * from extinfolist eil
+                         where eil.eil_from_eic_id = 10 and
+                               eil.eil_from_c_id = :c_id and
+                               eil.eil_is_json = 1 and
+                               eil.eil_status = 2 and
+                               coalesce(eil.eil_from_un_id, 0) = 0)) then
+                continue;
+            end
+            suspend;
+          end
+        end
+        if (cib_is_working = 0) then  -- RFCKG-4624
+        begin
+          select cq.cq_id, --
+                 cq.cq_default_val, --
+                 iif(:lang = &#x27;kg&#x27;, cq.cq_name_kg, cq.cq_name_ru), --
+                 cq.cq_min_val, --
+                 cq.cq_max_val
+          from cfp_questions cq
+          where cq.cq_code_name = &#x27;other_debt_repayment&#x27;
+          into id, --
+               default_value, --
+               name, --
+               min_value, --
+               max_value;
+          suspend;
+        end
+    end
+
+    if (db_id = 39801) then
+    begin
+      position_id = 1;
+
+      select ca.ca_id, cakdn.cakdn_kdn
+        from cfp_anketa ca
+        inner join cfp_anketa_kdn cakdn on cakdn.cakdn_from_mac_id = ca.ca_object_id
+        where ca.ca_from_c_id = :c_id and
+              ca.ca_object_kind = f_objkind(&#x27;miniappclient&#x27;, &#x27;id&#x27;) and
+              ca.ca_object_id = :mac_id and
+              ca.ca_from_cp_id = :position_id
+        into :ca_id, kpd;
+        if (coalesce(:ca_id, 0) &gt; 0 and kpd &gt; 0.5) then
+        begin
+          for select cq.cq_id, --
+                     caa.caa_value, --
+                     cq.cq_name_ru, --
+                     cq.cq_min_val, --
+                     cq.cq_max_val, --
+                     cq.cq_code_name
+              from cfp_anketa_answers caa
+              inner join cfp_questions cq on cq.cq_id = caa.caa_from_cq_id and
+                    cq.cq_is_delete = 0
+              where caa.caa_from_ca_id = :ca_id
+              order by cq.cq_basic_incom desc, cq.cq_id
+              into id, --
+                   default_value, --
+                   name, --
+                   min_value, --
+                   max_value, --
+                   cq_code_name
+          do
+          begin
+            -- RFCKZ-103
+            if (cq_code_name = &#x27;salary_statement&#x27;) then
+            begin
+                if (exists(select * from clientdocs cds
+                           inner join passkind pk on pk.pk_id = cds.cds_from_pk_id
+                           inner join passdoctype pdt on pdt.pdt_id = pk.pk_from_pdt_id
+                           where cds.cds_from_c_id = :c_id and
+                                 cds.cds_is_delete = 0 and
+                                 pdt.pdt_code = &#x27;card_statement&#x27; and -- выписка по карте
+                                 current_date between cds.cds_doc_date_begin and
+                                 coalesce(cds.cds_doc_date_end, &#x27;31.12.2099&#x27;))) then
+                 begin
+                    default_value = coalesce(salary_statement, default_value);
+                end
+                else
+                    default_value = coalesce(salary_statement, 0);
+            end
+           suspend;
+          end
+        end
+        else
+        begin
+          for select cq.cq_id, --
+                     cq.cq_default_val, --
+                     cq.cq_name_ru, --
+                     cq.cq_min_val, --
+                     cq.cq_max_val,
+                     cq.cq_code_name
+              from cfp_qgroup_link cql
+              inner join cfp_questions cq on cq.cq_id = cql.cql_from_cq_id and
+                    cq.cq_is_delete = 0
+              inner join cfp_position_qgroups cpq on cpq.cpg_from_cg_id = cql.cql_from_cg_id and
+                    cpq.cpg_from_cp_id = :position_id and
+                    cpq.cpg_is_delete = 0
+              order by cq.cq_basic_incom desc, cq.cq_id
+              into id, --
+                   default_value, --
+                   name, --
+                   min_value, --
+                   max_value,
+                   cq_code_name
+          do
+          begin
+            if (cq_code_name = &#x27;cl_income_pension&#x27;) then
+            begin
+              if (exists(select * from extinfolist eil
+                         where eil.eil_from_eic_id = 10
+                           and eil.eil_from_c_id = :c_id
+                           and eil.eil_is_json = 1
+                           and eil.eil_status = 2)) then
+              begin
+                select icq.icq_payment_sum
+                from income_check_querys icq
+                where (icq.icq_from_ma_id = :ma_id or
+                      icq.icq_from_mac_id = :mac_id) and
+                      icq.icq_from_c_id = :c_id and
+                      icq.icq_status = 2 and
+                      icq.icq_config = &#x27;pension_check&#x27;
+                order by icq.icq_create_datetime desc
+                rows 1
+                into :pension_income;
+
+                default_value = coalesce(pension_income, default_value);
+              end
+            end
+            if (cq_code_name = &#x27;cl_income_asp&#x27;) then
+            begin
+              if (exists(select * from extinfolist eil
+                         where eil.eil_from_eic_id = 12
+                           and eil.eil_from_c_id = :c_id
+                           and eil.eil_is_json = 1
+                           and eil.eil_status = 2)) then
+              begin
+                select icq.icq_payment_sum
+                from income_check_querys icq
+                where (icq.icq_from_ma_id = :ma_id or
+                      icq.icq_from_mac_id = :mac_id) and
+                      icq.icq_from_c_id = :c_id and
+                      icq.icq_status = 2 and
+                      icq.icq_config = &#x27;asp_check&#x27;
+                order by icq.icq_create_datetime desc
+                rows 1
+                into :asp_income;
+
+                default_value = coalesce(asp_income, default_value);
+              end
+            end
+            if (cq_code_name = &#x27;contract_salary&#x27;) then
+            begin
+              select icq.icq_payment_sum
+              from income_check_querys icq
+                where (icq.icq_from_ma_id = :ma_id or
+                      icq.icq_from_mac_id = :mac_id) and
+                      icq.icq_from_c_id = :c_id and
+                      icq.icq_status = 2 and
+                      icq.icq_config = &#x27;salary_check&#x27;
+              order by icq.icq_create_datetime desc
+              rows 1
+              into :salary_income;
+
+              default_value = coalesce(salary_income, default_value);
+            end
+            -- RFCKZ-103
+            if (cq_code_name = &#x27;salary_statement&#x27;) then
+            begin
+                if (exists(select * from clientdocs cds
+                           inner join passkind pk on pk.pk_id = cds.cds_from_pk_id
+                           inner join passdoctype pdt on pdt.pdt_id = pk.pk_from_pdt_id
+                           where cds.cds_from_c_id = :c_id and
+                                 cds.cds_is_delete = 0 and
+                                 pdt.pdt_code = &#x27;card_statement&#x27; and -- выписка по карте
+                                 current_date between cds.cds_doc_date_begin and
+                                 coalesce(cds.cds_doc_date_end, &#x27;31.12.2099&#x27;))) then
+                begin
+                    default_value = coalesce(salary_statement, default_value);
+                end
+                else
+                    default_value = coalesce(salary_statement, 0);
+            end
+            suspend;
+          end
+        end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

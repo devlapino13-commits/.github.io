@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_GET_TIME_LEFT_FORMATTED — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_GET_TIME_LEFT_FORMATTED: 3 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_GET_TIME_LEFT_FORMATTED</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_login_action_checks.html"><div class="to">HP_LOGIN_ACTION_CHECKS</div></a><a class="ref-card" href="mc_new_phone.html"><div class="to">MC_NEW_PHONE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MINUTES_CNT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CONT_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">TARGET_MSGQUOTA_CFG_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">TIME_LEFT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_GET_TIME_LEFT_FORMATTED(
+    MINUTES_CNT D_INTEGER,
+    CONT_CODE D_STR_CODE,
+    TARGET_MSGQUOTA_CFG_CODE D_STR_CODE)
+RETURNS (
+    TIME_LEFT D_STR_100)
+AS
+declare variable first_send_ts timestamp;
+declare variable expire_ts timestamp;
+declare variable remain_sec bigint;
+declare variable days_cnt integer;
+declare variable hours_cnt integer;
+declare variable mins_cnt integer;
+declare variable secs_cnt integer;
+begin
+    /*
+        Процедура возвращает оставшееся время действия
+        текущего временного окна msgquota в удобном для пользователя формате.
+    
+        Логика работы:
+        - по target_msgquota_cfg_code и cont_code ищется первая запись в msgquotalist,
+          попадающая в текущее окно длиной minutes_cnt минут;
+        - определяется момент окончания окна:
+              first_send_ts + minutes_cnt минут;
+        - рассчитывается разница между current_timestamp и временем окончания;
+        - результат возвращается в виде строки:
+              N д. HH ч. MM м. SS с.
+              HH ч. MM м. SS с.
+              M м. SS с.
+              S с.
+    
+        Важно:
+        - процедура ищет первую запись только в рамках текущего временного окна,
+          а не за всю историю;
+        - если записей в текущем окне нет или время уже истекло, возвращается &#x27;0 с.&#x27;;
+        - процедура подходит для отображения пользователю времени ожидания до окончания
+          ограничения, если логика ограничения считается от первой записи в текущем окне.
+    */
+
+    time_left = &#x27;0 с.&#x27;;
+
+    if (coalesce(minutes_cnt, 0) &lt;= 0) then
+    begin
+        suspend;
+        exit;
+    end
+
+    first_send_ts = null;
+
+    select first 1 mql.mql_datetime
+    from msgquotalist mql
+        inner join msgquotacfg mqc on mql.mql_from_mqc_id = mqc.mqc_id
+    where mqc.mqc_code = :target_msgquota_cfg_code and
+          mql.mql_cont_code = :cont_code and
+          mql.mql_datetime &gt;= dateadd(-:minutes_cnt minute to current_timestamp) and
+          mql.mql_datetime &lt;= current_timestamp
+    order by mql.mql_datetime asc
+    into :first_send_ts;
+
+    if (first_send_ts is null) then
+    begin
+        suspend;
+        exit;
+    end
+
+    expire_ts = dateadd(:minutes_cnt minute to :first_send_ts);
+    remain_sec = datediff(second from current_timestamp to :expire_ts);
+
+    if (coalesce(remain_sec, 0) &lt;= 0) then
+    begin
+        time_left = &#x27;0 с.&#x27;;
+        suspend;
+        exit;
+    end
+
+    days_cnt = floor(remain_sec / 86400);
+    remain_sec = mod(remain_sec, 86400);
+
+    hours_cnt = floor(remain_sec / 3600);
+    remain_sec = mod(remain_sec, 3600);
+
+    mins_cnt = floor(remain_sec / 60);
+    secs_cnt = mod(remain_sec, 60);
+
+    if (days_cnt &gt; 0) then
+    begin
+        time_left =
+            cast(days_cnt as varchar(10)) || &#x27; д. &#x27; ||
+            lpad(cast(hours_cnt as varchar(2)), 2, &#x27;0&#x27;) || &#x27; ч. &#x27; ||
+            lpad(cast(mins_cnt as varchar(2)), 2, &#x27;0&#x27;) || &#x27; м. &#x27; ||
+            lpad(cast(secs_cnt as varchar(2)), 2, &#x27;0&#x27;) || &#x27; с.&#x27;;
+    end
+    else if (hours_cnt &gt; 0) then
+    begin
+        time_left =
+            cast(hours_cnt as varchar(10)) || &#x27; ч. &#x27; ||
+            lpad(cast(mins_cnt as varchar(2)), 2, &#x27;0&#x27;) || &#x27; м. &#x27; ||
+            lpad(cast(secs_cnt as varchar(2)), 2, &#x27;0&#x27;) || &#x27; с.&#x27;;
+    end
+    else if (mins_cnt &gt; 0) then
+    begin
+        time_left =
+            cast(mins_cnt as varchar(10)) || &#x27; м. &#x27; ||
+            lpad(cast(secs_cnt as varchar(2)), 2, &#x27;0&#x27;) || &#x27; с.&#x27;;
+    end
+    else
+    begin
+        time_left = cast(secs_cnt as varchar(10)) || &#x27; с.&#x27;;
+    end
+
+    suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

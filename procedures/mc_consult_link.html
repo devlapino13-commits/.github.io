@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MC_CONSULT_LINK — процедура — схема БД</title>
+<meta name="description" content="Процедура MC_CONSULT_LINK: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>MC_CONSULT_LINK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="clt_get_price_for_consultation.html"><div class="to">CLT_GET_PRICE_FOR_CONSULTATION</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MCL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CONSULT_LINK</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE MC_CONSULT_LINK(
+    MCL_ID D_ID)
+RETURNS (
+    CONSULT_LINK D_STR_255)
+AS
+declare variable c_id d_id;
+declare variable db_id d_integer;
+declare variable current_level d_integer;
+declare variable level_1 d_integer;
+declare variable access_time d_integer;
+declare variable kc_id d_id;
+declare variable kc_id_1 d_id;
+declare variable end_date d_date;
+declare variable k_disb_date d_date;
+begin
+  db_id = f_get_db_id();
+  consult_link = &#x27;&#x27;;
+
+  select mcl_from_c_id
+  from mc_login
+  where mcl_id = :mcl_id
+  into c_id;
+
+  if (c_id is null or db_id not in (39801, 41701)) then
+  begin
+    suspend;
+    exit;
+  end
+
+  current_level = null;
+  kc_id = null;
+
+  for select kc.kc_id, kon.k_disb_date
+      from kontstate ks
+      inner join kontract kon on kon.k_id = ks.ks_from_k_id
+      inner join knclient kc on kc.kc_from_k_id = kon.k_id
+      inner join product pr on pr.pr_id = kon.k_from_pr_id
+      where kc.kc_from_c_id = :c_id and
+            kc.kc_amount_approved &gt; 0 and
+            ks.ks_ol_is_delete = 0 and
+            --ks.ks_state = 1 and
+            ks.ks_date_begin &gt;= &#x27;01.04.2021&#x27; and
+            pr.pr_code containing &#x27;.consultation.&#x27;
+      into :kc_id_1, k_disb_date
+  do
+  begin
+    select cons_level, access_time
+    from clt_get_price_for_consultation(:kc_id_1)
+    into level_1, access_time;
+    end_date = dateadd(month, access_time, k_disb_date);
+
+    if (end_date &gt; current_date) then
+    begin
+      if (current_level is null) then
+      begin
+        current_level = level_1;
+        kc_id = kc_id_1;
+      end
+      else
+      begin
+        if (level_1 &gt; current_level) then
+        begin
+          current_level = level_1;
+          kc_id = kc_id_1;
+        end
+      end
+    end
+  end
+
+  if (kc_id is not null) then
+  begin
+    select &#x27;https://consult.mbulak.kg/?uid=&#x27; || f_uuid(&#x27;knclient&#x27;, kc_id)
+    from knclient kc
+    inner join kontract k on kc_from_k_id = k_id
+    inner join region r on k_last_reg_id = reg_unicode
+    where kc_id = :kc_id
+    into :consult_link;
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

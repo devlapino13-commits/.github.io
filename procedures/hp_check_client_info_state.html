@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CHECK_CLIENT_INFO_STATE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CHECK_CLIENT_INFO_STATE: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CHECK_CLIENT_INFO_STATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_check_loan_data.html"><div class="to">HP_GET_CHECK_LOAN_DATA</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_IS_OK</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CHECK_CLIENT_INFO_STATE(
+    C_ID D_ID,
+    CHECK_KIND D_STR_CODE)
+RETURNS (
+    RES_IS_OK D_SMALLINT)
+AS
+declare variable last_disb_datetime d_datetime;
+declare variable db_id d_integer;
+declare variable tmp_id d_integer;
+declare variable k_id d_id;
+declare variable rd_id d_integer;
+begin
+  -- Процедура проверяет, после последней выдачи займа были ли изменения данных
+  -- Например, менялись документы, или менялись персональные данные и т.д.
+  -- Возвращает RES_IS_OK:
+  -- 0 - Да, менялись
+  -- 1 - После последней выдачи данные не менялись, все ОК
+
+  -- Данная процедура также вызывается для освежения статуса из ClientState
+  -- Для обновления статуса устанавливается значение ClientState.cs_info_state = -1 и далее триггер перевычислет
+
+  res_is_ok = 1;
+
+  if (coalesce(check_kind, &#x27;&#x27;) = &#x27;&#x27;) then
+    check_kind = &#x27;full&#x27;;
+
+  db_id = f_get_db_id();
+
+  /*select rd_id
+  from refdata
+  where rd_code = &#x27;ActionGroup.Check_Loan_Data&#x27;
+  into tmp_id;*/
+
+  -- Берем время выдачи последнего займа
+  for select ks_from_k_id, ol_datetime
+      from kontstate, knclient, operlist
+      where kc_from_c_id = :c_id and
+            kc_from_k_id = ks_from_k_id and
+            kc_amount_approved &gt; 0 and
+            ks_state = 1 and
+            ks_ol_is_delete = 0 and
+            ks_from_ol_id = ol_id
+      order by kc_from_c_id desc, kc_date_disb desc, kc_from_k_id desc
+      into k_id, last_disb_datetime
+  do
+  begin
+    if (db_id &lt;&gt; 81001) then
+      break;
+
+    select rd_id
+    from hp_get_check_loan_data(:k_id)
+    into :rd_id;
+
+    -- Если займ утвержден роботом, не берем эту дату
+    if (exists(select *
+               from actionlist
+               where acl_object_kind = 9 and
+                     acl_object_id = :k_id and
+                     acl_from_rd_id = :rd_id and
+                     acl_status = 2 and
+                     acl_from_un_id in (1000000000001, 1000000000000))) then
+      last_disb_datetime = null;
+
+    if (last_disb_datetime is not null) then
+      break;
+  end
+
+  -- Если выдач не было вообще, завершаем работу
+  if (last_disb_datetime is null) then
+    res_is_ok = 0;
+
+  -- Проверка состояние верификации паспортных данных
+  if (res_is_ok = 1) then
+  begin
+    if (exists(select *
+               from clients
+               where c_id = :c_id and
+                     c_verify_status &lt;&gt; 2)) then
+      res_is_ok = 0;
+  end
+
+  -- Проверка изменения документов
+  if (res_is_ok = 1) then
+  begin
+    if (exists(select *
+               from clientdocs, passkind
+               where cds_from_c_id = :c_id and
+                     cds_from_pk_id = pk_id and
+                     pk_is_other_category = 0 and
+                     (cds_create_datetime &gt; :last_disb_datetime or
+                     cds_delete_datetime &gt; :last_disb_datetime or
+                     cds_datetime &gt; :last_disb_datetime))) then
+      res_is_ok = 0;
+  end
+
+  -- Проверка действующего основного документа
+  if (res_is_ok = 1) then
+  begin
+    if (not exists(select *
+                   from clientdocs
+                   where cds_from_c_id = :c_id and
+                         cds_is_main_doc = 1 and
+                         cds_delete_datetime is null and
+                         cds_doc_date_begin &lt;= current_date and
+                         (cds_doc_date_end &gt;= current_date or
+                         cds_doc_date_end is null))) then
+      res_is_ok = 0;
+  end
+
+  if (res_is_ok = 1) then
+  begin
+    -- Проверка объединения клиентов
+    if (exists(select *
+               from joinedclients
+               where jc_stay_c_id = :c_id and
+                     jc_datetime &gt;= :last_disb_datetime)) then
+      res_is_ok = 0;
+  end
+
+  if (res_is_ok = 1) then
+  begin
+    -- Проверка изменения ФИО, ДР и т.д.
+
+    if (exists(select *
+               from clientlog
+               where cll_from_c_id = :c_id and
+                     cll_curr_datetime &gt;= :last_disb_datetime)) then
+      res_is_ok = 0;
+  end
+
+  if (res_is_ok = 1) then
+  begin
+    -- Если договор АСП подписан после выдачи последнего займа
+    tmp_id = null;
+    for select edc_id
+        from edoc_cfg
+        where edc_code in (&#x27;asp.agreement&#x27;, &#x27;cell.application&#x27;) and
+              edc_state = 3
+        into tmp_id
+    do
+    begin
+      if (exists(select *
+                 from edoc_list
+                 where edl_from_edc_id = :tmp_id and
+                       edl_object_kind = 0 and
+                       edl_object_id = :c_id and
+                       edl_create_datetime &gt;= :last_disb_datetime)) then
+        res_is_ok = 0;
+    end
+  end
+
+  if (res_is_ok = 1) then
+  begin
+    -- Если менялся адрес клиента
+    if (exists(select *
+               from addrclient
+               where adc_from_c_id = :c_id and
+                     adc_address_type in (1, 2) and
+                     adc_datetime &gt;= :last_disb_datetime)) then
+      res_is_ok = 0;
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

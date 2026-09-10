@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_PRE_SUD_PAYED — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_PRE_SUD_PAYED: 1 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_PRE_SUD_PAYED</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PAY_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PAY_SUM</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PAY_TYPE</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PAY_CLI</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_PRE_SUD_PAYED(
+    REP_K_ID ID_TYPE)
+RETURNS (
+    PAY_DATE D_DATE,
+    PAY_SUM CURR_TYPE,
+    PAY_TYPE STR_255,
+    PAY_CLI D_STR_LONG)
+AS
+declare variable ol_id id_type;
+begin
+  for select ol_id, ol_date, pay_cli, pay_type, sum(pay_sum)
+      from (select ol_id, ol_date,
+                   c_name_fio || iif(ol_doc_client_name is not null, &#x27; через &#x27; || ol_doc_client_name, &#x27;&#x27;) as pay_cli,
+                   case ok_pay_type
+                     when 1 then &#x27;Налич.&#x27;
+                     when 2 then &#x27;Безнал&#x27;
+                     when 3 then &#x27;Внутр.&#x27;
+                   end as pay_type,
+                   (ok_os + ok_perc + ok_fine + ok_kommis) * -1 as pay_sum
+            from operkred
+            inner join operlist on ol_id = ok_from_ol_id
+            left join clients on c_id = ol_document_client
+            where ok_from_k_id = :rep_k_id and
+                  ok_ol_is_active = 1 and
+                  ok_type = 4
+            union all
+            select ol_id, ol_date,
+                   c_name_fio || iif(ol_doc_client_name is not null, &#x27; через &#x27; || ol_doc_client_name, &#x27;&#x27;) as pay_cli,
+                   null as pay_type, ox_amount_minus as pay_sum
+            from operextra
+            inner join operlist on ol_id = ox_from_ol_id
+            left join clients on c_id = ol_document_client
+            where ox_object_kind = 9 and
+                  ox_object_id = :rep_k_id and
+                  ox_ol_is_active = 1 and
+                  ox_amount_minus &lt;&gt; 0
+            union all
+            select ol_id, ol_date,
+                   c_name_fio || iif(ol_doc_client_name is not null, &#x27; через &#x27; || ol_doc_client_name, &#x27;&#x27;) as pay_cli,
+                   null as pay_type,
+                   (oko_os + oko_perc + oko_other) * -1 as pay_sum
+            from operkroff
+            inner join operlist on ol_id = oko_from_ol_id
+            left join clients on c_id = oko_from_c_id
+            where oko_from_k_id = :rep_k_id and
+                  oko_type = 4 and
+                  oko_ol_is_active = 1)
+      group by 1, 2, 3, 4
+      order by ol_date
+      into ol_id, pay_date, pay_cli, pay_type, pay_sum
+  do
+  begin
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

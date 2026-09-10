@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_PAYSYS_ONE_POLICY_OPER — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_PAYSYS_ONE_POLICY_OPER: 8 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_PAYSYS_ONE_POLICY_OPER</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">8</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_paysys_one_card_oper.html"><div class="to">HP_PAYSYS_ONE_CARD_OPER</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">8 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PSI_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OPER_MEMO</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PSIP_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PSIP_TAX_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PSIP_PERC</div><div class="ptype">DECIMAL(18,7)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PSM_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(150)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_PAYSYS_ONE_POLICY_OPER(
+    PSI_ID DECIMAL(18,0),
+    K_ID DECIMAL(18,0),
+    UN_ID DECIMAL(18,0),
+    OPER_MEMO VARCHAR(255),
+    PSIP_AMOUNT DECIMAL(18,4),
+    PSIP_TAX_AMOUNT DECIMAL(18,4),
+    PSIP_PERC DECIMAL(18,7),
+    C_ID DECIMAL(18,0))
+RETURNS (
+    PSM_ID DECIMAL(18,0),
+    RES_TEXT VARCHAR(150))
+AS
+declare variable psi_date_begin date;
+declare variable psi_date_end date;
+declare variable kol integer;
+declare variable source_kind integer;
+declare variable source_id decimal(18,0);
+declare variable str varchar(100);
+declare variable disb_date date;
+begin
+  /* Надстройка над hp_paysys_one_card_oper, с доп. действиями над полисами*/
+
+  if (k_id is not null) then
+  begin
+-- Проверка возраста клиента
+    select k_disb_date
+    from kontract
+    where k_id = :k_id
+    into disb_date;
+    if (disb_date is null) then
+    begin
+      res_text = &#x27;Дата рождения клиента не указана&#x27;;
+      suspend;
+      exit;
+    end
+    if (exists(select 1
+               from clients
+               where c_id = :c_id and
+                     c_birth_date &lt;= dateadd(year, -70, :disb_date))) then
+    begin
+      res_text = &#x27;Возраст клиента должен быть менее 70 лет&#x27;;
+      suspend;
+      exit;
+    end
+
+-- Проверка на параллельные кредиты
+    if (exists(select 1
+               from kontract, product
+               where k_id = :k_id and
+                     k_from_pr_id = pr_id and
+                     pr_product_kind = 2)) then
+    begin
+      res_text = &#x27;По льготным продуктам страхование не допускается&#x27;;
+      suspend;
+      exit;
+    end
+  end
+
+  kol = 0;
+  for select psl_object_kind, psl_object_id
+      from paysys_list
+      where psl_from_psi_id = :psi_id and
+            psl_is_delete = 0
+      group by psl_object_kind, psl_object_id
+      having sum(psl_sign) &gt; 0
+      into :source_kind, source_id
+  do
+    kol = kol + 1;
+  if (kol = 1) then -- Проверяем только когда 1, остальные проверки в hp_paysys_one_card_oper
+  begin
+    if (source_kind = 3 and
+        k_id is not null) then
+    begin
+      str = &#x27;&#x27;;
+      select k_kontract_no
+      from kontract
+      where k_id = :source_id
+      into :str;
+      res_text = &#x27;Бланк уже закреплен за дог. № &#x27; || str;
+      str = &#x27;&#x27;;
+      select c_name_fio
+      from paysys_item_props, clients
+      where psip_from_c_id = c_id and
+            psip_from_psi_id = :psi_id
+      into :str;
+      res_text = res_text || &#x27;, кл. &#x27; || str;
+      suspend;
+      exit;
+    end
+    /*Бланк не должен висеть на контракте, передача должна быть только на контракт*/
+  end
+
+  select psm_id, res_text
+  from hp_paysys_one_card_oper(:psi_id, 3, :k_id, :un_id, :oper_memo)
+  into :psm_id, :res_text;
+  /*
+    При аннулировании обновляется дата окончания в paysys_item (берем текущую)
+    При выдаче обновляются даты начала и окончания (из контракта)
+    добавляются клиент, сумма, налог, процент в paysys_item_props
+  */
+  if (res_text = &#x27;&#x27;) then
+  begin
+    if (k_id is null) then -- Аннулирование
+    begin
+-- Обновляем дату окончания полиса
+      update paysys_item
+      set psi_date_end = current_date
+      where psi_id = :psi_id;
+    end
+    else -- Выдача полиса
+    begin
+-- Обновляем дату начала, окончания полиса, берем с контракта
+      select k_disb_date, k_kredline_end
+      from kontract
+      where k_id = :k_id
+      into :psi_date_begin, :psi_date_end;
+
+      update paysys_item
+      set psi_date_end = :psi_date_end,
+          psi_date_begin = :psi_date_begin
+      where psi_id = :psi_id;
+
+-- Добавляем запись с доп характеристиками полиса в paysys_item_props
+      update or insert into paysys_item_props (psip_from_psi_id, psip_amount, psip_tax_amount, psip_perc,
+                                               psip_from_c_id)
+      values (:psi_id, :psip_amount, :psip_tax_amount, :psip_perc, :c_id);
+    end
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

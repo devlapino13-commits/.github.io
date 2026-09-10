@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_OVERPAY_PREP — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_OVERPAY_PREP: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_OVERPAY_PREP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_make_zad_list.html"><div class="to">AAREP_MAKE_ZAD_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_OVERPAY_PREP
+AS
+declare variable rep_date d_date;
+declare variable active_k_id d_id;
+declare variable overpay_k_id d_id;
+declare variable c_id d_id;
+declare variable opm_id d_id;
+declare variable opl_id d_id;
+declare variable debt_sum d_currency;
+declare variable overpay_sum d_currency;
+declare variable overpay_sum_all d_currency;
+declare variable opl_res_sum d_currency;
+declare variable storno_summ d_currency;
+declare variable opm_status d_smallint;
+declare variable opm_create_datetime d_datetime;
+declare variable overpay_date d_date;
+declare variable sab_id d_integer;
+declare variable repay_ol_id_main d_id;
+declare variable opl_overdue_days d_integer;
+declare variable opl_no d_smallint;
+declare variable min_days d_smallint;
+declare variable db_id d_integer;
+begin
+  rep_date = current_date;
+  min_days = 7;    -- менять так же в HP_OVERPAY_CALC
+  db_id = f_get_db_id();
+
+  if (db_id = 81001) then
+  begin
+      select sab_id
+      from sys_accbalance
+      where sab_full_code = &#x27;Микрозаймы.Погашено.Переплата&#x27;
+      into :sab_id;
+  end
+
+  for select kc1.kc_from_c_id
+  from oksummary, knclient kc1, knclient kc2, operkred
+  where kc1.kc_from_k_id = oks_from_k_id
+    and :rep_date between oks_date_begin and oks_date_end
+    and oks_close_state = 0
+    and kc2.kc_from_c_id = kc1.kc_from_c_id
+    and ok_from_k_id = kc2.kc_from_k_id
+    and ok_ol_is_active = 1
+    and ok_type = 9
+    and (ok_os + ok_perc &gt; 0 or ok_ol_date &lt;= :rep_date - :min_days)
+  group by 1
+  having sum(ok_os + ok_perc) &lt; -1000
+  into c_id
+  do
+  begin
+    overpay_sum_all = 0;
+    opl_no = 0;
+    opm_id = null;
+
+    if (db_id = 81001) then
+    begin
+        if (f_edoc_status(&#x27;asp.agreement&#x27;, c_id, rep_date) &lt;&gt; &#x27;signed&#x27;) then
+          continue;
+    end
+
+    select opm_id, opm_status, opm_create_datetime
+    from overpay_main
+    where opm_from_c_id = :c_id
+      and opm_status in (-3,-1,0,1,2,3)
+    order by opm_create_datetime desc   -- берем последний
+    rows 1
+    into opm_id, opm_status, opm_create_datetime;
+
+    if (opm_id is not null) then
+    begin
+      if (opm_status = -1) then  --RFCRU-5037
+        continue;
+
+      if (opm_status in (1,2,3) and opm_create_datetime &gt; rep_date) then
+        continue;
+
+      if (opm_status in (0, -3)) then
+      begin
+        delete from overpay_loans
+        where opl_from_opm_id = :opm_id;
+
+        update overpay_main
+        set opm_status = 0,
+            opm_create_datetime = current_timestamp
+        where opm_id = :opm_id;
+      end
+      else
+        opm_id = null;
+    end
+
+    if (opm_id is null) then
+      insert into overpay_main (opm_from_c_id)
+      values (:c_id)
+      returning opm_id
+      into :opm_id;
+
+    -- найдем контракты по которым есть непогашенная переплата
+    for select ok_from_k_id
+    from knclient, operkred
+    where kc_from_c_id = :c_id
+      and ok_from_k_id = kc_from_k_id
+      and ok_ol_is_active = 1
+      and ok_type = 9
+      and (ok_os + ok_perc &gt; 0 or ok_ol_date &lt;= :rep_date - :min_days)
+    group by 1
+    having -sum(ok_os + ok_perc) &gt; 0
+    order by min(ok_ol_date)
+    into overpay_k_id
+    do
+    begin
+      -- найдем все переплаты по контракту по аналитике
+      for select ok_from_ol_id, ok_ol_date, -sum(ok_os + ok_perc)
+      from operkred
+      where ok_from_k_id = :overpay_k_id
+        and ok_ol_is_active = 1
+        and ok_type = 9
+        and ok_ol_date &lt;= :rep_date - :min_days
+      group by 1,2
+      having -sum(ok_os + ok_perc) &gt; 0
+      order by ok_ol_date
+      into repay_ol_id_main, overpay_date, overpay_sum
+      do
+      begin
+        storno_summ = 0;
+
+        if (db_id = 81001) then
+        begin
+          -- Смотрим сторнирования
+          select coalesce(sum(ok_os + ok_perc), 0)
+          from operkred, reversallist
+          where rl_new_ol_id = ok_from_ol_id
+            and ok_from_k_id = :overpay_k_id
+            and ok_ol_is_active = 1
+            and ok_type = 9
+            and rl_old_ol_id = :repay_ol_id_main
+          into storno_summ;
+        end
+
+        overpay_sum = overpay_sum - storno_summ;
+
+        if (overpay_sum &lt;= 0) then -- Сумма уже сторнированна полностью
+          continue;
+  
+        if (db_id = 81001) then
+        begin
+            -- проверим что мы можем провести (можем найти счет с которого погашать)
+            select minvalue(:overpay_sum, coalesce(sum(kob_summa), 0))
+            from knclient, kn_operbook, ref_account kt, acc_list
+            where kob_from_kc_id = kc_id
+              and kob_acc_kt = kt.acc_id
+              and al_from_acc_id = kob_acc_dt
+              and kt.acc_from_sab_id = :sab_id
+              and kc_from_k_id = :overpay_k_id
+              and kob_ol_is_active = 1
+              and kob_ol_date = :overpay_date
+            into overpay_sum;
+        end
+
+        if (overpay_sum &lt;= 0) then -- Если не можем переначислить, то дальше
+          continue;
+
+        if (overpay_sum &gt; 0) then
+        begin
+          opl_no = opl_no + 1;
+
+          insert into overpay_loans (opl_from_opm_id, opl_from_k_id, opl_type, opl_sum, opl_date, opl_no)
+          values (:opm_id, :overpay_k_id, 1, :overpay_sum, :overpay_date, :opl_no);
+
+          overpay_sum_all = overpay_sum_all + overpay_sum;
+        end
+      end
+    end
+
+    if (coalesce(overpay_sum_all, 0) &lt; 1000) then
+    begin
+      delete from overpay_loans
+      where opl_from_opm_id = :opm_id;
+
+      delete from overpay_main
+      where opm_id = :opm_id;
+
+      continue;
+    end 
+
+    if (not exists (select 1
+                    from overpay_loans
+                    where opl_from_opm_id = :opm_id
+                      and opl_type = 1))
+    then
+    begin
+      delete from overpay_main
+      where opm_id = :opm_id;
+
+      continue;
+    end 
+
+    -- найдем все активные
+    for select ks_from_k_id
+    from kontstate, knclient
+    where kc_from_k_id = ks_from_k_id
+      and kc_from_c_id = :c_id
+      and ks_ol_is_delete = 0
+      and ks_state = 1
+      and current_date between ks_date_begin + 1 and ks_date_end   -- сегодняшние выданные не берем
+    into active_k_id
+    do
+    begin
+      select sum(zad_os) + sum(sh_calc_perc) + sum(sh_calc_fine),
+            coalesce(current_date - min(iif(zad_os + sh_calc_perc &gt; 0, sh_date, current_date)), 0)
+      from aarep_make_zad_list(:active_k_id, :rep_date, 1)
+      into debt_sum, opl_overdue_days;
+
+      if (opl_overdue_days &lt; 0) then
+        opl_overdue_days = 0;
+
+      insert into overpay_loans (opl_from_opm_id, opl_from_k_id, opl_type, opl_sum, opl_res_sum, opl_overdue_days)
+      values (:opm_id, :active_k_id, 2, :debt_sum, 0, :opl_overdue_days);
+    end
+
+    opl_no = 0;
+
+    -- сначала надо закрыть просрочки RFCRU-4676
+    for select opl_id, opl_sum
+    from overpay_loans
+    where opl_from_opm_id = :opm_id
+      and opl_type = 2
+      and opl_res_sum = 0
+      and opl_overdue_days &gt; 0
+    order by opl_overdue_days desc
+    into opl_id, debt_sum
+    do
+    begin
+      opl_no = opl_no + 1;
+      opl_res_sum = minvalue(overpay_sum_all, debt_sum); --сумма к погашению
+      overpay_sum_all = overpay_sum_all - opl_res_sum;
+  
+      update overpay_loans
+      set opl_res_sum = :opl_res_sum,
+          opl_no = :opl_no
+      where opl_id = :opl_id;
+
+      if (overpay_sum_all &lt;= 0) then
+        break;
+    end
+
+    if (overpay_sum_all &lt;= 0) then
+      continue;
+
+    -- ищем активный займ, который переплата сможет закрыть полностью
+    for select opl_id, opl_sum
+    from overpay_loans
+    where opl_from_opm_id = :opm_id
+      and opl_type = 2
+    into opl_id, debt_sum
+    do
+    begin
+      if (debt_sum &gt; overpay_sum_all) then
+        continue;
+
+      opl_no = opl_no + 1;
+
+      update overpay_loans
+      set opl_res_sum = :debt_sum,
+          opl_no = :opl_no
+      where opl_id = :opl_id;
+
+      overpay_sum_all = overpay_sum_all - debt_sum;
+    end
+
+    if (overpay_sum_all &lt;= 0) then
+      continue;
+
+    -- т.к. не осталось активных займов, которые полностью закроются, выберем из оставшихся первый выданный
+    opl_id = null;
+
+    select opl_id, opl_sum
+    from overpay_loans
+    where opl_from_opm_id = :opm_id
+      and opl_type = 2
+      and opl_res_sum = 0
+    order by opl_id
+    rows 1
+    into opl_id, debt_sum;
+
+    if (opl_id is not null) then
+    begin
+      opl_no = opl_no + 1;
+      opl_res_sum = minvalue(overpay_sum_all, debt_sum); --сумма к погашению
+      overpay_sum_all = overpay_sum_all - opl_res_sum;
+  
+      update overpay_loans
+      set opl_res_sum = :opl_res_sum,
+          opl_no = :opl_no
+      where opl_id = :opl_id;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

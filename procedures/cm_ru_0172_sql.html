@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0172_SQL — процедура — схема БД</title>
+<meta name="description" content="Проверяет балл и сумму по продуктам НК и НК+&quot;">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0172_SQL</code></h1>
+<p class="desc">Проверяет балл и сумму по продуктам НК и НК+&quot;</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_max_amount_allowed.html"><div class="to">HP_MAX_AMOUNT_ALLOWED</div></a><a class="ref-card" href="reliable_client_amount_interval.html"><div class="to">RELIABLE_CLIENT_AMOUNT_INTERVAL</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0172_SQL(
+    MA_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable kc_amount curr_type;
+declare variable kf_disb_date d_date;
+declare variable kf_client_pass_no varchar(30);
+declare variable c_id id_type;
+declare variable pr_id integer;
+declare variable amount_min d_integer;
+declare variable amount_max d_integer;
+declare variable point_cl d_integer;
+declare variable is_refund d_smallint;
+declare variable active_loan_balance d_currency;
+declare variable pr_code d_str_100;
+declare variable final_pdn d_currency;
+declare variable kc_id d_id;
+declare variable mds d_currency;
+declare variable perc_pdn d_currency;
+declare variable refund_active_loan_balance d_currency;
+begin
+  for select c_id, c_name_fio, c_pass_no, ma_date_oper, mac_amount, ma_from_pr_id, ma_refund, pr_code
+      from miniapp
+      inner join product on pr_id = ma_from_pr_id and
+            (pr_code containing &#x27;.reliable_client.&#x27; or pr_code containing &#x27;.reliable_client_plus.&#x27; or pr_code containing &#x27;.loyal.&#x27; or pr_code containing &#x27;.shans.&#x27; or pr_code containing &#x27;.express.&#x27; or pr_code containing &#x27;.universal.&#x27; or pr_code containing &#x27;.privilege.&#x27; or pr_code containing &#x27;.privilege_plus.&#x27; or pr_code containing &#x27;.oivo.&#x27; or pr_code containing &#x27;.refinance.&#x27; or pr_code containing &#x27;.refinance_oivo.&#x27;)
+      inner join miniappclient on mac_from_ma_id = ma_id and
+            mac_amount &gt; 0
+      inner join clients on c_id = mac_from_c_id
+      where ma_id = :ma_id and
+            ma_date_end = &#x27;31.12.9999&#x27;
+      into :c_id, :res_info_text, :kf_client_pass_no, :kf_disb_date, :kc_amount, :pr_id, is_refund, pr_code
+  do
+  begin
+    if (kf_disb_date &lt; cast(&#x27;01.11.2020&#x27; as date)) then
+      exit;
+
+    point_cl = f_point_get(11, ma_id,c_id, kf_disb_date);
+
+    if (not(/*pr_code containing &#x27;.loyal.&#x27; or */pr_code containing &#x27;.shans.&#x27; or pr_code containing &#x27;.express.&#x27;)) then
+    begin
+      select amount_min, amount_max, point_cl
+      from reliable_client_amount_interval(:c_id, :pr_id, :kf_disb_date)
+      into :amount_min, :amount_max, :point_cl;
+      if (kc_amount &gt; amount_max) then
+      begin
+        res_error_text = &#x27;У клиента &#x27; || point_cl || &#x27; балла, допустимая минимальная сумма &#x27; || amount_min || &#x27;, максимальная &#x27; || amount_max || &#x27; рублей&#x27;;
+        res_error_is_critical = 1;
+        suspend;
+      end
+    end
+
+    if (kf_disb_date &lt; cast(&#x27;26.06.2023&#x27; as date)) then
+    begin
+      if (pr_code containing &#x27;.reliable_client.&#x27;) then
+      begin
+        amount_max = case
+                       when point_cl &lt;= 2 then 35000
+                       when point_cl &lt;= 5 then 40000
+                       when point_cl &lt;= 8 then 50000
+                       when point_cl &lt;= 11 then 60000
+                       when point_cl &lt;= 14 then 80000
+                       when point_cl &lt;= 17 then 100000
+                       when point_cl &lt;= 23 then 120000
+                       else 150000
+                     end;
+      end
+      else
+      if (pr_code containing &#x27;.reliable_client_plus.&#x27;) then
+      begin
+        amount_max = case
+                       when point_cl &lt;= 2 then 55000
+                       when point_cl &lt;= 5 then 60000
+                       when point_cl &lt;= 8 then 70000
+                       when point_cl &lt;= 11 then 80000
+                       when point_cl &lt;= 17 then 100000
+                       when point_cl &lt;= 23 then 120000
+                       else 150000
+                     end;
+      end
+    end
+    else
+    if (kf_disb_date &lt; cast(&#x27;04.07.2024&#x27; as date)) then
+    begin
+      if (pr_code containing &#x27;.reliable_client.&#x27;) then
+      begin
+        amount_max = case
+                       when point_cl &lt;= 2 then 55000
+                       when point_cl &lt;= 5 then 65000
+                       when point_cl &lt;= 8 then 75000
+                       when point_cl &lt;= 11 then 85000
+                       when point_cl &lt;= 14 then 100000
+                       when point_cl &lt;= 17 then 130000
+                       when point_cl &lt;= 23 then 150000
+                       else 200000
+                     end;
+      end
+      else
+      if (pr_code containing &#x27;.reliable_client_plus.&#x27;) then
+      begin
+        amount_max = case
+                       when point_cl &lt;= 2 then 75000
+                       when point_cl &lt;= 5 then 80000
+                       when point_cl &lt;= 8 then 90000
+                       when point_cl &lt;= 11 then 100000
+                       when point_cl &lt;= 17 then 130000
+                       when point_cl &lt;= 23 then 150000
+                       else 200000
+                     end;
+      end
+    end
+    else
+    begin
+      if (pr_code containing &#x27;.reliable_client.&#x27; or pr_code containing &#x27;.loyal.&#x27; or pr_code containing &#x27;.shans.&#x27; or pr_code containing &#x27;.express.&#x27; or pr_code containing &#x27;.universal.&#x27; or pr_code containing &#x27;.privilege.&#x27; or pr_code containing &#x27;.oivo.&#x27;) then
+      begin
+        final_pdn = 0;
+        /* --   на стадии заявки ПДН не проверяем, коммент от Ю. Каштановой, задача 1900
+            if (check_kind containing &#x27;.create_loan.&#x27; or
+            check_kind containing &#x27;.save_application.&#x27;) then
+            begin
+              select coalesce(kc_pdn_koef, 0)
+              from knclient_pdn
+              where kc_from_c_id = :c_id
+              order by kc_id desc
+              rows 1
+              into :final_pdn;
+            end
+            final_pdn = 0;  -- временно, Улан потом переделает.
+            */
+        perc_pdn = 80;
+        if (pr_code containing &#x27;.privilege.&#x27;) then
+          perc_pdn = 50;
+
+        if (kf_disb_date &lt; cast(&#x27;15.08.2024&#x27; as date)) then
+        begin
+          if (final_pdn &lt; perc_pdn) then
+          begin
+            amount_max = case
+                           when point_cl &lt;= 2 then 75000
+                           when point_cl &lt;= 5 then 90000
+                           when point_cl &lt;= 8 then 100000
+                           when point_cl &lt;= 11 then 120000
+                           when point_cl &lt;= 17 then 150000
+                           when point_cl &lt;= 23 then 200000
+                           else 200000
+                         end;
+          end
+          else
+          begin
+            amount_max = case
+                           when point_cl &lt;= 11 then 75000
+                           when point_cl &lt;= 17 then 90000
+                           when point_cl &lt;= 23 then 100000
+                           else iif(kf_disb_date &lt; &#x27;17.07.2024&#x27;, 130000, 200000)
+                         end;
+          end
+        end
+        else
+        if (kf_disb_date &lt; cast(&#x27;10.07.2025&#x27; as date)) then
+        begin
+          if (final_pdn &lt; perc_pdn) then
+          begin
+            amount_max = case
+                           when point_cl &lt;= 3 then 80000
+                           when point_cl &lt;= 6 then 90000
+                           when point_cl &lt;= 9 then 110000
+                           when point_cl &lt;= 12 then 120000
+                           when point_cl &lt;= 18 then 150000
+                           else 200000
+                         end;
+          end
+          else
+          begin
+            amount_max = case
+                           when point_cl &lt;= 6 then 55000
+                           when point_cl &lt;= 9 then 75000
+                           when point_cl &lt;= 18 then 85000
+                           else 100000
+                         end;
+          end
+        end
+        if (kf_disb_date &lt; cast(&#x27;10.02.2026&#x27; as date)) then
+        begin
+          amount_max = case
+                         when point_cl &lt;= 9 then 100000
+                         when point_cl &lt;= 15 then 150000
+                         when point_cl &lt;= 35 then 250000
+                         when point_cl &lt;= 45 then 300000
+                         else 400000
+                       end;
+        end
+        else   --RFCRU-4949
+        begin
+          amount_max = case
+                         when point_cl &lt;= 6 then 100000
+                         when point_cl &lt;= 11 then 150000
+                         when point_cl &lt;= 17 then 200000
+                         when point_cl &lt;= 24 then 250000
+                         when point_cl &lt;= 35 then 300000
+                         when point_cl &lt;= 45 then 350000
+                         else 450000
+                       end;
+        end
+        if (pr_code containing &#x27;.privilege.&#x27;) then
+          amount_max = amount_max + 100000;
+      end
+      else
+      if (pr_code containing &#x27;.reliable_client_plus.&#x27;) then
+      begin
+        amount_max = case
+                       when point_cl &lt;= 2 then 85000
+                       when point_cl &lt;= 5 then 100000
+                       when point_cl &lt;= 11 then 120000
+                       when point_cl &lt;= 17 then 150000
+                       else 200000
+                     end;
+      end
+    end
+
+    select mds
+    from hp_max_amount_allowed(11, :ma_id, :amount_max)
+    into mds;
+
+
+    active_loan_balance = 0;
+    if (is_refund = 0) then
+    begin
+      select coalesce(sum(oks_balance), 0)
+      from oksummary, knclient
+      where kc_from_c_id = :c_id and
+            kc_amount_approved &gt; 0 and
+            oks_from_k_id = kc_from_k_id and
+            :kf_disb_date between oks_date_begin and oks_date_end and
+            oks_close_state = 0
+      into active_loan_balance;
+    end
+    else
+    begin
+      select sum(oks_balance)                               -- RFCRU-3486
+      from oksummary, knclient, kontract, product
+      where kc_from_c_id = :c_id and
+            kc_amount_approved &gt; 0 and
+            oks_from_k_id = kc_from_k_id and
+            :kf_disb_date between oks_date_begin and oks_date_end and
+            oks_close_state = 0 and
+            oks_from_k_id = k_id and
+            k_from_pr_id = pr_id
+      into active_loan_balance;
+
+      select  coalesce(sum(oks_balance), 0)                  -- RFCRU-3486
+      from oksummary, knclient kc
+      inner join kontrefinance kr on kr.kr_from_k_id = kc.kc_from_k_id
+      where kc_from_c_id = :c_id and
+            kc_amount_approved &gt; 0 and
+            oks_from_k_id = kc_from_k_id and
+            current_date between oks_date_begin and oks_date_end and
+            oks_close_state = 0 and
+            kr.kr_from_ma_id = :ma_id and
+            kr.kr_from_k_id = kc_from_k_id
+      into refund_active_loan_balance;
+    end
+
+    refund_active_loan_balance = coalesce(refund_active_loan_balance, 0);
+
+    /*if ((amount_max &lt; active_loan_balance + kc_amount) and
+        is_refund = 1) then
+    begin
+      if ((pr_code containing &#x27;.reliable_client.&#x27; or pr_code containing &#x27;.loyal.&#x27; or pr_code containing &#x27;.shans.&#x27;) and
+          1 &lt;&gt; 1) then
+      begin
+        res_error_text = f_format(&#x27;Превышена макс. допустимая сумма, тек. баланс: %1, балл: %2, ПДН: %3&#x27;, f_numtostr(active_loan_balance, 0), point_cl, f_numtostr(final_pdn, 2));
+      end
+      else
+      begin
+        res_error_text = f_format(&#x27;Превышена макс. допустимая сумма, тек. баланс: %1, балл: %2.&#x27;, f_numtostr(active_loan_balance, 0), point_cl);
+      end
+      res_error_is_critical = 2;
+      suspend;
+    end */
+
+    if (current_date &lt; cast(&#x27;23.01.2025&#x27; as date) and
+        (amount_max &lt; active_loan_balance + kc_amount)) then
+    begin
+      res_error_text = f_format(&#x27;Превышена макс. допустимая сумма, тек. баланс: %1, балл: %2.&#x27;, f_numtostr(active_loan_balance, 0), point_cl);
+      res_error_is_critical = 2;
+      suspend;
+    end
+    if (current_date &gt;= cast(&#x27;23.01.2025&#x27; as date) and
+        (mds &lt; (kc_amount - refund_active_loan_balance))) then
+    begin
+      res_error_text = f_format(&#x27;Превышена макс. допустимая сумма, тек. баланс: %1, балл: %2.&#x27;, f_numtostr(active_loan_balance, 0), point_cl);
+      res_error_is_critical = 2;
+      suspend;
+    end
+
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

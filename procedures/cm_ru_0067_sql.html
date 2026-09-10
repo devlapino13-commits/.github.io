@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0067_SQL — процедура — схема БД</title>
+<meta name="description" content="Ограничения по суммам микрозаймов, вступает в силу от 01.07.2016">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0067_SQL</code></h1>
+<p class="desc">Ограничения по суммам микрозаймов, вступает в силу от 01.07.2016</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0067_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare kc_amount curr_type;
+declare kf_disb_date d_date;
+declare variable kc_from_c_id id_type;
+declare variable re_k_id id_type;
+declare variable re_disb_date date;
+declare variable re_kredline_end date;
+declare variable par_re_disb_date date;
+declare variable kc_circle integer;
+declare variable cl_par_max_delinq_day integer;
+declare variable cl_par_sum_delinq_day integer;
+declare variable max_delinq_day integer;
+declare variable sum_delinq_day integer;
+begin
+  for select kc_from_c_id, kc_amount_approved, kc_circle, kc.kc_date_disb
+      from knclient kc, kontract, product
+      where kc_from_k_id = :k_id
+      and kc_amount_approved &gt; 0
+      --and kc_date_disb &gt;= &#x27;01.07.16&#x27;
+      and kc_from_k_id = k_id
+      and k_from_pr_id = pr_id
+      and pr_code not containing &#x27;.PATENT.&#x27;
+  into kc_from_c_id, kc_amount, kc_circle, kf_disb_date
+  do
+  begin  
+    res_info_text = &#x27;&#x27;;
+    select c_name_fio
+    from clients
+    where c_id = :kc_from_c_id
+    into res_info_text;
+    if (kc_circle &lt;=1 and kc_amount &gt; 25000) then
+    begin
+      res_error_text = &#x27;Клиент новый и не может получить более 25тыс.руб.&#x27;;
+      res_error_is_critical = 1;
+      suspend;
+    end else
+    begin              
+      --проверяется предыдущий цикл клиента на просрочку
+      re_k_id = null;
+      select kc_from_k_id,
+             ks_date_begin,
+             k_kredline_end
+      from knclient, kontstate, kontract, product
+      where kc_from_c_id = :kc_from_c_id
+      and kc_amount_approved &gt; 0
+      and kc_from_k_id = ks_from_k_id
+      and ks_ol_is_delete = 0
+      and ks_state = 1
+      and ks_from_k_id &lt;&gt; :k_id
+      and ks_date_begin &lt; :kf_disb_date
+      and ks_from_k_id = k_id
+      and k_from_pr_id = pr_id
+      and pr_code not containing &#x27;.PAR.&#x27;
+      order by ks_date_begin desc
+      rows 1
+      into re_k_id,
+           re_disb_date,
+           re_kredline_end;
+      if (re_k_id is null or re_kredline_end-re_disb_date &lt; 87) then re_k_id = 0;
+        
+      if (re_k_id &lt;&gt; 0) then
+      begin
+        --вычисляется макс кол-во просроченных дней
+        max_delinq_day = 0;
+        sum_delinq_day = 0;
+        select max(ok_ol_date - ok_sh_date), sum(ok_ol_date - ok_sh_date) from operkred
+        where ok_ol_is_active = 1
+        and ok_from_k_id = :re_k_id
+        and ok_type in (4,5,9)
+        and ok_os + ok_perc &lt; -100
+        and ok_ol_date &gt; ok_sh_date
+        into max_delinq_day, sum_delinq_day;
+        
+        if (max_delinq_day is null) then max_delinq_day = 0;   
+        if (sum_delinq_day is null) then max_delinq_day = 0;
+        
+        --проверяется предыдущий параллельный цикл клиента на просрочку
+        re_k_id = null;
+        select kc_from_k_id, ks_date_begin
+        from knclient, kontstate, kontract, product pr
+        where kc_from_c_id = :kc_from_c_id
+        and kc_amount_approved &gt; 0
+        and kc_from_k_id = ks_from_k_id
+        and ks_ol_is_delete = 0
+        and ks_state = 1
+        and ks_from_k_id &lt;&gt; :k_id
+        and ks_date_begin &lt; :kf_disb_date
+        and ks_date_begin &gt; :re_disb_date
+        and ks_from_k_id = k_id
+        and k_from_pr_id = pr_id
+        and pr.pr_code containing &#x27;.PAR.&#x27;
+        order by ks_date_begin desc
+        rows 1
+        into re_k_id, par_re_disb_date;
+        
+        --вычисляется макс кол-во просроченных дней
+        cl_par_max_delinq_day = 0;
+        cl_par_sum_delinq_day = 0;
+        select max(ok_ol_date - ok_sh_date),
+               sum(ok_ol_date - ok_sh_date)
+        from operkred
+        where ok_ol_is_active = 1
+        and ok_from_k_id = :re_k_id
+        and ok_type in (4,5,9)
+        and ok_os + ok_perc &lt; -100
+        and ok_ol_date &gt; ok_sh_date
+        into cl_par_max_delinq_day, cl_par_sum_delinq_day;
+        
+        if (cl_par_max_delinq_day is null) then cl_par_max_delinq_day = 0;
+        if (cl_par_sum_delinq_day is null) then cl_par_sum_delinq_day = 0;
+        
+        if (max_delinq_day &lt; cl_par_max_delinq_day and re_disb_date &lt;= par_re_disb_date) then
+          max_delinq_day = cl_par_max_delinq_day;
+        if (sum_delinq_day &lt; cl_par_sum_delinq_day and re_disb_date &lt;= par_re_disb_date) then
+          sum_delinq_day = cl_par_sum_delinq_day;
+        
+        if (max_delinq_day &gt; 7) then
+        begin
+          res_error_text = &#x27;Клиент допустил просрочку более 7 дней и не может получить более 25тыс.руб.&#x27;;
+          res_error_is_critical = 1;
+          suspend;
+        end
+        
+        if (:kc_amount between 40001 and 60000) then
+        begin
+          if (sum_delinq_day &gt; 14) then
+          begin
+            res_error_text = &#x27;Клиент допустил просрочку более 14-дней суммарно и не может получить более 25тыс.руб.&#x27;;
+            res_error_is_critical = 1;
+            suspend;
+          end 
+          if (not exists (select *
+                          from knclient, kontstate
+                          where kc_from_c_id = :kc_from_c_id
+                          and kc_amount_approved &gt;= 40000
+                          and kc_from_k_id = ks_from_k_id
+                          and ks_ol_is_delete = 0
+                          and ks_state = 1
+                          and ks_from_k_id &lt;&gt; :k_id
+                          and ks_date_begin &lt; :kf_disb_date)) then
+          begin
+            res_error_text = &#x27;Клиент ранее не получал больше 40000р., и не может получить более 40000 руб.&#x27;;
+            res_error_is_critical = 1;
+            suspend;
+          end
+          if (exists (with table1 as (
+                      select k_kredline_end-ks_date_begin as close_days
+                      from knclient, kontstate, kontract, product
+                      where kc_from_c_id = :kc_from_c_id
+                      and kc_amount_approved &gt; 0
+                      and kc_from_k_id = ks_from_k_id
+                      and ks_ol_is_delete = 0
+                      and ks_state = 1
+                      and ks_from_k_id &lt;&gt; :k_id
+                      and ks_date_begin &lt; :kf_disb_date
+                      and ks_from_k_id = k_id
+                      and k_from_pr_id = pr_id
+                      and pr_code not containing &#x27;.PAR.&#x27;
+                      order by ks_date_begin desc
+                      rows 3)
+                      select min(close_days)
+                      from table1
+                      having min(close_days) &lt; 87)) then
+          begin
+            res_error_text = &#x27;Клиент закрыл досрочно в одном из 3-х поледних займах, и не может получить более 40тыс.руб.&#x27;;
+            res_error_is_critical = 1;
+            suspend;
+          end
+        end
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

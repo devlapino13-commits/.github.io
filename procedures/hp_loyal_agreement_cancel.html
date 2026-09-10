@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_LOYAL_AGREEMENT_CANCEL — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_LOYAL_AGREEMENT_CANCEL: 5 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_LOYAL_AGREEMENT_CANCEL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">AG_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CANCEL_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AGT_FROM_RD_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AGT_MEMO</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_IS_ERROR</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_LOYAL_AGREEMENT_CANCEL(
+    AG_ID D_INTEGER,
+    CANCEL_DATE D_DATE,
+    UN_ID D_ID,
+    AGT_FROM_RD_ID D_ID,
+    AGT_MEMO D_STR_255)
+RETURNS (
+    RES_TEXT D_STR_255,
+    RES_IS_ERROR D_SMALLINT)
+AS
+declare variable reg_id d_integer;
+declare variable db_id d_integer;
+declare variable ol_id d_id;
+declare variable obj_kind d_integer;
+declare variable obj_id d_id;
+declare variable rd_id d_integer;
+declare variable ogr_balance d_currency;
+declare variable edc_id d_integer;
+begin
+  -- Процедура расторжения участия в программе лояльности
+  -- Списывает накопленные баллы если имеются
+
+  res_text = &#x27;&#x27;;
+  res_is_error = 0;
+
+  rd_id = f_get_rd_id(&#x27;AgreementKinds.loyal_agreement&#x27;);
+  if (rd_id is null) then
+    exit;
+
+  if (not exists(select *
+                 from agreements
+                 where ag_id = :ag_id and
+                       ag_from_rd_id = :rd_id and
+                       ag_status &lt;&gt; -1 and
+                       :cancel_date between ag_date_begin and coalesce(ag_date_end, :cancel_date))) then
+  begin
+    res_is_error = 1;
+    res_text = &#x27;Нет действующей программы на указанную дату&#x27;;
+    suspend;
+    exit;
+  end
+
+  db_id = f_get_db_id();
+
+  reg_id = f_hq_id(db_id);
+
+  ogr_balance = 0;
+
+  select ag_object_kind, ag_object_id
+  from agreements
+  where ag_id = :ag_id
+  into obj_kind, obj_id;
+
+  select edc_id
+  from edoc_cfg
+  where edc_code = &#x27;loyal.agreement&#x27;
+  into edc_id;
+
+  update edoc_list
+  set edl_date_end = :cancel_date
+  where edl_from_edc_id = :edc_id and
+        edl_object_kind = :obj_kind and
+        edl_object_id = :obj_id and
+        edl_status &lt;&gt; -1 and
+        edl_date_end is null;
+
+  select sum(ogr_amount * ogr_sign + ogr_tax_fl * ogr_sign)
+  from operagr
+  where ogr_from_ag_id = :ag_id and
+        ogr_ol_is_active = 1
+  into ogr_balance;
+  if (ogr_balance is null) then
+    ogr_balance = 0;
+
+ -- if (ogr_balance &gt; 0) then
+  begin
+
+    update agreements
+    set ag_date_end = :cancel_date
+    where ag_id = :ag_id;
+
+    insert into operlist (ol_from_reg_id, ol_oper_type, ol_date, ol_doc_kind, ol_document_client, ol_memo, ol_user_id,
+                          ol_oper_subtype)
+    values (:reg_id, 2, :cancel_date, 9, :obj_id,
+            f_format(&#x27;Расторжение программы лояльности № %1&#x27;, :ag_id), :un_id, 38)
+    returning ol_id
+    into :ol_id;
+
+    insert into operagr (ogr_from_ol_id, ogr_from_ag_id, ogr_from_rd_id, ogr_sign, ogr_amount, ogr_tax_fl, ogr_ol_date)
+    values (:ol_id, :ag_id, :rd_id, -1, :ogr_balance, 0, :cancel_date);
+
+    insert into agreements_termination (agt_from_ag_id, agt_from_rd_id, agt_memo)
+    values (:ag_id, :agt_from_rd_id, :agt_memo);
+  end
+
+ -- if (ogr_balance &gt; 0) then
+    res_text = f_format(&#x27;Программа лояльности расторгнут, баллы списаны: %1&#x27;, ogr_balance);
+ -- else
+  --  res_text = &#x27;Программа лояльности расторгнут&#x27;;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

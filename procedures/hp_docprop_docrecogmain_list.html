@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DOCPROP_DOCRECOGMAIN_LIST — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DOCPROP_DOCRECOGMAIN_LIST: 3 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DOCPROP_DOCRECOGMAIN_LIST</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_docrecogrequest_doc_list.html"><div class="to">FM_DOCRECOGREQUEST_DOC_LIST</div></a><a class="ref-card" href="hp_docrecogrequest_docs.html"><div class="to">HP_DOCRECOGREQUEST_DOCS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OBJ_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DP_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">DRM_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DRM_NAME</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DOCPROP_DOCRECOGMAIN_LIST(
+    OBJ_KIND D_STR_CODE,
+    OBJ_ID D_ID,
+    DP_ID D_INTEGER)
+RETURNS (
+    DRM_ID D_INTEGER,
+    DRM_NAME D_STR_255,
+    C_ID D_ID)
+AS
+declare variable db_id d_integer;
+declare variable citizen_code d_str_code;
+declare variable citizen_kind d_smallint;
+declare variable passport_dp_id d_integer;
+declare variable doc_count d_integer;
+declare variable db_code d_str_code;
+begin
+  obj_kind = f_objkind(obj_kind, &#x27;code&#x27;);
+  db_id = f_get_db_id();
+    
+  if (obj_kind = &#x27;clients&#x27;) then
+    c_id = obj_id;
+  else
+  if (obj_kind = &#x27;kontract&#x27;) then
+  begin
+    select kc_from_c_id
+    from knclient
+    where kc_from_k_id = :obj_id and
+          kc_amount_approved &gt; 0
+    rows 1
+    into c_id;
+  end else
+  if (obj_kind = &#x27;miniapp&#x27;) then
+  begin
+    select mac_from_c_id
+    from miniappclient
+    where mac_from_ma_id = :obj_id and
+          mac_amount &gt; 0
+    rows 1
+    into c_id;
+  end
+
+  if (c_id is not null) then
+  begin
+    -- Свойство документа по которому документ считается паспортом.
+    select dp_id
+    from docprop
+    where dp_code = &#x27;person.passport&#x27;
+    into passport_dp_id;
+  
+    if (passport_dp_id is not null) then
+    begin
+      -- Среди действующих на дату документов выбираем по пориоритету:
+      -- Сначала паспорт текущей страны
+      -- если такого нет, выбираем последнюю по дате прикрепления
+      select dpk_citizen_kind, pk_country
+      from clientdocs, docproppk, passkind
+      where dpk_from_dp_id = :passport_dp_id and
+            dpk_is_delete = 0 and
+            cds_from_pk_id = dpk_from_pk_id and
+            dpk_from_pk_id = pk_id and
+            cds_from_c_id = :c_id and
+            cds_verify_status = 2 and
+            coalesce(cds_create_datetime, cds_datetime) &lt; (current_date + 1) and
+            (cds_delete_datetime is null or cds_delete_datetime &gt; (current_date + 1)) and
+            cds_doc_date_begin &lt;= current_date and
+            coalesce(cds_doc_date_end, current_date) &gt;= current_date
+      order by dpk_citizen_kind, coalesce(cds_create_datetime, cds_datetime) desc, cds_doc_date_end desc
+      rows 1
+      into citizen_kind, citizen_code;
+    
+      -- Если нет прикрепленного действующего паспорта,
+      -- смотрим поле &quot;Гражданство&quot; и по нему вычисляем тип гражданства
+      if (citizen_kind is null) then
+      begin
+        select replace(rd_code, &#x27;citizen.&#x27;, &#x27;&#x27;)
+        from clients, refdata
+        where c_id = :c_id and
+              c_citizen = rd_id
+        into citizen_code;
+    
+        if ((db_id = 81001 and citizen_code = &#x27;ru&#x27;) or
+            (db_id in (39801, 41701) and citizen_code = &#x27;kg&#x27;) or
+            (db_id = 94401 and citizen_code = &#x27;az&#x27;))
+        then citizen_kind = 0;
+        else
+          if ((db_id = 81001 and citizen_code = &#x27;kg&#x27;) or
+              (db_id in (39801, 41701) and citizen_code = &#x27;ru&#x27;))
+          then citizen_kind = 1;
+          else citizen_kind = 2;
+      end
+    end
+  end else
+    exit;
+
+  db_code = trim(case db_id
+    when 41701 then &#x27;kg&#x27;
+    when 39801 then &#x27;kz&#x27;
+    when 81001 then &#x27;ru&#x27;
+    when 94401 then &#x27;az&#x27;
+  end);
+
+  if (citizen_code is null) then
+    citizen_code = db_code;
+
+  doc_count = 0;
+  select distinct count(*)
+  from docprop, docproppk, passkind, docrecogmain
+  where dp_id = :dp_id and
+        dpk_from_dp_id = dp_id and
+        dpk_is_delete = 0 and
+        dpk_is_delete = 0 and
+        pk_id = dpk_from_pk_id and
+        pk_is_delete = 0 and
+        pk_from_drm_id = drm_id and
+        drm_inactive = 0 and
+        (pk_country starting :citizen_code or pk_country starting :db_code) and
+        (:citizen_kind is null or dpk_citizen_kind = :citizen_kind)
+  into doc_count;
+
+  if (doc_count &gt; 1) then
+  begin
+    drm_id = -1;
+    drm_name = &#x27;Любой документ из списка&#x27;;
+    suspend;
+  end
+
+  for select distinct drm_id, drm_name
+  from docprop, docproppk, passkind, docrecogmain
+  where dp_id = :dp_id and
+        dpk_from_dp_id = dp_id and
+        dpk_is_delete = 0 and
+        dpk_is_delete = 0 and
+        pk_id = dpk_from_pk_id and
+        pk_is_delete = 0 and
+        pk_from_drm_id = drm_id and
+        drm_inactive = 0 and
+        (pk_country starting :citizen_code or pk_country starting :db_code) and
+        (:citizen_kind is null or dpk_citizen_kind = :citizen_kind)
+  order by dp_position, pk_id
+  into drm_id, drm_name
+  do
+    suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_BKI_SET_PACKET_STATUS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_BKI_SET_PACKET_STATUS: 3 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_BKI_SET_PACKET_STATUS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PACKET_NAME</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">STATUS_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RESULT_STATUS</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_BKI_SET_PACKET_STATUS(
+    PACKET_NAME D_STR_CODE NOT NULL,
+    STATUS_CODE D_STR_CODE NOT NULL,
+    RESULT_STATUS D_STR_100 = null)
+AS
+declare variable object_kind d_integer;
+declare variable object_id d_id;
+declare variable bkc_uid_bkd_id d_id;
+declare variable t_object_kind d_integer;
+declare variable t_object_id d_id;
+declare variable status d_integer;
+declare variable bkp_status d_integer;
+declare variable need_exit boolean;
+declare variable counter d_integer;
+declare variable packet_id d_id;
+declare variable bev_id d_id;
+declare variable bev_id_temp d_id;
+declare variable bkc_id_temp d_id;
+declare variable bkt_action_code d_str_code;
+declare variable bkc_add d_str_long;
+declare variable ma_kind d_integer;
+declare variable k_kind d_integer;
+declare variable event_code d_str_code;
+declare variable event_date d_date;
+declare variable start_date d_date;
+begin
+  select bkp_id, bkp_status, f_enum(&#x27;bki_packet_action&#x27;, bkt_action, &#x27;code&#x27;)
+  from bki_packet, bki_packet_type
+  where bkp_code = :packet_name
+    and bkt_id = bkp_from_bkt_id
+  into packet_id, bkp_status, bkt_action_code;
+
+  if (packet_id is null) then
+    exception e_default &#x27;packet &quot;&#x27; || :packet_name || &#x27;&quot; not found&#x27;;
+
+  status = f_enum(&#x27;bki_status_send_packet_code&#x27;, status_code, &#x27;id&#x27;);
+
+  update bki_packet
+  set bkp_status        = :status,
+      bkp_result_status = :result_status
+  where bkp_id = :packet_id;
+
+  if (status_code = &#x27;PacketSended&#x27;) then
+  begin
+    update bki_packet
+    set bkp_send_datetime = cast(&#x27;now&#x27; as d_datetime)
+    where bkp_id = :packet_id;
+
+    update bki_manual_main
+    set bmm_status = 2
+    where bmm_from_bkp_id = :packet_id
+      and bmm_status &lt; 2;
+  end
+
+  if (status = bkp_status) then -- если уже ставили такой статус, то ничего не делаем
+    exit;
+
+  --если пакет пустой, то переименуем - для соблюдения уникальности имени для следующих пакетов на эту дату
+  if (status_code = &#x27;PacketSendError&#x27; and result_status = &#x27;EmptyPacket&#x27;) then
+  begin
+    need_exit = false;
+    counter = 0;
+
+    while (not need_exit)
+    do
+    begin
+      counter = counter + 1;
+      packet_name = packet_name || &#x27;#&#x27; || counter;
+      need_exit = not exists (select * from bki_packet where bkp_code = :packet_name);
+    end
+
+    update bki_packet
+    set bkp_code = :packet_name
+    where bkp_id = :packet_id;
+  end
+
+  if(status &gt; 0) then
+  begin
+    for select bkc_id
+    from bki_loans, bki_clients
+    where bkc_from_bkl_id = bkl_id
+      and bkl_from_bkp_id = :packet_id
+    into bkc_id_temp
+    do
+      update bki_events
+      set bev_status = :status
+      where bev_status &gt;= 0
+        and bev_from_bkc_id = :bkc_id_temp;
+  end
+
+  if (status_code = &#x27;PacketProcessed&#x27;) then -- если принят
+  begin
+    ma_kind = f_objkind(&#x27;miniapp&#x27;, &#x27;id&#x27;);
+    k_kind = f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;);
+
+    if (bkt_action_code in (&#x27;reset&#x27;, &#x27;recreate&#x27;, &#x27;delete&#x27;)) then
+    begin
+      -- пройдемся по пакету
+      for select bkl_object_id, bkl_object_kind, bev_id, bkc_uid_bkd_id, bkc_add, bev_event_date, f_enum(&#x27;bki_event&#x27;, bev_event_id, &#x27;code&#x27;)
+      from bki_loans, bki_clients, bki_events
+      where bkc_from_bkl_id = bkl_id
+        and bev_from_bkc_id = bkc_id
+        and bkl_from_bkp_id = :packet_id
+        and bev_status = 3                                                -- принятые записи
+      into object_id, object_kind, bev_id, bkc_uid_bkd_id, bkc_add, event_date, event_code
+      do
+      begin
+        if (event_code = &#x27;3.4_delete_app&#x27;) then -- временно. потом не забыть проставить удаление событиям 1.1, 1.2, 1.3
+          continue;
+
+        start_date = &#x27;01.01.1900&#x27;;
+        if (bkt_action_code = &#x27;reset&#x27;) then
+          start_date = coalesce(json.obj_get_val(json.parse(coalesce(bkc_add, &#x27;{}&#x27;)), &#x27;start_date&#x27;), event_date);
+
+        -- если есть записи старше текущей, то надо отметить старые записи что некоторые события из них переписывались
+        for select :ma_kind, :object_id
+          from rdb$database
+          where :object_kind = :ma_kind
+        union
+          select :k_kind, k_id
+          from kontract k
+          where :object_kind = :ma_kind
+            and k_from_ma_app_id = :object_id
+        union
+          select 9, k2.k_id
+          from kontract k1, kontract k2
+          where :object_kind = :k_kind
+            and k1.k_id = :object_id
+            and k2.k_from_ma_app_id = k1.k_from_ma_app_id
+        union
+          select :ma_kind, k_from_ma_app_id
+          from kontract
+          where :object_kind = :k_kind
+            and k_id = :object_id
+        into t_object_kind, t_object_id
+        do
+        begin
+          for select bev_id
+          from bki_packet, bki_loans, bki_clients, bki_events
+          where bkl_from_bkp_id = bkp_id
+            and bkc_from_bkl_id = bkl_id
+            and bev_from_bkc_id = bkc_id
+            and bkp_id &lt; :packet_id
+            and bkl_object_kind = :t_object_kind
+            and bkl_object_id = :t_object_id
+            and coalesce(bev_delete_bev_id, 0) = 0
+            and bev_event_date &gt;= :start_date
+            and (:bkt_action_code = &#x27;delete&#x27; or bev_event_id not in(0,1,2,4,5))
+            and bkc_uid_bkd_id = :bkc_uid_bkd_id
+          into bev_id_temp
+          do
+            update bki_events
+            set bev_delete_bev_id = :bev_id
+            where bev_id = :bev_id_temp;
+
+          -- если было удаление, то удалить в буфере
+          if (bkt_action_code = &#x27;delete&#x27;) then
+            delete from bki_buffer bkb
+            where bkb_object_kind = :t_object_kind
+              and bkb_object_id = :t_object_id;
+        end
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

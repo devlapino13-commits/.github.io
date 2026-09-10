@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_KONTREFUNDED_UPDATE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_KONTREFUNDED_UPDATE: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_KONTREFUNDED_UPDATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_kontract_refund_list.html"><div class="to">HP_KONTRACT_REFUND_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_kontrefunded_init.html"><div class="to">HP_KONTREFUNDED_INIT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_KONTREFUNDED_UPDATE(
+    K_ID D_ID)
+AS
+declare variable kont_count d_integer;
+declare variable delinq_days d_integer;
+declare variable advanced_days d_integer;
+declare variable kc_id d_id;
+begin
+  select count(*), max(res_refunded_delinq_day), max(res_refunded_adv_day)
+  from hp_kontract_refund_list(:k_id, 0)
+  into :kont_count, :delinq_days, :advanced_days;
+
+  if (kont_count is null) then
+    kont_count = 0;
+
+  if (delinq_days is null) then
+    delinq_days = 0;
+
+  if (advanced_days is null) then
+    advanced_days = 0;
+
+  if (kont_count = 0) then
+  begin
+    delinq_days = 0;
+    advanced_days = 0;
+
+    delete from kontrefunded
+    where krf_from_k_id = :k_id;
+
+    update knclient
+    set kc_refunded_count = :kont_count,
+        kc_refunded_delinq_day = :delinq_days,
+        kc_refunded_advanced_day = :advanced_days
+    where kc_from_k_id = :k_id and
+          (coalesce(kc_refunded_count, -1) &lt;&gt; :kont_count or
+           coalesce(kc_refunded_delinq_day, -1) &lt;&gt; :delinq_days or
+           coalesce(kc_refunded_advanced_day, -1) &lt;&gt; :advanced_days);
+  end else
+  begin
+    update or insert into kontrefunded (krf_from_k_id, krf_count, krf_max_delinq_days, krf_max_advanced_days)
+    values (:k_id, :kont_count, :delinq_days, :advanced_days)
+    matching (krf_from_k_id);
+
+    for select kc_id
+    from knclient
+    where kc_from_k_id = :k_id and
+          kc_amount_approved &gt; 0
+    into kc_id
+    do
+    begin
+      kont_count = 0;
+      delinq_days = 0;
+      advanced_days = 0;
+  
+      select count(*), max(res_refunded_delinq_day), max(res_refunded_adv_day)
+      from hp_kontract_refund_list(:k_id, :kc_id)
+      into :kont_count, :delinq_days, :advanced_days;
+  
+      if (kont_count is null) then
+        kont_count = 0;
+    
+      if (delinq_days is null) then
+        delinq_days = 0;
+    
+      if (advanced_days is null) then
+        advanced_days = 0;
+  
+      update knclient
+      set kc_refunded_count = :kont_count,
+          kc_refunded_delinq_day = :delinq_days,
+          kc_refunded_advanced_day = :advanced_days
+      where kc_id = :kc_id and
+            (coalesce(kc_refunded_count, -1) &lt;&gt; :kont_count or
+             coalesce(kc_refunded_delinq_day, -1) &lt;&gt; :delinq_days or
+             coalesce(kc_refunded_advanced_day, -1) &lt;&gt; :advanced_days);
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

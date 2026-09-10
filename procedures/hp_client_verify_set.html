@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CLIENT_VERIFY_SET — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CLIENT_VERIFY_SET: 4 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CLIENT_VERIFY_SET</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_cardclient_update_customer.html"><div class="to">HP_CARDCLIENT_UPDATE_CUSTOMER</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ACL_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACL_STATUS_STR</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACL_MEMO</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CLIENT_VERIFY_SET(
+    ACL_ID DECIMAL(18,0),
+    ACL_STATUS_STR VARCHAR(255),
+    ACL_MEMO VARCHAR(255),
+    UN_ID DECIMAL(18,0))
+AS
+declare variable cv_status integer;
+declare variable c_id decimal(18,0);
+declare variable acm_memo varchar(4000);
+declare variable check_kind varchar(20);
+declare variable is_confirm d_bool;
+declare variable err_text d_str_255;
+begin
+-- данные подтверждаются
+  acm_memo = &#x27;&#x27;;
+  cv_status = 2;
+  if (acl_status_str &lt;&gt; &#x27;&#x27;) then
+    cv_status = -2;
+
+  select acl_object_id
+  from actionlist
+  where acl_id = :acl_id and
+        acl_object_kind = 0
+  into :c_id;
+
+  update actionlist
+  set acl_status = :cv_status,
+      acl_from_un_id = :un_id
+  where acl_id = :acl_id and
+        coalesce(acl_status, -777) &lt;&gt; :cv_status;
+
+  update clients
+  set c_verify_status = :cv_status
+  where c_id = :c_id and
+        coalesce(c_verify_status, -777) &lt;&gt; :cv_status;
+  is_confirm = iif(row_count = 1 and cv_status = 2, 1, 0);
+
+  if (coalesce(acl_memo, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+  begin
+    acl_memo = replace(acl_memo, &#x27;&quot;&#x27;, &#x27;\&quot;&#x27;);
+    acm_memo = acm_memo || iif(acm_memo &lt;&gt; &#x27;&#x27;, &#x27;,&#x27;, &#x27;&#x27;) || &#x27;&quot;comment&quot;:&quot;&#x27; || acl_memo || &#x27;&quot;&#x27;;
+  end
+
+  if (cv_status = -2) then
+  begin
+    check_kind = &#x27;fio&#x27;;
+    if (position(check_kind || &#x27;;&#x27;, acl_status_str) &gt; 0) then
+      acm_memo = acm_memo || iif(acm_memo &lt;&gt; &#x27;&#x27;, &#x27;,&#x27;, &#x27;&#x27;) || &#x27;&quot;&#x27; || check_kind || &#x27;&quot;:&quot;&#x27; || iif(position(check_kind || &#x27;;&#x27;, acl_status_str) &gt; 0, 1, 0) || &#x27;&quot;&#x27;;
+
+    check_kind = &#x27;sex&#x27;;
+    if (position(check_kind || &#x27;;&#x27;, acl_status_str) &gt; 0) then
+      acm_memo = acm_memo || iif(acm_memo &lt;&gt; &#x27;&#x27;, &#x27;,&#x27;, &#x27;&#x27;) || &#x27;&quot;&#x27; || check_kind || &#x27;&quot;:&quot;&#x27; || iif(position(check_kind || &#x27;;&#x27;, acl_status_str) &gt; 0, 1, 0) || &#x27;&quot;&#x27;;
+
+    check_kind = &#x27;birth_date&#x27;;
+    if (position(check_kind || &#x27;;&#x27;, acl_status_str) &gt; 0) then
+      acm_memo = acm_memo || iif(acm_memo &lt;&gt; &#x27;&#x27;, &#x27;,&#x27;, &#x27;&#x27;) || &#x27;&quot;&#x27; || check_kind || &#x27;&quot;:&quot;&#x27; || iif(position(check_kind || &#x27;;&#x27;, acl_status_str) &gt; 0, 1, 0) || &#x27;&quot;&#x27;;
+
+    check_kind = &#x27;passno&#x27;;
+    if (position(check_kind || &#x27;;&#x27;, acl_status_str) &gt; 0) then
+      acm_memo = acm_memo || iif(acm_memo &lt;&gt; &#x27;&#x27;, &#x27;,&#x27;, &#x27;&#x27;) || &#x27;&quot;&#x27; || check_kind || &#x27;&quot;:&quot;&#x27; || iif(position(check_kind || &#x27;;&#x27;, acl_status_str) &gt; 0, 1, 0) || &#x27;&quot;&#x27;;
+
+    check_kind = &#x27;passdate_disb&#x27;;
+    if (position(check_kind || &#x27;;&#x27;, acl_status_str) &gt; 0) then
+      acm_memo = acm_memo || iif(acm_memo &lt;&gt; &#x27;&#x27;, &#x27;,&#x27;, &#x27;&#x27;) || &#x27;&quot;&#x27; || check_kind || &#x27;&quot;:&quot;&#x27; || iif(position(check_kind || &#x27;;&#x27;, acl_status_str) &gt; 0, 1, 0) || &#x27;&quot;&#x27;;
+
+    check_kind = &#x27;passdate_expire&#x27;;
+    if (position(check_kind || &#x27;;&#x27;, acl_status_str) &gt; 0) then
+      acm_memo = acm_memo || iif(acm_memo &lt;&gt; &#x27;&#x27;, &#x27;,&#x27;, &#x27;&#x27;) || &#x27;&quot;&#x27; || check_kind || &#x27;&quot;:&quot;&#x27; || iif(position(check_kind || &#x27;;&#x27;, acl_status_str) &gt; 0, 1, 0) || &#x27;&quot;&#x27;;
+
+    check_kind = &#x27;passkind&#x27;;
+    if (position(check_kind || &#x27;;&#x27;, acl_status_str) &gt; 0) then
+      acm_memo = acm_memo || iif(acm_memo &lt;&gt; &#x27;&#x27;, &#x27;,&#x27;, &#x27;&#x27;) || &#x27;&quot;&#x27; || check_kind || &#x27;&quot;:&quot;&#x27; || iif(position(check_kind || &#x27;;&#x27;, acl_status_str) &gt; 0, 1, 0) || &#x27;&quot;&#x27;;
+
+    check_kind = &#x27;inn&#x27;;
+    if (position(check_kind || &#x27;;&#x27;, acl_status_str) &gt; 0) then
+      acm_memo = acm_memo || iif(acm_memo &lt;&gt; &#x27;&#x27;, &#x27;,&#x27;, &#x27;&#x27;) || &#x27;&quot;&#x27; || check_kind || &#x27;&quot;:&quot;&#x27; || iif(position(check_kind || &#x27;;&#x27;, acl_status_str) &gt; 0, 1, 0) || &#x27;&quot;&#x27;;
+
+    check_kind = &#x27;photo&#x27;;
+    if (position(check_kind || &#x27;;&#x27;, acl_status_str) &gt; 0) then
+      acm_memo = acm_memo || iif(acm_memo &lt;&gt; &#x27;&#x27;, &#x27;,&#x27;, &#x27;&#x27;) || &#x27;&quot;&#x27; || check_kind || &#x27;&quot;:&quot;&#x27; || iif(position(check_kind || &#x27;;&#x27;, acl_status_str) &gt; 0, 1, 0) || &#x27;&quot;&#x27;;
+
+    check_kind = &#x27;passport&#x27;;
+    if (position(check_kind || &#x27;;&#x27;, acl_status_str) &gt; 0) then
+      acm_memo = acm_memo || iif(acm_memo &lt;&gt; &#x27;&#x27;, &#x27;,&#x27;, &#x27;&#x27;) || &#x27;&quot;&#x27; || check_kind || &#x27;&quot;:&quot;&#x27; || iif(position(check_kind || &#x27;;&#x27;, acl_status_str) &gt; 0, 1, 0) || &#x27;&quot;&#x27;;
+
+    check_kind = &#x27;passport_who&#x27;;
+    if (position(check_kind || &#x27;;&#x27;, acl_status_str) &gt; 0) then
+      acm_memo = acm_memo || iif(acm_memo &lt;&gt; &#x27;&#x27;, &#x27;,&#x27;, &#x27;&#x27;) || &#x27;&quot;&#x27; || check_kind || &#x27;&quot;:&quot;&#x27; || iif(position(check_kind || &#x27;;&#x27;, acl_status_str) &gt; 0, 1, 0) || &#x27;&quot;&#x27;;
+
+    check_kind = &#x27;birth_place&#x27;;
+    if (position(check_kind || &#x27;;&#x27;, acl_status_str) &gt; 0) then
+      acm_memo = acm_memo || iif(acm_memo &lt;&gt; &#x27;&#x27;, &#x27;,&#x27;, &#x27;&#x27;) || &#x27;&quot;&#x27; || check_kind || &#x27;&quot;:&quot;&#x27; || iif(position(check_kind || &#x27;;&#x27;, acl_status_str) &gt; 0, 1, 0) || &#x27;&quot;&#x27;;
+  end
+
+  if (acm_memo &lt;&gt; &#x27;&#x27;) then
+  begin
+    acm_memo = &#x27;{&quot;verify&quot;:{&#x27; || trim(acm_memo) || &#x27;}}&#x27;;
+
+    update or insert into actionmemo (acm_from_acl_id, acm_memo)
+    values (:acl_id, :acm_memo)
+    matching (acm_from_acl_id);
+  end
+
+  if (f_get_db_id() in (39801, 41701) and is_confirm = 1) then
+  begin
+    if (exists(
+      select * from cardclientid where cci_from_c_id = :c_id)) then
+    err_text = (select err_text from hp_cardclient_update_customer(:c_id, null, 0, :un_id));
+  end
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

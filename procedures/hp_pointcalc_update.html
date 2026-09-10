@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_POINTCALC_UPDATE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_POINTCALC_UPDATE: 3 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_POINTCALC_UPDATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">3</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_pointcalc_list.html"><div class="to">HP_POINTCALC_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_client_pointcalc_correct.html"><div class="to">HP_CLIENT_POINTCALC_CORRECT</div></a><a class="ref-card" href="hp_pointcalc_create.html"><div class="to">HP_POINTCALC_CREATE</div></a><a class="ref-card" href="hp_pointcalc_kont_update.html"><div class="to">HP_POINTCALC_KONT_UPDATE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DONT_CALC_TOTAL</div><div class="ptype">SMALLINT</div><div class="pdesc">Если передан 1, пересчитывает только раздельно по продктам. Общую не будет пересчитывать</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_POINTCALC_UPDATE(
+    C_ID D_ID,
+    REP_DATE D_DATE,
+    DONT_CALC_TOTAL D_BOOL = 0)
+AS
+declare variable SH_DATE D_DATE;
+declare variable CALC_DATE D_DATE;
+declare variable PTC_KIND D_INTEGER;
+declare variable PTC_CALC D_INTEGER;
+declare variable PTS_SALDO D_INTEGER;
+declare variable K_ID D_ID;
+declare variable DD_BEGIN D_DATE;
+declare variable DD_END D_DATE;
+declare variable MAX_PTC_KIND D_INTEGER;
+declare variable RECALC_DATE D_DATE;
+declare variable ZERO_DATE D_DATE;
+declare variable MIN_CALC_DATE D_DATE;
+declare variable MIN_K_ID D_ID;
+declare variable NEED_IPF_CALC D_BOOL;
+declare variable CALC_TYPE D_SMALLINT;
+begin
+  -- Пересчет баллов клиента на дату операции
+  zero_date = cast(&#x27;01.01.1900&#x27; as date);
+
+  rep_date = coalesce(rep_date, zero_date);
+
+  need_ipf_calc = 0;
+  if (f_get_db_id() = 41701) then
+    need_ipf_calc = 1;
+
+  if (dont_calc_total is null) then
+    dont_calc_total = 0;
+
+  calc_type = 0;
+  if (dont_calc_total = 1) then
+    calc_type = 1;
+
+  while (calc_type &lt;= 2) do
+  begin
+    if (rep_date = zero_date) then
+    begin
+      delete from pointcalc
+      where ptc_from_c_id = :c_id
+        and ptc_kind &lt;&gt; 0
+        and ptc_type = :calc_type
+      order by ptc_from_c_id desc, ptc_date desc;
+    
+      if (calc_type = 0) then
+      begin
+        delete from legitimcalc
+        where lgc_from_c_id = :c_id;
+      end
+    end else
+    begin
+      if (not exists(select * from legitimcalc
+      where lgc_from_c_id = :c_id)) then
+      begin
+        if (not exists(select * from pointcalc
+        where ptc_from_c_id = :c_id and
+              ptc_type = :calc_type)) then
+          rep_date = zero_date;
+      end
+  
+      if (calc_type = 0) then
+      begin
+        delete from legitimcalc
+        where lgc_from_c_id = :c_id and
+              lgc_date &gt;= :rep_date;
+      end
+    end
+  
+    for select distinct ok_ol_date
+    from operkred, knclient
+    where kc_from_c_id = :c_id and
+          kc_amount_approved &gt; 0 and
+          ok_ol_is_active = 1 and
+          ok_from_k_id = kc_from_k_id and
+          ok_type &lt; 7 and
+          ok_ol_date &gt;= :rep_date
+    union
+    select :rep_date
+    from rdb$database
+    order by 1
+    into recalc_date
+    do
+    begin
+      if (min_calc_date is null and recalc_date &gt; zero_date) then
+        min_calc_date = recalc_date;
+  
+      delete from pointcalc
+      where ptc_from_c_id = :c_id and
+            ptc_type = :calc_type and
+            ptc_kind &lt;&gt; 0 and
+            ptc_date &gt;= :recalc_date and
+            not(ptc_date = :recalc_date and ptc_kind &gt;= 20)
+      order by ptc_from_c_id desc, ptc_date desc;
+    
+      delete from pointsaldo
+      where pts_from_c_id = :c_id and
+            pts_type = :calc_type and
+            pts_date_begin &gt; :recalc_date
+      order by pts_from_c_id desc, pts_date_begin desc;
+    
+      pts_saldo = 0;
+      select pts_saldo
+      from pointsaldo
+      where pts_from_c_id = :c_id and
+            pts_type = :calc_type and
+            pts_date_begin &lt;= :recalc_date
+      order by pts_from_c_id desc, pts_date_begin desc
+      rows 1
+      into pts_saldo;
+    
+      for select calc_date, sh_date, k_id, sh_kind
+      from hp_pointcalc_list(:c_id, :recalc_date, :calc_type)
+      where calc_date &gt;= :recalc_date
+      order by calc_date, sh_date
+      into calc_date, sh_date, k_id, ptc_kind
+      do
+      begin
+        if (min_k_id is null) then
+          min_k_id = k_id;
+  
+        if (ptc_kind = 0) then
+        begin
+          if (calc_type = 0) then
+          begin
+            insert into legitimcalc (lgc_from_c_id, lgc_date, lgc_from_k_id, lgc_sh_date, lgc_calc)
+            values (:c_id, :recalc_date, :k_id, :sh_date, 1);
+          end
+        end else
+        begin
+          dd_begin = sh_date - extract(day from sh_date) + 1;
+          dd_end = f_date_month_end(sh_date);
+      
+          max_ptc_kind = 0;
+          select max(ptc_kind)
+          from pointcalc
+          where ptc_from_c_id = :c_id and
+                ptc_type = :calc_type and
+                ptc_sh_date between :dd_begin and :dd_end
+          into max_ptc_kind;
+          if (max_ptc_kind is null) then
+            max_ptc_kind = 0;
+      
+          if (max_ptc_kind &gt;= ptc_kind) then
+            continue;
+      
+          ptc_calc = case ptc_kind
+          when 10 then 1
+          when 20 then -2
+          when 30 then -2
+          when 100 then -999999
+          end;
+    
+          if (ptc_calc &lt; 0) then
+          begin
+            if (pts_saldo &lt;= 0) then
+              continue;
+      
+            if (pts_saldo + ptc_calc &lt; 0) then
+              ptc_calc = -pts_saldo;
+          end
+      
+          pts_saldo = pts_saldo + ptc_calc;
+      
+          insert into pointcalc (ptc_from_c_id, ptc_date, ptc_sh_date, ptc_from_k_id, ptc_type, ptc_kind, ptc_calc)
+          values (:c_id, :calc_date, :sh_date, :k_id, :calc_type, :ptc_kind, :ptc_calc);
+        end
+      end
+    end
+
+    if (calc_type = 0) then
+    begin
+      if (min_k_id is not null and not exists(select * from legitimcalc
+          where lgc_from_c_id = :c_id and
+                lgc_number = 0)) then
+      begin
+        insert into legitimcalc (lgc_from_c_id, lgc_number, lgc_date, lgc_from_k_id, lgc_sh_date, lgc_calc)
+        values (:c_id, 0, :min_calc_date, :min_k_id, :min_calc_date, 0);
+      end
+    end
+
+    if (need_ipf_calc = 1) then
+      calc_type = calc_type + 1;
+    else
+      exit;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

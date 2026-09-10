@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_ACTIONLIST_METRICS — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_ACTIONLIST_METRICS: 1 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_ACTIONLIST_METRICS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_antifrod_get_res.html"><div class="to">HP_ANTIFROD_GET_RES</div></a><a class="ref-card" href="hp_bki_json_get_list.html"><div class="to">HP_BKI_JSON_GET_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_actionlist_get_1.html"><div class="to">HP_ACTIONLIST_GET_1</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_HTML</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_CRITICAL_LEVEL</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_ACTIONLIST_METRICS(
+    K_ID D_ID)
+RETURNS (
+    RES_HTML D_BLOB_TEXT,
+    RES_CRITICAL_LEVEL D_SMALLINT)
+AS
+declare variable criteria d_str_255;
+declare variable res_text d_str_long;
+declare variable critical_level d_smallint;
+declare variable jso d_integer;
+declare variable data_jso d_integer;
+declare variable table_jso d_integer;
+declare variable lines_jsa d_integer;
+declare variable cells_jsa d_integer;
+declare variable line_html d_str_8100;
+declare variable rep_knd_datetime d_datetime;
+
+declare function get_color (
+critical_level d_smallint)
+returns d_str_20
+as
+begin
+return case critical_level
+when 0 then &#x27;#006600&#x27; -- зеленый
+when 1 then &#x27;#999900&#x27; -- желтый
+else &#x27;#990000&#x27; -- красный
+end;
+end
+
+
+begin
+  res_html = &#x27;&#x27;;
+  res_critical_level = 0;
+
+  select rep_knd_datetime, jso
+  from hp_antifrod_get_res(:k_id)
+  into rep_knd_datetime, jso;
+
+  if (rep_knd_datetime is not null) then
+    res_html = blob_append(res_html, f_format(&#x27;&lt;br&gt;&lt;h3&gt;Дата проверки: %1&lt;/h3&gt;&#x27;, f_datetimetostr(rep_knd_datetime)));
+
+  for select json.obj_get_obj(:jso, &#x27;criteria_data.&#x27; || val)
+  from hp_bki_json_get_list(json.obj_get_arr(:jso, &#x27;criteria_arr&#x27;), 0)
+  into data_jso
+  do
+  begin
+    criteria = json.obj_get_val(data_jso, &#x27;criteria&#x27;);
+    critical_level = json.obj_get_val(data_jso, &#x27;critical_level&#x27;);
+    res_text = json.obj_get_val(data_jso, &#x27;res_text&#x27;);
+    table_jso = json.obj_get_obj(data_jso, &#x27;add&#x27;);
+    lines_jsa = iif(table_jso is null, null, json.obj_get_arr(table_jso, &#x27;lines&#x27;));
+
+    res_html = blob_append(res_html, f_format(&#x27;&lt;br&gt;&lt;br&gt;&lt;h3&gt;%1 &amp;nbsp; &amp;nbsp; &lt;font color = &quot;%2&quot;&gt;%3&lt;/font&gt;&lt;/h3&gt;&#x27;, criteria, get_color(critical_level), res_text));
+
+    if (lines_jsa is not null and json.count_get(lines_jsa) &gt; 0) then
+    begin
+      res_critical_level = maxvalue(critical_level, res_critical_level);
+
+      -- создадим таблицу
+      line_html = &#x27;&lt;table width=&quot;100%&quot;&gt;&#x27;;
+
+      -- заголовок
+      line_html = line_html || (select list(&#x27;&lt;col width=&quot;&#x27;|| val ||&#x27;%&quot;&gt;&#x27;, &#x27;&#x27;) from hp_bki_json_get_list(json.obj_get_arr(:table_jso, &#x27;width&#x27;), 0));
+      line_html = line_html || &#x27;&lt;tr&gt;&#x27; || (select list(&#x27;&lt;th&gt;&#x27;|| val ||&#x27;&lt;/th&gt;&#x27;, &#x27;&#x27;) from hp_bki_json_get_list(json.obj_get_arr(:table_jso, &#x27;header&#x27;), 0)) || &#x27;&lt;/tr&gt;&#x27;;
+
+      -- строки
+      for select jso
+      from hp_bki_json_get_list(:lines_jsa, 2)
+      into cells_jsa
+      do
+        line_html = line_html || &#x27;&lt;tr&gt;&#x27; || (select list(&#x27;&lt;td&gt;&#x27;|| val ||&#x27;&lt;/td&gt;&#x27;, &#x27;&#x27;) from hp_bki_json_get_list(:cells_jsa, 0)) || &#x27;&lt;/tr&gt;&#x27;;
+
+      res_html = blob_append(res_html, line_html || &#x27;&lt;/table&gt;&#x27;);
+    end
+  end
+
+  res_html = blob_append(
+    f_format(&#x27;&lt;body&gt;&lt;h1 style=&quot;color:#999900&quot;&gt;%2&lt;/h1&gt;&#x27;,
+        get_color(res_critical_level),
+        iif(res_critical_level &gt; 0, &#x27;Выявлен стоп-фактор&#x27;, &#x27;Не выявлено стоп-факторов&#x27;)),
+    res_html);
+
+  res_html = blob_append((select res_style from fm_html_styles),res_html);
+  res_html = blob_append(res_html, &#x27;&lt;/body&gt;&#x27;);
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

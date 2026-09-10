@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0117_SQL — процедура — схема БД</title>
+<meta name="description" content="Блок на отсуствие файла в документах клиента">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0117_SQL</code></h1>
+<p class="desc">Блок на отсуствие файла в документах клиента</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0117_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare kc_amount curr_type;
+declare kf_disb_date d_date;
+declare variable pk_id integer;
+declare variable doc_name str_100;
+declare variable c_id id_type;
+begin
+  /*
+    SYSDBA
+    |Проверяем актинвые документы клиентов, проверяем прикреплены ли к ним файл. Если не прикреплен блокируем.
+*/
+  select k_disb_date
+  from kontract
+  where k_id = :k_id
+  into kf_disb_date;
+  if (kf_disb_date is null) then
+    exit;
+  else
+  begin
+    for select kc_from_c_id
+        from knclient kc
+        where kc_from_k_id = :k_id and
+              kc_amount_approved &gt; 0
+        into c_id
+    do
+    begin
+      select c_name_fio
+      from clients
+      where c_id = :c_id
+      into :res_info_text;
+      for select cd.cds_from_pk_id
+          from clientdocs cd
+          where cd.cds_from_c_id = :c_id and
+                cd.cds_is_delete = 0 and
+                :kf_disb_date between coalesce(cds_doc_date_begin, &#x27;01.01.01&#x27;) and coalesce(cds_doc_date_end, &#x27;31.12.2099&#x27;) and
+                coalesce(cds_doc_blob_1, 0) = 0 and
+                cd.cds_verify_status in (0, 1) and
+                cd.cds_from_pk_id is not null
+          into pk_id
+      do
+      begin
+        if (not exists(select cd.cds_from_pk_id
+                       from clientdocs cd
+                       where cd.cds_from_c_id = :c_id and
+                             cd.cds_is_delete = 0 and
+                             :kf_disb_date between coalesce(cds_doc_date_begin, &#x27;01.01.01&#x27;) and coalesce(cds_doc_date_end, &#x27;31.12.2099&#x27;) and
+                             coalesce(cds_doc_blob_1, 0) &gt; 0 and
+                             cd.cds_verify_status in (0, 1) and
+                             cd.cds_from_pk_id = :pk_id)) then
+        begin
+          select pk.pk_name
+          from passkind pk
+          where pk.pk_id = :pk_id
+          into doc_name;
+          res_error_text = &#x27;К документу &quot;&#x27; || coalesce(:doc_name, :pk_id, &#x27;&#x27;) || &#x27;&quot; не прикреплен файл!&#x27;;
+          res_error_is_critical = 1;
+          if (doc_name in (&#x27;ФССП&#x27;, &#x27;Кредитная история&#x27;)) then
+            res_error_is_critical = 0;
+          suspend;
+        end
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

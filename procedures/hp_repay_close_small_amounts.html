@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_REPAY_CLOSE_SMALL_AMOUNTS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_REPAY_CLOSE_SMALL_AMOUNTS: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_REPAY_CLOSE_SMALL_AMOUNTS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_repay_reschedule.html"><div class="to">HP_REPAY_RESCHEDULE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SMALL_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LAST_REC_NO</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_REPAY_CLOSE_SMALL_AMOUNTS(
+    SMALL_AMOUNT DECIMAL(18,4),
+    LAST_REC_NO INTEGER)
+AS
+declare variable next_os decimal(18,4) = 0;
+declare variable next_perc decimal(18,4) = 0;
+declare variable s_rec_no integer;
+declare variable isupdated integer;
+declare variable sh_new_os decimal(18,4);
+declare variable sh_new_perc decimal(18,4);
+declare variable res_amount decimal(18,4) = 0;
+declare variable s_running_total decimal(18,4) = 0;
+begin
+-- Если общая сумма платежа меньше 500 руб., платеж перекидываем на следующий
+  if (small_amount = 0) then
+    exit;
+
+  if (not(exists(select *
+                 from temp_vrepay
+                 where s_id &gt;= 0 and
+                       (sh_new_os + sh_new_perc) &gt; 0 and
+                       (sh_new_os + sh_new_perc) &lt;= :small_amount and
+                       s_date is not null))) then
+    exit;
+
+  next_os = 0;
+  next_perc = 0;
+  isupdated = 0;
+  for select s_rec_no, sh_new_os, sh_new_perc
+      from temp_vrepay
+      where s_id &gt;= 0 and
+            s_date is not null
+      into :s_rec_no, sh_new_os, sh_new_perc as cursor cur
+  do
+  begin
+    if ((s_rec_no &lt; last_rec_no) and
+        (sh_new_os + sh_new_perc &gt; 0)) then
+    begin
+      if (sh_new_os + sh_new_perc + next_os + next_perc &lt;= :small_amount) then
+      begin
+        next_os = next_os + sh_new_os;
+        next_perc = next_perc + sh_new_perc;
+        update temp_vrepay
+        set sh_new_os = 0,
+            sh_new_perc = 0
+        where s_rec_no = :s_rec_no;
+      end
+      else
+      begin
+        if (next_os + next_perc &gt; 0) then
+        begin
+          update temp_vrepay
+          set sh_new_os = sh_new_os + :next_os,
+              sh_new_perc = :sh_new_perc + :next_perc
+          where s_rec_no = :s_rec_no;
+          exit;
+        end
+      end
+    end
+  end
+  if (next_os + next_perc &gt; 0) then
+  begin
+    update temp_vrepay
+    set sh_new_os = sh_new_os + :next_os,
+        sh_new_perc = :sh_new_perc + :next_perc
+    where s_rec_no = :last_rec_no;
+  end
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

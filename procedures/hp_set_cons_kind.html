@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_SET_CONS_KIND — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_SET_CONS_KIND: 3 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_SET_CONS_KIND</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_cmd.html"><div class="to">FM_REPORT_CMD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OBJ_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CONS_KIND_ID</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEED_REFRESH</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_SET_CONS_KIND(
+    OBJ_KIND D_STR_CODE,
+    OBJ_ID D_ID,
+    CONS_KIND_ID D_SMALLINT)
+RETURNS (
+    RES_TEXT D_STR_255,
+    NEED_REFRESH D_SMALLINT)
+AS
+declare variable linked_id d_id;
+declare variable ks_state d_smallint;
+declare variable edoc_status varchar(20);
+begin
+  res_text = &#x27;&#x27;;
+  need_refresh = 0;
+
+  if (not exists(
+    select 1
+    from enum_list
+    where el_kind = &#x27;consultation_kind&#x27;
+        and el_id = :cons_kind_id))
+    then
+        res_text = &#x27;Некорректный тип оплаты за конс. услуги&#x27;;
+
+  if (res_text = &#x27;&#x27;) then
+  begin
+    if (obj_kind = &#x27;miniapp&#x27;) then
+    begin
+      select coalesce(k.k_id, 0)
+      from miniapp ma
+      left join kontract k on k.k_from_ma_app_id = ma.ma_id
+      where ma.ma_id = :obj_id
+        and ma.ma_is_active = 1
+        and ma.ma_date_end = &#x27;31.12.9999&#x27;
+      into linked_id;
+      if (row_count = 0) then res_text = &#x27;Заявка не найдена&#x27;;
+      else if (linked_id &gt; 0) then
+      begin
+        select ks_state
+        from kontstate
+        where ks_from_k_id = :linked_id
+            and ks_ol_is_delete = 0
+            and ks_date_end = &#x27;31.12.9999&#x27;
+        into ks_state;
+        if (ks_state in (1, 2)) then res_text = &#x27;Контракт уже выдан, изменить тип оплаты нельзя&#x27;;
+      end
+    end
+    else
+    begin
+      select k.k_from_ma_app_id, ks_state
+      from kontract k
+      left join kontstate ks on ks_from_k_id = k.k_id and ks_ol_is_delete = 0 and ks_date_end &gt;= &#x27;31.12.2999&#x27;
+      where k.k_id = :obj_id
+      into linked_id, ks_state;
+      if (row_count = 0) then res_text = &#x27;Контракт не найден&#x27;;
+      else if (ks_state in (1, 2)) then res_text = &#x27;Контракт уже выдан, изменить тип оплаты нельзя&#x27;;
+      else if (ks_state &lt;&gt; 0) then res_text = &#x27;Контракт должен быть в процессе&#x27;;
+    end
+
+--    if (res_text = &#x27;&#x27; and coalesce(linked_id, :obj_id) &gt; 0) then
+--    begin
+--      edoc_status = f_edoc_status(&#x27;consulting.agreement&#x27;, coalesce(linked_id, :obj_id), current_date);
+--      if (edoc_status = &#x27;signed&#x27;) then res_text = &#x27;Документ консультации уже подписан, изменить нельзя&#x27;;
+--    end
+
+    if (res_text = &#x27;&#x27;) then
+    begin
+      if (obj_kind = &#x27;miniapp&#x27;) then
+      begin
+        update miniapp
+        set ma_cons_kind = :cons_kind_id
+        where ma_id = :obj_id
+            and ma_is_active = 1
+            and ma_date_end = &#x27;31.12.9999&#x27;;
+        if (linked_id &gt; 0) then
+        begin
+          update kontract
+          set k_cons_kind = :cons_kind_id
+          where k_id = :linked_id;
+        end
+      end
+      else
+      begin
+        update kontract
+        set k_cons_kind = :cons_kind_id
+        where k_id = :obj_id;
+        if (linked_id &gt; 0) then
+        begin
+          update miniapp
+          set ma_cons_kind = :cons_kind_id
+          where ma_id = :linked_id
+              and ma_is_active = 1
+              and ma_date_end = &#x27;31.12.9999&#x27;;
+        end
+      end
+      res_text = &#x27;Тип оплаты консультационных услуг успешно изменен&#x27;;
+      need_refresh = 1;
+    end
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

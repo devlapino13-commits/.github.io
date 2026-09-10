@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0153_SQL — процедура — схема БД</title>
+<meta name="description" content="Анкета-опросник (печать)">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0153_SQL</code></h1>
+<p class="desc">Анкета-опросник (печать)</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0153_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable k_disb_date d_date;
+declare variable c_id id_type;
+declare variable has_zalog d_bool;
+declare variable sign_edoc_zalog d_smallint;
+begin
+
+  sign_edoc_zalog = f_get_const(&#x27;sign_edoc_zalog&#x27;); -- подписание edoc залогодателя проект RFCRU -1182
+  select k_disb_date
+  from kontract
+  inner join product on pr_id = k_from_pr_id and
+        pr_code containing &#x27;.zalog_car.&#x27;
+  where k_id = :k_id
+  into k_disb_date;
+
+  if (k_disb_date is null) then
+    exit;
+
+  if (exists(select *
+             from knclient knc, zalog z
+             where knc.kc_from_k_id = z.z_from_k_id and
+                   z.z_from_k_id = :k_id and
+                   knc.kc_amount_approved &gt; 0 and
+                   knc.kc_from_c_id = z.z_from_c_id)) then
+    exit;
+
+  has_zalog = 0;
+  for select c_id, c_name_fio
+      from zalog
+      inner join clients on z_from_c_id = c_id
+      where z_from_k_id = :k_id and
+            z_subtype = 4
+      into c_id, res_info_text
+  do
+  begin
+    has_zalog = 1;
+    if ((sign_edoc_zalog = 0) and (f_ft_valid(c_id, k_disb_date) = 0) and
+        not exists(select *
+                   from clientdocs
+                   inner join passkind on pk_id = cds_from_pk_id
+                   inner join passdoctype on pdt_id = pk_from_pdt_id and
+                         pdt_code = &#x27;anketa_questionnaire&#x27;
+                   where cds_from_c_id = :c_id and
+                         cds_is_delete = 0 and
+                         (cds_doc_blob_1 &gt; 0 or
+                         cds_doc_blob_2 &gt; 0))) then
+    begin
+      res_error_text = &#x27;Для данного залогодателя требуется закрепить анкету - опросник&#x27;;
+      res_error_is_critical = 2;
+      suspend;
+    end
+
+    -- Проверка печати возможно уже не нужна, как Гузель выйдет из отпуска, согласовать и выпилить, включая таблицы и процедуры
+    if (not exists(select *
+                   from printed_questionnaires
+                   where pqt_from_k_id = :k_id and
+                         pqt_from_c_id = :c_id) and (sign_edoc_zalog = 0)) then
+    begin
+      res_error_text = &#x27;Анкета-опросник не распечатана&#x27;;
+      res_error_is_critical = 2;
+      suspend;
+    end
+  end
+
+  if (has_zalog = 0) then
+  begin
+    res_error_text = &#x27;Залогодатель по автозайму не заполнен!&#x27;;
+    res_error_is_critical = 1;
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

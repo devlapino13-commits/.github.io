@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$UXSOURCE_SYNC — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$UXSOURCE_SYNC: 3 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$UXSOURCE_SYNC</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">US_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AUTO_APPLY</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">US_UUID_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$UXSOURCE_SYNC(
+    US_UUID D_UUID,
+    AUTO_APPLY D_BOOL = 0,
+    US_UUID_CODE D_STR_CODE = null)
+AS
+declare variable us_source d_str_code;
+declare variable us_kind d_smallint;
+declare variable res_memo d_str_8100;
+declare variable us_is_view d_bool;
+declare variable field_name d_str_code;
+declare variable uf_uuid d_uuid;
+declare variable table_name d_str_code;
+declare variable view_field d_str_code;
+declare variable rel_type d_bool;
+declare variable us_is_table d_smallint;
+declare variable view_name d_str_code;
+declare variable view_uuid d_uuid;
+begin
+  -- Сихронизирует индексы БД с таблицей uxIndex
+
+  if (coalesce(us_uuid, &#x27;&#x27;) = &#x27;&#x27;) then
+    us_uuid = uxf$uniq(us_uuid_code, 0);
+
+  if (auto_apply is null) then
+    auto_apply = 0;
+
+  select us_code, us_kind, us_is_table, us_is_view
+  from ux$source
+  where us_uuid = :us_uuid
+  into us_source, us_kind, us_is_table, us_is_view;
+
+  if (us_kind &lt;&gt; 0) then
+    exit;
+
+  select trim(rdb$description), r.rdb$relation_type
+  from rdb$relations r
+  where r.rdb$system_flag = 0 and
+        r.rdb$relation_type in (0, 1) and
+        r.rdb$relation_name = upper(:us_source)
+  into res_memo, rel_type;
+
+  if (res_memo is null) then
+    res_memo = &#x27;&#x27;;
+
+  if (rel_type is null) then
+    rel_type = 0;
+
+  update ux$source
+  set us_memo = :res_memo,
+      us_is_view = :rel_type
+  where us_uuid = :us_uuid
+  returning us_is_view
+  into us_is_view;
+
+  execute procedure uxp$uxsource_sync_params(:us_uuid, :auto_apply);
+
+  if (us_is_view = 0) then
+    execute procedure uxp$uxsource_sync_index(:us_uuid);
+  else
+  begin
+    table_name = &#x27;&#x27;;
+    select trim(rdb$relation_name)
+    from rdb$view_relations
+    where rdb$view_name = upper(:us_source) and
+          rdb$context_type = 0
+    order by rdb$view_context
+    rows 1
+    into :table_name;
+
+    if (table_name &lt;&gt; &#x27;&#x27;) then
+    begin
+      for select lower(trim(i.rdb$field_name))
+      from rdb$relation_constraints r
+      inner join rdb$index_segments i on i.rdb$index_name = r.rdb$index_name
+      inner join rdb$relation_fields rf on rf.rdb$field_name = i.rdb$field_name and
+            rf.rdb$relation_name = r.rdb$relation_name
+      inner join rdb$fields f on f.rdb$field_name = rf.rdb$field_source
+      where r.rdb$constraint_type = &#x27;PRIMARY KEY&#x27; and
+           r.rdb$relation_name = upper(:table_name)
+      into field_name
+      do
+      begin
+        for select lower(trim(rdb$field_name))
+        from rdb$relation_fields
+        where rdb$relation_name = upper(:us_source) and
+              rdb$base_field = upper(:field_name)
+        into view_field
+        do
+        begin
+          for select uf_uuid
+          from ux$field
+          where uf_owner = :us_uuid and
+                uf_field_name = :view_field
+          into uf_uuid
+          do
+            execute procedure uxp$uxfield_set_keyfield(:uf_uuid);
+        end
+      end
+    end
+
+    update ux$field
+    set uf_origin_uf_uuid = uf_origin_uf_uuid
+    where uf_owner = :us_uuid and
+          uf_origin_uf_uuid is null;
+  end
+
+  execute procedure uxp$uxsource_diff_sync(:us_uuid);
+
+  if (us_is_table = 1 and us_is_view = 0) then
+  begin
+    for select lower(trim(rdb$view_name))
+    from rdb$view_relations
+    where rdb$relation_name = upper(:us_source)
+    into view_name
+    do
+    begin
+      for select us_uuid
+      from ux$source
+      where us_code = :view_name
+      into view_uuid
+      do
+        execute procedure uxp$uxsource_sync(:view_uuid, 1);
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

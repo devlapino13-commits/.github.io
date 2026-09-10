@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CLIENT_DELINQ_CALLS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CLIENT_DELINQ_CALLS: 2 входных, 5 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CLIENT_DELINQ_CALLS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OBJECT_KIND</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJECT_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CALLED_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MEMO</div><div class="ptype">VARCHAR(1000)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PROJECT</div><div class="ptype">VARCHAR(10)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RESULT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CLIENT_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CLIENT_DELINQ_CALLS(
+    OBJECT_KIND INTEGER,
+    OBJECT_ID ID_TYPE)
+RETURNS (
+    CALLED_DATE DATE,
+    MEMO VARCHAR(1000),
+    PROJECT VARCHAR(10),
+    RESULT STR_100,
+    CLIENT_FIO STR_100)
+AS
+declare variable pcl_res integer;
+declare variable object_kind_name str_100;
+declare variable pcl_res_old integer;
+begin
+  object_kind_name = f_objkind(object_kind, &#x27;name&#x27;);
+
+  pcl_res_old = 0;
+
+  if (object_kind_name = &#x27;Clients&#x27;) then
+  begin
+    for select pcl.pcl_res, pcl.pcl_called_date, pcl.pcl_memo,
+               (
+               case pant_project_type
+                 when 1 then &#x27;Пантера&#x27;
+                 when 4 then &#x27;Сирена&#x27;
+               end)
+        from pantera_clients pcl
+        inner join pantera_kontracts pantk on pantk.pant_id = pcl.pcl_from_pan_id
+        inner join kontstate ks on ks.ks_from_k_id = pantk.pant_from_k_id
+        where pcl.pcl_from_c_id = :object_id and
+              pantk.pant_project_type in (1, 4) and
+              current_date between ks.ks_date_begin and ks.ks_date_end and
+              ks.ks_ol_is_delete = 0 and
+              ks.ks_state = 1
+        order by pcl.pcl_called_date desc
+        into :pcl_res, :called_date, :memo, :project
+    do
+    begin
+      select cl.c_name_fio
+      from clients cl
+      where cl.c_id = :object_id
+      into :client_fio;
+
+      if (pcl_res &lt;&gt; pcl_res_old) then
+      begin
+        result = null;
+
+        select rd.rd_name
+        from refdata rd
+        where rd.rd_main_code = &#x27;OKTELL.SirenaResults&#x27; and
+              rd.rd_tag = :pcl_res and
+              rd.rd_parent_id is not null
+        into :result;
+
+        pcl_res_old = pcl_res;
+      end
+
+      suspend;
+    end
+  end
+  else
+  if (object_kind_name = &#x27;Kontract&#x27;) then
+  begin
+    for select pcl.pcl_res, pcl.pcl_called_date, pcl.pcl_memo,
+               (
+               case pant_project_type
+                 when 1 then &#x27;Пантера&#x27;
+                 when 4 then &#x27;Сирена&#x27;
+               end),
+               cl.c_name_fio
+        from pantera_clients pcl
+        inner join pantera_kontracts pantk on pantk.pant_id = pcl.pcl_from_pan_id
+        inner join kontstate ks on ks.ks_from_k_id = pantk.pant_from_k_id
+        inner join clients cl on cl.c_id = pcl.pcl_from_c_id
+        where pantk.pant_from_k_id = :object_id and
+              pantk.pant_project_type in (1, 4) and
+              current_date between ks.ks_date_begin and ks.ks_date_end and
+              ks.ks_ol_is_delete = 0 and
+              ks.ks_state = 1
+        order by cl.c_name_fio, pcl.pcl_called_date desc
+        into :pcl_res, :called_date, :memo, :project, :client_fio
+    do
+    begin
+      result = &#x27;&#x27;;
+
+      if (pcl_res &lt;&gt; pcl_res_old) then
+      begin
+        result = null;
+
+        select rd.rd_name
+        from refdata rd
+        where rd.rd_main_code = &#x27;OKTELL.SirenaResults&#x27; and
+              rd.rd_tag = :pcl_res and
+              rd.rd_parent_id is not null
+        into :result;
+
+        pcl_res_old = pcl_res;
+      end
+
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$UXACTION_CLONE — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$UXACTION_CLONE: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$UXACTION_CLONE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OWNER_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEW_OWNER_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$UXACTION_CLONE(
+    OWNER_UUID D_UUID,
+    NEW_OWNER_UUID D_UUID)
+AS
+declare variable ua_uuid d_uuid;
+declare variable new_ufp_uuid d_uuid;
+begin
+  for select ua_uuid, ua_owner, ua_uxa_uuid, ua_uxa_fcode, ua_name, ua_hint, ua_disable_on_edit,
+             ua_readonly, ua_inactive,
+             ua_menu_index, ua_usr_id_field, ua_usr_text_field,
+             ua_img_uuid, ua_ext_component, ua_ext_dataset, ua_ext_action, ua_ext_replace_kind,
+             ua_hotkey, ua_add_delimiter, ua_auto_refresh_seconds, ua_is_group, ua_alias_group,
+             ua_trigger_kind, ua_preblank_kind, ua_preblank_code, ua_preblank_save
+  from ux$action
+  where ua_owner = :owner_uuid
+  as cursor cur
+  do
+  begin
+    update or insert into ux$action (ua_owner, ua_uxa_uuid, ua_uxa_fcode, ua_name, ua_hint, ua_disable_on_edit, ua_readonly,
+                                     ua_inactive, ua_menu_index, ua_usr_id_field, ua_usr_text_field,
+                                     ua_img_uuid, ua_ext_component, ua_ext_dataset, ua_ext_action, ua_ext_replace_kind,
+                                     ua_hotkey, ua_add_delimiter, ua_auto_refresh_seconds, ua_is_group, ua_alias_group,
+                                     ua_trigger_kind, ua_preblank_kind, ua_preblank_code, ua_preblank_save)
+    values (:new_owner_uuid, cur.ua_uxa_uuid, cur.ua_uxa_fcode, cur.ua_name, cur.ua_hint, cur.ua_disable_on_edit, cur.ua_readonly,
+            cur.ua_inactive, cur.ua_menu_index, cur.ua_usr_id_field, cur.ua_usr_text_field,
+            cur.ua_img_uuid, cur.ua_ext_component, cur.ua_ext_dataset, cur.ua_ext_action, cur.ua_ext_replace_kind,
+            cur.ua_hotkey, cur.ua_add_delimiter, cur.ua_auto_refresh_seconds, cur.ua_is_group, cur.ua_alias_group,
+            cur.ua_trigger_kind, cur.ua_preblank_kind, cur.ua_preblank_code, cur.ua_preblank_save)
+    matching (ua_owner, ua_uxa_uuid, ua_usr_id_field)
+    returning (ua_uuid)
+    into ua_uuid;
+
+    execute procedure uxp$uxpairuuid_add(cur.ua_uuid, :ua_uuid);
+    execute procedure uxp$uxexpression_clone(cur.ua_uuid, :ua_uuid);
+
+    for select uap_ua_uuid, uap_param_name, uap_owner_ufp_uuid, uap_owner_ext_field,
+               uap_default, uap_use_default, uap_locked, uap_exec_param_id
+    from ux$actionparam
+    where uap_ua_uuid = cur.ua_uuid
+    as cursor act
+    do
+    begin
+      new_ufp_uuid = null;
+
+      if (act.uap_owner_ufp_uuid is not null) then
+        new_ufp_uuid = uxf$pair(act.uap_owner_ufp_uuid);
+
+      insert into ux$actionparam (uap_ua_uuid, uap_param_name, uap_owner_ufp_uuid, uap_owner_ext_field,
+                                  uap_default, uap_use_default, uap_locked, uap_exec_param_id)
+      values (:ua_uuid, act.uap_param_name, :new_ufp_uuid, act.uap_owner_ext_field,
+              act.uap_default, act.uap_use_default, act.uap_locked, act.uap_exec_param_id);
+    end
+  end
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

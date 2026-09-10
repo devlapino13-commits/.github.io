@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLC_LIST_PRIOR — процедура — схема БД</title>
+<meta name="description" content="Процедура LLC_LIST_PRIOR: 2 входных, 6 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>LLC_LIST_PRIOR</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DD</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">LK_KONTRACT_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LK_DELIQ_DAYS_PRIOR</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LK_STATUS_PRIOR</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LK_PERCENT_PRIOR</div><div class="ptype">DECIMAL(18,7)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LK_DISB_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LK_KONT_NO</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE LLC_LIST_PRIOR(
+    ID DECIMAL(18,0),
+    DD DATE)
+RETURNS (
+    LK_KONTRACT_ID DECIMAL(18,0),
+    LK_DELIQ_DAYS_PRIOR INTEGER,
+    LK_STATUS_PRIOR SMALLINT,
+    LK_PERCENT_PRIOR DECIMAL(18,7),
+    LK_DISB_DATE DATE,
+    LK_KONT_NO VARCHAR(20))
+AS
+declare variable perc_gr decimal(18,7);
+declare variable perc_ind decimal(18,7);
+declare variable loan_t integer;
+declare variable prior_status integer;
+begin
+  /* Procedure Text */
+  for select lk_from_k_id, k_disb_date, k_kontract_no, k_from_cs_id, cs_is_for_group, cs_is_for_indiv, pr_loan_type
+      from llc_kont, kontract, classific, product
+      where lk_from_lm_id = :id and
+            k_id = lk_from_k_id and
+            k_from_cs_id = cs_id and
+            k_from_pr_id = pr_id
+      into :lk_kontract_id, :lk_disb_date, :lk_kont_no, :prior_status, :perc_gr, :perc_ind, :loan_t
+  do
+  begin
+    lk_deliq_days_prior = 0;
+    lk_status_prior = 0;
+    lk_percent_prior = 0;
+    select lk_status, lk_percent, lk_deliq_days
+    from llc_kont
+    where lk_date &lt; :dd and
+          lk_date_end &gt;= (:dd - 1) and
+          lk_from_k_id = :lk_kontract_id
+    order by lk_date desc
+    rows 1
+    into :lk_status_prior, :lk_percent_prior, :lk_deliq_days_prior;
+    if (lk_status_prior = 0) then
+    begin
+      if (loan_t = 0) then
+        lk_percent_prior = :perc_gr;
+      else
+        lk_percent_prior = :perc_ind;
+      lk_status_prior = :prior_status;
+    end
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

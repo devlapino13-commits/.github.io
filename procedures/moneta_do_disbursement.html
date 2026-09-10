@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MONETA_DO_DISBURSEMENT — процедура — схема БД</title>
+<meta name="description" content="Процедура MONETA_DO_DISBURSEMENT: 3 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>MONETA_DO_DISBURSEMENT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_bankacc_get_info.html"><div class="to">HP_BANKACC_GET_INFO</div></a><a class="ref-card" href="hp_client_bank_card.html"><div class="to">HP_CLIENT_BANK_CARD</div></a><a class="ref-card" href="hp_fps_get_loan_bank.html"><div class="to">HP_FPS_GET_LOAN_BANK</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_disbursement.html"><div class="to">HP_DO_DISBURSEMENT</div></a><a class="ref-card" href="hp_do_disbursement_card.html"><div class="to">HP_DO_DISBURSEMENT_CARD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DISB_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE MONETA_DO_DISBURSEMENT(
+    K_ID ID_TYPE,
+    C_ID ID_TYPE,
+    DISB_AMOUNT CURR_TYPE)
+AS
+declare variable esm_account d_str_code;
+declare variable cell_no d_str_100;
+declare variable fpb_code d_str_code;
+declare variable esm_action d_str_20;
+declare variable k_disb_kind d_smallint;
+declare variable fpl_payment_id d_str_code;
+declare variable json_data d_str_255;
+declare variable bank_bik d_str_10;
+declare variable client_account d_str_code;
+declare variable edoc_pmt_project_disb d_str_255;
+begin
+  edoc_pmt_project_disb = f_get_const(&#x27;edoc_pmt_project_disb&#x27;);
+  
+  select esm_action
+  from extsysmain em
+  where esm_project = f_format(&#x27;%1_disb&#x27;, :edoc_pmt_project_disb) and
+       esm_action in (&#x27;CardDisb&#x27;, &#x27;PhoneDisb&#x27;, &#x27;AccDisb&#x27;) and
+       esm_from_k_id = :k_id and
+       esm_status in (0, 1, 999)
+  into esm_action;
+
+  if (esm_action is not null) then
+    exit;
+
+  select k_disb_kind from kontract
+  where k_id = :k_id
+  into k_disb_kind;
+
+  esm_action = &#x27;CardDisb&#x27;;
+  if (k_disb_kind = 7) then
+    esm_action = &#x27;PhoneDisb&#x27;;
+  else if (k_disb_kind = 8) then
+    esm_action = &#x27;AccDisb&#x27;;
+
+  if (esm_action = &#x27;CardDisb&#x27;) then
+  begin
+    select token
+    from hp_client_bank_card(:c_id)
+    into esm_account;
+  
+    if (esm_account is null) then
+      exception e_default &#x27;Token is not exists&#x27;;
+  end
+
+  if (esm_action = &#x27;PhoneDisb&#x27;) then
+  begin
+    select fpb_code, cell_no
+    from hp_fps_get_loan_bank(:k_id, :c_id)
+    into fpb_code, cell_no;
+
+    if (fpb_code is null or cell_no is null ) then
+      exception e_default f_format(&#x27;FPS bank not found for k_id:%1, c_id:%2&#x27;, k_id, c_id);
+
+    esm_account = f_format(&#x27;%1:%2&#x27;, cell_no, fpb_code);
+
+    -- Подготовка платежного идентификатора для MONETA_FPS_CREDITS_FOR_ADD
+    select fpl_payment_id
+    from fps_locks
+    where fpl_from_k_id = :k_id
+    into fpl_payment_id;
+    json_data = &#x27;{&#x27; || f_json_make_pair(&#x27;payment_id&#x27;, fpl_payment_id, &#x27;str&#x27;) || &#x27;}&#x27;;
+  end
+
+  if (esm_action = &#x27;AccDisb&#x27;) then
+  begin
+
+    select bank_bik, client_account
+    from hp_bankacc_get_info(null, :c_id)
+    into bank_bik, client_account;
+
+    if (bank_bik is null or client_account is null) then
+      exception e_default f_format(&#x27;Bank or client account not found for k_id:%1, c_id:%2&#x27;, k_id, c_id);
+
+    esm_account = f_format(&#x27;%1:%2&#x27;, bank_bik, client_account);
+  end
+
+  insert into extsysmain (
+    esm_project, esm_action, esm_date, esm_object_kind, esm_object_id, esm_status,
+    esm_full_source, esm_amount, esm_from_k_id, esm_account)
+  values (f_format(&#x27;%1_disb&#x27;, :edoc_pmt_project_disb), :esm_action, current_date, 0, :c_id, 0, :json_data, :disb_amount, :k_id, :esm_account);
+  
+  post_event &#x27;request_payout&#x27;;
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

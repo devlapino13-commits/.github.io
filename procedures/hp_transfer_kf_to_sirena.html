@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_TRANSFER_KF_TO_SIRENA — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_TRANSFER_KF_TO_SIRENA: 3 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_TRANSFER_KF_TO_SIRENA</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="get_kv.html"><div class="to">GET_KV</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KA_MEMO</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">KA_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_TRANSFER_KF_TO_SIRENA(
+    K_ID D_ID,
+    REP_DATE D_DATE = null,
+    KA_MEMO D_STR_255 = null)
+RETURNS (
+    KA_ID D_ID)
+AS
+declare variable kf_id d_id;
+declare variable reg_id d_integer;
+declare variable ka_akt_no d_integer;
+declare variable current_lo_id d_id;
+declare variable kal_new_kf_name d_str_100;
+declare variable kal_new_no d_integer;
+declare variable kal_new_officer_code d_str_20;
+begin
+    rep_date = coalesce(:rep_date, current_date);
+    ka_memo = coalesce(:ka_memo, &#x27;&#x27;);
+
+    -- Получаем кредитную папку договора
+    select k_from_kf_id
+    from kontract
+    where k_id = :k_id
+    into :kf_id;
+
+    if (kf_id is null) then
+        exit;
+
+    -- Получаем текущее закрепление кредитной папки
+    select first 1 kal_new_kf_officer, kal_new_kf_name, kal_new_no, kal_new_officer_code, kal_new_reg_id
+    from knaktlist
+    where kal_from_kf_id = :kf_id and
+          is_delete = 0 and
+          :rep_date between kal_date and kal_date_end
+    order by kal_date desc
+    into :current_lo_id, :kal_new_kf_name, :kal_new_no, :kal_new_officer_code, :reg_id;
+
+    if (current_lo_id is null) then
+        exit;
+
+    -- Папка уже закреплена за КЦ Сирена
+    if (current_lo_id = 1000000000004) then
+        exit;
+
+    -- Повторяем ограничение из hp_transfer_lp_to_other:
+    -- перенос выполняем только с обычного сотрудника на виртуального
+    if (current_lo_id &lt;= 1000000000004) then
+        exit;
+
+    -- Создаем акт передачи
+    select kv
+    from get_kv(:reg_id, 7)
+    into :ka_id;
+
+    select coalesce(max(cast(ka_akt_no as integer)), 0) + 1
+    from knakt
+    where ka_from_reg_id = :reg_id
+    into :ka_akt_no;
+
+    insert into knakt (ka_id, ka_date, ka_from_reg_id, ka_akt_no, ka_memo, is_delete, ka_from_ol_id)
+    values (:ka_id, :rep_date, :reg_id, :ka_akt_no, :ka_memo, 0, null);
+
+    -- Для КЦ в существующей процедуре к названию папки добавляется &quot;.КЦ&quot;
+    kal_new_kf_name = kal_new_kf_name || &#x27;.КЦ&#x27;;
+
+    insert into knaktlist (kal_from_ka_id, kal_number, kal_from_kf_id, kal_from_k_id, kal_date, kal_date_end,
+                           kal_new_kf_officer, kal_new_kf_name, is_delete, kal_new_reg_id, kal_new_no,
+                           kal_new_officer_code)
+    values (:ka_id, -1, :kf_id, :kf_id, :rep_date, date &#x27;9999-12-31&#x27;, 1000000000004, :kal_new_kf_name, 0, :reg_id,
+            :kal_new_no, :kal_new_officer_code);
+
+    suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

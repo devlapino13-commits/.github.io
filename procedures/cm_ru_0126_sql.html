@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0126_SQL — процедура — схема БД</title>
+<meta name="description" content="Льготный период">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0126_SQL</code></h1>
+<p class="desc">Льготный период</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0126_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable PR_CODE varchar(100);
+declare variable K_KOLICH_LGOTA integer;
+begin
+  for select pr_code, k_kolich_lgota
+      from kontract, product
+      where k_id = :k_id and
+            k_from_pr_id = pr_id and
+            k_kolich_lgota &gt; 0
+      into pr_code, k_kolich_lgota
+  do
+  begin
+    if (pr_code containing &#x27;.express.&#x27;
+        -- or (pr_code containing &#x27;.par.&#x27; and pr_code not containing &#x27;.patent plus.&#x27;)
+        or pr_code containing &#x27;.status.&#x27; or pr_code containing &#x27;.shans plus.&#x27; or pr_code containing &#x27;.education.&#x27; or pr_code containing &#x27;.food.&#x27;) then
+    begin
+      res_error_text = &#x27;В текущем продукте не разрешается льготный период&#x27;;
+      res_error_is_critical = 2;
+      suspend;
+    end
+    if (pr_code containing &#x27;.zalog_car.&#x27; /*or pr_code containing &#x27;.privilege_plus.&#x27;*/) then
+    begin
+      if (k_kolich_lgota &gt; 3) then
+      begin
+        res_error_text = &#x27;Кол-во льготных периодов не должно превышать 3.&#x27;;
+        res_error_is_critical = 2;
+        suspend;
+      end
+      /*
+      if (pr_code containing &#x27;.privilege_plus.&#x27; and
+          exists(select *
+                 from schedule
+                 where sh_from_k_id = :k_id and
+                       sh_id &gt;= 4 and
+                       sh_grace = 1)) then
+      begin
+        res_error_text = &#x27;По продукту  &quot;Привилегия + &quot; льготные периоды должны быть в первых 3х платежах&#x27;;
+        res_error_is_critical = 2;
+        suspend;
+      end      */
+    end
+    else
+    if ((pr_code containing &#x27;.zalog.&#x27; or pr_code containing &#x27;.privilege.&#x27;) and
+        k_kolich_lgota &gt; 4) then
+    begin
+      res_error_text = &#x27;Кол-во льготных периодов не должно превышать 4.&#x27;;
+      res_error_is_critical = 2;
+      suspend;
+    end
+    else
+    if ((pr_code containing &#x27;.reliable_client.&#x27; or pr_code containing &#x27;.universal.&#x27; or pr_code containing &#x27;.oivo.&#x27; or pr_code containing &#x27;.selfemployed.&#x27; or
+         pr_code containing &#x27;.business.&#x27;) and
+        k_kolich_lgota &gt; 4) then
+    begin
+      res_error_text = &#x27;Кол-во льготных периодов не должно превышать 2.&#x27;;
+      res_error_is_critical = 2;
+      suspend;
+    end
+
+    else
+    if (k_kolich_lgota &gt; 2 and
+        pr_code not containing &#x27;.privilege.&#x27; and
+        pr_code not containing &#x27;.privilege_plus.&#x27; and
+        pr_code not containing &#x27;.reliable_client.&#x27; and
+        pr_code not containing &#x27;.universal.&#x27; and
+        pr_code not containing &#x27;.oivo.&#x27; and  
+        pr_code not containing &#x27;.par.&#x27; and
+        pr_code not containing &#x27;.selfemployed.&#x27;and
+        pr_code not containing &#x27;.business.&#x27;and
+        pr_code not containing &#x27;.refinance.&#x27; and
+        pr_code not containing &#x27;.refinance_oivo.&#x27; and
+        pr_code not containing &#x27;.refinance_plus.&#x27; and
+        pr_code not containing &#x27;.b_refinance.&#x27; and
+        pr_code not containing &#x27;.plus_100.&#x27; and
+        pr_code not containing &#x27;.plus_100_b.&#x27;
+
+        ) then
+    begin
+      res_error_text = &#x27;Кол-во льготных периодов не должно превышать 2.&#x27;;
+      res_error_is_critical = 2;
+      suspend;
+    end
+    if (pr_code containing &#x27;.shans.&#x27; or pr_code containing &#x27;.patent plus.&#x27;) then
+    begin
+      if (k_kolich_lgota &gt; 1) then
+      begin
+        res_error_text = &#x27;В текущем продукте разрешено 1 льготный период.&#x27;;
+        res_error_is_critical = 2;
+        suspend;
+      end
+      if (k_kolich_lgota = 1 and
+          exists(select *
+                 from schedule sh
+                 where sh.sh_from_k_id = :k_id and
+                       sh.sh_id &gt; 0 and
+                       sh.sh_os = 0 and
+                       sh.sh_id not in (1))) then
+      begin
+        res_error_text = &#x27;В текущем продукте льготный период разрешается только на первом платеже.&#x27;;
+        res_error_is_critical = 2;
+        suspend;
+      end
+    end
+    if (pr_code containing &#x27;.switch_plus.&#x27; or pr_code containing &#x27;.blago.&#x27; or pr_code containing &#x27;.uspeh.&#x27; or pr_code containing &#x27;.privilege_plus.&#x27; or pr_code containing &#x27;.refinance.&#x27; or pr_code containing &#x27;.refinance_oivo.&#x27;) then
+    begin
+      if (exists(select *
+                 from schedule sh
+                 where sh.sh_from_k_id = :k_id and
+                       sh.sh_id &gt; 0 and
+                       sh.sh_os = 0 and
+                       extract(month from sh_date) not in (1, 2))) then
+      begin
+        res_error_text = &#x27;Льготный период можно получить только на январь и/или февраль.&#x27;;
+        res_error_is_critical = 2;
+        suspend;
+      end
+    end
+  end
+
+  /*
+  if (exists(select pr_code, k_kolich_lgota
+             from kontract, product
+             where k_id = :k_id and
+                   k_from_pr_id = pr_id and
+                   k_kolich_lgota &lt; 3 and
+                   pr_code containing &#x27;.privilege_plus.&#x27;)) then
+  begin
+    res_error_text = &#x27;По текущему продукту можете выбрать до 3х льготных периодов.&#x27;;
+    res_error_is_critical = 2;
+    suspend;
+  end   */
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

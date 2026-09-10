@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLIENT_OTHER_DB_CHECK — процедура — схема БД</title>
+<meta name="description" content="Процедура CLIENT_OTHER_DB_CHECK: 4 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CLIENT_OTHER_DB_CHECK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_make_zad_list.html"><div class="to">AAREP_MAKE_ZAD_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">BIRTH_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">INN</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PASS_NO</div><div class="ptype">VARCHAR(64)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CLIENT_OTHER_DB_CHECK(
+    FIO STR_100,
+    BIRTH_DATE D_DATE,
+    INN STR_20,
+    PASS_NO D_STR_64)
+RETURNS (
+    RES_TEXT D_STR_8100)
+AS
+declare variable C_ID ID_TYPE;
+declare variable C_NAME_FIO STR_100;
+declare variable C_PASS_NO D_STR_64;
+declare variable C_PASS_DATE D_DATE;
+declare variable C_BIRTH_DATE D_DATE;
+declare variable KS_STATE smallint;
+declare variable DELINQ_DAY integer;
+declare variable K_ID ID_TYPE;
+declare variable MAX_DELINQ_DAY integer;
+declare variable QTY_KRED smallint;
+declare variable QTY_ACTIVE smallint;
+declare variable QTY_DELINQ smallint;
+declare variable SUM_OSTATOK CURR_TYPE;
+declare variable SUM_DELINQ_OSTATOK CURR_TYPE;
+declare variable SUM_ZAD CURR_TYPE;
+declare variable IS_PORUCH smallint;
+declare variable IS_ZAEMSHIK smallint;
+declare variable CATEGORY D_STR_100;
+declare variable STATE_STR D_STR_20;
+declare variable OX_AMOUNT_PLUS CURR_TYPE;
+declare variable IS_FOUND D_INTEGER;
+begin
+  -- доработка ч is_found связана с задачей RFCKG-1992. Механизм ломался, когда находилось несколько лиц удовлетворяющих условию проверки
+
+  res_text = &#x27;&#x27;;
+  fio = trim(fio);
+  if (fio = &#x27;&#x27;) then
+    fio = null;
+  inn = replace(inn, &#x27; &#x27;, &#x27;&#x27;);
+  if (inn = &#x27;&#x27;) then
+    inn = null;
+  pass_no = replace(pass_no, &#x27; &#x27;, &#x27;&#x27;);
+  if (pass_no = &#x27;&#x27;) then
+    pass_no = null;
+
+  is_found = 0;
+
+  for select c_id, c_name_fio, c_pass_no, -- № паспорта
+             c_pass_date, -- Дата паспорта
+             c_birth_date
+      from clients
+      where (c_name_fio = :fio and
+            c_birth_date = :birth_date) or
+            (c_inn = :inn)
+      union
+      select c_id, c_name_fio, c_pass_no, -- № паспорта
+             c_pass_date, -- Дата паспорта
+             c_birth_date
+      from clients, clientdocs
+      where c_id = cds_from_c_id and
+            cds_index_doc_no = :pass_no
+      into c_id, c_name_fio, c_pass_no, c_pass_date, c_birth_date
+  do
+  begin
+    if (is_found = 0) then
+        is_found = 1;
+    else
+        continue;
+
+    qty_kred = 0;
+    qty_active = 0;
+    qty_delinq = 0;
+    sum_ostatok = 0;
+    sum_delinq_ostatok = 0;
+    for select ks_from_k_id, iif(current_date between ks_date_begin and ks_date_end, 1, 0)
+        from knclient, kontstate
+        where kc_from_c_id = :c_id and
+              kc_amount_approved &gt; 0 and
+              kc_from_k_id = ks_from_k_id and
+              ks_state = 1
+        order by ks_date_begin
+        into k_id, ks_state
+    do
+    begin
+      qty_kred = qty_kred + 1;
+      qty_active = qty_active + ks_state;
+
+      if (ks_state = 1) then
+      begin
+        delinq_day = null;
+        select iif((cast(current_date as date) - oks_delinq_date &lt; 0), 0, cast(current_date as date) - oks_delinq_date)
+        from oksummary
+        where current_date between oks_date_begin and oks_date_end and
+              oks_from_k_id = :k_id and
+              oks_close_state = 0
+        into delinq_day;
+        delinq_day = coalesce(delinq_day, 0);
+
+        sum_zad = null;
+        select sum(zad_os + sh_calc_perc + sh_calc_fine)
+        from aarep_make_zad_list(:k_id, current_date, 1)
+        into sum_zad;
+        sum_zad = coalesce(sum_zad, 0);
+
+        if (delinq_day &gt; 0) then
+        begin
+          qty_delinq = qty_delinq + 1;
+          sum_delinq_ostatok = sum_delinq_ostatok + sum_zad;
+        end
+        sum_ostatok = sum_ostatok + sum_zad;
+      end
+
+      max_delinq_day = null;
+      select max(ok_ol_date - ok_sh_date)
+      from operkred
+      where ok_ol_is_active = 1 and
+            ok_from_k_id = :k_id and
+            ok_type in (4, 5) and
+            ok_os + ok_perc &lt; 0 and
+            ok_ol_date &gt; ok_sh_date
+      into max_delinq_day;
+      max_delinq_day = coalesce(max_delinq_day, 0);
+      if (delinq_day &gt; max_delinq_day) then
+        max_delinq_day = delinq_day;
+    end
+
+    is_zaemshik = 0;
+    if (qty_kred &gt; 0) then
+      is_zaemshik = 1;
+    is_poruch = 0;
+    if (exists(select *
+               from zalog, kontstate
+               where z_type = 0 and
+                     z_from_c_id = :c_id and
+                     z_from_k_id = ks_from_k_id and
+                     ks_ol_is_delete = 0 and
+                     ks_state = 1 and
+                     current_date between ks_date_begin and ks_date_end)) then
+      is_poruch = 1;
+
+    if (is_zaemshik + is_poruch = 2) then
+    begin
+      category = &#x27;Заёмщик/Поручитель&#x27;;
+    end
+    else
+    if (is_zaemshik = 1) then
+    begin
+      category = &#x27;Заёмщик&#x27;;
+    end
+    else
+    if (is_poruch = 1) then
+    begin
+      category = &#x27;Поручитель&#x27;;
+    end
+
+    state_str = &#x27;закрытый&#x27;;
+    if (exists(select oks.oks_close_state
+               from oksummary oks
+               where oks.oks_from_k_id = :k_id and
+                     current_date between oks.oks_date_begin and oks.oks_date_end and
+                     oks_close_state = 1)) then
+      state_str = &#x27;Спец.учет&#x27;;
+
+    if (exists(select ks.ks_state
+               from kontstate ks
+               where ks.ks_from_k_id = :k_id and
+                     current_date between ks.ks_date_begin and ks.ks_date_end and
+                     ks.ks_ol_is_delete = 0 and
+                     ks.ks_state in (1))) then
+      state_str = &#x27;Активный&#x27;;
+
+    if (state_str = &#x27;Спец.учет&#x27;) then
+    begin
+      select coalesce(sum(okf.oko_sh_os + okf.oko_sh_perc + okf.oko_sh_other),0)
+      from operkroff okf
+      where okf.oko_from_k_id = :k_id and
+            okf.oko_ol_is_active = 1
+      into sum_ostatok;
+
+      select coalesce(sum(ox.ox_amount_plus),0)
+      from operextra ox
+      where ox.ox_object_kind = 9 and
+            ox.ox_object_id = :k_id and
+            ox.ox_ol_date &lt;= current_date
+      into ox_amount_plus;
+
+      qty_delinq = 1; -- RFCKG-2511
+      sum_delinq_ostatok = sum_ostatok;
+
+    end
+
+    res_text = res_text || &#x27;{&#x27; ||
+    &#x27;&quot;C_NAME_FIO&quot; : &quot;&#x27; || c_name_fio || &#x27;&quot;,&#x27; ||
+    &#x27;&quot;C_PASS_NO&quot; : &quot;&#x27; || c_pass_no || &#x27;&quot;,&#x27; ||
+    &#x27;&quot;C_PASS_DATE&quot; : &quot;&#x27; || f_datetostr(c_pass_date) || &#x27;&quot;,&#x27; ||
+    &#x27;&quot;C_BIRTH_DATE&quot; : &quot;&#x27; || f_datetostr(c_birth_date) || &#x27;&quot;,&#x27; ||
+    &#x27;&quot;category&quot; : &quot;&#x27; || category || &#x27;&quot;,&#x27; ||
+    &#x27;&quot;qty_kred&quot; : &#x27; || qty_kred || &#x27;,&#x27; ||
+    &#x27;&quot;qty _active&quot; : &#x27; || qty_active || &#x27;,&#x27; ||
+    &#x27;&quot;sum_ostatok&quot; : &#x27; || round(sum_ostatok, 2) || &#x27;,&#x27; ||
+    &#x27;&quot;qty_delinq&quot; : &#x27; || qty_delinq || &#x27;,&#x27; ||
+    &#x27;&quot;state_str&quot; : &quot;&#x27; || state_str || &#x27;&quot;,&#x27; ||
+    &#x27;&quot;sum_delinq_ostatok&quot; : &#x27; || round(sum_delinq_ostatok, 2) || &#x27;,&#x27; ||
+    &#x27;&quot;ox_amount_plus&quot; : &#x27; || round(ox_amount_plus, 2) || &#x27;,&#x27; ||
+    &#x27;&quot;max_delinq_day&quot; : &#x27; || max_delinq_day || &#x27;&#x27; || &#x27;}&#x27;;
+  end
+  if (coalesce(res_text, &#x27;&#x27;) = &#x27;&#x27;) then
+    res_text = &#x27;{}&#x27;;
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

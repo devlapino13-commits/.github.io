@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_OPERDELMAIN_OPER_BY_KONT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_OPERDELMAIN_OPER_BY_KONT: 1 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_OPERDELMAIN_OPER_BY_KONT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_loanoper_payment_info.html"><div class="to">HP_GET_LOANOPER_PAYMENT_INFO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">IN_K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_OL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_OPERDELMAIN_OPER_BY_KONT(
+    IN_K_ID D_ID)
+RETURNS (
+    RES_OL_ID D_ID,
+    RES_TEXT D_STR_LONG)
+AS
+declare variable tmp_ol_id d_id;
+declare variable ol_date d_date;
+declare variable payment_kind_str d_str_code;
+declare variable reg_name d_str_100;
+declare variable doc_no_str d_str_code;
+begin
+  for select distinct ok_from_ol_id, ok_ol_date
+  from operkred
+  where ok_from_k_id = :in_k_id and
+        ok_ol_is_active = 1 and
+        ok_type in (4, 5, 9)
+  union
+  select oko_from_ol_id, oko_ol_date
+  from operkroff
+  where oko_from_k_id = :in_k_id
+  order by 2 desc, 1 desc
+  into tmp_ol_id, ol_date
+  do
+  begin
+    for select res_payment_kind, res_loan_ol_id, res_main_ol_id, res_loan_amount, res_book_amount, res_dt_account,
+               res_loan_office, res_fact_office, res_kkm_id
+    from hp_get_loanoper_payment_info(:tmp_ol_id, :in_k_id)
+    as cursor cur
+    do
+    begin
+      res_ol_id = cur.res_loan_ol_id;
+
+      doc_no_str = &#x27;&#x27;;
+      select ol_doc_no_str
+      from operlist
+      where ol_id = :res_ol_id
+      into doc_no_str;
+
+      if (doc_no_str is null) then
+        doc_no_str = &#x27;&#x27;;
+
+      if (doc_no_str = &#x27;&#x27;) then
+        doc_no_str = &#x27;-&#x27;;
+
+      payment_kind_str = &#x27;&#x27;;
+      payment_kind_str = trim(case cur.res_payment_kind
+        when 1 then &#x27;Касса&#x27;
+        when 2 then &#x27;Банк&#x27;
+        when 3 then &#x27;Онлайн&#x27;
+        else &#x27;Сумма&#x27;
+      end);
+
+      res_text = f_datetostr(ol_date);
+
+      if (payment_kind_str &lt;&gt; &#x27;&#x27;) then
+        res_text = res_text || &#x27; &#x27; || payment_kind_str;
+
+      select reg_code || &#x27; &#x27; || reg_name
+      from region
+      where reg_unicode = cur.res_fact_office
+      into reg_name;
+
+      res_text = res_text || &#x27;: &#x27; ||
+                 f_numtostr(cur.res_book_amount, 2) || &#x27;, док.№ &#x27; ||
+                 doc_no_str || &#x27;, &#x27; ||
+                 trim(iif(cur.res_payment_kind &lt;&gt; 3, reg_name || &#x27;,&#x27;, &#x27;&#x27;)) || &#x27; Id: &#x27; || res_ol_id;
+
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

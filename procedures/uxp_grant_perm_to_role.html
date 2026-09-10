@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$GRANT_PERM_TO_ROLE — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$GRANT_PERM_TO_ROLE: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$GRANT_PERM_TO_ROLE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ROLE_NAME</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$GRANT_PERM_TO_ROLE(
+    ROLE_NAME D_STR_CODE)
+AS
+declare variable object_name d_str_code;
+declare variable access_kind d_str_code;
+declare variable object_kind d_str_code;
+declare variable res_text d_str_long;
+declare variable full_access_list d_str_8100;
+begin
+  role_name = trim(role_name);
+  access_kind = &#x27;ALL&#x27;;
+
+  select list(&#x27;[&#x27; || uro_object_name || &#x27;]&#x27;)
+  from ux$readonly
+  into full_access_list;
+
+  if (role_name in (&#x27;SEL&#x27;, &#x27;APR&#x27;)) then
+    access_kind = &#x27;select&#x27;;
+
+--  res_text = &#x27;revoke ALL on ALL from &#x27; || role_name || &#x27;;&#x27;;
+--  execute statement (res_text);
+
+  for select trim(res_str)
+  from uxp$split_str(&#x27;table, view, procedure, function, package, sequence, exception&#x27;,&#x27;,&#x27;)
+  into object_kind
+  do
+  begin
+    res_text = &#x27;grant alter any &#x27; || object_kind || &#x27; to role &#x27; || role_name || &#x27;;&#x27;;
+    execute statement (res_text);
+    when any do
+    begin
+    end
+  end
+
+  object_kind = &#x27;&#x27;;
+  for select t.rdb$relation_name
+  from rdb$relations t
+  where coalesce(t.rdb$system_flag, 0) = 0
+  into object_name
+  do
+  begin
+    object_name = trim(object_name);
+
+    -- список таблиц доступных в режиме чтения
+    if (object_name starting &#x27;TEMP&#x27; or full_access_list containing &#x27;[&#x27; || object_name || &#x27;]&#x27;) then
+      res_text = &#x27;grant all on &#x27; || object_name || &#x27; to &#x27; || role_name || &#x27;;&#x27;;
+    else
+      res_text = &#x27;grant &#x27; || access_kind || &#x27; on &#x27; || object_name || &#x27; to &#x27; || role_name || &#x27;;&#x27;;
+
+    execute statement (res_text);
+    when any do
+    begin
+    end
+  end
+
+  access_kind = &#x27;execute&#x27;;
+
+  object_kind = &#x27;procedure&#x27;;
+  for select p.rdb$procedure_name
+  from rdb$procedures p
+  where coalesce(p.rdb$system_flag, 0) = 0
+  into object_name
+  do
+  begin
+    object_name = trim(object_name);
+
+    res_text = &#x27;grant &#x27; || access_kind || &#x27; on &#x27; || object_kind || &#x27; &#x27; || object_name || &#x27; to &#x27; || role_name || &#x27;;&#x27;;
+    execute statement (res_text);
+    when any do
+    begin
+    end
+  end
+
+  object_kind = &#x27;function&#x27;;
+  for select f.rdb$function_name
+  from rdb$functions f
+  where coalesce(f.rdb$system_flag, 0) = 0
+  into object_name
+  do
+  begin
+    object_name = trim(object_name);
+
+    res_text = &#x27;grant &#x27; || access_kind || &#x27; on &#x27; || object_kind || &#x27; &#x27; || object_name || &#x27; to &#x27; || role_name || &#x27;;&#x27;;
+    execute statement (res_text);
+    when any do
+    begin
+    end
+  end
+
+  object_kind = &#x27;package&#x27;;
+  for select pk.rdb$package_name
+  from rdb$packages pk
+  where coalesce(pk.rdb$system_flag, 0) = 0
+  into object_name
+  do
+  begin
+    object_name = trim(object_name);
+
+    res_text = &#x27;grant &#x27; || access_kind || &#x27; on &#x27; || object_kind || &#x27; &#x27; || object_name || &#x27; to &#x27; || role_name || &#x27;;&#x27;;
+    execute statement (res_text);
+    when any do
+    begin
+    end
+  end
+
+  access_kind = &#x27;usage&#x27;;
+  object_kind = &#x27;sequence&#x27;;
+  for select g.rdb$generator_name
+  from rdb$generators g
+  where coalesce(g.rdb$system_flag, 0) = 0
+  into object_name
+  do
+  begin
+    object_name = trim(object_name);
+
+    res_text = &#x27;grant &#x27; || access_kind || &#x27; on &#x27; || object_kind || &#x27; &#x27; || object_name || &#x27; to &#x27; || role_name || &#x27;;&#x27;;
+    execute statement (res_text);
+    when any do
+    begin
+    end
+  end
+
+  access_kind = &#x27;usage&#x27;;
+  object_kind = &#x27;exception&#x27;;
+  for select e.rdb$exception_name
+  from rdb$exceptions e
+  where coalesce(e.rdb$system_flag, 0) = 0
+  into object_name
+  do
+  begin
+    object_name = trim(object_name);
+
+    res_text = &#x27;grant &#x27; || access_kind || &#x27; on &#x27; || object_kind || &#x27; &#x27; || object_name || &#x27; to &#x27; || role_name || &#x27;;&#x27;;
+    execute statement (res_text);
+    when any do
+    begin
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

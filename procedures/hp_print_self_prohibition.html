@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_PRINT_SELF_PROHIBITION — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_PRINT_SELF_PROHIBITION: 2 входных, 5 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_PRINT_SELF_PROHIBITION</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ADD_PARAMS</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_INN</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_NAME_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_PASS_NO</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SELF_PROHIBITION_STATUS_STR</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SELF_PROHIBITION_DATETIME</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_PRINT_SELF_PROHIBITION(
+    C_ID D_ID,
+    ADD_PARAMS D_STR_LONG = null)
+RETURNS (
+    C_INN D_STR_20,
+    C_NAME_FIO D_STR_100,
+    C_PASS_NO D_STR_CODE,
+    SELF_PROHIBITION_STATUS_STR D_STR_255,
+    SELF_PROHIBITION_DATETIME D_DATETIME)
+AS
+declare variable k_id d_id;
+declare variable k_disb_date d_date;
+declare variable spm_total_result d_integer;
+declare variable cds_create_datetime  d_datetime;
+begin
+  -- RFCKG-4723
+
+  k_id = f_json_blob_get_value(add_params, &#x27;k_id&#x27;, 0);
+
+  select k.k_disb_date
+  from kontract k
+  where k.k_id = :k_id
+  into k_disb_date;
+
+  select c.c_inn,
+         c.c_name_fio,
+         c.c_pass_no
+  from clients c
+  where c.c_id = :c_id
+  into c_inn,
+       c_name_fio,
+       c_pass_no;
+
+  select
+         case
+           when spm.spm_total_result = 1 then &#x27;Установлен&#x27;
+           else &#x27;Не установлен&#x27;
+         end,
+         spm.spm_last_query_datetime,
+         spm.spm_total_result
+  from self_prohibition_main spm
+  where spm.spm_from_c_id = :c_id and
+        spm.spm_object_kind = 9 and
+        spm.spm_object_id = :k_id
+  rows 1
+  into :self_prohibition_status_str,
+       :self_prohibition_datetime,
+       :spm_total_result;
+
+  if (spm_total_result &lt; 0) then
+  begin
+    select cds.cds_create_datetime
+    from clientdocs cds
+    inner join passkind pk on pk.pk_id = cds.cds_from_pk_id
+    inner join passdoctype pdt on pdt.pdt_id = pk.pk_from_pdt_id
+    where pdt.pdt_code = &#x27;self_prohibition&#x27; and
+          cds.cds_from_c_id = :c_id and
+          cds.cds_doc_date_begin &lt;= cast(:self_prohibition_datetime as d_date)
+    order by cds.cds_create_datetime desc
+    rows 1
+    into cds_create_datetime;
+
+    if (cds_create_datetime is not null) then
+      self_prohibition_datetime = cds_create_datetime;
+  end
+
+  c_inn = coalesce(c_inn, &#x27;-&#x27;);
+  c_name_fio = coalesce(c_name_fio, &#x27;-&#x27;);
+  c_pass_no = coalesce(c_pass_no, &#x27;-&#x27;);
+  self_prohibition_status_str = coalesce(self_prohibition_status_str, &#x27;-&#x27;);
+  self_prohibition_datetime = coalesce(self_prohibition_datetime, cast(&#x27;31.12.9999&#x27; as d_datetime));
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

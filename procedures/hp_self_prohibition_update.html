@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_SELF_PROHIBITION_UPDATE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_SELF_PROHIBITION_UPDATE: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_SELF_PROHIBITION_UPDATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_blobex_blob.html"><div class="to">HP_GET_BLOBEX_BLOB</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_extinfotask_process.html"><div class="to">HP_EXTINFOTASK_PROCESS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EIL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_SELF_PROHIBITION_UPDATE(
+    EIL_ID D_ID)
+AS
+declare variable JSON_STR D_STR_8100;
+declare variable IS_CR_LOCKED D_SMALLINT;
+declare variable EIL_STATUS_DATETIME D_DATETIME;
+declare variable EIC_CODE D_STR_CODE;
+declare variable EIL_STATUS D_SMALLINT;
+declare variable SPD_ID D_ID;
+declare variable SPD_EIL_ISHENIM D_ID;
+declare variable SPD_EIL_SSOUND D_ID;
+declare variable TOTAL_RESULT D_INTEGER;
+declare variable IS_FOUND_CLIENT D_SMALLINT;
+declare variable BLS_ID D_ID;
+declare variable SELF_BAN_ENABLED D_SMALLINT;
+declare variable FREEZED D_SMALLINT;
+declare variable COOLING_PERIOD D_SMALLINT;
+declare variable IS_LOCKED_ISHENIM D_SMALLINT;
+begin
+
+  select eic.eic_code, eil.eil_status, eil.eil_from_bls_id
+  from extinfolist eil, extinfocfg eic
+  where eic.eic_code in (&#x27;stop_cr_kib&#x27;, &#x27;stop_cr_crif&#x27;) and
+        eic.eic_id = eil.eil_from_eic_id and
+        eil.eil_id = :eil_id
+  into :eic_code, eil_status, bls_id;
+
+  select cast(blx_blob as d_blob_text)
+  from hp_get_blobex_blob(:bls_id)
+  into :json_str;
+
+  -- запрос от Ишеним
+  if (eic_code = &#x27;stop_cr_kib&#x27;) then
+  begin
+    select spd.spd_id, spd.spd_eil_ishenim, spd.spd_eil_ssound
+    from self_prohibition_detail spd
+    where spd.spd_eil_ishenim = :eil_id
+    into: spd_id, spd_eil_ishenim, spd_eil_ssound;
+
+    if (eil_status = 2 and coalesce(json_str, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+    begin
+      is_found_client = iif(f_json_str_get_value(:json_str, &#x27;data.creditLockId&#x27;, &#x27;not&#x27;) = &#x27;&#x27;, 0, 1);
+
+      if (is_found_client = 1) then
+      begin
+        is_locked_ishenim = iif(f_json_str_get_value(:json_str, &#x27;data.isCreditLocked&#x27;, &#x27;&#x27;) = &#x27;true&#x27;, 1, 2);
+        cooling_period = iif(f_json_str_get_value(:json_str, &#x27;data.coolingOffPeriod.isCoolingOff&#x27;, &#x27;&#x27;) = &#x27;true&#x27;, 1, 2);
+
+        if ( is_locked_ishenim = 1 or cooling_period = 1) then
+          is_cr_locked = 1;
+        else
+          is_cr_locked = 2;
+      end
+      else
+        is_cr_locked = -2; -- клиент не найден
+    end
+    else if (eil_status = -3) then
+      is_cr_locked = -3; -- задача отменена
+    else
+      is_cr_locked = -1; -- ошибка (если eil_status -2 или json пустой)
+
+    -- заливаем ответ от Ишеним
+    update self_prohibition_detail spd
+    set spd.spd_ishenim_result = :is_cr_locked
+    where spd.spd_eil_ishenim = :eil_id;
+  end
+  else
+  begin
+    select spd.spd_id, spd.spd_eil_ishenim, spd.spd_eil_ssound
+    from self_prohibition_detail spd
+    where spd.spd_eil_ssound = :eil_id
+    into: spd_id, spd_eil_ishenim, spd_eil_ssound;
+
+    -- запрос от Сэйф энд Саунд
+    if (eil_status = 2 and coalesce(json_str, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+    begin
+      is_found_client = iif(f_json_str_get_value(:json_str, &#x27;result&#x27;, &#x27;&#x27;) = &#x27;Клиент не найден&#x27;, 0, 1);
+
+      if (is_found_client = 1) then
+      begin
+        self_ban_enabled = iif(f_json_str_get_value(:json_str, &#x27;self_ban_enabled&#x27;, &#x27;&#x27;) = &#x27;TRUE&#x27;, 1, 0);
+        freezed = iif(f_json_str_get_value(:json_str, &#x27;freezed&#x27;, &#x27;&#x27;) = &#x27;TRUE&#x27;, 1, 0);
+
+        if (self_ban_enabled = 1 or freezed = 1) then
+          is_cr_locked = 1;
+        else
+          is_cr_locked = 2;
+      end
+      else
+        is_cr_locked = -2; -- клиент не найден
+    end
+    else if (eil_status = -3) then
+      is_cr_locked = -3; -- задача отменена
+    else
+      is_cr_locked = -1; -- ошибка (если eil_status -2 или json пустой)
+
+    -- заливаем ответ от т Сэйф энд Саунд
+    update self_prohibition_detail spd
+    set spd.spd_ssound_result = :is_cr_locked
+    where (spd.spd_eil_ssound = :eil_id);
+  end
+
+  -- вычисляем итоговый результат
+  total_result = f_self_prohibition_total_result(:spd_eil_ishenim, :spd_eil_ssound);
+
+  update self_prohibition_detail spd
+  set spd.spd_total_result = :total_result
+  where (spd.spd_id = :spd_id);
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

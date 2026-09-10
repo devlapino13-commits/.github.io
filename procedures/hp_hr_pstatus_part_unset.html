@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_HR_PSTATUS_PART_UNSET — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_HR_PSTATUS_PART_UNSET: 4 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_HR_PSTATUS_PART_UNSET</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PS_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">HO_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OFFICE_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">EMP_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_IS_ERROR</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_HR_PSTATUS_PART_UNSET(
+    PS_ID D_INTEGER,
+    HO_ID ID_TYPE,
+    OFFICE_ID D_INTEGER,
+    EMP_ID D_ID)
+RETURNS (
+    RES_TEXT D_STR_255,
+    RES_IS_ERROR D_BOOL)
+AS
+declare variable PS_FROM_HO_ID ID_TYPE;
+declare variable PS_IS_PART D_BOOL;
+begin
+  -- Удаление совместителя (RFCAZ-555)
+
+  res_text = &#x27;&#x27;;
+  res_is_error = 1;
+
+  if (coalesce(office_id, 0) = 0 or coalesce(emp_id, 0) = 0) then
+  begin
+    res_text = &#x27;Не указан сотрудник, которому требуется установить признак совместительсва&#x27;;
+    suspend;
+    exit;
+  end
+
+  if (coalesce(ps_id, 0) = 0 or coalesce(ho_id, 0) = 0) then
+  begin
+    res_text = &#x27;Не указан действующий приказ о найме (ротации, изменении условий)&#x27;;
+    suspend;
+    exit;
+  end
+
+  select ps_from_ho_id,
+         ps_is_part
+  from hr_pstatus
+  inner join hr_orders on ho_id = ps_from_ho_id
+  where ho_status = 1 and -- утвержденные
+        ho_order_type between 1 and 3 and -- прием на работу, ротация, изменение условий договора
+        ps_id = :ps_id and
+        ps_from_ho_id = :ho_id and
+        ps_from_reg_id = :office_id and
+        ps_from_c_id = :emp_id and
+        ps_status = 1 and
+        ps_is_working = 1 and
+        current_date between ps_date_begin and ps_date_end
+  into ps_from_ho_id,
+       ps_is_part;
+
+  if (coalesce(ps_from_ho_id, 0) = 0) then
+    res_text = &#x27;Не найден действующий приказ о найме (ротации, изменении условий)&#x27;;
+
+  if (res_text = &#x27;&#x27; and coalesce(ps_is_part, 0) = 0) then
+    res_text = &#x27;Указанный сотрудник не является совместителем&#x27;;
+
+  if (res_text = &#x27;&#x27;) then
+  begin
+    -- Удаление
+    update hr_pstatus
+    set ps_is_part = 0,
+        ps_part_hours = 0
+    where ps_id = :ps_id and
+          ps_from_ho_id = :ho_id and
+          ps_from_reg_id = :office_id and
+          ps_from_c_id = :emp_id and
+          ps_is_part = 1 and
+          ps_status = 1 and
+          ps_is_working = 1 and
+          current_date between ps_date_begin and ps_date_end;
+
+    res_text = &#x27;Признак совместительства успешно аннулирован&#x27;;
+    res_is_error = 0;
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

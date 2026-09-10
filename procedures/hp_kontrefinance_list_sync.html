@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_KONTREFINANCE_LIST_SYNC — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_KONTREFINANCE_LIST_SYNC: 4 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_KONTREFINANCE_LIST_SYNC</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_kontrefinance_list_tmp.html"><div class="to">HP_KONTREFINANCE_LIST_TMP</div></a><a class="ref-card" href="hp_split_str.html"><div class="to">HP_SPLIT_STR</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OBJ_KIND</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CALC_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REFINANCE_KONT_LIST</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_KONTREFINANCE_LIST_SYNC(
+    OBJ_KIND D_INTEGER,
+    OBJ_ID D_ID,
+    CALC_DATE D_DATE,
+    REFINANCE_KONT_LIST D_STR_LONG)
+AS
+declare variable res_k_id d_id;
+declare variable loan_balance d_currency;
+declare variable loan_perc d_currency;
+declare variable disb_saldo d_currency;
+declare variable c_id d_id;
+declare variable k_id d_id;
+declare variable ma_id d_integer;
+declare variable disb_amount d_currency;
+declare variable kontract_no d_str_code;
+declare variable kc_id d_id;
+begin
+  -- Сначала отмечаем все займы для рефинансирования по заявке -1
+  if (calc_date is null) then
+    exception e_message &#x27;calc_date is empty&#x27;;
+
+  k_id = 0;
+  if (obj_kind = 9) then
+  begin
+    k_id = obj_id;
+    select k_from_ma_app_id, k_amount_approved
+    from kontract
+    where k_id = :k_id
+    into ma_id, disb_amount;
+
+    select kc_from_c_id
+    from knclient
+    where kc_from_k_id = :k_id and
+          kc_amount_approved &gt; 0
+    into c_id;
+  end else
+  if (obj_kind = 11) then
+  begin
+    ma_id = obj_id;
+
+    if (coalesce(disb_amount, 0) = 0) then
+      exception e_message &#x27;Disb_amount is 0&#x27;;
+
+    select k_id
+    from kontract
+    where k_from_ma_app_id = :ma_id and
+          k_status = 1 and
+          k_disb_date &lt;= :calc_date
+    order by k_disb_date desc
+    rows 1
+    into k_id;
+
+    select mac_from_c_id, mac_amount
+    from miniappclient
+    where mac_from_ma_id = :ma_id and
+          mac_amount &gt; 0
+    into c_id, disb_amount;
+  end
+  
+  update kontrefinance
+  set kr_sync_state = -1
+  where kr_from_ma_id = :ma_id;
+
+  if (coalesce(refinance_kont_list, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+  begin
+    for select trim(res_str)
+    from hp_split_str(:refinance_kont_list, &#x27;,&#x27;)
+    into :kontract_no
+    do
+    begin
+      res_k_id = null;
+
+      select k_id
+      from kontract
+      where k_kontract_no = :kontract_no
+      into res_k_id;
+
+      if (res_k_id is not null) then
+      begin
+        update or insert into kontrefinance (kr_from_ma_id, kr_from_k_id, kr_date, kr_balance,
+                                             kr_perc_saldo, kr_sync_state)
+        values (:ma_id, :res_k_id, :calc_date, 0, 0, 0)
+        matching (kr_from_ma_id, kr_from_k_id);
+      end else
+      if (kontract_no like &#x27;________-____-____-____-____________-_&#x27;) then -- проверка на формат UUID
+      begin
+        update or insert into kontrefinance (kr_from_ma_id, kr_loan_uuid, kr_date, kr_balance,
+                                             kr_perc_saldo, kr_sync_state)
+        values (:ma_id, :kontract_no, :calc_date, 0, 0, 0)
+        matching (kr_from_ma_id, kr_loan_uuid);
+      end else
+        exception e_message &#x27;Loan not found: &#x27; || kontract_no;
+    end
+  end else
+  begin
+    -- Заполняем список займов к рефинансированию
+    disb_saldo = disb_amount;
+    for select res_k_id, loan_balance, loan_perc
+    from hp_kontrefinance_list_tmp(:c_id, :calc_date)
+    where (loan_balance + loan_perc) &lt; :disb_amount and
+          res_k_id &lt;&gt; :k_id
+    order by res_avg_repay desc
+    into :res_k_id, loan_balance, loan_perc
+    do
+    begin
+      if (disb_saldo &lt; (loan_balance + loan_perc)) then
+        Continue;
+  
+      update or insert into kontrefinance (kr_from_ma_id, kr_from_k_id, kr_date, kr_balance,
+                                           kr_perc_saldo, kr_sync_state)
+      values (:ma_id, :res_k_id, :calc_date, :loan_balance, :loan_perc, 0)
+      matching (kr_from_ma_id, kr_from_k_id);
+  
+      disb_saldo = disb_saldo - (loan_balance + loan_perc);
+    end
+  end
+
+  -- Удаляем займы если они не вошли в список
+  delete from kontrefinance
+  where kr_from_ma_id = :ma_id and
+        kr_sync_state = -1;
+
+  if (not exists(select * from kontrefinance
+                 where kr_from_ma_id = :ma_id)) then
+    exception e_message &#x27;У клиента нет займа для рефинансирования&#x27;;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

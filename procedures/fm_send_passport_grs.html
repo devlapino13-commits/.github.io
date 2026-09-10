@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_SEND_PASSPORT_GRS — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_SEND_PASSPORT_GRS: 2 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_SEND_PASSPORT_GRS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_extinfo_insert.html"><div class="to">HP_EXTINFO_INSERT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="epass_ins_or_upd_client.html"><div class="to">EPASS_INS_OR_UPD_CLIENT</div></a><a class="ref-card" href="fm_report_cmd.html"><div class="to">FM_REPORT_CMD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(2048)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEED_REFRESH</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_SEND_PASSPORT_GRS(
+    C_ID D_ID,
+    UN_ID D_ID)
+RETURNS (
+    RES_TEXT D_STR_2048,
+    NEED_REFRESH D_SMALLINT)
+AS
+declare variable c_inn d_str_20;
+declare variable pass_who d_str_255;
+declare variable pass_who_code d_str_20;
+declare variable lang d_str_lang;
+declare variable db_id d_integer;
+declare variable c_pincode d_str_20;
+declare variable c_pass_no d_str_100;
+begin
+  db_id = f_get_db_id();
+  need_refresh = 1;
+  lang = f_get_lang_code(:un_id, null);
+  select c.c_inn, c.c_pass_who, c.c_pass_who_code, c.c_pincode, c.c_pass_no
+  from clients c
+  where c.c_id = :c_id
+  into c_inn, pass_who, pass_who_code, c_pincode, c_pass_no;
+
+  if (db_id in (39801, 41701)) then
+  begin
+    if (coalesce(c_inn, &#x27;&#x27;) &lt;&gt; &#x27;&#x27; and
+        char_length(c_inn) = 14 and
+        coalesce(pass_who, &#x27;&#x27;) &lt;&gt; &#x27;&#x27; and
+        coalesce(pass_who_code, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+    begin
+      execute procedure hp_extinfo_insert(&#x27;Tunduk&#x27;, f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;), :c_id, 1);
+      res_text = &#x27;Данные успешно отправлены в ГРС&#x27;;
+    end
+    else
+    if (coalesce(pass_who, &#x27;&#x27;) = &#x27;&#x27; or coalesce(pass_who_code, &#x27;&#x27;) = &#x27;&#x27;) then
+      res_text = &#x27;Перед отправкой в ГРС нужно заполнить поля: Код подразделения, Орган выдавший документ&#x27;;
+    else
+      res_text = &#x27;Для отправки запроса в ГРС надо заполнить ИНН клиента&#x27;;
+    suspend;
+  end
+  if (db_id = 94401) then
+  begin
+    if (char_length(c_pincode) = 7 and
+        coalesce(c_pass_no, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+    begin
+      execute procedure hp_extinfo_insert(&#x27;FIN&#x27;, f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;), :c_id, 1);
+      res_text = f_lang(lang, &#x27;Данные успешно отправлены в ГРС&#x27;);
+    end
+    else
+    if (coalesce(c_pass_no, &#x27;&#x27;) = &#x27;&#x27;) then
+      res_text = f_lang(lang, &#x27;Перед отправкой в ГРС нужно заполнить серию и номер паспорта&#x27;);
+    else
+      res_text = f_lang(lang, &#x27;Для отправки запроса в ГРС надо заполнить ПИН клиента&#x27;);
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

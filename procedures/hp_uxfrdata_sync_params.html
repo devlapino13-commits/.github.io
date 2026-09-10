@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_UXFRDATA_SYNC_PARAMS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_UXFRDATA_SYNC_PARAMS: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_UXFRDATA_SYNC_PARAMS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_uxframe_create.html"><div class="to">HP_UXFRAME_CREATE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UFR_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AUTO_APPLY</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_UXFRDATA_SYNC_PARAMS(
+    UFR_CODE D_STR_CODE,
+    AUTO_APPLY D_BOOL)
+AS
+declare variable ufd_new_source d_str_code;
+declare variable new_source_is_table d_bool;
+declare variable res_code d_str_code;
+declare variable res_index d_integer;
+declare variable res_pk_field d_smallint;
+declare variable res_is_param d_bool;
+declare variable pk_id d_integer;
+declare variable ufd_is_delete d_bool;
+declare variable ufd_kind d_integer;
+declare variable field_count d_integer;
+declare variable ufp_required d_bool;
+declare variable ufs_code d_str_100;
+declare variable ufs_field_name d_str_code;
+declare variable ufp_code d_str_100;
+declare variable ufd_source d_str_code;
+declare variable is_same_source d_bool;
+begin
+  for select ufd_kind, ufd_source, ufd_new_source, ufd_is_delete
+  from uxfrdata
+  where ufd_ufr_code = :ufr_code
+  order by ufd_kind
+  into :ufd_kind, :ufd_source, :ufd_new_source, ufd_is_delete
+  do
+  begin
+    is_same_source = 1;
+    if (ufd_source &lt;&gt; ufd_new_source) then
+      is_same_source = 0;
+
+    new_source_is_table = 0;
+
+    if (exists(select * from uxcode
+    where ux_code = :ufr_code and
+          ux_table_name = :ufd_new_source)) then
+      new_source_is_table = 1;
+
+    if (ufd_kind = 0) then
+    begin
+      -- Удаляем ранее не принятые изменения на добавление
+      delete from uxfrparam
+      where ufp_ufr_code = :ufr_code and
+            ufp_state = 1;
+
+      -- Временно отмечаем как кандидат на удаление
+      update uxfrparam
+      set ufp_state = -2
+      where ufp_ufr_code = :ufr_code and
+            ufp_parent_code is null;
+    end else
+    begin
+      -- Удаляем ранее не принятые изменения
+      delete from uxframesql
+      where ufs_ufr_code = :ufr_code and
+            ufs_sql_kind = :ufd_kind and
+            ufs_state &lt;&gt; 0;
+
+      -- Временно отмечаем как кандидат на удаление
+      update uxframesql
+      set ufs_state = -2
+      where ufs_ufr_code = :ufr_code and
+            ufs_sql_kind = :ufd_kind;
+    end
+
+    if (ufd_is_delete = 0 and ufd_new_source &lt;&gt; &#x27;&#x27;) then
+    begin
+      if (new_source_is_table = 1) then
+      begin
+        pk_id = 0;
+        for select trim(r.rdb$field_name), r.rdb$field_position, coalesce(r.rdb$null_flag, 0)
+        from rdb$fields f, rdb$relation_fields r
+        where f.rdb$field_name = r.rdb$field_source and
+              r.rdb$system_flag = 0 and
+              r.rdb$relation_name = upper(:ufd_new_source)
+        order by r.rdb$relation_name, r.rdb$field_position
+        into :res_code, :res_index, :ufp_required
+        do
+        begin
+          res_pk_field = 0;
+          if (exists(select *
+                     from rdb$relation_constraints r
+                     inner join rdb$index_segments i on i.rdb$index_name = r.rdb$index_name
+                     inner join rdb$relation_fields rf on rf.rdb$field_name = i.rdb$field_name and
+                           rf.rdb$relation_name = r.rdb$relation_name
+                     inner join rdb$fields f on f.rdb$field_name = rf.rdb$field_source
+                     where r.rdb$constraint_type = &#x27;PRIMARY KEY&#x27; and
+                           r.rdb$relation_name = upper(:ufd_new_source) and
+                           i.rdb$field_name = :res_code)) then
+            res_pk_field = 1;
+
+          res_code = lower(res_code);
+
+          if (res_pk_field = 1) then
+            pk_id = pk_id + 1;
+
+          -- если это Delete SQL, добавляем только ключевые поля
+          if (ufd_kind = 3 and res_pk_field = 0) then
+            Continue;
+
+          if (ufd_kind = 0) then
+          begin
+            update uxfrparam
+            set ufp_index = :res_index,
+                ufp_is_param = 0,
+                ufp_editor = iif(:is_same_source = 1, ufp_editor, &#x27;&#x27;),
+                ufp_is_delete = 0,
+                ufp_state = 0
+            where ufp_ufr_code = :ufr_code and
+                  ufp_origin_name = :res_code;
+  
+            if (row_count = 0) then
+            begin
+              insert into uxfrparam (ufp_ufr_code, ufp_origin_name, ufp_is_param, ufp_pk_field, ufp_index,
+                                     ufp_editor, ufp_in_use, ufp_required, ufp_is_delete, ufp_state)
+              values (:ufr_code, :res_code, 0, iif(:res_pk_field = 1, :pk_id, 0), :res_index,
+                      &#x27;&#x27;, 1, :ufp_required, 0, iif(:auto_apply = 1, 0, 1));
+            end
+          end else
+          begin
+            update or insert into uxframesql (ufs_ufr_code, ufs_sql_kind, ufs_index, ufs_field_name, ufs_state)
+            values (:ufr_code, :ufd_kind, :res_index, :res_code, 0)
+            matching (ufs_ufr_code, ufs_sql_kind, ufs_field_name);
+          end
+        end
+      end else
+      begin
+        field_count = 0;
+        for select lower(trim(rdb$parameter_name)), rdb$parameter_number, iif(rdb$parameter_type = 0, 1, 0),
+                   coalesce(rdb$null_flag, 0)
+        from rdb$procedure_parameters
+        where rdb$procedure_name = upper(:ufd_new_source) and
+              rdb$package_name is null
+        order by 3, 2
+        into :res_code, :res_index, res_is_param, ufp_required
+        do
+        begin
+          if (ufd_kind = 0) then
+          begin
+            update uxfrparam
+            set ufp_index = :res_index,
+                ufp_is_param = :res_is_param,
+                ufp_editor = iif(:is_same_source = 1, ufp_editor, &#x27;&#x27;),
+                ufp_required = iif(:is_same_source = 1, ufp_required, :ufp_required),
+                ufp_is_delete = 0,
+                ufp_state = 0
+            where ufp_ufr_code = :ufr_code and
+                  ufp_origin_name = :res_code;
+  
+            if (row_count = 0) then
+            begin
+              insert into uxfrparam (ufp_ufr_code, ufp_origin_name, ufp_is_param, ufp_index,
+                                     ufp_editor, ufp_in_use, ufp_required, ufp_is_delete, ufp_state)
+              values (:ufr_code, :res_code, :res_is_param, :res_index,
+                      &#x27;&#x27;, 1, :ufp_required, 0, iif(:auto_apply = 1, 0, 1));
+            end
+
+            if (res_is_param = 0) then
+              field_count = field_count + 1;
+          end else
+          begin
+            update or insert into uxframesql (ufs_ufr_code, ufs_sql_kind, ufs_index, ufs_field_name, ufs_state)
+            values (:ufr_code, :ufd_kind, :res_index, :res_code, 0)
+            matching (ufs_ufr_code, ufs_sql_kind, ufs_field_name);
+          end
+        end
+
+        if (ufd_kind = 3 and field_count = 0) then
+          exception e_message f_format(&#x27;Процедура удаления %1 должна возвращать хотя бы одно поле&#x27;, ufd_new_source);
+      end
+    end
+
+    if (ufd_kind = 0) then
+    begin
+      update uxfrparam
+      set ufp_state = iif(:auto_apply = 1, 0, -1)
+      where ufp_ufr_code = :ufr_code and
+            ufp_state = -2;
+    end
+
+    delete from uxframesql
+    where ufs_ufr_code = :ufr_code and
+          ufs_sql_kind = :ufd_kind and
+          ufs_state &lt;&gt; 0;
+
+    if (ufd_is_delete = 0) then
+    begin
+      update uxfrdata
+      set ufd_source = :ufd_new_source
+      where ufd_ufr_code = :ufr_code and
+            ufd_kind = :ufd_kind;
+    end else
+    begin
+      delete from uxfrdata
+      where ufd_ufr_code = :ufr_code and
+            ufd_kind = :ufd_kind;
+    end
+  end
+
+  for select ufs_code, ufs_field_name
+  from uxframesql
+  where ufs_ufr_code = :ufr_code and
+        ufs_ufp_code is null
+  into ufs_code, ufs_field_name
+  do
+  begin
+    ufp_code = null;
+
+    select ufp_code
+    from uxfrparam
+    where ufp_ufr_code = :ufr_code and
+          ufp_origin_name = :ufs_field_name and
+          ufp_state in (0, 1)
+    order by ufp_state
+    rows 1
+    into ufp_code;
+
+    if (ufp_code is not null) then
+    begin
+      update uxframesql
+      set ufs_ufp_code = :ufp_code
+      where ufs_code = :ufs_code;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0041_SQL — процедура — схема БД</title>
+<meta name="description" content="проверка если миграционка более 90 дней для гр УЗ и ТЖ то проверяется патент">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0041_SQL</code></h1>
+<p class="desc">проверка если миграционка более 90 дней для гр УЗ и ТЖ то проверяется патент</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0041_SQL(
+    MA_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare kc_amount curr_type;
+declare kf_disb_date d_date;
+declare kf_client_pass_no varchar(30);
+declare variable kc_from_c_id id_type;
+declare variable c_citizen integer;
+declare variable rd_code varchar(255);
+declare variable C_PASS_DATE date;
+declare variable C_PASS_DATE_EXPIRE date;
+declare variable k_percent_for_days integer;
+declare variable pr_percent_for_days integer;
+declare variable db_id integer;
+declare variable k_kolich_repay integer;
+declare variable kc_circle integer;
+declare variable CDS_DOC_DATE_BEGIN date;
+declare variable CDS_DOC_DATE_END date;
+declare variable pdt_code varchar(100);
+declare variable is_work_patent smallint;
+declare variable is_kvit_patent smallint;
+declare variable can_next smallint;
+begin
+  select min(ma_date_app) from miniapp
+  where ma_id = :ma_id
+  into KF_DISB_DATE;
+-- проверка по пункту 4,2
+  can_next = 1;
+  for
+  select mac_from_c_id,
+         c_citizen
+  from miniappclient, clients
+  where mac_from_ma_id = :ma_id
+  and mac_amount &gt; 0
+  and mac_from_c_id = c_id
+  into kc_from_c_id,
+       c_citizen
+  do
+  begin
+    if (can_next = 1) then
+    begin
+      select rd_code from refdata
+      where rd_id = :c_citizen
+      into rd_code;
+      if (rd_code in (&#x27;Citizen.RU&#x27;)) then
+      begin
+        can_next = 0;
+      end else
+      begin
+        if (exists(select *
+                   from CLIENTDOCS, PASSKIND, PASSDOCTYPE
+                   where CDS_FROM_C_ID = :kc_from_c_id
+                   and cds_from_pk_id = pk_id
+                   and pk_from_pdt_id = pdt_id
+                   and cds_is_delete = 0
+                   and :kf_disb_date between CDS_DOC_DATE_BEGIN and coalesce(CDS_DOC_DATE_END,&#x27;31.12.9999&#x27;)
+                   and pdt_code in (&#x27;registration_vnj&#x27;,
+                                    &#x27;registration_rvp&#x27;,
+                                    &#x27;work_permit&#x27;,
+                                    &#x27;kvit_patent&#x27;,
+                                    &#x27;certificate_approving_doc&#x27;
+                                    )
+                   )) then
+        begin
+          can_next = 0;
+        end 
+      end
+    end 
+  end
+
+  if (can_next = 1) then
+  for
+  select c_name_fio,
+         c_pass_no,
+         mac_amount,
+         c_citizen,
+         mac_from_c_id
+  from miniappclient, clients
+  where mac_from_ma_id = :ma_id
+  and mac_amount &gt; 0
+  and mac_from_c_id = c_id
+  into res_info_text,
+       kf_client_pass_no,
+       kc_amount,
+       c_citizen,
+       kc_from_c_id
+  do
+  begin
+    select rd_code from refdata
+    where rd_id = :c_citizen
+    into rd_code;
+    if (rd_code in (&#x27;Citizen.TJ&#x27;,&#x27;Citizen.UZ&#x27;)) then
+    begin
+      cds_doc_date_begin = null;
+      cds_doc_date_end = null;
+      select CDS_DOC_DATE_BEGIN, CDS_DOC_DATE_END
+      from CLIENTDOCS, PASSKIND, PASSDOCTYPE
+      where CDS_FROM_C_ID = :kc_from_c_id
+      and cds_from_pk_id = pk_id
+      and pk_from_pdt_id = pdt_id
+      and cds_is_delete = 0
+      and :kf_disb_date between CDS_DOC_DATE_BEGIN and CDS_DOC_DATE_END
+      and pdt_code = &#x27;magration_card&#x27;
+      order by CDS_DATETIME desc -- будем брать последний регистрированную миграционку
+      rows 1
+      into cds_doc_date_begin, cds_doc_date_end;
+      if (cds_doc_date_begin is null) then
+      begin
+        cds_doc_date_begin = current_date;
+      end
+      if (kf_disb_date - cds_doc_date_begin &gt; 90) then
+      begin
+--      проверка на наличие патента и квитанции патента
+        is_work_patent = 0;
+        is_kvit_patent = 0;
+        for
+        select pdt_code --   ,cds_doc_date_begin, cds_doc_date_end
+        from CLIENTDOCS, PASSKIND, PASSDOCTYPE
+        where CDS_FROM_C_ID = :kc_from_c_id
+        and cds_from_pk_id = pk_id
+        and pk_from_pdt_id = pdt_id
+        and cds_is_delete = 0
+        and :kf_disb_date between CDS_DOC_DATE_BEGIN and CDS_DOC_DATE_END
+        and pdt_code in (&#x27;work_patent&#x27;, &#x27;kvit_patent&#x27;)  -- дополнительно нужно добавить по пункту 4,1 - по 2му и 3му подпунктам
+        into pdt_code
+        do
+        begin
+          if (pdt_code = &#x27;work_patent&#x27;) then is_work_patent = 1;
+          if (pdt_code = &#x27;kvit_patent&#x27;) then is_kvit_patent = 1;
+        end
+        if (is_work_patent = 0) then
+        begin
+          res_error_text = &#x27;Срок пребывания по мигр.карте превышает 90 дней, необходимо патент.&#x27;;
+          res_error_is_critical = 1;
+          suspend;
+        end 
+        if (is_kvit_patent = 0) then
+        begin
+          res_error_text = &#x27;Срок пребывания по мигр.карте превышает 90 дней, необходимо квитанция патента.&#x27;;
+          res_error_is_critical = 1;
+          suspend;
+        end
+
+        
+        /*Если патент скопирован не с оригинала то проверям:
+        в этом случае клиент дополнительно должен предоставить оригинал справки по форме 2-НДФЛ или выписку из трудовой книжки,
+        заверенную работодателем клиента.
+        Справка 2-НДФЛ или выписка из трудовой книжки действительны в течение 1 месяца с даты их выдачи (заверения)
+        -- так как нет возможности проверить отсканирован документ с оригинала или с копии проверка будет по все клиентам,
+        сообщение будет не критичным - Музаффар 04 апреля 16 года.*/
+        if (not exists (select pdt_code
+                        from CLIENTDOCS, PASSKIND, PASSDOCTYPE
+                        where CDS_FROM_C_ID = :kc_from_c_id
+                        and cds_from_pk_id = pk_id
+                        and pk_from_pdt_id = pdt_id
+                        and cds_is_delete = 0
+--                            and :kf_disb_date &gt; CDS_DOC_DATE_BEGIN -29
+                        and pdt_code in (&#x27;certificate_2NDFL&#x27;)
+                    )) then
+        begin
+          res_error_text = &#x27;Срок пребывания по мигр.карте превышает 90 дней, необходимо Справка 2-НДФЛ.&#x27;;
+          res_error_is_critical = 0;
+          suspend;
+        end
+        if (not exists (select pdt_code
+                        from CLIENTDOCS, PASSKIND, PASSDOCTYPE
+                        where CDS_FROM_C_ID = :kc_from_c_id
+                        and cds_from_pk_id = pk_id
+                        and pk_from_pdt_id = pdt_id
+                        and cds_is_delete = 0
+                        and :kf_disb_date &gt; CDS_DOC_DATE_BEGIN -29
+                        and pdt_code in (&#x27;certificate_2NDFL&#x27;)
+                    )) then
+        begin
+          res_error_text = &#x27;Срок пребывания по мигр.карте превышает 90 дней, необходимо выписка из трудовой книжки.&#x27;;
+          res_error_is_critical = 0;
+          suspend;
+        end
+        /*Конец условии по 2НДФЛ и выписки из трудовой книжки - Музаффар 04 апреля 16-года*/
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

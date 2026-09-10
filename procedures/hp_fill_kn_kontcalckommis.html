@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_FILL_KN_KONTCALCKOMMIS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_FILL_KN_KONTCALCKOMMIS: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_FILL_KN_KONTCALCKOMMIS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_devide_kn_kontcalcperc.html"><div class="to">HP_DEVIDE_KN_KONTCALCPERC</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LAST_PERIOD</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_FILL_KN_KONTCALCKOMMIS(
+    K_ID ID_TYPE,
+    LAST_PERIOD INTEGER)
+AS
+declare variable k_is_devided integer;
+declare variable k_base_k_id id_type;
+declare variable loan_kc_list d_str_255;
+declare variable loan_amount_list d_str_255;
+declare variable tmp_kc_list d_str_255;
+declare variable tmp_amount_list d_str_255;
+declare variable loan_amount curr_type;
+declare variable tmp_loan_amount curr_type;
+declare variable kcp_period integer;
+declare variable kc_id id_type;
+declare variable kc_amount curr_type;
+declare variable tmp_k_id id_type;
+declare variable close_date date;
+declare variable kcp_kommis_begin_saldo curr_type;
+declare variable kcp_period_prv integer;
+declare variable kcp_kommis_calced curr_type = 0;
+declare variable diff_kcp_kommis_begin_saldo curr_type;
+declare variable diff_kcp_kommis_calced curr_type = 0;
+declare variable curr_year integer;
+declare variable curr_month integer;
+declare variable kc_kommis curr_type;
+declare variable loan_kommis curr_type;
+declare variable loan_kommis_list d_str_255;
+declare variable tmp_kommis_list d_str_255;
+declare variable tmp_loan_kommis curr_type;
+declare variable cl_kcp_kommis_calced curr_type;
+declare variable cl_kcp_kommis_payed curr_type;
+declare variable cl_kcp_kommis_writeoff curr_type;
+declare variable cl_kcp_kommis_saldo curr_type;
+declare variable cl_kcp_kommis_begin_saldo curr_type;
+declare variable cl_kcp_kommis_transfer_payed curr_type;
+declare variable cl_kcp_kommis_transfer_writeoff curr_type;
+begin
+-- процедура делит проценты на уровне участников и заполняет таблицу kn_kontcalcperc
+  select k_is_devided, k_base_k_id
+  from kontract
+  where k_id = :k_id
+  into k_is_devided, k_base_k_id;
+
+  if (coalesce(last_period, 0) = 0) then
+    exception e_default &#x27;Last period is empty&#x27;;
+
+-- амнистированные (дочерние) займы не делим, они заполняются параллельно при делении главного займа
+  if (k_is_devided = 1 and
+      k_base_k_id &lt;&gt; :k_id) then
+    exit;
+
+  loan_kc_list = &#x27;&#x27;;
+  loan_amount = 0;
+  kcp_period_prv = 0;
+  select list(kc_id), list(kc_amount_approved),
+         list(iif(kc_amount_approved &gt; 0, coalesce(kc_amount_approved * k_kommis_perc, 0) - coalesce(kc_kommis_lgota, 0), 0)),
+         sum(kc_amount_approved),
+         sum(iif(kc_amount_approved &gt; 0, coalesce(kc_amount_approved * k_kommis_perc, 0) - coalesce(kc_kommis_lgota, 0), 0))
+  from knclient, kontract
+  where kc_from_k_id = :k_id and
+        kc_amount_approved &gt; 0 and
+        k_id = kc_from_k_id
+  into loan_kc_list, loan_amount_list, loan_kommis_list, loan_amount, loan_kommis;
+
+  if (loan_kc_list is null) then
+    loan_kc_list = &#x27;&#x27;;
+  if (loan_amount_list is null) then
+    loan_amount_list = &#x27;&#x27;;
+  if (loan_kommis_list is null) then
+    loan_kommis_list = &#x27;&#x27;;
+  if (loan_amount is null) then
+    loan_amount = 0;
+  if (loan_kommis is null) then
+    loan_kommis = 0;
+
+  if (loan_amount = 0) then
+    exit;
+
+  update kn_kontcalcperc
+  set kcp_kommis_begin_saldo = 0,
+      kcp_kommis_payed = 0,
+      kcp_kommis_calced = 0,
+      kcp_kommis_saldo = 0,
+      kcp_kommis_writeoff = 0,
+      kcp_kommis_transfer_payed = 0,
+      kcp_kommis_transfer_writeoff = 0
+  where kcp_from_k_id = :k_id;
+
+  if (k_is_devided = 1) then
+  begin
+    for select kd_k_new
+        from kontdevides
+        where kd_k_orig = :k_id
+        into tmp_k_id
+    do
+    begin
+      update kn_kontcalcperc
+      set kcp_kommis_begin_saldo = 0,
+          kcp_kommis_payed = 0,
+          kcp_kommis_calced = 0,
+          kcp_kommis_saldo = 0,
+          kcp_kommis_writeoff = 0,
+          kcp_kommis_transfer_payed = 0,
+          kcp_kommis_transfer_writeoff = 0
+      where kcp_from_k_id = :tmp_k_id;
+    end
+  end
+
+  for select kcp_period
+      from kontcalcperc
+      where kcp_from_k_id = :k_id
+      order by kcp_period
+      into :kcp_period
+  do
+  begin
+    curr_year = kcp_period / 100;
+    curr_month = mod(kcp_period, 100);
+
+    if (curr_month &gt; 1) then
+      curr_month = curr_month - 1;
+    else
+    begin
+      curr_month = 12;
+      curr_year = curr_year - 1;
+    end
+    kcp_period_prv = curr_year * 100 + curr_month;
+
+    tmp_kc_list = loan_kc_list;
+    tmp_amount_list = loan_amount_list;
+    tmp_loan_amount = loan_amount;
+    tmp_kommis_list = loan_kommis_list;
+    tmp_loan_kommis = loan_kommis;
+
+    kcp_kommis_begin_saldo = 0;
+    kcp_kommis_calced = 0;
+
+    diff_kcp_kommis_begin_saldo = 0;
+    diff_kcp_kommis_calced = 0;
+
+    if (k_is_devided = 1) then
+    begin
+-- к текущему составу займов добавляем ранее амнистированных, если по ним нет начислений в ведомости
+      for select kd_k_new
+          from kontdevides
+          where kd_k_orig = :k_id and
+                kd_k_new &lt;&gt; :k_id
+          into :tmp_k_id
+      do
+      begin
+        if (not(exists(select *
+                       from kontcalcperc
+                       where kcp_from_k_id = :tmp_k_id and
+                             kcp_period = :kcp_period))) then
+        begin
+-- начисление в ведомости нет. Проверяем, не закрыт ли займ к этому периоду
+          close_date = null;
+
+          select ks_date_begin
+          from kontstate
+          where ks_from_k_id = :tmp_k_id and
+                ks_ol_is_delete = 0 and
+                ks_state = 2
+          into :close_date;
+
+-- добавляем в текущий состав участников
+          if (close_date is null or (kcp_period &lt;= extract(year from close_date) * 100 + extract(month from close_date))) then
+          begin
+            for select kc_id, kc_amount_approved,
+                       iif(kc_amount_approved &gt; 0, coalesce(kc_amount_approved * k_kommis_perc, 0) - coalesce(kc_kommis_lgota, 0), 0)
+                from knclient, kontract
+                where kc_from_k_id = :tmp_k_id and
+                      kc_from_k_id = k_id and
+                      kc_amount_approved &gt; 0
+                into :kc_id, kc_amount, kc_kommis
+            do
+            begin
+              tmp_kc_list = kc_id || &#x27;,&#x27; || tmp_kc_list;
+              tmp_amount_list = kc_amount || &#x27;,&#x27; || tmp_amount_list;
+              tmp_loan_amount = tmp_loan_amount + kc_amount;
+
+              tmp_kommis_list = kc_kommis || &#x27;,&#x27; || tmp_kommis_list;
+              tmp_loan_kommis = tmp_loan_kommis + kc_kommis;
+
+            end
+          end
+        end
+        else
+        begin
+          kc_id = null;
+          select kc_id, kc_amount_approved,
+                 iif(kc_amount_approved &gt; 0, coalesce(kc_amount_approved * k_kommis_perc, 0) - coalesce(kc_kommis_lgota, 0), 0)
+          from knclient, kontract
+          where kc_from_k_id = :tmp_k_id and
+                kc_from_k_id = k_id and
+                kc_amount_approved &gt; 0
+          into :kc_id, kc_amount, kc_kommis;
+
+          if (not(exists(select *
+                         from kontcalcperc
+                         where kcp_from_k_id = :tmp_k_id and
+                               kcp_period = :kcp_period_prv))) then
+          begin
+-- если амнистированный займ уже имеется в ведомости и ввстречается первый раз,
+-- переносим без изменений, с актуальным сальдо
+            kcp_kommis_begin_saldo = 0;
+            kcp_kommis_calced = 0;
+
+            for select cl_kcp_kommis_calced, cl_kcp_kommis_payed, cl_kcp_kommis_writeoff, cl_kcp_kommis_saldo,
+                       cl_kcp_kommis_begin_saldo, cl_kcp_kommis_transfer_payed, cl_kcp_kommis_transfer_writeoff
+                from hp_devide_kn_kontcalcperc(:tmp_k_id, :kcp_period, :kc_id, :kc_amount, :kc_kommis)
+                into cl_kcp_kommis_calced, cl_kcp_kommis_payed, cl_kcp_kommis_writeoff, cl_kcp_kommis_saldo,
+                     cl_kcp_kommis_begin_saldo, cl_kcp_kommis_transfer_payed, cl_kcp_kommis_transfer_writeoff
+            do
+            begin
+              kcp_kommis_begin_saldo = 0;
+              kcp_kommis_calced = 0;
+
+              update kn_kontcalcperc
+              set kcp_kommis_calced = :cl_kcp_kommis_calced,
+                  kcp_kommis_payed = :cl_kcp_kommis_payed,
+                  kcp_kommis_writeoff = :cl_kcp_kommis_writeoff,
+                  kcp_kommis_saldo = :cl_kcp_kommis_saldo,
+                  kcp_kommis_begin_saldo = :cl_kcp_kommis_begin_saldo,
+                  kcp_kommis_transfer_payed = :cl_kcp_kommis_transfer_payed,
+                  kcp_kommis_transfer_writeoff = :cl_kcp_kommis_transfer_writeoff
+              where kcp_from_kc_id = :kc_id and
+                    kcp_period = :kcp_period
+              returning kcp_kommis_begin_saldo, kcp_kommis_calced
+              into kcp_kommis_begin_saldo, kcp_kommis_calced;
+            end
+
+--            kcp_kommis_begin_saldo = 0;
+--            kcp_kommis_calced = 0;
+            select :kcp_kommis_begin_saldo - kcp_kommis_begin_saldo, :kcp_kommis_calced - kcp_kommis_calced
+            from kontcalcperc
+            where kcp_from_k_id = :tmp_k_id and
+                  kcp_period = :kcp_period
+            into kcp_kommis_begin_saldo, kcp_kommis_calced;
+
+            diff_kcp_kommis_begin_saldo = diff_kcp_kommis_begin_saldo + kcp_kommis_begin_saldo;
+            diff_kcp_kommis_calced = diff_kcp_kommis_calced + kcp_kommis_calced;
+          end
+          else
+          begin
+-- в ведомости данный займ встречается не первый месяц,
+-- поэтому переносим без изменений
+            for select kcp_kommis_calced, kcp_kommis_payed, kcp_kommis_writeoff, kcp_kommis_saldo,
+                       kcp_kommis_begin_saldo, kcp_kommis_transfer_payed, kcp_kommis_transfer_writeoff
+                from kontcalcperc
+                where kcp_period = :kcp_period and
+                      kcp_from_k_id = :tmp_k_id
+                into cl_kcp_kommis_calced, cl_kcp_kommis_payed, cl_kcp_kommis_writeoff, cl_kcp_kommis_saldo,
+                     cl_kcp_kommis_begin_saldo, cl_kcp_kommis_transfer_payed, cl_kcp_kommis_transfer_writeoff
+            do
+            begin
+              update kn_kontcalcperc
+              set kcp_kommis_calced = :cl_kcp_kommis_calced,
+                  kcp_kommis_payed = :cl_kcp_kommis_payed,
+                  kcp_kommis_writeoff = :cl_kcp_kommis_writeoff,
+                  kcp_kommis_saldo = :cl_kcp_kommis_saldo,
+                  kcp_kommis_begin_saldo = :cl_kcp_kommis_begin_saldo,
+                  kcp_kommis_transfer_payed = :cl_kcp_kommis_transfer_payed,
+                  kcp_kommis_transfer_writeoff = :cl_kcp_kommis_transfer_writeoff
+              where kcp_from_kc_id = :kc_id and
+                    kcp_period = :kcp_period;
+            end
+          end
+        end -- конец если займ встречается
+      end -- конец списка амнистированных
+    end -- конец формирование составка
+
+    for select kc_id, cl_kcp_kommis_calced, cl_kcp_kommis_payed, cl_kcp_kommis_writeoff, cl_kcp_kommis_saldo,
+               cl_kcp_kommis_begin_saldo, cl_kcp_kommis_transfer_payed, cl_kcp_kommis_transfer_writeoff
+        from hp_devide_kn_kontcalcperc(:k_id, :kcp_period, :tmp_kc_list, :tmp_amount_list, :tmp_kommis_list, 0, :diff_kcp_kommis_begin_saldo, 0, 0, :diff_kcp_kommis_calced, 0)
+        into kc_id, cl_kcp_kommis_calced, cl_kcp_kommis_payed, cl_kcp_kommis_writeoff, cl_kcp_kommis_saldo,
+             cl_kcp_kommis_begin_saldo, cl_kcp_kommis_transfer_payed, cl_kcp_kommis_transfer_writeoff
+    do
+    begin
+      update kn_kontcalcperc
+      set kcp_kommis_calced = :cl_kcp_kommis_calced,
+          kcp_kommis_payed = :cl_kcp_kommis_payed,
+          kcp_kommis_writeoff = :cl_kcp_kommis_writeoff,
+          kcp_kommis_saldo = :cl_kcp_kommis_saldo,
+          kcp_kommis_begin_saldo = :cl_kcp_kommis_begin_saldo,
+          kcp_kommis_transfer_payed = :cl_kcp_kommis_transfer_payed,
+          kcp_kommis_transfer_writeoff = :cl_kcp_kommis_transfer_writeoff
+      where kcp_from_kc_id = :kc_id and
+            kcp_period = :kcp_period;
+    end
+  end -- конец периода
+
+  if (kcp_period is null) then
+    exit;
+
+-- основной займ закрылся раньше, переводим остальных самостоятельно
+  while (kcp_period &lt; last_period) do
+  begin
+    kcp_period_prv = kcp_period;
+
+    curr_year = kcp_period / 100;
+    curr_month = mod(kcp_period, 100);
+
+    if (curr_month &lt; 12) then
+      curr_month = curr_month + 1;
+    else
+    begin
+      curr_month = 1;
+      curr_year = curr_year + 1;
+    end
+    kcp_period = curr_year * 100 + curr_month;
+
+    for select kd_k_new
+        from kontdevides
+        where kd_k_orig = :k_id and
+              kd_k_new &lt;&gt; :k_id
+        into :tmp_k_id
+    do
+    begin
+      if (exists(select *
+                 from kontcalcperc
+                 where kcp_from_k_id = :tmp_k_id and
+                       kcp_period = :kcp_period)) then
+      begin
+        kc_id = null;
+        select kc_id, kc_amount_approved
+        from knclient
+        where kc_from_k_id = :tmp_k_id and
+              kc_amount_approved &gt; 0
+        into :kc_id, kc_amount;
+
+        for select kcp_kommis_calced, kcp_kommis_payed, kcp_kommis_writeoff, kcp_kommis_saldo, kcp_kommis_begin_saldo,
+                   kcp_kommis_transfer_payed, kcp_kommis_transfer_writeoff
+            from kontcalcperc
+            where kcp_period = :kcp_period and
+                  kcp_from_k_id = :tmp_k_id
+            into cl_kcp_kommis_calced, cl_kcp_kommis_payed, cl_kcp_kommis_writeoff, cl_kcp_kommis_saldo,
+                 cl_kcp_kommis_begin_saldo, cl_kcp_kommis_transfer_payed, cl_kcp_kommis_transfer_writeoff
+        do
+        begin
+          update kn_kontcalcperc
+          set kcp_kommis_calced = :cl_kcp_kommis_calced,
+              kcp_kommis_payed = :cl_kcp_kommis_payed,
+              kcp_kommis_writeoff = :cl_kcp_kommis_writeoff,
+              kcp_kommis_saldo = :cl_kcp_kommis_saldo,
+              kcp_kommis_begin_saldo = :cl_kcp_kommis_begin_saldo,
+              kcp_kommis_transfer_payed = :cl_kcp_kommis_transfer_payed,
+              kcp_kommis_transfer_writeoff = :cl_kcp_kommis_transfer_writeoff
+          where kcp_from_kc_id = :kc_id and
+                kcp_period = :kcp_period;
+        end
+      end -- конец если займ встречается
+    end -- конец списка амнистированных
+
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_MONEYOPER_EPS_RECALC — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_MONEYOPER_EPS_RECALC: 1 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_MONEYOPER_EPS_RECALC</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_IS_ERROR</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_MONEYOPER_EPS_RECALC(
+    REP_DATE D_DATE)
+RETURNS (
+    RES_IS_ERROR D_BOOL,
+    RES_TEXT D_STR_255)
+AS
+declare variable recalc_count d_integer;
+declare variable cash_acc_id d_id;
+declare variable recalced_date d_integer;
+begin
+  res_is_error = 0;
+  res_text = &#x27;&#x27;;
+
+  recalced_date = 0;
+
+  for select acc_id
+  from ref_account, sys_accbalance
+  where sab_full_code = &#x27;ПлатСистемы.Погашено&#x27; and
+        acc_from_sab_id = sab_id
+  into cash_acc_id
+  do
+  begin
+    for select kob_id, kob_from_ol_id, kob_ol_date, kob_cashflow_date
+    from kn_operbook
+    where kob_ol_date = :rep_date and
+          kob_ol_is_active = 1 and
+          kob_acc_dt + 0 = :cash_acc_id
+    as cursor cur
+    do
+    begin
+      if (not exists(select kob_ol_date
+      from operperiod, kn_operbook, ref_account, sys_accbalance
+      where cur.kob_ol_date between olp_date_begin and olp_date_end and
+            kob_ol_date = cur.kob_cashflow_date and
+            kob_ol_is_active = 1 and
+            olp_from_ol_id = kob_from_ol_id and
+            kob_acc_kt + 0 = :cash_acc_id and
+            kob_acc_dt = acc_id and
+            acc_from_sab_id = sab_id and
+            sab_full_code starting &#x27;Деньги.Безнал.Банк.&#x27;)) then
+      begin
+        recalced_date = recalced_date + 1;
+
+        update kn_operbook
+        set kob_from_rml_id = -2
+        where current of cur;
+      end
+    end
+  end
+
+  update kn_operbook
+  set kob_from_rml_id = -2
+  where kob_ol_date = :rep_date and
+        kob_ol_is_active = 1 and
+        coalesce(kob_from_rml_id, 0) = 0;
+
+  recalc_count = row_count;
+
+  if (recalc_count + recalced_date = 0) then
+    res_text = &#x27;Нет данных для пересчета&#x27;;
+  else
+    res_text = &#x27;Пересчитаны коды: &#x27; || recalc_count || &#x27;, даты: &#x27; || recalced_date;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MC_CHEC_EXTMINIAPP — процедура — схема БД</title>
+<meta name="description" content="Процедура MC_CHEC_EXTMINIAPP: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>MC_CHEC_EXTMINIAPP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_check_client_fio.html"><div class="to">AAREP_CHECK_CLIENT_FIO</div></a><a class="ref-card" href="hp_blacklist_search.html"><div class="to">HP_BLACKLIST_SEARCH</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="mc_extminiapp_create.html"><div class="to">MC_EXTMINIAPP_CREATE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MCL_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_RESULT_TXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE MC_CHEC_EXTMINIAPP(
+    C_ID ID_TYPE,
+    MCL_ID ID_TYPE)
+RETURNS (
+    MA_RESULT_TXT D_STR_255)
+AS
+declare variable c_name_fio d_str_100;
+declare variable c_birth_date d_date;
+declare variable c_pass_no d_str_long;
+declare variable c_inn d_str_20;
+declare variable k_id decimal(18,0);
+declare variable c_comment d_str_255;
+declare variable subject d_str_255;
+begin
+    -- Предворительная проверка клиента на уровне подачи заявки.
+    ma_result_txt = &#x27;&#x27;;
+
+    select
+        c.c_name_fio,
+        c.c_birth_date,
+        c.c_pass_no, 
+        c.c_inn
+    from clients c
+    where c.c_id = :c_id
+    into
+        :c_name_fio,
+        :c_birth_date,
+        :c_pass_no,
+        :c_inn;
+
+
+    if (ma_result_txt = &#x27;&#x27;
+        and :c_id is not null
+        and exists
+        (
+            select 1
+            from aarep_check_client_fio(:c_id, &#x27;&#x27;, &#x27;&#x27;, &#x27;&#x27;, 0, null, &#x27;&#x27;, 1)
+            where c_comment_id = 1
+        )
+    ) then
+        ma_result_txt = &#x27;Вы не можете подать заявку на заем через приложение, обратитесь в офис Компании или к своему специалисту&#x27;;
+
+
+    -- RFCKG-2967 Если у клиента есть активная просрочка
+    if (ma_result_txt = &#x27;&#x27;
+        and :c_id is not null
+        and exists
+        (
+            select 1
+            from oksummary
+            inner join knclient on oks_from_k_id = kc_from_k_id
+                and kc_amount_approved &gt; 0
+                and kc_from_c_id = :c_id
+            where current_date between oks_date_begin and oks_date_end
+                and current_date - oks_delinq_date &gt; 0
+                and oks_close_state in (0, 1)
+        )
+    ) then
+        ma_result_txt = &#x27;У вас имеется активная просрочка&#x27;;
+
+
+    -- Если клиент находится в Стоп-листе
+    if (ma_result_txt = &#x27;&#x27;
+        and :c_id is not null
+        and exists
+        (
+            select 1
+            from hp_blacklist_search(:c_id, :c_name_fio, :c_birth_date, :c_pass_no, :c_inn, f_cont(:c_id, &#x27;cell&#x27;, &#x27;ok&#x27;, &#x27;main&#x27;), 1, 0, 0)
+            where c_comment_id = 1
+        )
+    ) then
+        ma_result_txt = &#x27;Прошу обратиться к своему куратору или в ближайший офис&#x27;;
+
+
+    -- активная онлайн-заявка по c_id
+    if (ma_result_txt = &#x27;&#x27;
+        and :c_id is not null
+        and exists
+        (
+            select 1
+            from extminiapp ema
+            where ema.ema_from_c_id = :c_id
+                and ema.ema_date between current_date - 30 and current_date
+        )
+    ) then
+        ma_result_txt = &#x27;Вы не можете подать заявку на заем через приложение, обратитесь в офис Компании или к своему специалисту&#x27;;
+
+
+    -- активная онлайн-заявка по mcl_id
+    if (ma_result_txt = &#x27;&#x27;
+        and :c_id is null
+        and exists
+        (
+            select 1
+            from extminiapp ema
+            where ema.ema_from_mcl_id = :mcl_id
+                and ema.ema_date between current_date - 30 and current_date
+        )
+    ) then
+        ma_result_txt = &#x27;Вы не можете подать заявку на заем через приложение, обратитесь в офис Компании или к своему специалисту&#x27;;
+
+
+    --проверка активный кредит
+    if (ma_result_txt = &#x27;&#x27;
+        and :c_id is not null
+        and exists
+        (
+            select 1
+            from knclient, kontstate
+            where kc_from_c_id = :c_id
+                and kc_amount_approved &gt; 0
+                and kc_from_k_id = ks_from_k_id
+                and ks_ol_is_delete = 0
+                and ks_state = 1
+                and current_date between ks_date_begin and ks_date_end   
+        )
+    ) then
+        ma_result_txt = &#x27;Вы не можете подать заявку на заем через приложение, обратитесь в офис Компании или к своему специалисту&#x27;;
+
+
+    --проверка спец учет
+    if (ma_result_txt = &#x27;&#x27;  
+        and :c_id is not null
+        and exists
+        (
+            select 1
+            from operkroff, knclient
+            where kc_from_c_id = :c_id
+                and kc_amount_approved &gt; 0
+                and kc_from_k_id = oko_from_k_id
+                and oko_ol_is_active = 1
+           group by oko_from_k_id
+           having sum(oko_os + oko_sh_os) &gt; 0 or sum(oko_perc + oko_sh_perc) &gt; 0
+        )
+    ) then
+        ma_result_txt = &#x27;Вы не можете подать заявку на заем через приложение, обратитесь в офис Компании или к своему специалисту&#x27;;
+
+
+    -- активная кредитная заявка
+    if (ma_result_txt = &#x27;&#x27;
+        and :c_id is not null
+        and exists
+        (
+            select *
+            from miniapp
+            inner join miniappclient on mac_from_ma_id = ma_id
+            left join kontract on k_from_ma_app_id = ma_id
+            where ma_date_end = &#x27;31.12.9999&#x27;
+                and iif(k_id is not null, ma_is_active = 1
+                and k_status = 0, ma_is_active = 1)
+                and ma_date_app between current_date - 30 and current_date
+                and mac_from_c_id = :c_id
+        )
+    ) then
+        ma_result_txt = &#x27;Вы не можете подать заявку на заем через приложение, обратитесь в офис Компании или к своему специалисту&#x27;;
+
+
+    suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

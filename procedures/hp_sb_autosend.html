@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_SB_AUTOSEND — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_SB_AUTOSEND: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_SB_AUTOSEND</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_make_zad_list.html"><div class="to">AAREP_MAKE_ZAD_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_SB_AUTOSEND(
+    REP_DATE DATE)
+AS
+declare variable un_id id_type;
+declare variable k_id id_type;
+declare variable is_ok smallint;
+declare variable zad_total curr_type;
+declare variable k_amount_approved curr_type;
+declare variable kc_amount_approved curr_type;
+declare variable perc perc_type;
+declare variable cl_zadol curr_type;
+begin
+  if (rep_date &lt; cast(&#x27;26.02.2018&#x27; as date)) then
+    exit;
+  if (rep_date &gt;= cast(&#x27;13.04.2018&#x27; as date)) then
+    exit;
+
+  select un_id
+  from username un
+  where un.un_name = &#x27;IGUSEV&#x27;
+  into :un_id;
+
+--  беру все контракты с просрочкой 421 день и более
+  for select oks_from_k_id
+      from oksummary, kontract
+      where :rep_date between oks_date_begin and oks_date_end and
+            :rep_date - oks_delinq_date &gt;= 421 and
+            oks_from_k_id = k_id and
+            oks_close_state = 0
+      into :k_id
+  do
+  begin
+--  проверяю чтобы группа не висела на СБ
+    if (not exists(select *
+                   from sb_akt sa
+                   where sa.sba_is_delete = 0 and
+                         sa.sba_from_k_id = :k_id and
+                         sa.sba_status &gt;= 0 and
+                         :rep_date between sa.sba_date_begin and sa.sba_date_end)) then
+    begin
+      is_ok = 1;
+      zad_total = 0;
+-- если группа не висит не за одним из СБ,
+
+      select sum(zad_os + sh_calc_perc + sh_calc_fine)
+      from aarep_make_zad_list(:k_id, :rep_date, 1)
+      where sh_date is not null
+      into :zad_total;
+
+      select kont.k_amount_approved
+      from kontract kont
+      where kont.k_id = :k_id
+      into :k_amount_approved;
+
+      for select kncl.kc_amount_approved
+          from knclient kncl
+          where kncl.kc_from_k_id = :k_id and
+                kncl.kc_amount_approved &gt; 0
+          into :kc_amount_approved
+      do
+      begin
+        perc = (kc_amount_approved * 100) / k_amount_approved;
+
+        cl_zadol = (zad_total * perc) / 100;
+
+        if (cl_zadol &gt;= 900001) then
+        begin
+          is_ok = 0;
+        end
+      end
+-- если сумма задолженности на одного заемщика меньше 900 001,
+-- сажаю группу на Шерматова Э. Важно ID = 25 (Есть еще одна запись Шерматов Э. с ID = 29. Нужен именно 25)
+      if (is_ok = 1) then
+      begin
+        insert into sb_akt (sba_from_k_id, sba_number, sba_date_begin, sba_from_sbl_id, sba_status, sba_from_un_id,
+                            sba_is_delete)
+        values (:k_id, -1, :rep_date, 25, 2, :un_id, 0);
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_HTML_DISB_LIST — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_HTML_DISB_LIST: 4 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_HTML_DISB_LIST</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_loan_disb_list_tmp.html"><div class="to">AAREP_LOAN_DISB_LIST_TMP</div></a><a class="ref-card" href="aarep_plan_indicator.html"><div class="to">AAREP_PLAN_INDICATOR</div></a><a class="ref-card" href="hp_test_un_id.html"><div class="to">HP_TEST_UN_ID</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_html_main.html"><div class="to">FM_REPORT_HTML_MAIN</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REG_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_HTML_DISB_LIST(
+    UN_ID DECIMAL(18,0),
+    REP_DATE_BEGIN DATE,
+    REP_DATE_END DATE,
+    REG_ID INTEGER)
+RETURNS (
+    RES_TEXT BLOB SUB_TYPE TEXT SEGMENT SIZE 80)
+AS
+declare variable AMOUNT decimal(18,4) = 0;
+declare variable LO_ID decimal(18,0);
+declare variable JK_SYSTEM_CODE varchar(100);
+declare variable RES_APP_AMOUNT decimal(18,4);
+declare variable STR varchar(1024);
+declare variable C_NAME_FIO varchar(100);
+declare variable C_NAME_FIO_PRIOR varchar(100);
+declare variable D_L_COUNT integer;
+declare variable D_C_COUNT integer;
+declare variable D_APP_AMOUNT decimal(18,4) = 0;
+declare variable D_DISB_AMOUNT decimal(18,4) = 0;
+declare variable TMP_L_COUNT integer;
+declare variable TMP_C_COUNT integer;
+declare variable TMP_APP_AMOUNT decimal(18,4) = 0;
+declare variable TMP_DISB_AMOUNT decimal(18,4) = 0;
+declare variable R_L_COUNT integer;
+declare variable R_C_COUNT integer;
+declare variable R_APP_AMOUNT decimal(18,4) = 0;
+declare variable R_DISB_AMOUNT decimal(18,4) = 0;
+declare variable P_L_COUNT integer;
+declare variable P_C_COUNT integer;
+declare variable P_APP_AMOUNT decimal(18,4) = 0;
+declare variable P_DISB_AMOUNT decimal(18,4) = 0;
+declare variable RES_KIND varchar(20);
+declare variable LO_FIO varchar(100);
+declare variable DB_ID integer;
+declare variable HTML_TEMPLATE D_BLOB_TEXT;
+declare variable UN_NAME D_STR_CODE;
+begin
+  res_text = (select res_style
+              from fm_html_styles) || &#x27;&lt;body&gt;&#x27;;
+
+  :db_id = f_get_db_id();
+  un_id = (select un_id
+           from hp_test_un_id(:un_id));
+
+  -- RFCRU-4360 Будет убрано после тестирования
+  select un_name
+  from username
+  where un_id = :un_id
+  into :un_name;
+
+  if (un_name = &#x27;fmtest&#x27;) then
+  begin
+    select html_content
+    from apple_test_data
+    where report_type = &#x27;DISB_LIST&#x27;
+    into :html_template;
+
+    if (html_template is not null) then
+    begin
+      str = f_format(&#x27;%1: &#x27;, iif(db_id &lt;&gt; 94401, &#x27;Период&#x27;, &#x27;Mudd?t&#x27;)) || iif(rep_date_begin is not null, right(&#x27;0&#x27; || extract(day from rep_date_begin), 2) || &#x27;.&#x27; || right(&#x27;0&#x27; || extract(month from rep_date_begin), 2) || &#x27;.&#x27; || extract(year from rep_date_begin), &#x27;Не указан&#x27;) || &#x27; - &#x27; || iif(rep_date_end is not null, right(&#x27;0&#x27; || extract(day from rep_date_end), 2) || &#x27;.&#x27; || right(&#x27;0&#x27; || extract(month from rep_date_end), 2) || &#x27;.&#x27; || extract(year from rep_date_end), &#x27;Не указан&#x27;);
+      str = &#x27;&lt;font color=&quot;black&quot;&gt;&#x27; || :str || &#x27;&lt;/font&gt;&#x27;;
+      res_text = blob_append(res_text, str || &#x27;&lt;br&gt;&#x27;);
+      res_text = blob_append(res_text, html_template);
+      suspend;
+      exit;
+    end
+    else
+    begin
+      res_text = blob_append(res_text, &#x27;&lt;font color=&quot;red&quot;&gt;тестовый шаблон не найден в таблице apple_test_data&lt;/font&gt;&lt;br&gt;&#x27;);
+      suspend;
+      exit;
+    end
+  end
+
+  select un_from_c_id, c_name_fio
+  from username, clients
+  where un_id = :un_id and
+        un_from_c_id = c_id
+  into :lo_id, lo_fio;
+  if (lo_id is null) then
+    exit;
+
+  select jk_system_code
+  from hr_pstatus, joblist, jobkind
+  where ps_date_begin &lt;= :rep_date_end and
+        ps_date_end &gt;= :rep_date_end and
+        ps_from_c_id = :lo_id and
+        ps_status = 1 and
+        ps_is_working = 1 and
+        ps_from_jl_id = jl_id and
+        jl_kind = jk_id
+  into :jk_system_code;
+
+  if (reg_id is null) then
+  begin
+    res_text = BLOB_APPEND(res_text, &#x27;&lt;h2&gt; У вас нет доступа на просмотр данного отчета&lt;h2&gt;&lt;/body&gt;&#x27;);
+    suspend;
+    exit;
+  end
+
+  if (not(jk_system_code in (&#x27;JobSystem.LO_Partner&#x27;, &#x27;JobSystem.LO_Standart&#x27;, &#x27;JobSystem.LO_Senior&#x27;, &#x27;JobSystem.Region_KM&#x27;, &#x27;JobSystem.Specialist_Expert&#x27;))) then
+  begin
+    res_text = BLOB_APPEND(res_text, &#x27;&lt;h2&gt; У вас нет доступа на просмотр данного отчета&lt;h2&gt;&lt;/body&gt;&#x27;);
+    suspend;
+    exit;
+  end
+
+
+  if (jk_system_code = &#x27;JobSystem.Region_KM&#x27;) then
+  begin
+    lo_id = 0;
+    select reg_code || &#x27; &#x27; || reg_name
+    from region
+    where reg_unicode = :reg_id
+    into :lo_fio;
+  end
+
+  res_text = BLOB_APPEND(res_text, f_format(&#x27;&lt;h1 class=&quot;green_text&quot;&gt;%1&lt;br&gt;%2&lt;/h1&gt;&#x27;, iif(db_id &lt;&gt; 94401, &#x27;Отчет по выдачам&#x27;, &#x27;Verilən kreditlər üzrə hesabat&#x27;), lo_fio));
+
+  str = f_format(&#x27;%1: &#x27;, iif(db_id &lt;&gt; 94401, &#x27;Период&#x27;, &#x27;Müddət&#x27;)) || iif(rep_date_begin is not null, right(&#x27;0&#x27; || extract(day from rep_date_begin), 2) || &#x27;.&#x27; || right(&#x27;0&#x27; || extract(month from rep_date_begin), 2) || &#x27;.&#x27; || extract(year from rep_date_begin), &#x27;Не указан&#x27;) || &#x27; - &#x27; || iif(rep_date_end is not null, right(&#x27;0&#x27; || extract(day from rep_date_end), 2) || &#x27;.&#x27; || right(&#x27;0&#x27; || extract(month from rep_date_end), 2) || &#x27;.&#x27; || extract(year from rep_date_end), &#x27;Не указан&#x27;);
+  str = &#x27;&lt;font color=&quot;black&quot;&gt;&#x27; || :str || &#x27;&lt;/font&gt;&#x27;;
+  res_text = BLOB_APPEND(res_text, str || &#x27;&lt;br&gt;&#x27;);
+
+-- Общий список
+  res_text = BLOB_APPEND(res_text, f_format(&#x27;&lt;h2&gt;%1&lt;/h2&gt;&#x27;, iif(db_id &lt;&gt; 94401, &#x27;Итоги за период&#x27;, &#x27;Müddət üzrə nəticələr&#x27;)));
+  res_text = BLOB_APPEND(res_text, &#x27;&lt;table width=&quot;100%&quot;&gt;
+       &lt;col width=&quot;20%&quot;&gt;
+       &lt;col width=&quot;20%&quot;&gt;
+       &lt;col width=&quot;10%&quot;&gt;
+       &lt;col width=&quot;10%&quot;&gt;
+       &lt;col width=&quot;20%&quot;&gt;
+       &lt;col width=&quot;20%&quot;&gt;
+       &lt;tr&gt;&#x27; || f_format(&#x27;&lt;th&gt;%1&lt;/th&gt;&lt;th&gt;%2&lt;/th&gt;&lt;th&gt;%3&lt;/th&gt;&lt;th&gt;%4&lt;/th&gt;&lt;th&gt;%5&lt;/th&gt;&#x27;, iif(db_id &lt;&gt; 94401, &#x27;Дата&#x27;, &#x27;Tarix&#x27;),
+                                                                                    iif(db_id &lt;&gt; 94401, &#x27;Статус&#x27;, &#x27;Status&#x27;),
+                                                                                    iif(db_id &lt;&gt; 94401, &#x27;Дог.&#x27;, &#x27;Müq.&#x27;),
+                                                                                    iif(db_id &lt;&gt; 94401, &#x27;Кл.&#x27;, &#x27;Müşt.&#x27;),
+                                                                                    iif(db_id &lt;&gt; 94401, &#x27;Заявка&#x27;, &#x27;Ərizə&#x27;)) ||
+                f_format(&#x27;&lt;th&gt;%1&lt;/th&gt;&lt;/tr&gt;&#x27;, iif(db_id &lt;&gt; 94401, &#x27;Выдано&#x27;, &#x27;Verilib&#x27;)));
+
+  for select &#x27;&lt;tr&gt;&#x27; || &#x27;&lt;td align=&quot;left&quot;&gt;&#x27; || right(100 + extract(day from res_date), 2) || &#x27;.&#x27; || right(100 + extract(month from res_date), 2) || &#x27;.&#x27; || extract(year from res_date) || &#x27;&lt;/td&gt;&#x27; || &#x27;&lt;td align=&quot;left&quot;&gt;&#x27; || res_kind || &#x27;&lt;/td&gt;&#x27; || &#x27;&lt;td align=&quot;center&quot;&gt;&#x27; || round(count(*), 0) || &#x27;&lt;/td&gt;&#x27; || &#x27;&lt;td align=&quot;center&quot;&gt;&#x27; || round(sum(k_client_count), 0) || &#x27;&lt;/td&gt;&#x27; || &#x27;&lt;td align=&quot;right&quot;&gt;&#x27; || round(sum(res_app_amount), 0) || &#x27;&lt;/td&gt;&#x27; || &#x27;&lt;td align=&quot;right&quot;&gt;&#x27; || round(sum(res_disb_amount), 0) || &#x27;&lt;/td&gt;&#x27; || &#x27;&lt;/tr&gt;&#x27;
+      from aarep_loan_disb_list_tmp(:un_id, :rep_date_begin, :rep_date_end, :reg_id)
+      group by res_date, res_kind
+      into :str
+  do
+  begin
+    res_text = BLOB_APPEND(res_text, str);
+  end
+  for select &#x27;&lt;tr&gt;&#x27; || f_format(&#x27;&lt;td class=&quot;filled&quot; align=&quot;left&quot;&gt;&lt;b&gt;%1&lt;/b&gt;&lt;/td&gt;&#x27;, iif(:db_id &lt;&gt; 94401, &#x27;Всего&#x27;, &#x27;Ümumi&#x27;)) || &#x27;&lt;td class=&quot;filled&quot; align=&quot;left&quot;&gt;&lt;b&gt;&#x27; || res_kind || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;td class=&quot;filled&quot; align=&quot;center&quot;&gt;&lt;b&gt;&#x27; || round(count(*), 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;td class=&quot;filled&quot; align=&quot;center&quot;&gt;&lt;b&gt;&#x27; || round(count(distinct k_client), 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;td class=&quot;filled&quot; align=&quot;right&quot;&gt;&lt;b&gt;&#x27; || round(sum(res_app_amount), 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;td class=&quot;filled&quot; align=&quot;right&quot;&gt;&lt;b&gt;&#x27; || round(sum(res_disb_amount), 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;/tr&gt;&#x27;
+      from aarep_loan_disb_list_tmp(:un_id, :rep_date_begin, :rep_date_end, :reg_id)
+      group by res_kind
+      into :str
+  do
+  begin
+    res_text = BLOB_APPEND(res_text, str);
+  end
+  res_text = BLOB_APPEND(res_text, &#x27;&lt;/table&gt;&#x27;);
+
+  if (db_id = 81001) then
+  begin
+    res_text = BLOB_APPEND(res_text, f_format(&#x27;&lt;h1 class=&quot;green_text&quot;&gt;%1&lt;br&gt;%2&lt;/h1&gt;&#x27;, iif(db_id &lt;&gt; 94401, &#x27;Выдачи по СБП&#x27;, &#x27;Verilən kreditlər üzrə hesabat&#x27;)));
+  
+--    str = f_format(&#x27;%1: &#x27;, iif(db_id &lt;&gt; 94401, &#x27;Период&#x27;, &#x27;Mudd?t&#x27;)) || iif(rep_date_begin is not null, right(&#x27;0&#x27; || extract(day from rep_date_begin), 2) || &#x27;.&#x27; || right(&#x27;0&#x27; || extract(month from rep_date_begin), 2) || &#x27;.&#x27; || extract(year from rep_date_begin), &#x27;Не указан&#x27;) || &#x27; - &#x27; || iif(rep_date_end is not null, right(&#x27;0&#x27; || extract(day from rep_date_end), 2) || &#x27;.&#x27; || right(&#x27;0&#x27; || extract(month from rep_date_end), 2) || &#x27;.&#x27; || extract(year from rep_date_end), &#x27;Не указан&#x27;);
+--    str = &#x27;&lt;font color=&quot;black&quot;&gt;&#x27; || :str || &#x27;&lt;/font&gt;&#x27;;
+--    res_text = BLOB_APPEND(res_text, str || &#x27;&lt;br&gt;&#x27;);
+  
+  -- Общий список
+--    res_text = BLOB_APPEND(res_text, f_format(&#x27;&lt;h2&gt;%1&lt;/h2&gt;&#x27;, iif(db_id &lt;&gt; 94401, &#x27;Итоги за период&#x27;, &#x27;Mudd?t uzr? n?tic?l?r&#x27;)));
+    res_text = BLOB_APPEND(res_text, &#x27;&lt;table width=&quot;100%&quot;&gt;
+         &lt;col width=&quot;20%&quot;&gt;
+         &lt;col width=&quot;20%&quot;&gt;
+         &lt;col width=&quot;10%&quot;&gt;
+         &lt;col width=&quot;10%&quot;&gt;
+         &lt;col width=&quot;20%&quot;&gt;
+         &lt;col width=&quot;20%&quot;&gt;
+         &lt;tr&gt;&#x27; || f_format(&#x27;&lt;th&gt;%1&lt;/th&gt;&lt;th&gt;%2&lt;/th&gt;&lt;th&gt;%3&lt;/th&gt;&lt;th&gt;%4&lt;/th&gt;&lt;th&gt;%5&lt;/th&gt;&#x27;, iif(db_id &lt;&gt; 94401, &#x27;Дата&#x27;, &#x27;Tarix&#x27;),
+                                                                                      iif(db_id &lt;&gt; 94401, &#x27;Статус&#x27;, &#x27;Status&#x27;),
+                                                                                      iif(db_id &lt;&gt; 94401, &#x27;Дог.&#x27;, &#x27;Müq.&#x27;),
+                                                                                      iif(db_id &lt;&gt; 94401, &#x27;Кл.&#x27;, &#x27;Müşt.&#x27;),
+                                                                                      iif(db_id &lt;&gt; 94401, &#x27;Заявка&#x27;, &#x27;Ərizə&#x27;)) ||
+                  f_format(&#x27;&lt;th&gt;%1&lt;/th&gt;&lt;/tr&gt;&#x27;, iif(db_id &lt;&gt; 94401, &#x27;Выдано&#x27;, &#x27;Verilib&#x27;)));
+  
+    for select &#x27;&lt;tr&gt;&#x27; || &#x27;&lt;td align=&quot;left&quot;&gt;&#x27; || right(100 + extract(day from res_date), 2) || &#x27;.&#x27; || right(100 + extract(month from res_date), 2) || &#x27;.&#x27; || extract(year from res_date) || &#x27;&lt;/td&gt;&#x27; || &#x27;&lt;td align=&quot;left&quot;&gt;&#x27; || res_kind || &#x27;&lt;/td&gt;&#x27; || &#x27;&lt;td align=&quot;center&quot;&gt;&#x27; || round(count(*), 0) || &#x27;&lt;/td&gt;&#x27; || &#x27;&lt;td align=&quot;center&quot;&gt;&#x27; || round(sum(k_client_count), 0) || &#x27;&lt;/td&gt;&#x27; || &#x27;&lt;td align=&quot;right&quot;&gt;&#x27; || round(sum(res_app_amount), 0) || &#x27;&lt;/td&gt;&#x27; || &#x27;&lt;td align=&quot;right&quot;&gt;&#x27; || round(sum(res_disb_amount), 0) || &#x27;&lt;/td&gt;&#x27; || &#x27;&lt;/tr&gt;&#x27;
+        from aarep_loan_disb_list_tmp(:un_id, :rep_date_begin, :rep_date_end, :reg_id)
+        where k_disb_kind in (7, 8)
+        group by res_date, res_kind
+        into :str
+    do
+    begin
+      res_text = BLOB_APPEND(res_text, str);
+    end
+    for select &#x27;&lt;tr&gt;&#x27; || f_format(&#x27;&lt;td class=&quot;filled&quot; align=&quot;left&quot;&gt;&lt;b&gt;%1&lt;/b&gt;&lt;/td&gt;&#x27;, iif(:db_id &lt;&gt; 94401, &#x27;Всего&#x27;, &#x27;Ümumi&#x27;)) || &#x27;&lt;td class=&quot;filled&quot; align=&quot;left&quot;&gt;&lt;b&gt;&#x27; || res_kind || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;td class=&quot;filled&quot; align=&quot;center&quot;&gt;&lt;b&gt;&#x27; || round(count(*), 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;td class=&quot;filled&quot; align=&quot;center&quot;&gt;&lt;b&gt;&#x27; || round(count(distinct k_client), 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;td class=&quot;filled&quot; align=&quot;right&quot;&gt;&lt;b&gt;&#x27; || round(sum(res_app_amount), 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;td class=&quot;filled&quot; align=&quot;right&quot;&gt;&lt;b&gt;&#x27; || round(sum(res_disb_amount), 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;/tr&gt;&#x27;
+        from aarep_loan_disb_list_tmp(:un_id, :rep_date_begin, :rep_date_end, :reg_id)
+        where k_disb_kind in (7, 8)
+        group by res_kind
+        into :str
+    do
+    begin
+      res_text = BLOB_APPEND(res_text, str);
+    end
+    res_text = BLOB_APPEND(res_text, &#x27;&lt;/table&gt;&#x27;);
+  end 
+
+
+
+--S.K.
+  -- JIRA 5793
+  if (db_id not in (39801, 41701)) then
+  begin
+  res_text = BLOB_APPEND(res_text,(select html_txt
+                         from aarep_plan_indicator(:un_id, :rep_date_begin)));
+  end
+
+  c_name_fio_prior = &#x27;&#x27;;
+  d_l_count = 0;
+  d_c_count = 0;
+  d_app_amount = 0;
+  d_disb_amount = 0;
+
+  r_l_count = 0;
+  r_c_count = 0;
+  r_app_amount = 0;
+  r_disb_amount = 0;
+
+  p_l_count = 0;
+  p_c_count = 0;
+  p_app_amount = 0;
+  p_disb_amount = 0;
+
+  if (lo_id = 0) then -- только для МО
+  begin
+    res_text = BLOB_APPEND(res_text, f_format(&#x27;&lt;h1 class=&quot;green_text&quot;&gt;%1&lt;/h1&gt;&#x27;, iif(db_id &lt;&gt; 94401, &#x27;Детально по сотрудникам&#x27;, &#x27;İşçilər üzrə ətraflı&#x27;)));
+    res_text = BLOB_APPEND(res_text, &#x27;&lt;table width=&quot;100%&quot;&gt;
+         &lt;col width=&quot;20%&quot;&gt;
+         &lt;col width=&quot;20%&quot;&gt;
+         &lt;col width=&quot;10%&quot;&gt;
+         &lt;col width=&quot;10%&quot;&gt;
+         &lt;col width=&quot;20%&quot;&gt;
+         &lt;col width=&quot;20%&quot;&gt;
+         &lt;tr&gt;&#x27; || f_format(&#x27;&lt;th&gt;%1&lt;/th&gt;&lt;th&gt;%2&lt;/th&gt;&lt;th&gt;%3&lt;/th&gt;&lt;th&gt;%4&lt;/th&gt;&lt;th&gt;%5&lt;/th&gt;&#x27;, iif(db_id &lt;&gt; 94401, &#x27;Дата&#x27;, &#x27;Tarix&#x27;),
+                                                                                      iif(db_id &lt;&gt; 94401, &#x27;Статус&#x27;, &#x27;Status&#x27;),
+                                                                                      iif(db_id &lt;&gt; 94401, &#x27;Дог.&#x27;, &#x27;Müq.&#x27;),
+                                                                                      iif(db_id &lt;&gt; 94401, &#x27;Кл.&#x27;, &#x27;Müşt.&#x27;),
+                                                                                      iif(db_id &lt;&gt; 94401, &#x27;Заявка&#x27;, &#x27;Ərizə&#x27;)) ||
+                  f_format(&#x27;&lt;th&gt;%1&lt;/th&gt;&lt;/tr&gt;&#x27;, iif(db_id &lt;&gt; 94401, &#x27;Выдано&#x27;, &#x27;Verilib&#x27;)));
+
+    for select c_name_fio, res_kind,
+               &#x27;&lt;tr&gt;&#x27; || &#x27;&lt;td align=&quot;left&quot;&gt;&#x27; || right(100 + extract(day from res_date), 2) || &#x27;.&#x27; || right(100 + extract(month from res_date), 2) || &#x27;.&#x27; || extract(year from res_date) || &#x27;&lt;/td&gt;&#x27; || &#x27;&lt;td align=&quot;left&quot;&gt;&#x27; || res_kind || &#x27;&lt;/td&gt;&#x27; || &#x27;&lt;td align=&quot;center&quot;&gt;&#x27; || round(count(*), 0) || &#x27;&lt;/td&gt;&#x27; || &#x27;&lt;td align=&quot;center&quot;&gt;&#x27; || round(sum(k_client_count), 0) || &#x27;&lt;/td&gt;&#x27; || &#x27;&lt;td align=&quot;right&quot;&gt;&#x27; || round(sum(res_app_amount), 0) || &#x27;&lt;/td&gt;&#x27; || &#x27;&lt;td align=&quot;right&quot;&gt;&#x27; || round(sum(res_disb_amount), 0) || &#x27;&lt;/td&gt;&#x27; || &#x27;&lt;/tr&gt;&#x27;,
+               round(count(*), 0), round(sum(k_client_count), 0), round(sum(res_app_amount), 0),
+               round(sum(res_disb_amount), 0)
+        from aarep_loan_disb_list_tmp(:un_id, :rep_date_begin, :rep_date_end, :reg_id), clients
+        where res_lo_id = c_id
+        group by c_name_fio, res_date, res_kind
+        into c_name_fio, res_kind, :str, tmp_l_count, tmp_c_count, tmp_app_amount, tmp_disb_amount
+
+    do
+    begin
+      if (c_name_fio &lt;&gt; c_name_fio_prior) then
+      begin
+        if (c_name_fio_prior &lt;&gt; &#x27;&#x27;) then
+        begin
+          res_text = BLOB_APPEND(res_text, &#x27;&lt;tr&gt;&#x27; || f_format(&#x27;&lt;td class=&quot;filled&quot; align=&quot;left&quot;&gt;&lt;b&gt;%1&lt;/td&gt;&lt;td class=&quot;filled&quot; align=&quot;left&quot;&gt;&lt;b&gt;%2&lt;/td&gt;&#x27;, iif(db_id &lt;&gt; 94401, &#x27;Итог по СВЗ&#x27;, &#x27;Müt.üzrə nəticə&#x27;),
+                                                                                                                                            iif(db_id &lt;&gt; 94401, &#x27;выдан&lt;&#x27;, &#x27;Verilib&#x27;)) || &#x27;&lt;td class=&quot;filled&quot; align=&quot;center&quot;&gt;&lt;b&gt;&#x27; || round(d_l_count, 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;td class=&quot;filled&quot; align=&quot;center&quot;&gt;&lt;b&gt;&#x27; || round(d_c_count, 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;td class=&quot;filled&quot; align=&quot;right&quot;&gt;&lt;b&gt;&#x27; || round(d_app_amount, 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;td class=&quot;filled&quot; align=&quot;right&quot;&gt;&lt;b&gt;&#x27; || round(d_disb_amount, 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;/tr&gt;&#x27;);
+
+          res_text = BLOB_APPEND(res_text, &#x27;&lt;tr&gt;&#x27; || f_format(&#x27;&lt;td class=&quot;filled&quot; align=&quot;left&quot;&gt;&lt;b&gt;%1&lt;/td&gt;&lt;td class=&quot;filled&quot; align=&quot;left&quot;&gt;&lt;b&gt;%2&lt;/td&gt;&#x27;, iif(db_id &lt;&gt; 94401, &#x27;Итог по СВЗ&#x27;, &#x27;Müt.üzrə nəticə&#x27;),
+                                                                                                                                            iif(db_id &lt;&gt; 94401, &#x27;в процессе&#x27;, &#x27;Prossesdə&#x27;)) || &#x27;&lt;td class=&quot;filled&quot; align=&quot;center&quot;&gt;&lt;b&gt;&#x27; || round(p_l_count, 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;td class=&quot;filled&quot; align=&quot;center&quot;&gt;&lt;b&gt;&#x27; || round(p_c_count, 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;td class=&quot;filled&quot; align=&quot;right&quot;&gt;&lt;b&gt;&#x27; || round(p_app_amount, 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;td class=&quot;filled&quot; align=&quot;right&quot;&gt;&lt;b&gt;&#x27; || round(p_disb_amount, 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;/tr&gt;&#x27;);
+
+          res_text = BLOB_APPEND(res_text, &#x27;&lt;tr&gt;&#x27; || f_format(&#x27;&lt;td class=&quot;filled&quot; align=&quot;left&quot;&gt;&lt;b&gt;%1&lt;/td&gt;&lt;td class=&quot;filled&quot; align=&quot;left&quot;&gt;&lt;b&gt;%2&lt;/td&gt;&#x27;, iif(db_id &lt;&gt; 94401, &#x27;Итог по СВЗ&#x27;, &#x27;Müt.üzrə nəticə&#x27;),
+                                                                                                                                            iif(db_id &lt;&gt; 94401, &#x27;отказано&#x27;, &#x27;İmtina olunub&#x27;)) || &#x27;&lt;td class=&quot;filled&quot; align=&quot;center&quot;&gt;&lt;b&gt;&#x27; || round(r_l_count, 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;td class=&quot;filled&quot; align=&quot;center&quot;&gt;&lt;b&gt;&#x27; || round(r_c_count, 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;td class=&quot;filled&quot; align=&quot;right&quot;&gt;&lt;b&gt;&#x27; || round(r_app_amount, 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;td class=&quot;filled&quot; align=&quot;right&quot;&gt;&lt;b&gt;&#x27; || round(r_disb_amount, 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;/tr&gt;&#x27;);
+        end
+
+        res_text = BLOB_APPEND(res_text, &#x27;&lt;table width=&quot;100%&quot;&gt;
+             &lt;col width=&quot;60%&quot;&gt;
+             &lt;col width=&quot;20%&quot;&gt;
+             &lt;col width=&quot;20%&quot;&gt;&#x27;);
+        res_text = BLOB_APPEND(res_text, &#x27;&lt;tr&gt;&#x27; || &#x27;&lt;td align=&quot;left&quot;&gt;&lt;b&gt;&#x27; || c_name_fio || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;td align=&quot;right&quot;&gt;&lt;/td&gt;&#x27; || &#x27;&lt;td align=&quot;right&quot;&gt;&lt;/td&gt;&#x27; || &#x27;&lt;/tr&gt;&#x27;);
+        c_name_fio_prior = c_name_fio;
+
+        res_text = BLOB_APPEND(res_text, &#x27;&lt;table width=&quot;100%&quot;&gt;
+             &lt;col width=&quot;20%&quot;&gt;
+             &lt;col width=&quot;20%&quot;&gt;
+             &lt;col width=&quot;10%&quot;&gt;
+             &lt;col width=&quot;10%&quot;&gt;
+             &lt;col width=&quot;20%&quot;&gt;
+             &lt;col width=&quot;20%&quot;&gt;
+             &lt;tr&gt;&#x27; || f_format(&#x27;&lt;th&gt;%1&lt;/th&gt;&lt;th&gt;%2&lt;/th&gt;&lt;th&gt;%3&lt;/th&gt;&lt;th&gt;%4&lt;/th&gt;&lt;th&gt;%5&lt;/th&gt;&#x27;, iif(db_id &lt;&gt; 94401, &#x27;Дата&#x27;, &#x27;Tarix&#x27;),
+                                                                                          iif(db_id &lt;&gt; 94401, &#x27;Статус&#x27;, &#x27;Status&#x27;),
+                                                                                          iif(db_id &lt;&gt; 94401, &#x27;Дог.&#x27;, &#x27;Müq.&#x27;),
+                                                                                          iif(db_id &lt;&gt; 94401, &#x27;Кл.&#x27;, &#x27;Müş.&#x27;),
+                                                                                          iif(db_id &lt;&gt; 94401, &#x27;Заявка&#x27;, &#x27;Ərizə&#x27;)) ||
+                      f_format(&#x27;&lt;th&gt;%1&lt;/th&gt;&lt;/tr&gt;&#x27;, iif(db_id &lt;&gt; 94401, &#x27;Выдано&#x27;, &#x27;Verilib&#x27;)));
+
+        d_l_count = 0;
+        d_c_count = 0;
+        d_app_amount = 0;
+        d_disb_amount = 0;
+
+        r_l_count = 0;
+        r_c_count = 0;
+        r_app_amount = 0;
+        r_disb_amount = 0;
+
+        p_l_count = 0;
+        p_c_count = 0;
+        p_app_amount = 0;
+        p_disb_amount = 0;
+
+      end
+      if (res_kind = iif(db_id &lt;&gt; 94401, &#x27;выдан&#x27;, &#x27;verilib&#x27;)) then
+      begin
+        d_l_count = d_l_count + tmp_l_count;
+        d_c_count = d_c_count + tmp_c_count;
+        d_app_amount = d_app_amount + tmp_app_amount;
+        d_disb_amount = d_disb_amount + tmp_disb_amount;
+      end
+      if (res_kind = iif(db_id &lt;&gt; 94401, &#x27;отказано&#x27;, &#x27;imtina olunub&#x27;)) then
+      begin
+        r_l_count = r_l_count + tmp_l_count;
+        r_c_count = r_c_count + tmp_c_count;
+        r_app_amount = r_app_amount + tmp_app_amount;
+        r_disb_amount = r_disb_amount + tmp_disb_amount;
+      end
+      if (res_kind = iif(db_id &lt;&gt; 94401, &#x27;в процессе&#x27;, &#x27;prossesdə&#x27;)) then
+      begin
+        p_l_count = p_l_count + tmp_l_count;
+        p_c_count = p_c_count + tmp_c_count;
+        p_app_amount = p_app_amount + tmp_app_amount;
+        p_disb_amount = p_disb_amount + tmp_disb_amount;
+      end
+
+      res_text = BLOB_APPEND(res_text, str);
+    end
+    str = &#x27;&lt;tr&gt;&#x27; || f_format(&#x27;&lt;td class=&quot;filled&quot; align=&quot;left&quot;&gt;&lt;b&gt;%1&lt;/td&gt;&lt;td class=&quot;filled&quot; align=&quot;left&quot;&gt;&lt;b&gt;%2&lt;/td&gt;&#x27;, iif(db_id &lt;&gt; 94401, &#x27;Итог по СВЗ&#x27;, &#x27;Mütəx.üzrə nəticə&#x27;),
+                                                                                                                     iif(db_id &lt;&gt; 94401, &#x27;выдан&#x27;, &#x27;verilib&#x27;)) || &#x27;&lt;td class=&quot;filled&quot; align=&quot;center&quot;&gt;&lt;b&gt;&#x27; || round(d_l_count, 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;td class=&quot;filled&quot; align=&quot;center&quot;&gt;&lt;b&gt;&#x27; || round(d_c_count, 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;td class=&quot;filled&quot; align=&quot;right&quot;&gt;&lt;b&gt;&#x27; || round(d_app_amount, 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;td class=&quot;filled&quot; align=&quot;right&quot;&gt;&lt;b&gt;&#x27; || round(d_disb_amount, 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;/tr&gt;&#x27;;
+    res_text = BLOB_APPEND(res_text, str);
+
+    str = &#x27;&lt;tr&gt;&#x27; || f_format(&#x27;&lt;td class=&quot;filled&quot; align=&quot;left&quot;&gt;&lt;b&gt;%1&lt;/td&gt;&lt;td class=&quot;filled&quot; align=&quot;left&quot;&gt;&lt;b&gt;%2&lt;/td&gt;&#x27;, iif(db_id &lt;&gt; 94401, &#x27;Итог по СВЗ&#x27;, &#x27;Mütəx.üzrə nəticə&#x27;),
+                                                                                                                     iif(db_id &lt;&gt; 94401, &#x27;в процессе&#x27;, &#x27;prossesdə&#x27;)) || &#x27;&lt;td class=&quot;filled&quot; align=&quot;center&quot;&gt;&lt;b&gt;&#x27; || round(p_l_count, 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;td class=&quot;filled&quot; align=&quot;center&quot;&gt;&lt;b&gt;&#x27; || round(p_c_count, 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;td class=&quot;filled&quot; align=&quot;right&quot;&gt;&lt;b&gt;&#x27; || round(p_app_amount, 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;td class=&quot;filled&quot; align=&quot;right&quot;&gt;&lt;b&gt;&#x27; || round(p_disb_amount, 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;/tr&gt;&#x27;;
+    res_text = BLOB_APPEND(res_text, str);
+
+    str = &#x27;&lt;tr&gt;&#x27; || f_format(&#x27;&lt;td class=&quot;filled&quot; align=&quot;left&quot;&gt;&lt;b&gt;%1&lt;/td&gt;&lt;td class=&quot;filled&quot; align=&quot;left&quot;&gt;&lt;b&gt;%2&lt;/td&gt;&#x27;, iif(db_id &lt;&gt; 94401, &#x27;Итог по СВЗ&#x27;, &#x27;Mütəx.üzrə nəticə&#x27;),
+                                                                                                                     iif(db_id &lt;&gt; 94401, &#x27;отказано&#x27;, &#x27;imtina olunub&#x27;)) || &#x27;&lt;td class=&quot;filled&quot; align=&quot;center&quot;&gt;&lt;b&gt;&#x27; || round(r_l_count, 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;td class=&quot;filled&quot; align=&quot;center&quot;&gt;&lt;b&gt;&#x27; || round(r_c_count, 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;td class=&quot;filled&quot; align=&quot;right&quot;&gt;&lt;b&gt;&#x27; || round(r_app_amount, 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;td class=&quot;filled&quot; align=&quot;right&quot;&gt;&lt;b&gt;&#x27; || round(r_disb_amount, 0) || &#x27;&lt;/b&gt;&lt;/td&gt;&#x27; || &#x27;&lt;/tr&gt;&#x27;;
+    res_text = BLOB_APPEND(res_text, str);
+
+    res_text = BLOB_APPEND(res_text, &#x27;&lt;/table&gt;&#x27;);
+    res_text = BLOB_APPEND(res_text, &#x27;&lt;/body&gt;&#x27;);
+
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

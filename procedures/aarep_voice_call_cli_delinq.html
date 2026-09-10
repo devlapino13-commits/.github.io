@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_VOICE_CALL_CLI_DELINQ — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_VOICE_CALL_CLI_DELINQ: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_VOICE_CALL_CLI_DELINQ</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_make_zad_list.html"><div class="to">AAREP_MAKE_ZAD_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_VOICE_CALL_CLI_DELINQ(
+    REP_DATE_END DATE)
+AS
+declare variable phone varchar(80);
+declare variable delinq_day integer;
+declare variable c_ammount decimal(18,4);
+declare variable k_kontract_no varchar(20);
+declare variable c_id d_id;
+begin
+
+  insert into voice_call_result (vc_phone_no, vc_amount, vc_script_no, vc_call_result, vc_last_call, vc_call_count,
+                                 vc_date_save, vc_kontract_no)
+  select vc_phone_no, vc_amount, vc_script_no, vc_call_result, vc_last_call, vc_call_count, current_date,
+         vc_kontract_no
+  from voice_call;
+
+  delete from voice_call
+  where 1 = 1;
+
+  insert into voice_call (vc_phone_no, vc_amount, vc_script_no, vc_call_result, vc_last_call, vc_call_count)
+  values (&#x27;996772681079&#x27;, 123, 27, null, null, 0);
+  insert into voice_call (vc_phone_no, vc_amount, vc_script_no, vc_call_result, vc_last_call, vc_call_count)
+  values (&#x27;996772681079&#x27;, 123, 57, null, null, 0);
+  insert into voice_call (vc_phone_no, vc_amount, vc_script_no, vc_call_result, vc_last_call, vc_call_count)
+  values (&#x27;996772681079&#x27;, 123, 90, null, null, 0);
+  --  INSERT INTO VOICE_CALL (VC_PHONE_NO, VC_AMOUNT, VC_SCRIPT_NO, VC_CALL_RESULT, VC_LAST_CALL, VC_CALL_COUNT) VALUES (&#x27;996772110011&#x27;, 123, 5, NULL, NULL, 0);
+
+  for with tabl1
+      as (select oks_region_id, oks_from_k_id, cast(:rep_date_end as date) - oks_delinq_date as delinq_day
+          from oksummary
+          where :rep_date_end between oks_date_begin and oks_date_end and
+                cast(:rep_date_end as date) - oks_delinq_date in (27, 57, 90) and
+                oks_close_state = 0)
+      select delinq_day,
+             (select sum(zad_os + zad_perc + sh_calc_fine)
+              from aarep_make_zad_list(k_id, :rep_date_end, 0)
+              where sh_date is not null and
+                    sh_repay_type = 1), k_kontract_no, kc_from_c_id
+      from tabl1, knclient, kontract
+      where oks_from_k_id = kc_from_k_id and
+            kc_amount_approved &gt; 0 and
+            oks_from_k_id = k_id
+      into :delinq_day, :c_ammount, :k_kontract_no, c_id
+  do
+  begin
+    phone = f_cont_info(&#x27;clients&#x27;, c_id, &#x27;cell_main&#x27;, &#x27;ok&#x27;);
+    if (char_length(phone) &lt;&gt; 11) then
+      continue;
+
+    insert into voice_call (vc_phone_no, vc_amount, vc_script_no, vc_call_count, vc_kontract_no)
+    values (:phone, :c_ammount, :delinq_day, 0, :k_kontract_no);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

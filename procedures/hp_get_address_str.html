@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_GET_ADDRESS_STR — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_GET_ADDRESS_STR: 1 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_GET_ADDRESS_STR</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_msgquota_process.html"><div class="to">HP_MSGQUOTA_PROCESS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ADL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ADL_ADDRESS_STR</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEED_GEO</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_GET_ADDRESS_STR(
+    ADL_ID D_ID)
+RETURNS (
+    ADL_ADDRESS_STR D_STR_255,
+    NEED_GEO D_BOOL)
+AS
+declare variable quota_exceeded d_bool;
+begin
+  -- Процедура вызывается из FsService, возвращает адрес для получения геопозиции
+  if (f_get_db_id() &lt;&gt; 81001) then
+    exit;
+
+  need_geo = 0;
+  -- Проверка на превышение количества запросов в Yandex Geocoder
+  -- Передаем adl_id, но это не принципиально, т.к. лимит на уровне всех запросов
+  select quota_exceeded
+  from hp_msgquota_process(&#x27;yandex.geocoder&#x27;, :adl_id)
+  into quota_exceeded;
+  if (quota_exceeded = 0) then
+    need_geo = 1;
+
+  adl_address_str = &#x27;&#x27;;
+  select adl_address_str
+  from addrlist
+  where adl_id = :adl_id and
+        (adl_depart_no not in (&#x27;0&#x27;, &#x27;&#x27;) or
+        adl_flat_no not in (&#x27;0&#x27;, &#x27;&#x27;) or
+        adl_building_no not in (&#x27;0&#x27;, &#x27;&#x27;) or
+        adl_section_no not in (&#x27;0&#x27;, &#x27;&#x27;))
+  into adl_address_str;
+  if (adl_address_str &lt;&gt; &#x27;&#x27;) then
+    suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

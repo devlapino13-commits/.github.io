@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EDOC_WEB_UNIQACC_CHECK — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EDOC_WEB_UNIQACC_CHECK: 2 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EDOC_WEB_UNIQACC_CHECK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_check_clientuniq_acc_no.html"><div class="to">HP_CHECK_CLIENTUNIQ_ACC_NO</div></a><a class="ref-card" href="hp_fio_clear.html"><div class="to">HP_FIO_CLEAR</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CL_ACCOUNT</div><div class="ptype">VARCHAR(10)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CL_BIRTHDATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_CLIENT_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_CODE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EDOC_WEB_UNIQACC_CHECK(
+    CL_ACCOUNT D_STR_10,
+    CL_BIRTHDATE D_DATE)
+RETURNS (
+    RES_CLIENT_ID D_ID,
+    RES_TEXT D_STR_255,
+    RES_CODE D_INTEGER)
+AS
+declare variable cell_no d_str_code;
+declare variable client_name d_str_100;
+declare variable db_id d_integer;
+declare variable k_id d_id;
+begin
+  res_code = 0;
+  res_text = &#x27;&#x27;;
+  db_id = f_get_db_id();
+
+  if (cl_account is null) then
+  begin
+    res_code = 1;
+    res_text = &#x27;Лицевой счет не указан&#x27;;
+  end
+  if (res_code = 0 and cl_birthdate is null) then
+  begin
+    res_code = 1;
+    res_text = &#x27;Дата рождения не указана&#x27;;
+  end
+  if (res_code = 0) then
+  begin
+    select c_id
+    from hp_check_clientuniq_acc_no(:cl_birthdate, :cl_account)
+    into res_client_id;
+    if (res_client_id = -1) then
+    begin
+      res_code = 1;
+      res_text = &#x27;Не найден клиент с такой датой рождения и лицевым счетом, обратитесь в офис компании&#x27;;
+    end
+  end
+
+  if (res_code = 0 and db_id = 81001) then
+  begin
+    -- Если займ утвержден, но еще не выдан, запрещаем изменение карты
+    if (exists(
+        select 1
+        from kontract, knclient, kontstate
+        where kc_from_c_id = :res_client_id
+          and kc_from_k_id = k_id
+          and kc_amount_approved &gt; 0
+          and k_status = 1
+          and ks_from_k_id = k_id
+          and ks_ol_is_delete = 0
+          and current_date between ks_date_begin and ks_date_end
+          and (ks_state = 0 or (ks_state = 1 and ks_date_begin = current_date))))
+    then
+    begin
+      res_code = 1;
+      res_text = &#x27;Невозможно заменить карту, так как ваш заем в процессе выдачи.&#x27;;
+    end
+  end
+
+  if (res_code = 0) then
+  begin
+    select cl.c_name_fio
+    from clients cl
+    where cl.c_id = :res_client_id
+    into client_name;
+
+    select short_fio
+    from hp_fio_clear(:client_name)
+    into client_name;
+
+    cell_no = f_cont_info(&#x27;clients&#x27;, res_client_id, &#x27;cell_main&#x27;, &#x27;ok&#x27;);
+    if (cell_no = &#x27;&#x27;) then
+    begin
+      res_code = 1;
+      res_text = &#x27;У вас нет подтвержденного номера. Обратитесь в офис компании.&#x27;;
+    end
+    else
+    begin
+      cell_no = f_cont_format(cell_no, &#x27;cell&#x27;, &#x27;secured&#x27;);
+      res_text = f_format(&#x27;%1, на ваш телефон %2 будет выслана ссылка и код для ввода данных банковской карты. Подтверждаете?&#x27;, client_name, cell_no);
+    end
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

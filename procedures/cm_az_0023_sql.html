@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_AZ_0023_SQL — процедура — схема БД</title>
+<meta name="description" content="Условия по возрасту, поручителю и залогов c 19.04.2018">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_AZ_0023_SQL</code></h1>
+<p class="desc">Условия по возрасту, поручителю и залогов c 19.04.2018</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_make_zad_list.html"><div class="to">AAREP_MAKE_ZAD_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_AZ_0023_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare kc_amount curr_type;
+declare kf_disb_date d_date;
+declare variable PR_ID ID_TYPE;
+declare variable PR_CODE STR_100;
+declare variable C_ID ID_TYPE;
+declare variable Z_FROM_C_ID ID_TYPE;
+declare variable Z_FROM_C_ID_TMP ID_TYPE;
+declare variable KC_CIRCLE ID_TYPE;
+declare variable C_BIRTH_DATE date;
+declare variable Z_NAME_FIO varchar(100);
+declare variable Z_BIRTH_DATE date;
+declare variable K_ID_OLD ID_TYPE;
+declare variable MAX_DELINQ_DAYS integer;
+declare variable SUM_DELINQ_DAYS integer;
+declare variable OLD_CONT integer;
+declare variable NEW_CONT integer;
+declare variable IS_PORUCH integer;
+declare variable IS_ZALOG integer;
+declare variable ZAD_KOL integer;
+declare variable PR_CODE_OLD varchar(50);
+declare variable K_KONTRACT_NO_OLD varchar(50);
+declare variable Z_COST_MARKET CURR_TYPE;
+declare variable Z_COST_MARKET_TMP CURR_TYPE;
+declare variable PRIOR_INDIV integer;
+declare variable PORUCH_K_ID ID_TYPE;
+declare variable PORUCH_MAX_DELINQ_DAYS integer;
+declare variable PORUCH_SUM_DELINQ_DAYS integer;
+declare variable PORUCH_KOLICH_REPAY integer;
+declare variable K_OLD_OL_DATE date;
+declare variable K_OLD_DELINQ_DATE date;
+declare variable K_OL_DEL_DAY_TMP integer;
+declare variable Z_TYPE integer;
+declare variable IND_CL integer;
+begin
+  select K_DISB_DATE, K_FROM_PR_ID, PR_CODE
+  from KONTRACT K, PRODUCT PR
+  where K_ID = :K_ID and
+        K_FROM_PR_ID = PR_ID
+  into KF_DISB_DATE, PR_ID, PR_CODE;
+  if (PR_CODE containing &#x27;.IND.&#x27;) then
+  begin
+    for select KC_FROM_C_ID, KC_AMOUNT_APPROVED, KC_CIRCLE
+        from KNCLIENT
+        where KC_FROM_K_ID = :K_ID and
+              KC_AMOUNT_APPROVED &gt; 0
+        into C_ID, KC_AMOUNT, KC_CIRCLE
+    do
+    begin
+      IND_CL = coalesce(IND_CL, 0) + 1;
+      select C_NAME_FIO, C_BIRTH_DATE
+      from CLIENTS
+      where C_ID = :C_ID
+      into res_info_text, C_BIRTH_DATE;
+      --Блокировки на уровне клиента!
+      --Условия по возрасту &gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;
+      if (dateadd(year, 21, C_BIRTH_DATE) &gt; :KF_DISB_DATE) then
+      begin
+        --Возраст клиента всегда должен быть больше или равен 21-лет
+        res_error_text = &#x27;Müştərinin 21 yaşı tamam olmayıb. Kredit buraxılışı qeyri-mümkündür.&#x27;;
+        res_error_is_critical = 2;
+        suspend;
+      end
+      if (KC_CIRCLE = 1) then
+      begin --Новые клиенты
+        if (dateadd(year, 71, C_BIRTH_DATE) &lt; KF_DISB_DATE) then
+        begin
+          --Возраст клиентов в первом цикле всегда не должен превыщать 70-лет
+          res_error_text = &#x27;Təkrar müştərilərin yaşı 21 - 70 il arasında olmalıdır.&#x27;;
+          res_error_is_critical = 2;
+          suspend;
+        end
+      end
+      else
+      begin --Повторные клиенты
+        --Повторники
+        select KS_FROM_K_ID
+        from KNCLIENT, KONTSTATE
+        where KC_FROM_C_ID = :C_ID and
+              KC_AMOUNT_APPROVED &gt; 0 and
+              KC_FROM_K_ID &lt;&gt; :K_ID and
+              KC_FROM_K_ID = KS_FROM_K_ID and
+              KS_OL_IS_DELETE = 0 and
+              KS_STATE = 1 and
+              KS_DATE_BEGIN &lt; :KF_DISB_DATE
+        order by KS_DATE_BEGIN desc rows 1
+        into K_ID_OLD;
+        if (K_ID_OLD is null and
+            KC_CIRCLE &gt; 1) then
+        begin
+          res_error_text = &#x27;Последний цикл не определен, обратитесь к разработчику&#x27;;
+          res_error_is_critical = 2;
+          suspend;
+        end
+        else
+        if (KC_CIRCLE &gt; 1) then
+        begin
+          for select max(OKS_DATE_END) + 1, OKS_DELINQ_DATE
+              from OKSUMMARY
+              where oks_close_state = 0 and
+                    OKS_FROM_K_ID = :K_ID_OLD and
+                    OKS_DATE_END &lt;= :KF_DISB_DATE and
+                    OKS_DELINQ_DATE &lt;= :KF_DISB_DATE and
+                    --На случаи если дата выдачи указана не верно
+                    OKS_DELINQ_DATE &lt;= current_date and
+                    OKS_DELINQ_DATE &lt;= OKS_DATE_END
+              group by OKS_DELINQ_DATE
+              into K_OLD_OL_DATE, K_OLD_DELINQ_DATE
+          do
+          begin
+            K_OL_DEL_DAY_TMP = coalesce(K_OLD_OL_DATE - K_OLD_DELINQ_DATE, 0);
+            if (coalesce(MAX_DELINQ_DAYS, 0) &lt; K_OL_DEL_DAY_TMP) then
+              MAX_DELINQ_DAYS = K_OL_DEL_DAY_TMP;
+            SUM_DELINQ_DAYS = coalesce(SUM_DELINQ_DAYS, 0) + K_OL_DEL_DAY_TMP;
+          end
+          MAX_DELINQ_DAYS = coalesce(MAX_DELINQ_DAYS, 0);
+          SUM_DELINQ_DAYS = coalesce(SUM_DELINQ_DAYS, 0);
+          select distinct PR_CODE, K_KONTRACT_NO
+          from KONTRACT, PRODUCT
+          where K_ID = :K_ID_OLD and
+                K_FROM_PR_ID = PR_ID
+          into PR_CODE_OLD, K_KONTRACT_NO_OLD;
+          -- Комментарий: “В предыдущем закрытом кредите опоздание по оплате одного погашения не должно быть больше 14 дней.”
+          if (MAX_DELINQ_DAYS &gt; 14 and
+              PR_CODE_OLD containing &#x27;.IND.&#x27; and
+              PR_ID not in (49, 63)) then --49исключен от 30.05.17
+          begin /*
+            if ((PR_ID not in (54, 55, 56, 57, 64, 65, 66, 67)) and
+                (KF_DISB_DATE &gt;= &#x27;20.11.2017&#x27;)) then -- added by igusev 20.11.17
+            begin
+              res_error_text = &#x27;Təkrar müştərilərin bağlanmış kredit üzrə 1 ödəniş üzrə gecikmə 14 gündən çox ola bilməz.&#x27;;
+              res_error_is_critical = 2;
+              suspend;
+            end    */
+          end
+          if (SUM_DELINQ_DAYS &gt; 45 and
+              PR_CODE_OLD containing &#x27;.IND.&#x27; and
+
+              --PR_ID not in (49, 54, 55, 56, 57, 64, 65, 66, 67)) then
+              PR_ID in (54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
+                        64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
+                        74, 75, 76, 77, 78, 79, 80, 81, 82, 83,
+                        84, 85)) then
+          begin
+            res_error_text = &#x27;Təkrar müştərilərin bağlanmış kredit üzrə ümumi gecikmə günləri 45 gündən çox ola bilməz&#x27;;
+            res_error_is_critical = 2;
+            if (K_ID in(101010008867700101, 101010004667700301)) then
+            begin
+              res_error_is_critical = 1;
+              res_error_text = res_error_text || &#x27; - (исключение)&#x27;;
+            end
+            suspend;
+          end
+          if (SUM_DELINQ_DAYS &gt; 32 and
+              PR_CODE_OLD containing &#x27;.IND.&#x27; and
+
+              --PR_ID in (49, 54, 55, 56, 57, 64, 65, 66, 67)) then
+              PR_ID in (54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
+                        64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
+                        74, 75, 76, 77, 78, 79, 80, 81, 82, 83,
+                        84, 85)) then
+          begin
+            res_error_text = &#x27;Sonuncu bağlı müqavilə üzrə gecikmə günlərin sayı 32 çox olmamalıdır.&#x27;;
+            res_error_is_critical = 1;   
+            if (K_ID in(101010008867700101)) then
+            begin
+              res_error_is_critical = 1;
+              res_error_text = res_error_text || &#x27; - (исключение)&#x27;;
+            end
+            suspend;
+          end
+        end --Проверки в последнем цикле(конец)
+        if (PR_ID in (54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
+                      64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
+                      74, 75, 76, 77, 78, 79, 80, 81, 82, 83,
+                      84, 85)) then
+        begin
+          if (dateadd(year, 73, C_BIRTH_DATE) &lt; KF_DISB_DATE) then
+          begin
+            res_error_text = &#x27;Təkrar müştərilərin yaşı 21 - 72 il arasında olmalıdır.&#x27;;
+            res_error_is_critical = 2;
+            suspend;
+          end
+        end
+        else
+        if (MAX_DELINQ_DAYS &lt; 1 and
+            dateadd(year, 75, C_BIRTH_DATE) &lt;= KF_DISB_DATE) then
+        begin
+          res_error_text = &#x27;Təkrar müştəri  və zaminlərdə yaş həddi 21-75 arası olmalıdır&#x27;;
+          res_error_is_critical = 2;
+          suspend;
+        end
+        else
+        if (dateadd(year, 73, C_BIRTH_DATE) &lt; KF_DISB_DATE) then
+        begin
+          --Комментарий: “Возраст повторных клиентов должен быть в промежутке 21 – 72 года.”
+          res_error_text = &#x27;Təkrar müştərilərin yaşı 21 - 72 il arasında olmalıdır.&#x27;;
+          res_error_is_critical = 2;
+          suspend;
+        end
+        --Конец условии по возрасту &lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;
+      end
+      /*5.    В личной информации клиента должны быть указаны минимально 6 контактных лиц.
+        Комментарий: “В личной информации клиента должны быть указаны 6 контактных лиц.” 
+        Сообщение: “Müştərinin məlumatında en azı 6 nəfər əlaqə üçün şəxs qeyd olunmalıdır.”
+        &gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;
+        */
+      select sum(iif(CT.CC_CREATE_DATE &lt; :KF_DISB_DATE - 14, 1, 0)) OLD_CONT,
+             sum(iif(CT.CC_CREATE_DATE &lt; :KF_DISB_DATE - 14, 0, 1)) NEW_CONT
+      from CONTACTS CT
+      where CT.CC_FROM_C_ID = :C_ID
+      into OLD_CONT, NEW_CONT;
+      OLD_CONT = coalesce(OLD_CONT, 0);
+      NEW_CONT = coalesce(NEW_CONT, 0);
+      if (NEW_CONT &lt; 1 and
+          OLD_CONT &gt; 5) then
+      begin
+        res_error_text = &#x27;Yeni əlaqələr mövcud deyil&#x27;;
+        res_error_is_critical = 0;
+        suspend;
+      end
+      if (NEW_CONT + OLD_CONT &lt; 6) then
+      begin
+        res_error_text = &#x27;Müştərinin məlumatında en azı 6 nəfər əlaqə üçün şəxs qeyd olunmalıdır&#x27;;
+        res_error_is_critical = 2;
+        suspend;
+      end
+      --контактныe лицa&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;
+      -- проверяю договора где клиент выступает поручителем &gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;
+      for select distinct Z.Z_FROM_K_ID
+          from ZALOG Z
+          inner join KONTSTATE KS on KS.KS_FROM_K_ID = Z.Z_FROM_K_ID
+          where Z_FROM_C_ID = :C_ID and
+                Z_TYPE = 0 and
+                :KF_DISB_DATE between KS.KS_DATE_BEGIN and KS.KS_DATE_END and
+                KS.KS_OL_IS_DELETE = 0 and
+                KS.KS_STATE = 1 and
+                Z.Z_FROM_K_ID &lt;&gt; :K_ID
+          into :PORUCH_K_ID
+      do
+      begin
+        PORUCH_MAX_DELINQ_DAYS = null;
+        PORUCH_SUM_DELINQ_DAYS = null;
+        for select max(OKS_DATE_END) + 1, OKS_DELINQ_DATE
+            from OKSUMMARY
+            where oks_close_state = 0 and
+                  OKS_FROM_K_ID = :PORUCH_K_ID and
+                  OKS_DELINQ_DATE &lt;= :KF_DISB_DATE and
+                  OKS_DELINQ_DATE &lt;= OKS_DATE_END
+            group by OKS_DELINQ_DATE
+            into K_OLD_OL_DATE, K_OLD_DELINQ_DATE
+        do
+        begin
+          K_OL_DEL_DAY_TMP = coalesce(K_OLD_OL_DATE - K_OLD_DELINQ_DATE, 0);
+          if (coalesce(PORUCH_MAX_DELINQ_DAYS, 0) &lt; K_OL_DEL_DAY_TMP) then
+            PORUCH_MAX_DELINQ_DAYS = K_OL_DEL_DAY_TMP;
+          PORUCH_SUM_DELINQ_DAYS = coalesce(PORUCH_SUM_DELINQ_DAYS, 0) + K_OL_DEL_DAY_TMP;
+        end
+        PORUCH_MAX_DELINQ_DAYS = coalesce(PORUCH_MAX_DELINQ_DAYS, 0);
+        PORUCH_SUM_DELINQ_DAYS = coalesce(PORUCH_SUM_DELINQ_DAYS, 0);
+        if (PR_ID in (49, 62, 63)) then
+        begin
+          if (PR_ID = 49 and
+              (PORUCH_MAX_DELINQ_DAYS &gt; 0 or PORUCH_SUM_DELINQ_DAYS &gt; 0)) then
+          begin
+            res_error_text = &#x27;Zamin kimi təminat verdiyi kreditdə gecikmə var&#x27;;
+            res_error_is_critical = 2;
+            suspend;
+          end
+          if (PR_ID = 63 and
+              PORUCH_MAX_DELINQ_DAYS &gt; 0) then
+          begin
+            res_error_text = &#x27;Zamin kimi təminat verdiyi kreditdə gecikmə var.&#x27;;
+            res_error_is_critical = 2;
+            suspend;
+          end
+          if (ZAD_KOL &gt; 3) then
+          begin
+            res_error_text = &#x27;Zamin kimi təminat verdiyi kreditin müddətin bitməyinə 3 və daha az ödəniş sayı olmalıdır&#x27;;
+            res_error_is_critical = 2;
+            suspend;
+          end
+          if (PORUCH_MAX_DELINQ_DAYS &gt; 0) then
+          begin
+            res_error_text = &#x27;Zamin kimi təminat verdiyi kreditdə gecikmə var.&#x27;;
+            res_error_is_critical = 2;
+            suspend;
+          end
+          ZAD_KOL = null;
+          select count(SH_DATE)
+          from AAREP_MAKE_ZAD_LIST(:PORUCH_K_ID, :KF_DISB_DATE, 1)
+          into :ZAD_KOL;
+          ZAD_KOL = coalesce(ZAD_KOL, 0);
+          if (ZAD_KOL &gt; 3) then
+          begin
+            res_error_text = &#x27;Zamin kimi təminat verdiyi kreditin müddətin bitməyinə 3 və daha az ödəniş sayl olmalıdır.&#x27;;
+            res_error_is_critical = 2;
+            suspend;
+          end
+        end
+        /*3.       Для того, чтобы поручитель какого-либо кредита мог получить кредит единовременно должны соблюдаться 3 условия:    
+    
+            1. Количество оставшихся погашений активного контракта (где данный клиент указан как поручитель) не должно превышать
+            50% от общего срока контракта (т.е. например, кредит выдан на 12 месяцев, если было сделано как минимум 6 погашений –
+            то поручитель может брать кредит).
+            2· По погашениям активного контракта (где данный клиент указан как поручитель) не должно быть просрочек.
+            3· Контракт (где данный клиент указан как поручитель) – не должен быть рест-ван (т.е. не должны меняться/отличаться от
+            первоначального графика: дата закрытия кредита, кол-во погашений по контракту)
+            */
+        if (PR_ID in (54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
+                      64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
+                      74, 75, 76, 77, 78, 79, 80, 81, 82, 83,
+                      84, 85) and
+            ((PORUCH_KOLICH_REPAY - ZAD_KOL) &lt; ZAD_KOL or --
+            PORUCH_MAX_DELINQ_DAYS &gt; 0 or --
+            exists(select *
+                   from OPERREST ORT, OPERLIST OL
+                   where ORT.OR_FROM_K_ID = :PORUCH_K_ID and
+                         ORT.OR_FROM_OL_ID = OL_ID and
+                         OL.IS_DELETE = 0))) then
+        begin
+          --Оставшийся срок кредита с поручительством не соответствует условиям или есть просрочки в погашениях
+          res_error_text = &#x27;Zamin kimi təminat verdiyi kredit müqavilə üzrə müddətin 50 % və daha artıq keçməlidir, aylıq ödənişlərdə gecikmə olmamalıdır.&#x27;;
+          res_error_is_critical = 1;
+          if(k_id in(101010006618000201)) then
+          res_error_is_critical = 0;
+          suspend;
+        end
+      end
+    end -- конец проверок договора где клиент выступает поручителем &lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;
+    --Поручителей и залогодателей может быть несколько
+    for select C_NAME_FIO, C_BIRTH_DATE, Z_FROM_C_ID, Z_TYPE, coalesce(Z_COST_MARKET, 0)
+        from ZALOG Z, CLIENTS
+        where Z_FROM_K_ID = :K_ID and
+              Z_FROM_C_ID = C_ID
+        into Z_NAME_FIO, :Z_BIRTH_DATE, Z_FROM_C_ID_TMP, Z_TYPE, Z_COST_MARKET_TMP
+    do
+    begin
+      if (Z_TYPE = 0) then
+      begin
+        if (Z_FROM_C_ID_TMP &lt;&gt; coalesce(Z_FROM_C_ID, 0)) then
+        begin
+          IS_PORUCH = coalesce(IS_PORUCH, 0) + 1;
+          Z_FROM_C_ID_TMP = Z_FROM_C_ID;
+        end
+        if (PR_ID in (
+                  -- 51, 56, 57, 58, 59, 62, 63, 66, 67, 70, 71
+                  56, 57, 66, 67, 70, 71, 76, 77, 82, 83)) then
+        begin
+          --Комментарий: “Не должны регистрироваться поручители.”
+          res_error_text = &#x27;Carı məhsul üzrə zamin qeyd oluna bilməz.&#x27;;
+          res_error_is_critical = 2;
+          suspend;
+        end
+        else
+        begin
+          if (dateadd(year, 21, Z_BIRTH_DATE) &gt; :KF_DISB_DATE) then
+          begin
+            res_error_text = Z_NAME_FIO || &#x27; 1 dövrdə müştəri və ya zaminin yaşı 21 - 70 il arasında olmalıdır&#x27;;
+            res_error_is_critical = 2;
+            suspend;
+          end
+          if (dateadd(year, 71, Z_BIRTH_DATE) &lt; KF_DISB_DATE) then
+          begin
+            res_error_text = Z_NAME_FIO || &#x27; - 1 dövrdə müştəri və ya zaminin yaşı 21 - 70 il arasında olmalıdır&#x27;;
+            res_error_is_critical = 2;
+            suspend;
+          end
+        end
+      end
+      else
+      if (Z_TYPE = 1) then
+      begin
+        if (Z_FROM_C_ID_TMP &lt;&gt; coalesce(Z_FROM_C_ID, 0)) then
+        begin
+          IS_ZALOG = coalesce(IS_ZALOG, 0) + 1; --Количество залогов
+          Z_FROM_C_ID_TMP = Z_FROM_C_ID;
+        end
+        Z_COST_MARKET = coalesce(Z_COST_MARKET, 0) + Z_COST_MARKET_TMP; --Общая сумма залога
+      end
+    end
+    if (PR_ID in (
+              --49, 50, 54, 55, 56, 57, 62, 63, 64, 65, 66, 67, 68, 69, 74, 75
+              54, 55, 56, 57, 64, 65, 66, 67, 68, 69,
+                  74, 75, 80, 81) and
+        coalesce(IS_ZALOG, 0) &gt;= 1) then
+    begin
+      --Комментарий: “Не должны регистрироваться залоги.”
+      res_error_text = &#x27;Carı məhsul üzrə girov qeyd oluna bilməz.&#x27;;
+      res_error_is_critical = 2;
+      suspend;
+    end
+    if (coalesce(IS_ZALOG, 0) &lt; 1 and
+        PR_ID in (51, 52, 53, 58, 59, 60, 61, 70, 71, 76,
+                  77, --
+                  72, 73, 78, 79, 84, 85)) then --Если нет залога
+    begin
+      res_error_text = &#x27;Cari məhsul üzrə zamin qeyd olunmamalıdır. Girovun əlavə olunması mütləqdir&#x27;;
+      res_error_is_critical = 2;
+      suspend;
+    end
+    if (coalesce(Z_COST_MARKET, 0) &lt; :KC_AMOUNT and
+        PR_ID in (51, 52, 53, 58, 59, 60, 61, 70, 71, 76,
+                  77, 82, 83)) then
+    begin
+      --Комментарий: “Сумма рыночной стоимости залога(-ов) не должна быть меньше суммы выдачи кредита.”
+      res_error_text = &#x27;Girovların ümumi razılaşdırılmış dəyəri kredit məbləğindən az ola bilməz.&#x27;;
+      res_error_is_critical = 2;
+      suspend;
+    end
+    if (coalesce(IS_PORUCH, 0) &lt; 1 and
+        PR_ID in (
+              --49, 50, 52, 53, 54, 55, 60, 61, 64, 65, 68, 69, 72, 73, 74, 75, 78, 79
+              --Обновил на сл.от 21.11.18 Письмо Саида.
+              54, 55, 64, 65, 68, 69, 72, 73, 78, 79,
+                  80, 81, 84, 85)) then --Если нет поручителя
+    begin
+      --По указанному продукту обязательно наличие 1 поручителя
+      res_error_text = &#x27;Qeyd olunan kredit məhsulu üçün minimal olaraq 1 zamin qeydə alınmalıdır.&#x27;;
+      res_error_is_critical = 2;
+      suspend;
+    end
+    if (exists(select *
+               from SCHEDULE S
+               where S.SH_FROM_K_ID = :K_ID and
+                     S.SH_OS = 0 and
+                     S.SH_PERC &lt;&gt; 0)) then
+    begin
+      --Комментарий: “По текущему продукту в графике погашений не должно быть льготных платежей”
+      res_error_text = &#x27;Cari məhsul üzrə ödəniş cədvəlində güzəştli ödəniş ola bilməz&#x27;;
+      res_error_is_critical = 2;
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

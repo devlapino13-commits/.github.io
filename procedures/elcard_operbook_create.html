@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ELCARD_OPERBOOK_CREATE — процедура — схема БД</title>
+<meta name="description" content="Процедура ELCARD_OPERBOOK_CREATE: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>ELCARD_OPERBOOK_CREATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="find_acc_list.html"><div class="to">FIND_ACC_LIST</div></a><a class="ref-card" href="get_kv.html"><div class="to">GET_KV</div></a><a class="ref-card" href="last_doc_number.html"><div class="to">LAST_DOC_NUMBER</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="elcard_operbook_create_by_list.html"><div class="to">ELCARD_OPERBOOK_CREATE_BY_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ESM_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE ELCARD_OPERBOOK_CREATE(
+    ESM_ID ID_TYPE)
+AS
+declare variable k_kontract_no str_100;
+declare variable id_no id_type;
+declare variable ol_id id_type;
+declare variable amount curr_type;
+declare variable ob_memo varchar(1024);
+declare variable acc_dt d_str_20;
+declare variable acc_kt d_str_20;
+declare variable esa_message d_blob_text;
+declare variable doc_no d_integer;
+declare variable acc_dt_id d_id;
+declare variable acc_kt_id d_id;
+declare variable moneta_acc d_str_code;
+declare variable k_id d_id;
+declare variable reg_id d_integer;
+declare variable parent_ol_id d_id;
+declare variable pr_code d_str_100;
+declare variable acc d_str_20;
+declare variable esm_date d_date;
+declare variable ol_memo d_str_255;
+declare variable al_number d_integer;
+declare variable reg_code d_str_100;
+begin
+  esa_message = &#x27;&#x27;;
+
+  select em.esm_amount, kont.k_fact_disb_reg_id, pr.pr_code, kont.k_kontract_no, em.esm_date, reg.reg_code
+  from extsysmain em
+  inner join kontract kont on kont.k_id = em.esm_from_k_id
+  inner join product pr on kont.k_from_pr_id = pr.pr_id
+  inner join region reg on reg.reg_unicode = kont.k_fact_disb_reg_id
+  where em.esm_id = :esm_id
+  and em.esm_project = &#x27;elcard_disb&#x27;
+  and em.esm_action = &#x27;OperbookCreate&#x27;
+  and em.esm_status = 0
+  into :amount, :reg_id, :pr_code, :k_kontract_no, :esm_date, :reg_code;
+
+  ob_memo = &#x27;Комиссия банка 0,25% по Зачислению на пл.карту Элкарт суммы займа по договору &#x27; || k_kontract_no;
+  ol_memo = &#x27;Комиссия за выдачу на карту Элькарт&#x27;;
+
+  al_number = 1;
+  if (pr_code like &#x27;.KARDHASAN.&#x27;) then
+    al_number = 101;
+
+  -- 0 . ======== создаем родительский Operlist ============================== &gt;
+  select kv
+  from get_kv(1090100, 5) -- Бишкек ГО
+  into :id_no;
+
+  select num
+  from last_doc_number(:esm_date, 9, 1090100)
+  into :doc_no;
+
+  parent_ol_id = :id_no;
+
+  insert into operlist (ol_id, ol_doc_no, ol_from_reg_id, ol_oper_type, ol_date, ol_doc_kind, ol_memo, ol_status, is_delete, ol_user_id)
+  values (:parent_ol_id, :doc_no, 1090100, 2, :esm_date, 9, :ol_memo, 0, 0, 1000000000000);
+  -- ========================================================================= &lt;
+  -- 1 . ============= создаем операцию и проводку в офисе выдачи займа ====== &gt;
+  -- создаем операцию (дочернюю) в офисе выдачи займа -------------------------&gt;
+  select kv
+  from get_kv(:reg_id, 5)
+  into :id_no;
+
+  select num
+  from last_doc_number(:esm_date, 9, :reg_id)
+  into :doc_no;
+
+  ol_id = :id_no;
+
+  insert into operlist (ol_id, ol_parent_id,  ol_doc_no, ol_from_reg_id, ol_oper_type, ol_date, ol_doc_kind, ol_memo, ol_status, is_delete, ol_user_id)
+  values (:ol_id, :parent_ol_id, :doc_no, :reg_id, 2, :esm_date, 9, :ol_memo, 0, 0, 1000000000000);
+  -----------------------------------------------------------------------------&lt;
+  -- создаем проводку --- офис: офис выдачи займа, Дт 80509/..., Кт 11510/2 -----&gt;
+  acc_dt = &#x27;&#x27;;
+  acc_kt =&#x27;&#x27;;
+
+
+  if (pr_code like &#x27;.KARDHASAN.&#x27;) then
+    acc = &#x27;80509/101&#x27;;
+  else
+    acc = &#x27;80509/1&#x27;;
+
+  select al_id
+  from find_acc_list(:acc)
+  where al_from_reg_id = :reg_id
+  and al_number = :al_number
+  into :acc_dt;
+
+  select al_id
+  from find_acc_list(&#x27;11510/2&#x27;)
+  where al_from_reg_id = :reg_id
+
+  into :acc_kt;
+
+  insert into operbook (ob_from_ol_id, ob_number, ob_currency, ob_curr_rate, ob_client_dt, ob_account_dt, ob_summa_val,
+                        ob_summa, ob_from_pc_id, ob_from_kp_id, ob_oper_mask, ob_account_kt, ob_client_kt, ob_detail,
+                        ob_from_sac_id)
+  values (:ol_id, 1, &#x27;417&#x27;, 1, null, :acc_dt, :amount, :amount, null, null, null, :acc_kt, null, :ob_memo, null);
+  -----------------------------------------------------------------------------&lt;
+  -- ========================================================================= &lt;
+  -- 2 . ============= создаем операцию и проводку в Бишкекском офисе ======== &gt;
+  -- создаем операцию (дочернюю) в Бишкекском офисе ---------------------------&gt;
+  select kv
+  from get_kv(1060100, 5) -- Бишкекский офис
+  into :id_no;
+
+  select num
+  from last_doc_number(:esm_date, 9, 1060100)
+  into :doc_no;
+
+  ol_id = :id_no;
+
+  insert into operlist (ol_id, ol_parent_id, ol_doc_no, ol_from_reg_id, ol_oper_type, ol_date, ol_doc_kind, ol_memo, ol_status, is_delete, ol_user_id)
+  values (:ol_id, :parent_ol_id, :doc_no, 1060100, 2, :esm_date, 9, :ol_memo, 0, 0, 1000000000000);
+  -----------------------------------------------------------------------------&lt;
+  -- создаем проводку --- офис: Бишкекский офис, Дт 11512/152, Кт 11510/1 -----&gt;
+  acc_dt = &#x27;&#x27;;
+  acc_kt =&#x27;&#x27;;
+
+  select al_id
+  from find_acc_list(&#x27;11512/&#x27;)
+  where al_from_reg_id = 1060100
+  and al_name like &#x27;%&#x27;||:reg_code||&#x27;%&#x27;
+  into :acc_dt;
+
+  select al_id
+  from find_acc_list(&#x27;11510/1&#x27;)
+  where al_from_reg_id = 1060100
+  into :acc_kt;
+
+  insert into operbook (ob_from_ol_id, ob_number, ob_currency, ob_curr_rate, ob_client_dt, ob_account_dt, ob_summa_val,
+                        ob_summa, ob_from_pc_id, ob_from_kp_id, ob_oper_mask, ob_account_kt, ob_client_kt, ob_detail,
+                        ob_from_sac_id)
+  values (:ol_id, 1, &#x27;417&#x27;, 1, null, :acc_dt, :amount, :amount, null, null, null, :acc_kt, null, :ob_memo, null);
+  -----------------------------------------------------------------------------&lt;
+  -- ========================================================================= &lt;
+  -- ========================================================================= &lt;
+  -- 3 . ============= создаем операцию и проводку в Бишкек ГО =============== &gt;
+  -- создаем операцию (дочернюю) в Бишкек ГО ----------------------------------&gt;
+  select kv
+  from get_kv(1090100, 5) -- Бишкек ГО
+  into :id_no;
+
+  select num
+  from last_doc_number(:esm_date, 9, 1090100)
+  into :doc_no;
+
+  ol_id = :id_no;
+
+  insert into operlist (ol_id, ol_parent_id, ol_doc_no, ol_from_reg_id, ol_oper_type, ol_date, ol_doc_kind, ol_memo, ol_status, is_delete, ol_user_id)
+  values (:ol_id, :parent_ol_id, :doc_no, 1090100, 2, :esm_date, 9, :ol_memo, 0, 0, 1000000000000);
+  -----------------------------------------------------------------------------&lt;
+  -- создаем проводку --- офис: Бишкек г. (ГО), Дт 11512/152, Кт 10004/2 -----&gt;
+  acc_dt = &#x27;&#x27;;
+  acc_kt =&#x27;&#x27;;
+
+  select al_id
+  from find_acc_list(&#x27;11512/5&#x27;)
+  where al_from_reg_id = 1090100
+  into :acc_dt;
+
+  select al_id
+  from find_acc_list(&#x27;10004/2&#x27;)
+  where al_from_reg_id = 1090100
+  into :acc_kt;
+
+  insert into operbook (ob_from_ol_id, ob_number, ob_currency, ob_curr_rate, ob_client_dt, ob_account_dt, ob_summa_val,
+                        ob_summa, ob_from_pc_id, ob_from_kp_id, ob_oper_mask, ob_account_kt, ob_client_kt, ob_detail,
+                        ob_from_sac_id)
+  values (:ol_id, 1, &#x27;417&#x27;, 1, null, :acc_dt, :amount, :amount, null, null, null, :acc_kt, null, :ob_memo, null);
+  -----------------------------------------------------------------------------&lt;
+  -- ========================================================================= &lt;
+
+  insert into extsysanswer (esa_from_esm_id, esa_message)
+  values (:esm_id, &#x27;ol_id = &#x27; || :parent_ol_id);
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

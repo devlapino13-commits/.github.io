@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_DEMO_SCHED_ACTION — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_DEMO_SCHED_ACTION: 3 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_DEMO_SCHED_ACTION</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">5 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_get_percent.html"><div class="to">FM_GET_PERCENT</div></a><a class="ref-card" href="fm_json_parse.html"><div class="to">FM_JSON_PARSE</div></a><a class="ref-card" href="hp_json_from_sql.html"><div class="to">HP_JSON_FROM_SQL</div></a><a class="ref-card" href="hp_make_schedule_date.html"><div class="to">HP_MAKE_SCHEDULE_DATE</div></a><a class="ref-card" href="hp_make_schedule_perc.html"><div class="to">HP_MAKE_SCHEDULE_PERC</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACTION_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACTION_DATA</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RESULT_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RESULT_TXT</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_DEMO_SCHED_ACTION(
+    UN_ID D_ID,
+    ACTION_KIND D_STR_CODE,
+    ACTION_DATA D_STR_8100)
+RETURNS (
+    RESULT_ID D_INTEGER,
+    RESULT_TXT D_BLOB_TEXT)
+AS
+declare variable LONG_TXT D_STR_8100;
+declare variable LOAN_AMOUNT D_CURRENCY = 0;
+declare variable LOAN_PERIOD D_INTEGER;
+declare variable LOAN_PRODUCT D_INTEGER;
+declare variable LOAN_PRODUCT_ADD D_INTEGER;
+declare variable LOAN_PERCENT D_PERCENT;
+declare variable LOAN_DISB_DATE D_DATE;
+declare variable LOAN_REPAY_DAY D_INTEGER;
+declare variable LOAN_STATUS D_INTEGER;
+declare variable LOAN_GRACE_PERIODS D_STR_255;
+declare variable DB_ID D_INTEGER;
+declare variable JSON_KEY D_STR_100;
+declare variable JSON_VALUE D_STR_255;
+declare variable LOAN_PERIOD_MIN D_INTEGER;
+declare variable LOAN_PERIOD_MAX D_INTEGER;
+declare variable LOAN_AMOUNT_MIN D_INTEGER;
+declare variable LOAN_AMOUNT_MAX D_INTEGER;
+declare variable LOAN_ADD_MONTH D_INTEGER;
+declare variable I D_SMALLINT;
+declare variable LANG D_STR_LANG;
+declare variable TMP_BLOB D_BLOB_TEXT;
+declare variable LOAN_TOTAL_PERC_AMOUNT D_INTEGER;
+declare variable LOAN_CLI_ID D_ID;
+begin
+  db_id = f_get_db_id();
+  lang = f_get_lang_code(un_id, null);
+
+  result_id = 0;
+  result_txt = f_lang(lang, &#x27;Невыполнимая команда&#x27;);
+
+  if (action_kind = &#x27;do_load&#x27;) then
+  begin
+    result_id = 1;
+    loan_amount = iif(db_id &lt;&gt; 94401, 20000, 100);
+    loan_period = 6;
+    loan_period_min = 1;
+    loan_period_max = 12;
+    loan_percent = 0;
+    loan_repay_day = 0;
+
+    select min(prl_repay_min), max(prl_repay_max), min(prl_amount_cl_min), max(prl_amount_cl_max)
+    from product, prodlogic
+    where pr_date_begin &lt;= current_date and
+          coalesce(pr_date_end, &#x27;31.12.2999&#x27;) &gt;= current_date and
+          pr_active = 1 and
+          prl_from_pr_id = pr_id
+    into loan_period_min, loan_period_max, loan_amount_min, loan_amount_max;
+
+    if (loan_amount &lt; loan_amount_min) then
+      loan_amount = loan_amount_min;
+    if (loan_amount &gt; loan_amount_max) then
+      loan_amount = loan_amount_max;
+
+    result_txt =
+      &#x27;&quot;amount&quot;:&#x27; || loan_amount ||
+      &#x27;,&quot;min_amount&quot;: &#x27; || loan_amount_min ||
+      &#x27;,&quot;max_amount&quot;: &#x27; || loan_amount_max ||
+      &#x27;,&quot;period&quot;:&#x27; || loan_period ||
+      &#x27;,&quot;min_period&quot;: &#x27; || loan_period_min ||
+      &#x27;,&quot;max_period&quot;: &#x27; || loan_period_max ||
+      &#x27;,&quot;disb_date&quot;:&quot;&#x27; || f_datetostr(current_date) || &#x27;&quot;&#x27; ||
+      &#x27;,&quot;repay_day&quot;: &#x27; || loan_repay_day || &#x27;,&#x27; ||
+      iif(db_id in (39801, 41701, 94401), &#x27;&quot;percent&quot;: &#x27; || loan_percent ||
+      &#x27;, &quot;min_percent&quot;: 0.0, &quot;max_percent&quot;: 100.0,&#x27;, &#x27;&#x27;);
+
+    if (db_id = 81001) then
+    begin
+      -- Массив статусов, только для РФ
+      long_txt = &#x27;&#x27;;
+      i = 0;
+      while (i &lt;= 81) do
+      begin
+        long_txt = long_txt || iif(long_txt = &#x27;&#x27;, &#x27;&#x27;, &#x27;,&#x27;) || f_format(&#x27;{&quot;id&quot;:&quot;%1&quot;,&quot;name&quot;:&quot;%2&quot;}&#x27;, i, trim(iif(i = 81, i || &#x27; и более&#x27;, i)));
+        i = i + 1;
+      end
+      result_txt = BLOB_APPEND(result_txt, &#x27;&quot;status&quot;:0, &quot;statuses&quot;:[&#x27; || long_txt || &#x27;],&#x27;);
+    end
+
+    -- Массив продуктов без параллельных
+    select res_json
+    from hp_json_from_sql(&#x27;array&#x27;, &#x27;products&#x27;, &#x27;
+    select pr_id, pr_memo as pr_name
+    from product
+    where pr_date_begin &lt;= current_date
+    and coalesce(pr_date_end, &#x27;&#x27;31.12.2999&#x27;&#x27;) &gt;= current_date
+    and pr_active = 1
+    and pr_code not containing &#x27;&#x27;.loyal.&#x27;&#x27;
+    and pr_code not containing &#x27;&#x27;.emp.&#x27;&#x27;
+     &#x27;)
+    into long_txt;
+
+    result_txt = BLOB_APPEND(result_txt, long_txt);
+
+    -- Массив только параллельных
+    if (db_id = 81001) then
+    begin
+      long_txt = &#x27;{&quot;pr_id&quot;: -1,&quot;pr_name&quot;:&quot;Нет&quot;}&#x27;;
+      for select pr_id, pr_memo as pr_name
+          from product
+          where pr_date_begin &lt;= current_date and
+                coalesce(pr_date_end, &#x27;31.12.2999&#x27;) &gt;= current_date and
+                pr_active = 1 and
+                pr_code containing &#x27;.loyal.&#x27; and
+                pr_code not containing &#x27;.emp.&#x27;
+      as cursor cur_prod
+      do
+      begin
+        long_txt = long_txt || &#x27;,{&quot;pr_id&quot;:&#x27; || cur_prod.pr_id || &#x27;, &quot;pr_name&quot;:&quot;&#x27; || cur_prod.pr_name || &#x27;&quot;}&#x27;;
+      end
+      long_txt = &#x27;, &quot;products_add&quot;:[&#x27; || long_txt || &#x27;]&#x27;;
+      result_txt = BLOB_APPEND(result_txt, long_txt);
+    end
+
+    -- Отсрочки COVID
+    /* Отключены 11.11.2021, т.к. больше года не предоставляются
+       Если включить, то в МП появится этот контрол для выбора
+    long_txt = &#x27;[{&quot;id&quot;:&quot;0&quot;,&quot;name&quot;:&quot;&#x27; || f_lang(lang, &#x27;Стандартно&#x27;) || &#x27;&quot;}]&#x27;;
+    if ((db_id in (39801, 41701) and current_date &gt;= &#x27;26.03.2020&#x27;) or
+        (db_id = 81001 and current_date &gt;= &#x27;28.03.2020&#x27;)) then
+      long_txt =
+        &#x27;[{&quot;id&quot;:&quot;0&quot;,&quot;name&quot;:&quot;&#x27; || f_lang(lang, &#x27;Стандартно&#x27;) || &#x27;&quot;},&#x27;||
+        &#x27;{&quot;id&quot;:&quot;1&quot;,&quot;name&quot;:&quot;&#x27; || f_lang(lang, &#x27;Добавить 1 месяц&#x27;) || &#x27;&quot;},&#x27;||
+        &#x27;{&quot;id&quot;:&quot;2&quot;,&quot;name&quot;:&quot;&#x27; || f_lang(lang, &#x27;Добавить 2 месяца&#x27;) || &#x27;&quot;}]&#x27;;
+    result_txt = BLOB_APPEND(result_txt, &#x27;, &quot;add_month_list&quot;:&#x27; || long_txt );
+    */
+
+    result_txt = &#x27;{&#x27; || result_txt || &#x27;}&#x27;;
+  end
+  else
+  if (action_kind = &#x27;do_schedule&#x27;) then
+  begin
+    result_id = 1;
+    result_txt = &#x27;&#x27;;
+    loan_add_month = 0;
+
+    for select json_key, json_value
+        from fm_json_parse(:action_data)
+        into :json_key, :json_value
+    do
+    begin
+      if (json_key = &#x27;amount&#x27;) then
+        loan_amount = json_value;
+      if (json_key = &#x27;period&#x27;) then
+        loan_period = json_value;
+      if (json_key = &#x27;disb_date&#x27;) then
+        loan_disb_date = json_value;
+      if (json_key = &#x27;repay_day&#x27;) then
+        loan_repay_day = json_value;
+      if (db_id in (39801, 41701, 94401) and
+          json_key = &#x27;percent&#x27;) then
+      begin
+        loan_percent = json_value;
+      when any do
+        begin
+          result_id = 0;
+          result_txt = f_lang(lang, &#x27;Процентная ставка не может быть нулевой&#x27;);
+          suspend;
+          exit;
+        end
+      end
+      if (json_key = &#x27;status&#x27;) then
+        loan_status = json_value;
+      if (json_key = &#x27;product&#x27;) then
+        loan_product = json_value;
+      if (json_key = &#x27;product_add&#x27;) then
+        loan_product_add = json_value;
+      if (json_key = &#x27;grace_periods&#x27;) then
+        loan_grace_periods = json_value;
+      if (json_key = &#x27;add_month&#x27;) then
+        loan_add_month = json_value;
+      if (json_key = &#x27;client_id&#x27;) then
+        loan_cli_id = json_value;
+    end
+
+    if (db_id = 81001) then
+    begin
+      select perc_default
+      from fm_get_percent(:loan_product, :loan_status, :loan_disb_date, :loan_amount, :loan_period, :loan_product_add)
+      into loan_percent;
+      if (loan_percent is null) then
+      begin
+        result_id = 0;
+        result_txt = f_lang(lang, &#x27;Введенные параметры не соответствуют условиям выбранного продукта&#x27;);
+        suspend;
+        exit;
+      end
+    end
+    else
+    begin
+      if (coalesce(loan_percent, 0) = 0) then
+      begin
+        result_id = 0;
+        result_txt = f_lang(lang, &#x27;Процентная ставка не может быть нулевой&#x27;);
+        suspend;
+        exit;
+      end
+    end
+
+    -- Базовый график
+    execute procedure hp_make_schedule_date(loan_amount, loan_period, loan_repay_day, loan_disb_date, loan_product,
+        0, 0, loan_grace_periods, 1, loan_add_month);
+
+    execute procedure hp_make_schedule_perc(loan_amount, loan_period, loan_product, loan_percent, 0, 0, loan_add_month, -1, 1);
+
+    result_id = 1;
+    result_txt = &#x27;&#x27;;
+    select res_json || &#x27;}&#x27;
+    from hp_json_from_sql(&#x27;array&#x27;, &#x27;schedule&#x27;, &#x27;
+    select sh_id as id,
+           sh_date,
+           sh_os as os,
+           sh_perc as perc,
+           sh_grace as grace,
+           0 as tax,
+           sh_os + sh_perc as sh_all,
+           sh_os + sh_perc as sh_all_tax
+    from temp_schedule
+    where sh_id &lt;&gt; 0&#x27;)
+    into tmp_blob;
+
+    select sum(sh_perc)
+    from temp_schedule
+    where sh_id &lt;&gt; 0
+    into loan_total_perc_amount;
+    loan_total_perc_amount = coalesce(loan_total_perc_amount, 0);
+
+    result_txt = 
+      &#x27;{&quot;title&quot;:&quot;&#x27; || f_lang(lang, &#x27;Базовый&#x27;) || &#x27;&quot;,&#x27; ||
+      &#x27;&quot;detail&quot;: &quot;&#x27; || f_lang(lang, &#x27;График платежей с &lt;b&gt;базовой&lt;/b&gt; процентной ставкой&#x27;) || &#x27;&quot;,&#x27; ||
+      &#x27;&quot;summary&quot;: &quot;&#x27; || f_format(f_lang(lang, &#x27;Итого сумма %% по займу: &lt;b&gt;%1&lt;/b&gt;&#x27;), loan_total_perc_amount) || &#x27;&quot;,&#x27; ||
+      tmp_blob;
+
+    -- Если продукт с плавающей ставкой, добавляем график с пониженной ставкой
+    if (db_id = 81001 and exists(
+      select * from product
+      where pr_id = :loan_product
+      and pr_percent_kind = 1)) then
+    begin
+      -- RFCRU-5436
+      -- Т.к. сотрудников нет, строим сниженный
+      execute procedure hp_make_schedule_perc(loan_amount, loan_period, loan_product, loan_percent, 0, 0, loan_add_month, :loan_cli_id, 0);
+      select res_json || &#x27;}&#x27;
+      from hp_json_from_sql(&#x27;array&#x27;, &#x27;schedule&#x27;, &#x27;
+      select sh_id as id,
+             sh_date,
+             sh_os as os,
+             sh_perc as perc,
+             sh_grace as grace,
+             0 as tax,
+             sh_os + sh_perc as sh_all,
+             sh_os + sh_perc as sh_all_tax
+      from temp_schedule
+      where sh_id &lt;&gt; 0&#x27;)
+      into tmp_blob;
+  
+      select sum(sh_perc)
+      from temp_schedule
+      where sh_id &lt;&gt; 0
+      into loan_total_perc_amount;
+      loan_total_perc_amount = coalesce(loan_total_perc_amount, 0);
+
+      result_txt = BLOB_APPEND(result_txt,
+        &#x27;,{&quot;title&quot;:&quot;&#x27; || f_lang(lang, &#x27;Пониженный&#x27;) || &#x27;&quot;,&#x27; ||
+        &#x27;&quot;detail&quot;: &quot;&#x27; || f_lang(lang, &#x27;График платежей с &lt;b&gt;пониженной&lt;/b&gt; процентной ставкой&#x27;) || &#x27;&quot;,&#x27; ||
+        &#x27;&quot;summary&quot;: &quot;&#x27; || f_format(f_lang(lang, &#x27;Итого сумма %% по займу: &lt;b&gt;%1&lt;/b&gt;&#x27;), loan_total_perc_amount) || &#x27;&quot;,&#x27; ||
+        tmp_blob);
+   end
+   -- Упаковка всех графиков в массив
+   result_txt = BLOB_APPEND(&#x27;{&quot;tab_list&quot;: [&#x27;, result_txt, &#x27;]}&#x27;);
+  end
+
+  suspend;
+
+  delete from temp_schedule
+  where 1 = 1;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

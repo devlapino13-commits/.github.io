@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FSROBOT_MAILING_MA_NOTIFICATION — процедура — схема БД</title>
+<meta name="description" content="Процедура FSROBOT_MAILING_MA_NOTIFICATION: 3 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FSROBOT_MAILING_MA_NOTIFICATION</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_PARAMS</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_EMAIL</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">USER_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_SUBJECT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_BODY</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_MAILLIST</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FSROBOT_MAILING_MA_NOTIFICATION(
+    REP_PARAMS VARCHAR(255),
+    REP_EMAIL VARCHAR(255),
+    USER_FIO VARCHAR(100))
+RETURNS (
+    RES_SUBJECT VARCHAR(255),
+    RES_BODY BLOB SUB_TYPE TEXT SEGMENT SIZE 80,
+    RES_MAILLIST VARCHAR(255),
+    RES_C_ID DECIMAL(18,0))
+AS
+declare variable GOOGLE_ID varchar(255);
+declare variable DAYS integer;
+declare variable STR_TMP STR_255;
+declare variable KF_NAME STR_100;
+declare variable MESSAGE_TYPE STR_100;
+declare variable MEMO_STR STR_100;
+declare variable H integer;
+declare variable M integer;
+declare variable MINUTES_QTY integer;
+begin
+-- Отправка PUSH СВЗ после регистрации заявки
+
+-- Процедура вызывается из FSROBOT_ON_MAILING
+-- Процедура готовит список уведомлений для отправки роботом по почте или sms
+-- REP_COMMAND_KIND. Настройки сообщения хранятся в таблице RefData:
+-- справочник NotifyMail || &#x27;.&#x27; || Rep_Command_Kind - строка настроек email
+-- справочник NotifySMS  || &#x27;.&#x27; || Rep_Command_Kind - строка настроек SMS
+
+-- RefData.RD_Memo    - Список получателей
+-- RefData.RD_Tag     - Срок жизни сообщения
+-- RefData.RD_STR_ID  - Название хранимой процедуры, которая готовит текст сообщения
+
+-- Rep_Params - входящий параметры в зависимости от команды
+-- Rep_UN_ID - пользователь
+
+-- СМС после выдачи кредита
+  res_c_id = 0;
+  if (user_fio is null) then
+    user_fio = &#x27;&#x27;;
+  res_maillist = :rep_email;
+
+  res_c_id = cast(substring(rep_params from 1 for position(&#x27;;&#x27; in rep_params) - 1) as id_type);
+
+  str_tmp = substring(rep_params from position(&#x27;;&#x27; in rep_params) + 1);
+
+  days = cast(substring(str_tmp from 1 for position(&#x27;;&#x27; in str_tmp) - 1) as integer);
+
+  str_tmp = substring(str_tmp from position(&#x27;;&#x27; in str_tmp) + 1);
+
+  kf_name = substring(str_tmp from 1 for position(&#x27;;&#x27; in str_tmp) - 1);
+
+  str_tmp = substring(str_tmp from position(&#x27;;&#x27; in str_tmp) + 1);
+
+  message_type = substring(str_tmp from 1 for position(&#x27;;&#x27; in str_tmp) - 1);
+
+  memo_str = substring(str_tmp from position(&#x27;;&#x27; in str_tmp) + 1);
+
+  select un.un_google_id
+  from username un
+  where un_from_c_id = :res_c_id rows 1
+  into :google_id;
+  if (coalesce(google_id, &#x27;&#x27;) = &#x27;&#x27;) then
+    exit;
+  res_maillist = google_id;
+
+  if (message_type = &#x27;6_days&#x27;) then
+  begin
+    res_subject = &#x27;Уведомление о зависшей заявке&#x27;;
+
+    if (days = 3) then
+      res_body = &#x27;Заявка &#x27; || kf_name || &#x27; висит 3 дня. Примите решение не позднее 2 дней!&#x27;;
+    else
+    if (days = 5) then
+      res_body = &#x27;Заявка &#x27; || kf_name || &#x27; висит 5 дней. Примите решение сегодня иначе будете оштрафованы!&#x27;;
+    else
+    if (days &gt;= 6) then
+      res_body = &#x27;Заявка &#x27; || kf_name || &#x27; висит &#x27; || days || &#x27; дней. Заявка аннулирована. Вам начислен штраф!&#x27;;
+    else
+      exit;
+  end
+  else
+  if (message_type = &#x27;24_hours&#x27;) then
+  begin
+    if (current_date &lt;= &#x27;01.06.2021&#x27;) then
+    begin
+      res_subject = &#x27;Уведомление о зависшей заявке&#x27;;
+      res_body = &#x27;С момента регистрации заявки &#x27; || kf_name || &#x27; прошло более &#x27; || iif(current_date &lt; &#x27;01.08.2018&#x27;, &#x27;24&#x27;, &#x27;72&#x27;) || &#x27;часов и заявка не отправлена на КК. Заявка аннулирована. Вам начислен штраф!&#x27;;
+    end else
+    begin
+      res_subject = &#x27;Уведомление о сроках работы с заявкой&#x27;;
+      res_body = &#x27;С момента регистрации заявки &#x27; || kf_name || &#x27; прошло более 72 двух часов. Заявка не отправлена на КК и в ней не отказано, поэтому вам начислен штраф.&#x27;;
+    end 
+  end
+  else
+  if (message_type = &#x27;24_hours_inform&#x27;) then
+  begin
+    minutes_qty = memo_str;
+
+    h = trunc(minutes_qty / 60);
+    m = coalesce(mod(minutes_qty, 60), 0);
+
+    res_subject = &#x27;Уведомление о зависшей заявке&#x27;;
+    res_body = &#x27;Примите решение по заявке &#x27; || kf_name || &#x27;, иначе через &#x27; || cast(h as varchar(10)) || &#x27; часов &#x27; || cast(m as varchar(10)) || &#x27; минут будет штраф !&#x27;;
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

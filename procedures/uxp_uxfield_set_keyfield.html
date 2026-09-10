@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$UXFIELD_SET_KEYFIELD — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$UXFIELD_SET_KEYFIELD: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$UXFIELD_SET_KEYFIELD</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UF_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$UXFIELD_SET_KEYFIELD(
+    UF_UUID D_UUID)
+AS
+declare variable uf_pk_field d_integer;
+declare variable uf_is_param d_bool;
+declare variable us_kind d_smallint;
+declare variable us_is_table d_bool;
+declare variable uf_field_name d_str_code;
+declare variable uf_owner d_uuid;
+declare variable tmp_field d_str_code;
+declare variable keyfields d_str_100;
+declare variable uf_source d_str_code;
+declare variable us_is_view d_bool;
+declare variable pk_found d_bool;
+begin
+  -- Назначает или удаляет признак ключевого поля
+
+  select uf_pk_field, uf_owner, us_code, uf_field_name, uf_is_param, us_kind,
+         us_is_table, us_is_view
+  from ux$field, ux$source
+  where uf_uuid = :uf_uuid and
+        uf_owner = us_uuid
+  into uf_pk_field, uf_owner, uf_source, uf_field_name, uf_is_param, us_kind,
+       us_is_table, us_is_view;
+
+  if (uf_is_param = 1) then
+    exception e_message (&#x27;Параметр не может быть ключевым полем&#x27;);
+
+  if (us_kind = 0 and us_is_table = 1 and us_is_view = 0) then
+    exception e_message (&#x27;По реальным таблицам ключевые поля меняются только на уровне БД.&#x27;);
+
+  tmp_field = &#x27;&#x27;;
+  keyfields = &#x27;&#x27;;
+  pk_found = 0;
+  for select uf_field_name
+  from ux$field
+  where uf_owner = :uf_owner and
+        uf_pk_field &lt;&gt; 0
+  order by uf_pk_field
+  into tmp_field
+  do
+  begin
+    if (uf_pk_field &lt;&gt; 0 and tmp_field = uf_field_name) then
+    begin
+      pk_found = 1;
+      Continue;
+    end
+
+    if (keyfields &lt;&gt; &#x27;&#x27;) then
+      keyfields = keyfields || &#x27;;&#x27;;
+
+    keyfields = keyfields || tmp_field;
+  end
+
+  if (uf_pk_field = 0) then
+  begin
+    if (keyfields &lt;&gt; &#x27;&#x27;) then
+      keyfields = keyfields || &#x27;;&#x27;;
+
+    keyfields = keyfields || uf_field_name;
+  end
+
+  if (keyfields = &#x27;&#x27; and pk_found = 0) then
+  begin
+    delete from ux$index
+    where uix_source = :uf_source and
+          uix_pk = 1;
+  end else
+  begin
+    if (keyfields = &#x27;&#x27; and pk_found = 1) then
+      keyfields = uf_field_name;
+
+    update ux$index
+    set uix_state = 1
+    where uix_source = :uf_source and
+          uix_fields = :keyfields;
+
+    update or insert into ux$index (uix_source, uix_fields, uix_pk, uix_virtual, uix_state)
+    values (:uf_source, :keyfields, 1, 1, 0)
+    matching (uix_source, uix_pk);
+  end
+
+  update ux$source
+  set us_keyfields = :keyfields
+  where us_uuid = :uf_owner and
+        us_keyfields is distinct from :keyfields;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

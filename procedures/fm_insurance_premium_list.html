@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_INSURANCE_PREMIUM_LIST — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_INSURANCE_PREMIUM_LIST: 2 входных, 6 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_INSURANCE_PREMIUM_LIST</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_param_list.html"><div class="to">FM_REPORT_PARAM_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REG_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OBJ_KIND</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT_1</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT_2</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT_3</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT_4</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_INSURANCE_PREMIUM_LIST(
+    UN_ID D_ID,
+    REG_ID D_INTEGER = null)
+RETURNS (
+    OBJ_KIND D_STR_100,
+    OBJ_ID D_ID,
+    RES_TEXT_1 D_STR_255,
+    RES_TEXT_2 D_STR_255,
+    RES_TEXT_3 D_STR_255,
+    RES_TEXT_4 D_STR_255)
+AS
+declare variable lang d_str_lang;
+declare variable c_id d_id;
+declare variable is_manager d_smallint;
+declare variable k_id d_id;
+declare variable cli_id d_id;
+declare variable c_name_fio d_str_100;
+declare variable k_kontract_no d_str_20;
+declare variable insurance_amount d_currency;
+declare variable payed_amount d_currency;
+declare variable pay_due_date d_date;
+begin
+  -- Список клиентов, которым необходимо оплатить страховую премию.
+  -- Только ИПФ-продукты (как в HP_IPF_CHECK_INSURANCE_PAY).
+  -- ВИПС видит свои кредитные папки, МО - папки офиса, выбранного в МП (reg_id).
+  lang = f_get_lang_code(un_id, null);
+  obj_kind = &#x27;clients&#x27;;
+
+  select un.un_from_c_id
+  from username un
+  where un.un_id = :un_id
+  into :c_id;
+
+  if (c_id is null) then
+    exit;
+
+  -- Признак менеджера офиса по действующим кадровым приказам.
+  -- МО может быть приписан сразу к нескольким офисам, поэтому сам офис
+  -- берем не отсюда, а из входящего reg_id (выбор офиса в МП).
+  is_manager = 0;
+
+  if (exists(select *
+             from hr_pstatus ps
+             inner join joblist jl on jl.jl_id = ps.ps_from_jl_id
+             inner join jobkind jk on jk.jk_id = jl.jl_kind
+             where ps.ps_from_c_id = :c_id and
+                   ps.ps_status = 1 and
+                   ps.ps_is_working = 1 and
+                   current_date between ps.ps_date_begin and ps.ps_date_end and
+                   jk.jk_system_code = &#x27;JobSystem.Region_KM&#x27;)) then
+    is_manager = 1;
+
+  if (is_manager = 1) then
+  begin
+    -- Офис не выбран - показывать нечего
+    if (reg_id is null) then
+      exit;
+
+    -- Офис должен быть среди тех, к которым приписан менеджер
+    if (not exists(select *
+                   from hr_pstatus ps
+                   inner join joblist jl on jl.jl_id = ps.ps_from_jl_id
+                   inner join jobkind jk on jk.jk_id = jl.jl_kind
+                   where ps.ps_from_c_id = :c_id and
+                         ps.ps_status = 1 and
+                         ps.ps_is_working = 1 and
+                         current_date between ps.ps_date_begin and ps.ps_date_end and
+                         jk.jk_system_code = &#x27;JobSystem.Region_KM&#x27; and
+                         ps.ps_from_reg_id = :reg_id)) then
+      exit;
+  end
+
+  for select k.k_id,
+             kc.kc_from_c_id,
+             c.c_name_fio,
+             k.k_kontract_no,
+             ik.ik_commission
+  from knaktlist kal
+  inner join kontract k on k.k_from_kf_id = kal.kal_from_kf_id
+  inner join product pr on pr.pr_id = k.k_from_pr_id and
+        pr.pr_code containing &#x27;.ipf.&#x27; and
+        pr.pr_code not containing &#x27;.ignore_insurance.&#x27;
+  inner join kontstate ks on ks.ks_from_k_id = k.k_id and
+        ks.ks_state = 1 and
+        ks.ks_ol_is_delete = 0 and
+        current_date between ks.ks_date_begin and ks.ks_date_end
+  inner join insurance_kontract ik on ik.ik_from_k_id = k.k_id and
+        (ik.ik_enum_status in (f_enum_id(&#x27;insurance_kontract&#x27;, &#x27;insurance_policy_obtained&#x27;),
+                               f_enum_id(&#x27;insurance_kontract&#x27;, &#x27;insurance_policy_app_was_sent&#x27;)) or
+         ik.ik_from_ag_id in (7414, 7570))
+  inner join knclient kc on kc.kc_from_k_id = k.k_id and
+        kc.kc_amount_approved &gt; 0
+  inner join clients c on c.c_id = kc.kc_from_c_id
+  where kal.is_delete = 0 and
+        current_date between kal.kal_date and kal.kal_date_end and
+        ((:is_manager = 1 and kal.kal_new_reg_id = :reg_id) or
+         (:is_manager = 0 and kal.kal_new_kf_officer = :c_id))
+  order by c.c_name_fio
+  into :k_id,
+       :cli_id,
+       :c_name_fio,
+       :k_kontract_no,
+       :insurance_amount
+  do
+  begin
+    -- Дата, до которой нужно оплатить премию - первый платеж по графику
+    pay_due_date = null;
+    select sh.sh_date
+    from schedule sh
+    where sh.sh_from_k_id = :k_id and
+          sh.sh_id = 1
+    into :pay_due_date;
+
+    -- Оплаченная сумма премии.
+    -- Оплата - это приход денег извне: по кредиту 11531/xxx (закрытие
+    -- требования) или 21122/xxx (прямая оплата в кассу), при этом по
+    -- дебету НЕ эти счета. Проводка Дт 11531/xxx -&gt; Кт 21122/xxx это
+    -- начисление в день выдачи, оплатой не является.
+    -- Договор определяем по клиенту и уточняем номером в OL_MEMO.
+    payed_amount = 0;
+    select coalesce(sum(ob.ob_summa), 0)
+    from operbook ob
+    inner join operlist ol on ol.ol_id = ob.ob_from_ol_id and
+          ol.is_delete = 0
+    where (ob.ob_client_dt = :cli_id or
+           ob.ob_client_kt = :cli_id) and
+          ob.ob_ol_is_active = 1 and
+          ob.ob_short_acc_dt not starting &#x27;11531/&#x27; and
+          ob.ob_short_acc_dt not starting &#x27;21122/&#x27; and
+          (ob.ob_short_acc_kt starting &#x27;11531/&#x27; or
+           ob.ob_short_acc_kt starting &#x27;21122/&#x27;) and
+          ol.ol_memo containing :k_kontract_no || &#x27; от &#x27;
+    into :payed_amount;
+
+    payed_amount = coalesce(payed_amount, 0);
+    insurance_amount = coalesce(insurance_amount, 0);
+
+    obj_id = cli_id;
+    res_text_1 = c_name_fio || &#x27;&lt;br&gt;&lt;small&gt;&#x27; || coalesce(k_kontract_no, &#x27;&#x27;) || &#x27;&lt;/small&gt;&#x27;;
+    res_text_2 = f_numtostr(insurance_amount, 2);
+    res_text_3 = iif(pay_due_date is null, &#x27;-&#x27;, f_datetostr(pay_due_date));
+    res_text_4 = iif(payed_amount &gt;= insurance_amount,
+                     f_lang(lang, &#x27;Оплачено&#x27;),
+                     f_lang(lang, &#x27;Не оплачено&#x27;));
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

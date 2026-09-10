@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MC_LOGIN_ACTION — процедура — схема БД</title>
+<meta name="description" content="Действия при логине">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>MC_LOGIN_ACTION</code></h1>
+<p class="desc">Действия при логине</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">4 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_contdata_find_object.html"><div class="to">HP_CONTDATA_FIND_OBJECT</div></a><a class="ref-card" href="hp_login_action_checks.html"><div class="to">HP_LOGIN_ACTION_CHECKS</div></a><a class="ref-card" href="hp_login_action_validation.html"><div class="to">HP_LOGIN_ACTION_VALIDATION</div></a><a class="ref-card" href="mc_agreement_save.html"><div class="to">MC_AGREEMENT_SAVE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="mc_login_user.html"><div class="to">MC_LOGIN_USER</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ACTION_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACTION_DATA</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ERR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE MC_LOGIN_ACTION(
+    ACTION_CODE D_STR_CODE,
+    ACTION_DATA D_STR_LONG)
+RETURNS (
+    RES_CODE D_STR_CODE,
+    ERR_TEXT D_STR_255)
+AS
+declare variable MCL_ID D_ID;
+declare variable DB_ID D_INTEGER;
+declare variable MCL_LOGIN D_STR_CODE;
+declare variable MCC_PIN_CODE D_INTEGER;
+declare variable MCL_PASS_HASH D_STR_LONG;
+declare variable MCL_BIRTH_DATE D_DATE;
+declare variable C_ID D_ID;
+declare variable LOGIN_CNT D_INTEGER;
+declare variable MCL_LANG_CODE D_STR_LANG;
+declare variable C_ID_BY_LOGIN D_ID;
+declare variable DB_IS_ACTUAL D_SMALLINT;
+declare variable OPERATING_SYSTEM D_STR_10;
+declare variable APPLICATION_VERSION D_STR_10;
+declare variable MCL_DEV_ID_TMP D_STR_CODE;
+declare variable MCL_DEV_ID D_UUID;
+declare variable IS_BIOM D_INTEGER;
+declare variable LAST_UPDATE_NOTIFY_DATETIME D_DATETIME;
+declare variable LAST_LOGIN_DATETIME D_DATETIME;
+declare variable CV_VALUE D_INTEGER;
+declare variable IF_TEST_PHONE D_BOOL;
+declare variable TEST_PIN_CODE D_INTEGER;
+declare variable TEST_C_ID D_ID;
+declare variable PROD_C_ID D_ID;
+declare variable MCL_PROJECT D_INTEGER;
+declare variable MSG_OBJECT_KIND D_INTEGER;
+declare variable MSG_OBJECT_ID D_ID;
+declare variable MSG_SENDER D_STR_CODE;
+declare variable SEND_CODE_CNT D_INTEGER;
+declare variable SMS_BODY D_STR_255;
+declare variable IP_ADDRESS D_STR_CODE;
+begin
+  err_text = &#x27;&#x27;;
+  res_code = &#x27;undefined&#x27;;
+  db_id = f_get_db_id();
+  is_biom = 0; -- is_biom = 1 только для КР и КЗ
+  db_is_actual = 0;
+  if_test_phone = 0;
+
+  if (exists(select * from hp_db_is_actual)) then
+    db_is_actual = 1;
+
+  mcl_login = f_json_str_get_value(action_data, &#x27;login&#x27;, &#x27;&#x27;);
+
+  -- RFCKG-4319
+  -- Если мы получили запись, то это тестовый телефон и if_test_phone будет = 1
+  select
+    mta.mta_pin_code,
+    mta.mta_from_c_id,
+    mta.mta_test_c_id,
+    1
+  from mc_test_access mta
+  where mta.mta_phone_number = :mcl_login
+  into
+    test_pin_code,
+    prod_c_id,
+    test_c_id,
+    if_test_phone;
+
+  if (action_code = &#x27;send_code&#x27;) then
+  begin
+    mcl_project = f_enum(&#x27;mcl_project&#x27;, f_json_str_get_value(action_data, &#x27;project&#x27;, &#x27;kmp&#x27;), &#x27;id&#x27;, 0);
+
+    select res_code, err_text
+    from hp_login_action_validation(:action_code, :action_data, :if_test_phone)
+    into :res_code, :err_text;
+
+    if (coalesce(err_text, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+    begin
+        suspend;
+        exit;
+    end
+
+    select res_code, err_text
+    from hp_login_action_checks(:action_code, :action_data)
+    into :res_code, :err_text;
+
+    if (coalesce(err_text, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+    begin
+        suspend;
+        exit;
+    end
+
+    -- RFCRU-3620
+    -- Получаем длину кода из константы
+    select cv_value
+    from const_var
+    where cv_code = &#x27;mc_registr_code_length&#x27;
+    into :cv_value;
+
+    if (db_is_actual = 0 or if_test_phone = 1) then
+      -- На вермя тестирования отправки кода не будет, код 7777 для всех
+      mcc_pin_code = coalesce(test_pin_code, cast(lpad(&#x27;&#x27;, cast(cv_value as integer), &#x27;7&#x27;) as integer));
+    else
+    begin
+      if (cv_value = 6) then
+        mcc_pin_code = trunc(rand() * 900000 + 100000);
+      else
+        mcc_pin_code = trunc(rand() * 9000 + 1000);
+
+      -- RFCRU-4045
+      select res_object_kind, res_object_id
+      from hp_contdata_find_object(:mcl_login, &#x27;cell&#x27;)
+      rows 1
+      into :msg_object_kind, :msg_object_id;
+
+      /*
+        Если msg_object_kind, msg_object_id имеют значение null, заменяеем их на 0.
+        Дело в том, что в таблице fsrobot_msgbox есть триггер fsrobot_msgbox_bi, в котором
+        происходит то же самое действие, то есть таблица допускает вставку значений null.
+        При этом, в функции f_send_sms соответствующие параметры отмечены как not null,
+        что может привести к ошибкам
+      */
+      if (msg_object_kind is null and msg_object_id is null) then
+      begin
+          msg_object_kind = 0;
+          msg_object_id = 0;
+      end
+
+      msg_sender = null;
+
+      if (db_id = 81001) then
+        msg_sender = trim(iif (:mcl_project = 2, &#x27;oivo&#x27;, &#x27;mbulak&#x27;));
+
+      sms_body = case db_id
+                    when 94401 then &#x27;M Bulak: Tesdiq uchun kod: &#x27;
+                    when 81001 then &#x27;Ваш код для подтверждения: &#x27;
+                    else &#x27;М Булак: Ваш код для подтверждения: &#x27;
+                 end;
+
+      f_send_sms(:mcl_login,
+                sms_body || mcc_pin_code,
+                :msg_object_kind, :msg_object_id, &#x27;quick sms&#x27;, 365, 1000000000000, 1, :msg_sender);
+    end
+
+    select mcc_send_code_cnt
+    from mc_check
+    where mcc_login = :mcl_login and
+          mcc_check_kind = 0 and
+          mcc_project = :mcl_project
+    into :send_code_cnt;
+
+    update or insert into mc_check
+    (
+      mcc_login,
+      mcc_send_code_cnt,
+      mcc_pin_code,
+      mcc_check_kind,
+      mcc_last_send_time,
+      mcc_project
+    )
+    values
+    (
+      :mcl_login,
+      :send_code_cnt + 1,
+      :mcc_pin_code,
+      0,
+      current_timestamp,
+      :mcl_project
+    )
+    matching (mcc_login, mcc_check_kind, mcc_project);
+
+    res_code = &#x27;send_ok&#x27;;
+    suspend;
+  end
+
+  -- ***************************************************************************
+
+  if (action_code = &#x27;check_code&#x27;) then
+  begin
+    mcl_project = f_enum(&#x27;mcl_project&#x27;, f_json_str_get_value(action_data, &#x27;project&#x27;, &#x27;kmp&#x27;), &#x27;id&#x27;, 0);
+
+    select res_code, err_text
+    from hp_login_action_validation(:action_code, :action_data, :if_test_phone)
+    into :res_code, :err_text;
+
+    if (coalesce(err_text, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+    begin
+        suspend;
+        exit;
+    end
+
+    select res_code, err_text
+    from hp_login_action_checks(:action_code, :action_data)
+    into :res_code, :err_text;
+
+    if (coalesce(err_text, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+    begin
+        suspend;
+        exit;
+    end
+
+    update mc_check
+    set mcc_check_code_cnt = 0,
+        mcc_send_code_cnt = 0
+    where mcc_login = :mcl_login
+      and mcc_check_kind = 0
+      and mcc_project = :mcl_project;
+
+    res_code = &#x27;check_ok&#x27;;
+    suspend;
+  end
+
+  -- ***************************************************************************
+  if (action_code = &#x27;update_pass&#x27;) then
+  begin
+    mcl_pass_hash = f_json_str_get_value(action_data, &#x27;password&#x27;, null);
+    mcl_lang_code = coalesce(f_json_str_get_value(action_data, &#x27;lang_code&#x27;, &#x27;ru&#x27;), &#x27;ru&#x27;);
+    operating_system = f_json_str_get_value(action_data, &#x27;operating_system&#x27;, &#x27;&#x27;);
+    application_version = f_json_str_get_value(action_data, &#x27;application_version&#x27;, &#x27;&#x27;);
+    mcl_dev_id_tmp = f_json_str_get_value(action_data, &#x27;uuid_id&#x27;, &#x27;&#x27;);
+    mcl_project = f_enum(&#x27;mcl_project&#x27;, f_json_str_get_value(action_data, &#x27;project&#x27;, &#x27;kmp&#x27;), &#x27;id&#x27;, 0);
+    c_id = f_json_str_get_value(action_data, &#x27;c_id&#x27;, null);
+    ip_address = f_json_str_get_value(action_data, &#x27;ip&#x27;, &#x27;&#x27;);
+
+    select res_code, err_text
+    from hp_login_action_validation(:action_code, :action_data)
+    into :res_code, :err_text;
+
+    if (coalesce(err_text, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+    begin
+        suspend;
+        exit;
+    end
+
+    select res_code, err_text
+    from hp_login_action_checks(:action_code, :action_data)
+    into :res_code, :err_text;
+
+    if (coalesce(err_text, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+    begin
+        suspend;
+        exit;
+    end
+
+    if (db_id in (39801, 41701)) then
+      is_biom = 1;
+
+    if (is_biom = 0) then
+        mcl_birth_date = cast(f_json_str_get_value(action_data, &#x27;birth_date&#x27;, &#x27;&#x27;) as date);
+
+    if (mcl_dev_id_tmp &lt;&gt; &#x27;&#x27;) then
+    begin
+      select cast(char_to_uuid(cast(:mcl_dev_id_tmp as varchar(50))) as char(16) character set octets)
+      from rdb$database
+      into mcl_dev_id;
+    end
+
+    select
+      mcl.mcl_id,
+      mcl.mcl_from_c_id,
+      coalesce(mcl.mcl_last_login_datetime, current_timestamp),
+      coalesce(mcl.mcl_last_update_notify, current_timestamp)
+    from mc_login mcl
+    where :db_id &lt;&gt; 39801
+      and mcl.mcl_login = :mcl_login
+      and mcl.mcl_project = :mcl_project
+      and mcl.mcl_is_delete = 0
+    order by mcl_datetime desc
+    into
+      mcl_id,
+      c_id,
+      last_login_datetime,
+      last_update_notify_datetime;
+
+    if (is_biom = 0) then
+    begin
+        c_id_by_login = null;
+    
+        select cd.cda_from_c_id
+        from contdata cd
+        where cd.cda_from_clt_id = f_cont_id(:mcl_login, &#x27;null&#x27;)
+              and cd.cda_cont_kind = 0
+              and cd.cda_is_main = 1
+              and cd.cda_status = 1
+              and cd.cda_is_delete = 0
+        rows 1
+        into :c_id_by_login;
+    end
+
+    if (c_id is null) then -- если клиент не был подвязан
+    begin
+      -- Создаем/обновляем пользователя, привязанного клиента нет(По старой логике)
+      -- Если логика новая то c_id всегда null
+      update or insert into mc_login
+      (
+        mcl_login,
+        mcl_from_c_id,
+        mcl_is_delete,
+        mcl_pass_hash,
+        mcl_lang_code,
+        mcl_os,
+        mcl_app_version,
+        mcl_dev_id,
+        mcl_birth_date,
+        mcl_project
+      )
+      values
+      (
+        :mcl_login,
+        iif(:is_biom = 0, :c_id_by_login, null),
+        0,
+        :mcl_pass_hash,
+        :mcl_lang_code,
+        iif(:operating_system = &#x27;android&#x27;, 1, 2),
+        :application_version,
+        :mcl_dev_id,
+        :mcl_birth_date,
+        :mcl_project
+      )
+      matching (mcl_login, mcl_is_delete, mcl_project)
+      returning mcl_id into :mcl_id;
+
+      -- Обнуляем счетчики проверок кода и логина
+      update mc_check
+      set mcc_check_code_cnt = 0,
+          mcc_login_try_cnt = 0,
+          mcc_check_birth_date = 0
+      where mcc_login = :mcl_login
+        and mcc_check_kind = 0
+        and mcc_project = :mcl_project;
+
+      res_code = &#x27;pass_ok&#x27;;
+    end
+    else -- если клиент подвязан
+    begin
+      -- Для новой логики условие всегда работает.
+      -- Для старой логики работает если условие выполняется
+      if (c_id is distinct from c_id_by_login or :is_biom = 1) then
+      begin
+        -- Расчитываем суффикс для логина login_nnn
+        select count(*)
+        from mc_login
+        where mcl_login starting :mcl_login
+          and mcl_project = :mcl_project
+        into login_cnt;
+
+        -- Переименовываем существующего пользователя в вид login_nnn
+        update mc_login mcl
+        set mcl.mcl_login = mcl.mcl_login || &#x27;_&#x27; || lpad(:login_cnt, 3, &#x27;0&#x27;),
+            mcl.mcl_is_delete = 1
+        where mcl.mcl_login = :mcl_login
+          and mcl.mcl_project = :mcl_project;
+
+        -- Если логика новая то c_id всегда null
+        insert into mc_login
+        (
+          mcl_login,
+          mcl_from_c_id,
+          mcl_pass_hash,
+          mcl_lang_code,
+          mcl_os,
+          mcl_app_version,
+          mcl_dev_id,
+          mcl_birth_date,
+          mcl_last_login_datetime,
+          mcl_last_update_notify,
+          mcl_project
+        )
+        values
+        (
+          :mcl_login,
+          iif(:is_biom = 0, :c_id_by_login, iif(:db_id = 39801, :c_id, null)),
+          :mcl_pass_hash,
+          :mcl_lang_code,
+          iif(:operating_system = &#x27;android&#x27;, 1, 2),
+          :application_version,
+          :mcl_dev_id,
+          :mcl_birth_date,
+          :last_login_datetime,
+          :last_update_notify_datetime,
+          :mcl_project
+        )
+        returning mcl_id into :mcl_id;
+
+      end
+      else
+      begin
+        -- Обновляем пароль
+        update mc_login mcl
+        set mcl.mcl_pass_hash = :mcl_pass_hash
+        where mcl.mcl_id = :mcl_id;
+      end
+
+      -- Обнуляем счетчики проверок кода и логина
+      update mc_check
+      set mcc_check_code_cnt = 0,
+          mcc_login_try_cnt = 0,
+          mcc_check_birth_date = 0
+      where mcc_login = :mcl_login
+        and mcc_check_kind = 0
+        and mcc_project = :mcl_project;
+
+      res_code = &#x27;pass_ok&#x27;;
+
+    end
+
+    if (if_test_phone = 1) then
+      update mc_login mcl
+      set mcl.mcl_from_c_id = iif(:db_is_actual = 1, :prod_c_id, :test_c_id)
+      where mcl.mcl_id = :mcl_id;
+
+    if (db_id = 39801) then
+    begin
+    insert into mc_login_ip (mli_from_mcl_id, mli_ip, mli_flag, mli_datetime)
+    values (:mcl_id, :ip_address, 1, current_timestamp);
+    end
+
+    execute procedure mc_agreement_save(:mcl_id, &#x27;mobile_app_use&#x27;, :mcl_lang_code);
+
+    suspend;
+    exit;
+  end
+
+  if (action_code = &#x27;login&#x27;) then
+  begin
+    mcl_pass_hash = f_json_str_get_value(action_data, &#x27;password&#x27;, &#x27;&#x27;);
+    mcl_dev_id_tmp = f_json_str_get_value(action_data, &#x27;uuid_id&#x27;, &#x27;&#x27;);
+    mcl_project = f_enum(&#x27;mcl_project&#x27;, f_json_str_get_value(action_data, &#x27;project&#x27;, &#x27;kmp&#x27;), &#x27;id&#x27;, 0);
+    operating_system = f_json_str_get_value(action_data, &#x27;operating_system&#x27;, &#x27;&#x27;);
+    application_version = f_json_str_get_value(action_data, &#x27;application_version&#x27;, &#x27;&#x27;);
+    mcl_id = 0;
+
+    select res_code, err_text
+    from hp_login_action_validation(:action_code, :action_data)
+    into :res_code, :err_text;
+
+    if (coalesce(err_text, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+    begin
+        suspend;
+        exit;
+    end
+
+    select res_code, err_text
+    from hp_login_action_checks(:action_code, :action_data)
+    into :res_code, :err_text;
+
+    if (coalesce(err_text, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+    begin
+        suspend;
+        exit;
+    end
+
+    select
+      mcl.mcl_id
+    from mc_login mcl
+    where mcl.mcl_login = :mcl_login
+      and mcl.mcl_is_delete = 0
+      and mcl.mcl_project = :mcl_project
+      and mcl.mcl_pass_hash = :mcl_pass_hash
+    into
+      :mcl_id;
+
+    -- Чистим счетчики
+    update mc_check
+    set mcc_check_code_cnt = 0,
+        mcc_login_try_cnt = 0
+    where mcc_login = :mcl_login
+      and mcc_check_kind = 0
+      and mcc_project = :mcl_project;
+
+    -- сохраняем: ОС, версию приложения, дату+время последнего входа
+    update mc_login mcl
+    set mcl.mcl_os = iif(:operating_system = &#x27;android&#x27;, 1, 2),
+        mcl.mcl_app_version = :application_version,
+        mcl.mcl_last_login_datetime = current_timestamp
+    where mcl.mcl_id = :mcl_id;
+
+    res_code = &#x27;login_ok&#x27;;
+    suspend;
+    exit;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

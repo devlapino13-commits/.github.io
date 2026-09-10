@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0234_SQL — процедура — схема БД</title>
+<meta name="description" content="Процедура CM_RU_0234_SQL: 3 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0234_SQL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_kontur_ip_get_base_info.html"><div class="to">HP_KONTUR_IP_GET_BASE_INFO</div></a><a class="ref-card" href="hp_objectprops_get.html"><div class="to">HP_OBJECTPROPS_GET</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0234_SQL(
+    MA_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable c_id id_type;
+declare variable pr_code d_str_100;
+declare variable mac_loan_target d_integer;
+declare variable c_inn str_20;
+declare variable req_status d_smallint;
+declare variable actuality_date d_date;
+declare variable ip_status d_smallint;
+begin
+    for select pr.pr_code, mac.mac_from_c_id, mac.mac_loan_target
+    from miniapp ma
+    inner join miniappclient mac on mac.mac_from_ma_id = ma.ma_id
+        and mac.mac_amount &gt; 0
+    inner join product pr on ma.ma_from_pr_id = pr.pr_id
+        and (pr.pr_code containing &#x27;.selfemployed.&#x27; or pr.pr_code containing &#x27;.business.&#x27;)
+    where ma.ma_id = :ma_id
+        and ma.ma_is_active = 1
+        and ma.ma_date_end = &#x27;31.12.9999&#x27;
+    into :pr_code, :c_id, :mac_loan_target
+    do
+    begin
+        c_inn = null;
+        c_inn = (select c.c_inn from clients c where c.c_id = :c_id);
+
+        if (c_inn is null) then
+        begin
+            res_error_is_critical = 2;
+            res_error_text = &#x27;ИНН не указан.&#x27;;
+            suspend;
+        end 
+
+        if (f_get_rd_id (&#x27;Loan_Target.72&#x27;) &lt;&gt; mac_loan_target) then
+        begin
+            res_error_is_critical = 2;
+            res_error_text = &#x27;Некорректная цель займа.  Должна быть развитие бизнеса.&#x27;;
+            suspend;
+        end
+
+
+        -- RFCRU-5314
+        -- Проверка анкеты
+        if (check_kind in (&#x27;.miniapp.&#x27;, &#x27;.create_loan.&#x27;) and pr_code containing &#x27;.business.&#x27;) then
+        begin
+            if (not exists
+                (
+                    select res_rd_code
+                    from hp_objectprops_get(0, :c_id, -1, &#x27;AnketaQuestions.LoanPurpose&#x27;, current_date)
+                    where res_rd_code = &#x27;AnketaAnswers.9936&#x27;
+                )
+            ) then
+            begin
+                res_error_is_critical = 2;
+                res_error_text = &#x27;В анкете клиента должно быть выбрано значение &quot;На развитие бизнеса&quot;&#x27;;
+                suspend;
+            end
+
+
+            -- Проверка статуса
+            res_error_is_critical = 0;
+            res_error_text = &#x27;&#x27;;
+
+            select req_status, actuality_date, coalesce(ip_status, 0)
+            from hp_kontur_ip_get_base_info(&#x27;miniapp&#x27;, :ma_id)
+            into req_status, actuality_date, ip_status;
+
+            -- Как видно из блока ниже, валиден только ip_status = 1 (Клиент является ИП)
+            res_error_text =
+                case
+                    when req_status is null then &#x27;Сначала проверьте статус ИП&#x27;
+                    when current_date &gt;= actuality_date then &#x27;Сначала проверьте статус ИП&#x27;
+                    when req_status &lt; 0 then &#x27;Ошибка&#x27;
+                    when req_status = 0 then &#x27;Сначала проверьте статус ИП&#x27;
+                    when req_status = 1 then &#x27;Сначала проверьте статус ИП&#x27;
+                    when req_status = 2 and ip_status = 1 then &#x27;&#x27;
+                    when req_status = 2 and ip_status = 0 then &#x27;Нет действующего статуса ИП, измените продукт&#x27;
+                    else &#x27;Не предвиденная ошибка, просим обратиться в службу технической поддержки&#x27;
+                end;
+
+            if (res_error_text &lt;&gt; &#x27;&#x27;) then
+            begin
+                res_error_is_critical = 2;
+                suspend;
+            end
+
+
+        end
+
+    end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

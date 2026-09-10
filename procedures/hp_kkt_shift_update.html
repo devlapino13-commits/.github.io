@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_KKT_SHIFT_UPDATE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_KKT_SHIFT_UPDATE: 5 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_KKT_SHIFT_UPDATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ACTION_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FN_NUMBER</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FISC_DATETIME</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KKD_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SHIFT_NUMBER</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_KKT_SHIFT_UPDATE(
+    ACTION_CODE D_STR_CODE NOT NULL,
+    FN_NUMBER D_STR_20 NOT NULL,
+    FISC_DATETIME D_DATETIME NOT NULL,
+    KKD_CODE D_STR_CODE NOT NULL,
+    SHIFT_NUMBER D_INTEGER NOT NULL)
+AS
+declare variable kkf_id d_integer;
+  declare variable kkd_id d_integer;
+  declare variable kks_id d_id;
+  declare variable error_text d_str_255;
+  declare variable msg_subject d_str_255;
+  declare variable msg_text d_str_long;
+begin
+  select kkf_id
+  from kkt_fn
+  where kkf_code = :fn_number
+  into kkf_id;
+
+  if (kkf_id is null) then
+  begin
+    select kkd_id
+    from kkt_devices
+    where kkd_code = :kkd_code
+    into kkd_id;
+
+    if (kkd_id is null) then
+    begin
+      error_text = &#x27;Не найдена ККТ&#x27;;
+      exception e_default &#x27;not found KKT. kkd_code = &#x27; || coalesce(kkd_code, &#x27;&lt;NULL&gt;&#x27;);
+    end
+
+    insert into kkt_fn (kkf_from_kkd_id, kkf_code)
+    values (:kkd_id, :fn_number)
+    returning kkf_id
+    into :kkf_id;
+  end
+
+  select kks_id
+  from kkt_shift
+  where kks_from_kkf_id = :kkf_id
+    and kks_number = :shift_number
+  into kks_id;
+
+  if (kks_id is null) then
+    insert into kkt_shift (kks_from_kkf_id, kks_number)
+    values (:kkf_id, :shift_number)
+    returning kks_id
+    into kks_id;
+
+  if (action_code = &#x27;open&#x27;) then
+    update kkt_shift
+    set kks_open_datetime = current_timestamp,
+        kks_open_datetime_fisc = :fisc_datetime,
+        kks_close_datetime = null,
+        kks_close_datetime_fisc = null
+    where (kks_id = :kks_id);
+
+  else if (action_code = &#x27;close&#x27;) then
+    update kkt_shift
+    set kks_close_datetime = current_timestamp,
+        kks_close_datetime_fisc = :fisc_datetime
+    where (kks_id = :kks_id);
+
+  else
+  begin
+    error_text = &#x27;Неизвестное действие:&#x27; || action_code;
+    exception e_default &#x27;Unknown action action_code = &#x27; || action_code;
+  end 
+
+  when any do
+  begin
+    msg_subject = &#x27;ККТ: Ошибка в hp_kkt_shift_update.&#x27;;
+    msg_text  = &#x27;Ошибка в hp_kkt_shift_update: &#x27; || coalesce(error_text, &#x27;gdscode: &#x27; || gdscode) || ascii_char(10) || ascii_char(13) ||
+                &#x27;Параметры:&#x27; || ascii_char(10) || ascii_char(13) ||
+                &#x27; action_code = &#x27; || coalesce(action_code, &#x27;&lt;NULL&gt;&#x27;) || ascii_char(10) || ascii_char(13) ||
+                &#x27; fn_number = &#x27; || coalesce(fn_number, &#x27;&lt;NULL&gt;&#x27;) || ascii_char(10) || ascii_char(13) ||
+                &#x27; fisc_datetime = &#x27; || coalesce(fisc_datetime, &#x27;&lt;NULL&gt;&#x27;) || ascii_char(10) || ascii_char(13) ||
+                &#x27; kkd_code = &#x27; || coalesce(kkd_code, &#x27;&lt;NULL&gt;&#x27;) || ascii_char(10) || ascii_char(13) ||
+                &#x27; shift_number = &#x27; || coalesce(shift_number, &#x27;&lt;NULL&gt;&#x27;);
+    insert into fsrobot_msgbox (msg_type, msg_mail_to, msg_subject, msg_body, msg_lifetime_days, msg_from_un_id, msg_command_kind)
+    values (0, &#x27;ru.finstart@molbulak.com&#x27;, :msg_subject, :msg_text, 7, 1000000000001, &#x27;&#x27;);
+  end 
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_CHANGE_DISB_KIND — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_CHANGE_DISB_KIND: 4 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_CHANGE_DISB_KIND</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_fps_resend_kk.html"><div class="to">HP_FPS_RESEND_KK</div></a><a class="ref-card" href="hp_get_check_loan_data.html"><div class="to">HP_GET_CHECK_LOAN_DATA</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_cmd.html"><div class="to">FM_REPORT_CMD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_KIND</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DISB_KIND</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_CHANGE_DISB_KIND(
+    UN_ID D_ID,
+    OBJ_KIND D_STR_100,
+    OBJ_ID D_ID,
+    DISB_KIND D_SMALLINT)
+RETURNS (
+    RES_ID D_INTEGER,
+    RES_TXT D_STR_255)
+AS
+declare variable k_id d_id;
+declare variable k_disb_kind d_smallint;
+declare variable is_online d_smallint;
+declare variable k_is_online d_smallint;
+declare variable k_status d_smallint;
+declare variable rd_id d_integer;
+begin
+  is_online = 0;
+  if (disb_kind = -1) then
+  begin
+    disb_kind = 5;
+    is_online = 1;
+  end
+
+  if (disb_kind in (7, 8)) then
+    is_online = 1;
+
+  if (obj_kind = &#x27;miniapp&#x27;) then
+  begin
+    select k_id, k.k_disb_kind, k.k_is_online, k_status
+    from kontract k
+    where k_from_ma_app_id = :obj_id and
+          k.k_status &lt;&gt; -2
+    order by k_disb_date
+    rows 1
+    into :k_id, k_disb_kind, k_is_online, k_status;
+
+    if (k_id is null) then
+    begin
+      select m.ma_disb_kind, m.ma_is_online
+      from miniapp m
+      where ma_id = :obj_id and
+            ma_date_end &gt;= &#x27;31.12.2999&#x27;
+      into :k_disb_kind, :k_is_online;
+    end
+  end
+  else
+  begin
+    select k_id, k_disb_kind, k_is_online, k_status
+    from kontract
+    where k_id = :obj_id
+    into :k_id, :k_disb_kind, :k_is_online, k_status;
+  end
+
+  if (k_status = 1) then
+  begin
+    res_id = -1;
+    res_txt = &#x27;Договор уже утвержден. Необходимо вернуть в процесс.&#x27;;
+    suspend;
+    exit;
+  end
+
+  if ((disb_kind = k_disb_kind) and
+      (is_online = k_is_online)) then
+  begin
+    res_id = -1;
+    res_txt = &#x27;Вы не поменяли способ выдачи.&#x27;;
+    suspend;
+    exit;
+  end
+
+  if (k_id is not null) then
+  begin
+    if (exists(select *
+               from kontstate
+               where ks_from_k_id = :k_id and
+                     ks_state = 1 and
+                     ks_ol_is_delete = 0)) then
+    begin
+      res_id = -1;
+      res_txt = &#x27;Выдача произведена. Нельзя менять способ выдачи&#x27;;
+      suspend;
+      exit;
+    end
+
+    select rd_id
+    from hp_get_check_loan_data(:k_id)
+    INTO:rd_id;
+
+    if (exists(select *
+               from actionlist
+               where acl_object_kind = 9 and
+                     acl_object_id = :k_id and
+                     acl_status = 1 and
+                     acl_from_rd_id = :rd_id)) then
+    begin
+      res_id = -1;
+      res_txt = &#x27;Договор находится на рассмотрении КК. Изменения запрещены.&#x27;;
+      suspend;
+      exit;
+    end
+  end
+
+  if (f_can_disb_on_card(obj_kind, obj_id) = 0) then
+  begin
+    if (disb_kind not in (1, 7)) then
+    begin
+      -- После запуска БС СОФР в РФ, выдачи на карту запрещены
+      res_id = -1;
+      res_txt = &#x27;Способ выдачи может быть только через кассу или СБП.&#x27;;
+      suspend;
+      exit;
+    end
+    else
+    if (k_disb_kind &lt;&gt; 7 and disb_kind = 7) then
+    begin
+      -- Также запрещена смена способа выдачи на СБП
+      res_id = -1;
+      res_txt = &#x27;Нельзя менять способ выдачи на СБП. Для выдачи по СБП откажите в текущей заявке и оформите новую.&#x27;;
+      suspend;
+      exit;
+    end
+  end
+
+  res_id = 1;
+
+  update miniapp m
+  set ma_disb_kind = :disb_kind,
+      m.ma_is_online = :is_online,
+      m.ma_from_un_id = :un_id
+  where ma_id = :obj_id and
+        ma_date_end &gt;= &#x27;31.12.2999&#x27;;
+
+  if (k_id is not null) then
+  begin
+    update kontract k
+    set k.k_disb_kind = :disb_kind,
+        k.k_is_online = :is_online,
+        k_user_id = :un_id
+    where k_id = :obj_id;
+
+    if (k_disb_kind = 7) then
+      execute procedure hp_fps_resend_kk(k_id, un_id);
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_OFFICERPAR7_KG_20141110 — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_OFFICERPAR7_KG_20141110: 1 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_OFFICERPAR7_KG_20141110</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OKS_KC_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OKS_DELINQ_BALANCE</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OKS_BALANCE_BEGIN</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PAR</div><div class="ptype">DECIMAL(5,5)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_OFFICERPAR7_KG_20141110(
+    REP_DATE_END DATE)
+RETURNS (
+    OKS_KC_ID ID_TYPE,
+    OKS_DELINQ_BALANCE CURR_TYPE,
+    OKS_BALANCE_BEGIN CURR_TYPE,
+    PAR DECIMAL(5,5))
+AS
+declare variable rep_date_begin date;
+begin
+  rep_date_begin = rep_date_end - extract(day from :rep_date_end);
+-- Баланс просрчоки на каждого КСа
+  for select oks_kc_id,
+             sum(iif(k_disb_date &gt;= cast(&#x27;01.01.2014&#x27; as date) and :rep_date_end &gt;= oks_delinq_date, oks_balance, 0))
+      from oksummary, kontract
+      where :rep_date_end between oks_date_begin and oks_date_end and
+            :rep_date_end &gt;= oks_delinq_date and
+            oks_from_k_id = k_id and
+            oks_close_state = 0
+      group by oks_kc_id
+      into oks_kc_id, oks_delinq_balance
+  do
+  begin
+--  Баланс на начало
+    oks_balance_begin = null;
+    select sum(oks_balance)
+    from oksummary
+    where :rep_date_begin between oks_date_begin and oks_date_end and
+          oks_kc_id = :oks_kc_id and
+          oks_close_state = 0
+    into oks_balance_begin;
+    if (oks_balance_begin is null) then
+      oks_balance_begin = 0;
+--  Расчет ПАР
+    if (oks_delinq_balance = 0) then
+    begin
+      par = 0;
+    end
+    else
+    if (oks_balance_begin = 0) then
+    begin
+      par = 100;
+    end
+    else
+    begin
+      par = cast(oks_delinq_balance as double precision) / oks_balance_begin * 100;
+    end
+
+    insert into officerpar7 (op_kc_id, op_number, op_date_begin, op_date_end, op_balance, op_delinq_bal8_180,
+                             op_par8_180)
+    values (:oks_kc_id, null, :rep_date_end, &#x27;31.12.9999&#x27;, :oks_balance_begin, :oks_delinq_balance, :par);
+
+--    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

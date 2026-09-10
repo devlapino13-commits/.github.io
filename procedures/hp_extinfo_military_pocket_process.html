@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EXTINFO_MILITARY_POCKET_PROCESS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EXTINFO_MILITARY_POCKET_PROCESS: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EXTINFO_MILITARY_POCKET_PROCESS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_extinfotask_process.html"><div class="to">HP_EXTINFOTASK_PROCESS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EIL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EXTINFO_MILITARY_POCKET_PROCESS(
+    EIL_ID D_ID)
+AS
+declare variable EIL_STATUS D_SMALLINT;
+declare variable EIL_STATUS_DATETIME D_DATETIME;
+declare variable JSON_STR D_BLOB_TEXT;
+declare variable I D_INTEGER;
+declare variable ARR_LENGTH D_INTEGER;
+declare variable MCP_ID D_INTEGER;
+declare variable ANSWER_DATE D_DATE;
+declare variable ANSWER_STATUS D_BOOLEAN;
+declare variable INN D_STR_20;
+declare variable C_ID D_ID;
+declare variable MCP_CREATE_DATE D_DATETIME;
+declare variable UN_ID D_ID;
+begin
+  -- RFCRU-3817 получения информации о статусе прохождения воинской службы в КЗ при покетной обработке
+  select cast(blx_blob as d_blob_text),
+         eil.eil_status,
+         eil.eil_status_datetime
+  from extinfolist eil, extinfocfg, hp_get_blobex_blob(eil_from_bls_id)
+  where eic_code = &#x27;military_pocket&#x27; and
+        eil_from_eic_id = eic_id and
+        eil_id = :eil_id rows 1
+  into json_str,
+       eil_status,
+       eil_status_datetime;
+
+  if (eil_status = -2) then    -- Если ошибка
+  begin
+    update military_check_pocket mcp
+      set mcp.mcp_status = -2
+    where mcp.mcp_from_eil_id = :eil_id;
+  end
+
+  if (eil_status = 2) then -- Если мы получили успешный ответ
+  begin
+    select mcp.mcp_id,
+           mcp.mcp_create_date,
+           mcp.mcp_from_un_id
+    from military_check_pocket mcp
+    where mcp.mcp_from_eil_id = :eil_id
+    into mcp_id,
+         mcp_create_date,
+         un_id;
+
+    arr_length = f_json_blob_get_count(json_str, &#x27;data&#x27;) - 1;
+    i = 0;
+
+    while (i &lt;= arr_length) do  -- Проходимся по списку
+    begin
+      answer_date = cast(f_json_str_get_value(json_str, f_format(&#x27;data[%1].date&#x27;, i), null) as d_date);
+      answer_status = cast(f_json_str_get_value(json_str, f_format(&#x27;data[%1].status&#x27;, i), null) as d_boolean);
+      inn = cast(f_json_str_get_value(json_str, f_format(&#x27;data[%1].iin&#x27;, i), null) as d_str_20);
+
+      if (coalesce(answer_date, &#x27;&#x27;) &lt;&gt; &#x27;&#x27; and coalesce(answer_status, &#x27;&#x27;) &lt;&gt; &#x27;&#x27; and coalesce(inn, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+      begin
+        select c.c_id
+        from clients c
+        where c.c_inn = :inn
+        into c_id;
+        -- Добавляем запрос по клиенту в таблицу с запросами
+        insert into military_check_query (mcq_from_c_id,
+                                          mcq_inn,
+                                          mcq_status,
+                                          mcq_answer_date,
+                                          mcq_received,
+                                          mcq_from_un_id,
+                                          mcq_creation_stage,
+                                          mcq_status_datetime,
+                                          mcq_create_datetime,
+                                          mcq_from_eil_id,
+                                          mcq_from_mcp_id)
+        values (:c_id,
+                :inn,
+                iif(:answer_status, 1, 0),
+                :answer_date,
+                1,
+                :un_id,
+                f_enum_id(&#x27;military_request_source&#x27;, &#x27;pocket_query&#x27;),
+                current_timestamp,
+                current_timestamp,
+                :eil_id,
+                :mcp_id);
+      end
+
+      i = i + 1;
+    end
+
+    update military_check_pocket mcp
+      set mcp.mcp_status = 2
+    where mcp.mcp_id = :mcp_id;
+  end
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

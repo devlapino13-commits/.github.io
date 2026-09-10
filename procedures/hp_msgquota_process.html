@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_MSGQUOTA_PROCESS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_MSGQUOTA_PROCESS: 2 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_MSGQUOTA_PROCESS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">6</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">6 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_addr_update.html"><div class="to">FM_ADDR_UPDATE</div></a><a class="ref-card" href="fm_user_check_bio.html"><div class="to">FM_USER_CHECK_BIO</div></a><a class="ref-card" href="fm_user_login.html"><div class="to">FM_USER_LOGIN</div></a><a class="ref-card" href="hp_get_address_str.html"><div class="to">HP_GET_ADDRESS_STR</div></a><a class="ref-card" href="hp_login_action_checks.html"><div class="to">HP_LOGIN_ACTION_CHECKS</div></a><a class="ref-card" href="mc_new_phone.html"><div class="to">MC_NEW_PHONE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MQC_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MQL_CONT_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">QUOTA_EXCEEDED</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">QUOTA_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_MSGQUOTA_PROCESS(
+    MQC_CODE D_STR_CODE NOT NULL,
+    MQL_CONT_CODE D_STR_CODE)
+RETURNS (
+    QUOTA_EXCEEDED D_BOOL,
+    QUOTA_CODE D_STR_CODE)
+AS
+declare variable mqc_id d_integer;
+declare variable mqc_is_active d_bool;
+declare variable start_datetime d_datetime;
+declare variable mql_count d_integer;
+declare variable mqt_interval d_integer;
+declare variable mqt_max_count d_integer;
+declare variable mqt_is_common d_bool;
+declare variable max_interval d_integer;
+declare variable is_whitelist d_bool;
+declare variable mqt_add_limit d_smallint;
+begin
+  -- Процедура обеспечивает обработку квот (лимитов) отправки сообщений
+
+  quota_exceeded = 0;
+  quota_code = &#x27;&#x27;;
+  mql_cont_code = coalesce(mql_cont_code, &#x27;&#x27;);
+
+  select mqc_id, mqc_is_active
+  from msgquotacfg
+  where mqc_code = :mqc_code
+  into mqc_id, mqc_is_active;
+
+  -- Если кодовое имя квоты передается в процедуру, оно обязано быть и в msgquotacfg
+  if (mqc_id is null) then
+    exception e_default f_format(&#x27;mqc_code:%1 not found in table msgquotacfg.&#x27;, mqc_code);
+
+  -- Допустимо, чтобы конфигурация была отключена, тогда считаем что квота соблюдена
+  if (mqc_is_active = 0) then
+  begin
+    suspend;
+    exit;
+  end
+
+  -- Проверяем контакт по списку исключений
+  is_whitelist = 0;
+  if (exists (select *
+    from msgquotaexclude
+    where mqe_cont_code = :mql_cont_code)) then
+    is_whitelist = 1;
+
+  max_interval = 0;
+  -- Проходим по всем лимитам текущей конфигурации
+  for select mqt_interval, mqt_max_count, mqt_is_common, mqt_add_limit
+      from msgquotatimer
+      where mqt_from_mqc_id = :mqc_id
+        and mqt_is_active = 1
+      into mqt_interval, mqt_max_count, mqt_is_common, mqt_add_limit
+  do
+  begin
+    if (max_interval &lt; mqt_interval) then
+      max_interval = mqt_interval;
+
+    -- Вычисляем начало интервала для подсчета количества сообщений
+    start_datetime = dateadd(second, -mqt_interval * 60, current_timestamp);
+
+    -- Если учет внутри текущих суток, корректируем начало интервала
+    if (mqt_add_limit = 1 and start_datetime &lt; current_date) then
+      start_datetime = current_date;
+
+    -- Выясняем количество сообщений подпадающих под наш интервал
+    if (mqt_is_common = 1) then
+      select count(*)
+      from msgquotalist
+        left join msgquotaexclude on mqe_cont_code = mql_cont_code
+      where mql_from_mqc_id = :mqc_id and
+        mql_datetime &gt;= :start_datetime and
+        (
+          (:mqt_add_limit = 0 and mqe_cont_code is null) or -- Считаем всех кроме номеров из списка исключений
+          (:mqt_add_limit = 2 and mqe_cont_code is not null) -- Считаем только номера из списка исключений
+        )
+      into mql_count;
+    else
+      select count(*)
+      from msgquotalist
+        left join msgquotaexclude on mqe_cont_code = mql_cont_code
+      where mql_from_mqc_id = :mqc_id and
+        mql_datetime &gt;= :start_datetime and
+        mql_cont_code = :mql_cont_code and
+        mqe_cont_code is null
+      into mql_count;
+
+    -- При превышении выделенной квоты выходим
+    if (mql_count &gt;= mqt_max_count and (is_whitelist = 0 or mqt_add_limit = 2)) then
+    begin
+      quota_exceeded = 1;
+      quota_code = f_format(&#x27;i%1t%2c%3f%4&#x27;, mqc_id, mqt_interval, mqt_max_count, mql_count);
+      suspend;
+      exit;
+    end
+  end
+
+  -- Проверки пройдены, логируем сообщение
+  insert into msgquotalist (mql_from_mqc_id, mql_cont_code)
+  values (:mqc_id, :mql_cont_code);
+
+  -- Очистка сообщений, которые вышли за максимальный интервал. Т.е. неактуальны
+
+  -- Выбираем конфигурации, для которых наступило время очистки
+  for select mqc_id
+      from msgquotacfg
+      where dateadd(minute, mqc_cleanup_interval, mqc_cleanup_datetime) &lt; current_timestamp
+      into mqc_id
+  do
+  begin
+    -- Удаляем сообщения, которые вышли за границы макс. интервала
+    start_datetime = dateadd(second, -max_interval * 60, current_timestamp);
+    delete from msgquotalist
+    where mql_from_mqc_id = :mqc_id and
+      mql_datetime &lt;= :start_datetime;
+
+    -- Обновляем время последней очистки
+    update msgquotacfg
+    set mqc_cleanup_datetime = current_timestamp
+    where mqc_id = :mqc_id;
+
+  when any do
+    begin
+    -- Тут по плану будут только ошибки блокировки.
+    end
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

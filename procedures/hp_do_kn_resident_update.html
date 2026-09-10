@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DO_KN_RESIDENT_UPDATE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DO_KN_RESIDENT_UPDATE: 5 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DO_KN_RESIDENT_UPDATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">4</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="get_ref_account_knclient.html"><div class="to">GET_REF_ACCOUNT_KNCLIENT</div></a><a class="ref-card" href="hp_do_kn_operbook_ins.html"><div class="to">HP_DO_KN_OPERBOOK_INS</div></a><a class="ref-card" href="hp_get_knclient_type.html"><div class="to">HP_GET_KNCLIENT_TYPE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">4 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_disbursement.html"><div class="to">HP_DO_DISBURSEMENT</div></a><a class="ref-card" href="hp_do_kn_operbook_one_loan.html"><div class="to">HP_DO_KN_OPERBOOK_ONE_LOAN</div></a><a class="ref-card" href="hp_do_kn_operbook_one_online.html"><div class="to">HP_DO_KN_OPERBOOK_ONE_ONLINE</div></a><a class="ref-card" href="hp_do_kn_resident_update_all.html"><div class="to">HP_DO_KN_RESIDENT_UPDATE_ALL</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CURR_CITIZEN_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DOC_VNJ_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DO_KN_RESIDENT_UPDATE(
+    K_ID D_ID,
+    REP_DATE D_DATE,
+    CURR_CITIZEN_ID D_INTEGER,
+    DOC_VNJ_ID D_INTEGER,
+    UN_ID D_ID)
+AS
+declare variable KC_ID D_ID;
+declare variable C_ID D_ID;
+declare variable KNR_DATE_BEGIN D_DATE;
+declare variable KNR_NON_RESIDENT D_SMALLINT;
+declare variable C_NON_RESIDENT D_SMALLINT;
+declare variable CDS_ID D_INTEGER;
+declare variable ACC_ID D_ID;
+declare variable ACC_FROM_SAB_ID D_ID;
+declare variable AMOUNT_SUM D_CURRENCY;
+declare variable AMOUNT_TAX D_CURRENCY;
+declare variable REG_ID D_INTEGER;
+declare variable CLIENT_TYPE D_INTEGER;
+declare variable NEW_ACC_ID D_ID;
+declare variable IS_DISB D_SMALLINT;
+declare variable ACC_DT D_ID;
+declare variable ACC_KT D_ID;
+declare variable OL_ID D_ID;
+declare variable KONTRACT_NO D_STR_255;
+declare variable KONTRACT_DATE D_DATE;
+declare variable OL_MEMO D_STR_LONG;
+begin
+-- если дата не указана, значит это выдача и нужно очистить и создать только одну запись
+  if (rep_date is null) then
+    is_disb = 1;
+  else
+    is_disb = 0;
+
+  for select kc_id, kc_from_c_id, k_fact_disb_reg_id, iif(:is_disb = 0, :rep_date, k_disb_date), k_kontract_no,
+             k_kontract_date, kc_non_resident
+      from knclient, kontract
+      where k_id = :k_id and
+            kc_from_k_id = k_id and
+            kc_amount_approved &gt; 0
+      into :kc_id, :c_id, :reg_id, :rep_date, :kontract_no, kontract_date, knr_non_resident
+  do
+  begin
+    ol_memo = &#x27;Перенос остатка договору займа &#x27; || kontract_no || &#x27; от &#x27; || f_datetostr(:kontract_date) || &#x27; г.&#x27;;
+
+    knr_date_begin = null;
+    cds_id = null;
+
+    if (is_disb = 1) then
+    begin
+      delete from kn_resident
+      where knr_from_kc_id = :kc_id;
+    end
+    else
+    begin
+-- получаем последний статус резидентства на дату
+      select knr_date_begin, knr_non_resident
+      from kn_resident
+      where knr_from_kc_id = :kc_id and
+            knr_date_begin &lt;= :rep_date
+      order by knr_from_kc_id desc, knr_date_begin desc
+      rows 1
+      into knr_date_begin, knr_non_resident;
+    end
+
+-- получаем актуальный статус резидентства клиента из документов на дату
+    select res_client_type, res_non_resident, res_from_cds_id
+    from hp_get_knclient_type(:kc_id, :curr_citizen_id, :doc_vnj_id, :rep_date) -- изменено от 02.04.2026 Улан, было  hp_get_client_type(:c_id, :curr_citizen_id, :doc_vnj_id, :rep_date)
+    into client_type, c_non_resident, cds_id;
+
+--    if (knr_non_resident = c_non_resident) then
+--      continue;
+
+    if (knr_date_begin = rep_date) then -- если до этого была создана запись
+    begin
+-- обновляем данные на дату
+      update kn_resident
+      set knr_non_resident = :c_non_resident,
+          knr_from_cds_id = :cds_id
+      where knr_from_kc_id = :kc_id and
+            knr_date_begin = :knr_date_begin;
+    end
+    else
+    begin
+-- вставляем новую запись
+--      insert into kn_resident (knr_from_kc_id, knr_date_begin, knr_non_resident, knr_from_cds_id)
+--      values (:kc_id, :rep_date, :c_non_resident, :cds_id);
+
+      update or insert into kn_resident (knr_from_kc_id, knr_date_begin, knr_non_resident, knr_from_cds_id)
+      values (:kc_id, :rep_date, :c_non_resident, :cds_id)
+      matching (knr_from_kc_id, knr_date_begin);
+    end
+
+    if (is_disb = 1) then
+      continue;
+
+    if (ol_id is null) then
+    begin
+      insert into operlist (ol_from_reg_id, ol_oper_type, ol_oper_subtype, ol_date, ol_doc_kind, ol_doc_no,
+                            ol_doc_no_str, ol_memo, ol_parent_id, is_delete, ol_user_id)
+      values (:reg_id, 2, 31, :rep_date, 9, 0, &#x27;&#x27;, :ol_memo, null, 0, :un_id)
+      returning ol_id
+      into :ol_id;
+    end
+
+    update kn_resident
+    set knt_from_ol_id = :ol_id
+    where knr_from_kc_id = :kc_id and
+          knr_date_begin = :rep_date;
+
+-- переносим остаток и закрепим OL_ID к записи
+    for select acc_id, acc_from_sab_id
+        from ref_account
+        where acc_object_kind = 8 and
+              acc_object_id = :kc_id and
+              acc_non_resident &lt;&gt; :c_non_resident
+        into acc_id, acc_from_sab_id
+    do
+    begin
+      amount_sum = 0;
+      amount_tax = 0;
+      select kobs_bal_sum, kobs_bal_tax
+      from kn_obsummary
+      where kobs_acc_id = :acc_id and
+            kobs_date &lt;= :rep_date and
+            kobs_date_end &gt;= :rep_date
+      order by kobs_acc_id desc, kobs_date desc
+      rows 1
+      into :amount_sum, amount_tax;
+      if (amount_sum is null) then
+        amount_sum = 0;
+      if (amount_tax is null) then
+        amount_tax = 0;
+      if (amount_sum = 0 and
+          amount_tax = 0) then
+        continue;
+
+      new_acc_id = null;
+      select acc_id
+      from get_ref_account_knclient(:acc_from_sab_id, &#x27;&#x27;, :kc_id, :c_non_resident, :client_type, :rep_date, :reg_id)
+      into new_acc_id;
+
+      if (acc_id = new_acc_id) then
+        continue;
+
+      if (amount_sum &gt; 0) then
+      begin
+        acc_dt = new_acc_id;
+        acc_kt = acc_id;
+      end
+      else
+      begin
+        acc_dt = acc_id;
+        acc_kt = new_acc_id;
+        amount_sum = -amount_sum;
+        amount_tax = -amount_tax;
+      end
+
+      execute procedure hp_do_kn_operbook_ins(:ol_id, :kc_id, :acc_dt, :acc_kt, null, null, :amount_sum, 0, :amount_tax,
+          :rep_date, :reg_id, 1, &#x27;Перенос остатка из-за смены резидентства&#x27;);
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

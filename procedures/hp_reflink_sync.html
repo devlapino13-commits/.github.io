@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_REFLINK_SYNC — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_REFLINK_SYNC: 5 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_REFLINK_SYNC</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_reflinklog.html"><div class="to">HP_REFLINKLOG</div></a><a class="ref-card" href="hp_reflink_category.html"><div class="to">HP_REFLINK_CATEGORY</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REF_CATEGORY</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REF_OBJECT_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REF_VALUES</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REF_ACTION_KIND</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MASTER_CATEGORY</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_REFLINK_SYNC(
+    REF_CATEGORY D_STR_255,
+    REF_OBJECT_ID ID_TYPE,
+    REF_VALUES D_STR_255,
+    REF_ACTION_KIND D_STR_100,
+    MASTER_CATEGORY D_STR_100 = &#x27;&#x27;)
+AS
+declare variable ref_table_name d_str_100;
+declare variable ref_key_field d_str_100;
+declare variable ref_label_field d_str_100;
+declare variable obj_kind d_integer;
+declare variable rd_id d_integer;
+declare variable rd_str_id d_str_255;
+declare variable n_finish d_integer;
+declare variable sql_text d_str_2048;
+declare variable orig_value d_str_255;
+begin
+  -- Add - Добавляем одно значение
+  -- Delete - Исключаем одно значение
+  -- Full - Приводим в полное соответствие
+  -- Import - Full+Создает записи в справочнике если нет
+
+  if (ref_values is null) then
+    ref_values = &#x27;&#x27;;
+
+  if (coalesce(ref_category, &#x27;&#x27;) = &#x27;&#x27;) then
+    exit;
+
+  if (coalesce(ref_values, &#x27;&#x27;) = &#x27;&#x27; and
+      not(ref_action_kind in (&#x27;full&#x27;, &#x27;import&#x27;))) then
+    exit;
+
+  if (coalesce(master_category, &#x27;&#x27;) = &#x27;&#x27;) then
+    master_category = ref_category;
+
+  select ref_label_field,
+         ref_table_name,
+         f_objkind(ref_table_name, &#x27;field&#x27;),
+         f_objkind(ref_table_name, &#x27;id&#x27;)
+  from hp_reflink_category(0)
+  where ref_name = :master_category and
+        f_objkind(ref_table_name, &#x27;field&#x27;) &lt;&gt; &#x27;&#x27;
+  into :ref_label_field,
+       ref_table_name,
+       ref_key_field,
+       obj_kind;
+
+  -- Если ref_label_field пустой, значит нет поле для хранения текстовой версии
+
+  if (obj_kind is null) then
+    exit;
+
+  if (ref_values = &#x27;&#x27; and
+      ref_action_kind in (&#x27;full&#x27;, &#x27;import&#x27;)) then
+  begin
+    execute procedure hp_reflinklog(&#x27;delete&#x27;, :obj_kind, :ref_object_id);
+    delete from reflink
+    where rlk_object_kind = :obj_kind and
+          rlk_object_id = :ref_object_id;
+    exit;
+  end
+
+  if (ref_action_kind in (&#x27;full&#x27;, &#x27;import&#x27;)) then
+  begin
+    if (left(ref_values, 1) &lt;&gt; &#x27;.&#x27;) then
+      ref_values = &#x27;.&#x27; || ref_values;
+    if (right(ref_values, 1) &lt;&gt; &#x27;.&#x27;) then
+      ref_values = ref_values || &#x27;.&#x27;;
+
+    for select rd_id,
+               rd_str_id
+        from reflink, refdata
+        where rlk_object_kind = :obj_kind and
+              rlk_object_id = :ref_object_id and
+              rlk_from_rd_id = rd_id and
+              rd_main_code = &#x27;reflink&#x27;
+        into :rd_id,
+             :rd_str_id
+    do
+    begin
+      if (position(&#x27;.&#x27; || rd_str_id || &#x27;.&#x27;, ref_values) = 0) then
+      begin
+        execute procedure hp_reflinklog(&#x27;delete&#x27;, :obj_kind, :ref_object_id, :rd_id);
+        delete from reflink
+        where rlk_object_kind = :obj_kind and
+              rlk_object_id = :ref_object_id and
+              rlk_from_rd_id = :rd_id;
+      end
+    end
+
+    while (ref_values &lt;&gt; &#x27;&#x27;) do
+    begin
+      rd_str_id = &#x27;&#x27;;
+      n_finish = position(&#x27;.&#x27;, ref_values, 2);
+      if (n_finish &gt; 0) then
+      begin
+        rd_str_id = substring(ref_values from 2 for (n_finish - 2));
+        ref_values = replace(ref_values, &#x27;.&#x27; || rd_str_id || &#x27;.&#x27;, &#x27;.&#x27;);
+        if (ref_values = &#x27;.&#x27;) then
+          ref_values = &#x27;&#x27;;
+        if (ref_values &lt;&gt; &#x27;&#x27; and
+            left(ref_values, 1) &lt;&gt; &#x27;.&#x27;) then
+          ref_values = &#x27;.&#x27; || ref_values;
+      end
+      else
+      begin
+        rd_str_id = replace(ref_values, &#x27;.&#x27;, &#x27;&#x27;);
+        ref_values = &#x27;&#x27;;
+      end
+      if (rd_str_id &lt;&gt; &#x27;&#x27;) then
+      begin
+        rd_id = null;
+        select rd_id
+        from refdata
+        where rd_main_code = &#x27;reflink&#x27; and
+              rd_str_id = :rd_str_id and
+              rd_is_active = 1 rows 1
+        into rd_id;
+
+        if (rd_id is null and
+            ref_action_kind = &#x27;import&#x27;) then
+        begin
+          insert into refdata (rd_main_code, rd_name, rd_memo, rd_str_id)
+          values (&#x27;reflink&#x27;, :rd_str_id, :ref_category, :rd_str_id)
+          returning (rd_id)
+          into :rd_id;
+        end
+
+        if (rd_id is null) then
+          exception e_default &#x27;Unknown reflink value in refdata: &#x27; || ref_category || &#x27; - &#x27; || :rd_str_id;
+
+        if (not(exists(select *
+                       from reflink
+                       where rlk_object_kind = :obj_kind and
+                             rlk_object_id = :ref_object_id and
+                             rlk_from_rd_id = :rd_id))) then
+        begin
+          insert into reflink (rlk_object_kind, rlk_object_id, rlk_from_rd_id)
+          values (:obj_kind, :ref_object_id, :rd_id);
+          execute procedure hp_reflinklog(&#x27;insert&#x27;, :obj_kind, :ref_object_id, :rd_id);
+        end
+      end
+    end
+  end
+
+  if (ref_action_kind in (&#x27;add&#x27;, &#x27;delete&#x27;)) then
+  begin
+    if (ref_label_field = &#x27;&#x27;) then
+    begin
+      select rd_id
+      from refdata
+      where rd_main_code = &#x27;reflink&#x27; and
+            rd_str_id = :ref_values and
+            rd_is_active = 1 rows 1
+      into rd_id;
+
+      if (rd_id is null) then
+        exception e_default &#x27;Unknown reflink value: &#x27; || ref_category || &#x27; - &#x27; || :ref_values;
+
+      if (ref_action_kind = &#x27;add&#x27;) then
+      begin
+        if (not(exists(select *
+                       from reflink
+                       where rlk_object_kind = :obj_kind and
+                             rlk_object_id = :ref_object_id and
+                             rlk_from_rd_id = :rd_id))) then
+        begin
+          insert into reflink (rlk_object_kind, rlk_object_id, rlk_from_rd_id)
+          values (:obj_kind, :ref_object_id, :rd_id);
+          execute procedure hp_reflinklog(&#x27;insert&#x27;, :obj_kind, :ref_object_id, :rd_id);
+        end
+      end
+      else
+      begin
+        execute procedure hp_reflinklog(&#x27;delete&#x27;, :obj_kind, :ref_object_id, :rd_id);
+        delete from reflink
+        where rlk_object_kind = :obj_kind and
+              rlk_object_id = :ref_object_id and
+              rlk_from_rd_id = :rd_id;
+      end
+    end
+    else
+    begin
+      orig_value = &#x27;&#x27;;
+      sql_text = &#x27;select &#x27; || :ref_label_field || &#x27; from &#x27; || :ref_table_name || &#x27; where &#x27; || ref_key_field || &#x27;=&#x27; || :ref_object_id;
+      execute statement :sql_text into orig_value;
+
+      if (orig_value is null) then
+        orig_value = &#x27;&#x27;;
+
+      if (ref_action_kind = &#x27;add&#x27;) then
+      begin
+        if (position(&#x27;.&#x27; || ref_values || &#x27;.&#x27;, orig_value) = 0) then
+        begin
+          if (right(orig_value, 1) &lt;&gt; &#x27;.&#x27;) then
+            orig_value = orig_value || &#x27;.&#x27;;
+          orig_value = orig_value || ref_values || &#x27;.&#x27;;
+        end
+      end
+
+      if (ref_action_kind = &#x27;delete&#x27;) then
+      begin
+        if (position(&#x27;.&#x27; || ref_values || &#x27;.&#x27;, orig_value) &gt; 0) then
+        begin
+          orig_value = replace(orig_value, &#x27;.&#x27; || ref_values || &#x27;.&#x27;, &#x27;.&#x27;);
+          if (orig_value = &#x27;.&#x27;) then
+            orig_value = &#x27;&#x27;;
+          if (orig_value &lt;&gt; &#x27;&#x27; and
+              right(orig_value, 1) &lt;&gt; &#x27;.&#x27;) then
+            orig_value = orig_value || &#x27;.&#x27;;
+        end
+      end
+
+      sql_text = &#x27;update &#x27; || ref_table_name || &#x27; set &#x27; || ref_label_field || &#x27;=&#x27;&#x27;&#x27; || orig_value || &#x27;&#x27;&#x27; where &#x27; || ref_key_field || &#x27;=&#x27; || :ref_object_id;
+      execute statement :sql_text;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

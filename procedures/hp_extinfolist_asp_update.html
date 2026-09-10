@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EXTINFOLIST_ASP_UPDATE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EXTINFOLIST_ASP_UPDATE: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EXTINFOLIST_ASP_UPDATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_blobex_blob.html"><div class="to">HP_GET_BLOBEX_BLOB</div></a><a class="ref-card" href="hp_income_new_query.html"><div class="to">HP_INCOME_NEW_QUERY</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EIL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EXTINFOLIST_ASP_UPDATE(
+    EIL_ID D_ID)
+AS
+declare variable BLS_ID D_ID;
+declare variable EIL_STATUS D_SMALLINT;
+declare variable JSON_STR D_BLOB_TEXT;
+declare variable ERROR_STATE D_STR_255;
+declare variable C_ID D_ID;
+declare variable UN_ID D_ID;
+declare variable CONFIG D_STR_CODE;
+declare variable COUNTER D_INTEGER;
+declare variable SUMMA D_CURRENCY;
+declare variable MA_ID D_ID;
+begin
+-- RFCRU-3940 обработка ответа
+  select eil.eil_from_bls_id,
+         eil.eil_status
+  from extinfolist eil
+  inner join extinfocfg eic on eic.eic_id = eil.eil_from_eic_id
+  where eil.eil_id = :eil_id and
+        eic.eic_code = &#x27;asp_check&#x27;
+  rows 1
+  into bls_id,
+       eil_status;
+
+  select icq.icq_from_c_id,
+         icq.icq_from_un_id,
+         icq.icq_config,
+         ma.ma_id
+  from income_check_querys icq
+  inner join miniappclient mac on mac.mac_id = icq.icq_from_mac_id
+  inner join miniapp ma on ma.ma_id = mac.mac_from_ma_id
+  where icq.icq_from_eil_id = :eil_id
+  order by icq.icq_create_datetime desc
+  rows 1
+  into c_id,
+       un_id,
+       config,
+       ma_id;
+
+  if (eil_status = 2) then
+  begin
+
+    select cast(blx_blob as d_blob_text)
+    from hp_get_blobex_blob(:bls_id)
+    into json_str;
+
+    if (row_count is null or coalesce(json_str, &#x27;&#x27;) = &#x27;&#x27;) then
+      exit;
+
+    error_state = cast(f_json_str_get_value(json_str, &#x27;responseCode&#x27;, null) as d_str_255);
+
+    if (error_state = &#x27;PROVIDER_ERROR&#x27;) then
+    begin
+
+      select count(icq.icq_id)
+      from income_check_querys icq
+      where icq.icq_status = -1 and
+            icq.icq_from_c_id = :c_id
+      into counter;
+
+      update income_check_querys
+      set icq_status = -1
+      where icq_from_eil_id = :eil_id;
+
+      if (counter &lt; 1) then    -- Если первый запрос вернул ошибку то автоматически отправляем второй запрос (Пункт 3)
+        execute procedure hp_income_new_query(:ma_id, :un_id, :config);
+
+    end
+    else if (:config = &#x27;asp_check&#x27;) then
+    begin
+      summa = cast(f_json_str_get_value(json_str, f_format(&#x27;sddFamilyMembers&#x27;), 0) as d_currency);
+
+      update income_check_querys icq
+         set icq.icq_status = 2,
+             icq.icq_payment_sum = :summa
+      where icq_from_eil_id = :eil_id;
+    end
+  end
+
+  if (eil_status in (-2, -3)) then
+  begin
+    update income_check_querys icq
+       set icq.icq_status = -2
+    where icq_from_eil_id = :eil_id;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

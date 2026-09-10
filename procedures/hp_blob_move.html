@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_BLOB_MOVE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_BLOB_MOVE: 4 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_BLOB_MOVE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_insert_into_blobstore.html"><div class="to">HP_INSERT_INTO_BLOBSTORE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CB_FROM_C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CB_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CB_KIND</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_BLOB_MOVE(
+    CB_FROM_C_ID DECIMAL(18,0),
+    CB_ID INTEGER,
+    CB_KIND INTEGER,
+    UN_ID DECIMAL(18,0))
+AS
+declare variable cb_blob blob sub_type 0 segment size 80;
+declare variable cb_from_un_id decimal(18,0);
+declare variable cb_datetime timestamp;
+declare variable cb_name varchar(255);
+declare variable cb_filename varchar(255);
+declare variable bls_id integer;
+begin
+  for select cb_name, cb_blob, cb_filename, cb_from_un_id
+      from clientblob
+      where cb_from_c_id = :cb_from_c_id and
+            cb_id = :cb_id and
+            cb_blob is not null and
+            (cb_from_bls_id is null or
+            cb_from_bls_id = 0)
+      into :cb_name, :cb_blob, :cb_filename, :cb_from_un_id
+  do
+  begin
+
+    if (cb_blob is not null) then
+    begin
+      execute procedure hp_insert_into_blobstore (:cb_filename, :cb_name, :cb_blob, :un_id, 2, 0)
+      returning_values :bls_id;
+
+      if (cb_kind = 0) then -- Прочие документы
+      begin
+        update clientblob
+        set cb_from_bls_id = :bls_id,
+            cb_blob = null,
+            cb_from_un_id = :un_id
+        where cb_from_c_id = :cb_from_c_id and
+              cb_id = :cb_id;
+      end
+      if (cb_kind = 1) then -- Фото клиента
+      begin
+        update clients
+        set c_blob_photo_id = :bls_id
+        where c_id = :cb_from_c_id;
+      end
+      if (cb_kind = 2) then -- Лицевая часть паспорта
+      begin
+        update clients
+        set c_blob_pass1_id = :bls_id
+        where c_id = :cb_from_c_id;
+      end
+      if (cb_kind = 3) then -- Обратная часть паспорта, прописка
+      begin
+        update clients
+        set c_blob_pass2_id = :bls_id
+        where c_id = :cb_from_c_id;
+      end
+      if (cb_kind &lt;&gt; 0) then -- Прочие документы
+      begin
+        delete from clientblob
+        where cb_from_c_id = :cb_from_c_id and
+              cb_id = :cb_id;
+      end
+    end
+  end
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

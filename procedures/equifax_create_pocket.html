@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EQUIFAX_CREATE_POCKET — процедура — схема БД</title>
+<meta name="description" content="Процедура EQUIFAX_CREATE_POCKET: 2 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>EQUIFAX_CREATE_POCKET</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="equifax_create_pocket_list.html"><div class="to">EQUIFAX_CREATE_POCKET_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">INPUT_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">POCKET_TYPE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">POCKET_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">POCKET_NAME</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">POCKET_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE EQUIFAX_CREATE_POCKET(
+    INPUT_DATE DATE,
+    POCKET_TYPE VARCHAR(50))
+RETURNS (
+    POCKET_ID INTEGER,
+    POCKET_NAME STR_255,
+    POCKET_DATE DATE)
+AS
+declare variable y varchar(4);
+declare variable m varchar(2);
+declare variable d varchar(2);
+declare variable v varchar(1);
+declare variable cp_counter integer;
+declare variable cib_id integer;
+declare variable pocket_type_tmp d_str_100;
+declare variable cp_date_begin d_date;
+begin
+  /*
+  POCKET_TYPE
+    .d.kont.    - ежедневный по кредитам
+    .d.miniapp. - ежедневный по заявкам
+    .m.kont.    - ежемесячный по кредитам
+    .m.miniapp. - ежемесячный по заявкам
+  */
+  -- &#x27;01.07.2014&#x27; -- дата запуска проекта по выгрузке кредитных историй
+  -- &#x27;01.03.2015&#x27; -- дата запуска проекта по выгрузке ФИЧ-файла
+
+  pocket_date = input_date;
+  cp_date_begin = pocket_date;
+
+
+  --  pocket_type_tmp может быть либо по кредиту (.kont.) илбо по заявке (.miniapp.), на этом все
+  -- удаляю лишние слова
+  if (pocket_type containing (&#x27;.miniapp.&#x27;)) then
+    pocket_type_tmp = &#x27;.miniapp.&#x27;;
+  else if (pocket_type containing (&#x27;.kont.&#x27;)) then
+    pocket_type_tmp = &#x27;.kont.&#x27;;
+
+  select rd.rd_id
+  from refdata rd
+  where rd.rd_code = &#x27;CIB.EQUIFAX&#x27;
+  into cib_id;
+
+  cp_counter = 0;
+
+  select cp.cp_counter
+  from cib_pocket cp
+  where cp.cp_date_end = :pocket_date and
+        cp.cp_pocket_type containing (:pocket_type_tmp) and
+        cp.cp_cib_id = :cib_id and
+        cp.cp_pocket_status &gt;= 0
+  order by cp.cp_date_end desc, cp.cp_id desc
+  rows 1
+  into :cp_counter;
+
+  cp_counter = cp_counter + 1;
+
+  if (pocket_type containing (&#x27;.miniapp.&#x27;)) then
+    y = cast(extract(year from pocket_date) as varchar(4));
+  else
+  if (pocket_type containing (&#x27;.kont.&#x27;)) then
+  begin
+    y = cast(extract(year from pocket_date) as varchar(4));
+    y = (case y when &#x27;2014&#x27; then &#x27;E&#x27;
+                when &#x27;2015&#x27; then &#x27;F&#x27;
+                when &#x27;2016&#x27; then &#x27;G&#x27;
+                when &#x27;2017&#x27; then &#x27;H&#x27;
+                when &#x27;2018&#x27; then &#x27;I&#x27;
+                when &#x27;2019&#x27; then &#x27;J&#x27;
+                when &#x27;2020&#x27; then &#x27;K&#x27;
+                when &#x27;2021&#x27; then &#x27;L&#x27;
+                when &#x27;2022&#x27; then &#x27;M&#x27;
+                when &#x27;2023&#x27; then &#x27;N&#x27;
+                when &#x27;2024&#x27; then &#x27;O&#x27;
+                when &#x27;2025&#x27; then &#x27;P&#x27;
+                when &#x27;2025&#x27; then &#x27;Q&#x27;
+                when &#x27;2026&#x27; then &#x27;R&#x27;
+                when &#x27;2027&#x27; then &#x27;S&#x27;
+                end);
+  end
+
+  m = cast(extract(month from :pocket_date) as varchar(2));
+  d = cast(extract(day from :pocket_date) as varchar(2));
+
+  if (pocket_type containing (&#x27;.kont.&#x27;)) then
+  begin
+    m = (case m when &#x27;10&#x27; then &#x27;A&#x27;
+                when &#x27;11&#x27; then &#x27;B&#x27;
+                when &#x27;12&#x27; then &#x27;C&#x27;
+                else m end);
+
+    d = (case d when &#x27;10&#x27; then &#x27;A&#x27;
+                when &#x27;11&#x27; then &#x27;B&#x27;
+                when &#x27;12&#x27; then &#x27;C&#x27;
+                when &#x27;13&#x27; then &#x27;D&#x27;
+                when &#x27;14&#x27; then &#x27;E&#x27;
+                when &#x27;15&#x27; then &#x27;F&#x27;
+                when &#x27;16&#x27; then &#x27;G&#x27;
+                when &#x27;17&#x27; then &#x27;H&#x27;
+                when &#x27;18&#x27; then &#x27;I&#x27;
+                when &#x27;19&#x27; then &#x27;J&#x27;
+                when &#x27;20&#x27; then &#x27;K&#x27;
+                when &#x27;21&#x27; then &#x27;L&#x27;
+                when &#x27;22&#x27; then &#x27;M&#x27;
+                when &#x27;23&#x27; then &#x27;N&#x27;
+                when &#x27;24&#x27; then &#x27;O&#x27;
+                when &#x27;25&#x27; then &#x27;P&#x27;
+                when &#x27;26&#x27; then &#x27;Q&#x27;
+                when &#x27;27&#x27; then &#x27;R&#x27;
+                when &#x27;28&#x27; then &#x27;S&#x27;
+                when &#x27;29&#x27; then &#x27;T&#x27;
+                when &#x27;30&#x27; then &#x27;U&#x27;
+                when &#x27;31&#x27; then &#x27;V&#x27;
+                else d end);
+
+    if (cp_counter &lt; 10) then
+      v = cast(cp_counter as varchar(1));
+
+    v  = (case cp_counter when &#x27;10&#x27; then &#x27;A&#x27;
+                          when &#x27;11&#x27; then &#x27;B&#x27;
+                          when &#x27;12&#x27; then &#x27;C&#x27;
+                          when &#x27;13&#x27; then &#x27;D&#x27;
+                          when &#x27;14&#x27; then &#x27;E&#x27;
+                          when &#x27;15&#x27; then &#x27;F&#x27;
+                          when &#x27;16&#x27; then &#x27;G&#x27;
+                          when &#x27;17&#x27; then &#x27;H&#x27;
+                          when &#x27;18&#x27; then &#x27;I&#x27;
+                          when &#x27;19&#x27; then &#x27;J&#x27;
+                          when &#x27;20&#x27; then &#x27;K&#x27;
+                          when &#x27;21&#x27; then &#x27;L&#x27;
+                          when &#x27;22&#x27; then &#x27;M&#x27;
+                          when &#x27;23&#x27; then &#x27;N&#x27;
+                          when &#x27;24&#x27; then &#x27;O&#x27;
+                          when &#x27;25&#x27; then &#x27;P&#x27;
+                          else v end);
+
+    pocket_name = &#x27;47L&#x27; || &#x27;U&#x27; || y || m || d || v; -- формирую название файла
+
+    --
+    if (pocket_type containing &#x27;.monthly.&#x27;) then
+    begin
+       cp_date_begin = (select cast(&#x27;01.&#x27; || cast(extract(month from cast(:pocket_date as date)) as varchar(2)) || &#x27;.&#x27; || cast(extract(year from cast(:pocket_date as date)) as varchar(4)) as date)
+                     from rdb$database);
+    end
+  end
+  else -- пакет по заявкам
+  begin
+    if (char_length(m) &lt; 2) then
+      m = &#x27;0&#x27; || m;
+    if (char_length(d) &lt; 2) then
+      d = &#x27;0&#x27; || d;
+
+    pocket_name = &#x27;47L&#x27; || &#x27;_&#x27; || y || m || d || &#x27;_&#x27; ||(case
+                                                          when char_length(cp_counter) = 4 then cp_counter
+                                                          when char_length(cp_counter) = 3 then &#x27;0&#x27; || cp_counter
+                                                          when char_length(cp_counter) = 2 then &#x27;00&#x27; || cp_counter
+                                                          when char_length(cp_counter) = 1 then &#x27;000&#x27; || cp_counter
+                                                        end);
+  end
+  insert into cib_pocket (cp_counter, cp_date_begin, cp_date_end, cp_pocket_name, cp_pocket_type, cp_pocket_status,
+                          cp_pocket_kib_status, cp_cib_id)
+  values (:cp_counter, :cp_date_begin, :pocket_date, :pocket_name, :pocket_type, 0, null, f_get_rd_id(&#x27;CIB.EQUIFAX&#x27;))
+  returning cp_id
+  into :pocket_id;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

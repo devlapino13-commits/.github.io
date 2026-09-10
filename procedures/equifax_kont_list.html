@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EQUIFAX_KONT_LIST — процедура — схема БД</title>
+<meta name="description" content="Процедура EQUIFAX_KONT_LIST: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>EQUIFAX_KONT_LIST</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="equifax_prep_kont_list_temp.html"><div class="to">EQUIFAX_PREP_KONT_LIST_TEMP</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">POCKET_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE EQUIFAX_KONT_LIST(
+    POCKET_ID D_INTEGER)
+RETURNS (
+    K_ID D_ID)
+AS
+declare variable ACTIVE_DATE D_DATE;
+declare variable EQUIFAX_CIB_ID D_INTEGER;
+declare variable CIB_CODE D_STR_100;
+declare variable POCKET_TYPE D_STR_100;
+declare variable REP_DATE_BEGIN D_DATE;
+declare variable REP_DATE_END D_DATE;
+declare variable POCKET_CREATE_DATE D_DATE;
+declare variable CP_ID D_INTEGER;
+begin
+    select cp.cp_date_begin,
+           cp.cp_date_end,
+           cp.cp_pocket_type,
+           rd.rd_code,
+           cast(cp.cp_datetime as date),
+           cp.cp_id
+    from cib_pocket cp
+    inner join refdata rd on cp.cp_cib_id = rd.rd_id
+    where cp.cp_id = :pocket_id
+    into :rep_date_begin,
+         :rep_date_end,
+         :pocket_type,
+         :cib_code,
+         :pocket_create_date,
+         :cp_id;
+
+  equifax_cib_id = f_get_rd_id(&#x27;cib.equifax&#x27;);
+
+  if(cib_code = &#x27;cib.equifax&#x27;) then
+  begin
+      active_date  = &#x27;01.07.2014&#x27;; -- дата запуска проекта;
+
+      if (exists (select * from cib_knclient_in_pocket ckp where ckp.ckp_from_cp_id = :cp_id)) then -- если по пакету уже имеется сформированный набор кредитов, тогда тянем эти кредиты
+      begin
+          for select distinct kncl.kc_from_k_id
+          from cib_knclient_in_pocket ckp
+          inner join knclient kncl on kncl.kc_id = ckp.ckp_from_kc_id
+          where ckp.ckp_from_cp_id = :cp_id
+          into :k_id
+          do
+          begin
+            suspend;
+          end
+          exit;
+      end
+
+      if (pocket_type containing &#x27;.error_check.&#x27;) then -- если нужно подтянуть набор кредитов, для правки в эквифакс
+      begin
+        for select cke.k_id
+        from cib_actuality cke
+        where cke.k_id &lt;&gt; 101010000000100101
+        into :k_id
+        do
+        begin
+            suspend;
+        end
+      end
+
+      if (pocket_type containing &#x27;.errors_corrected.&#x27;) then -- если это пакет по исправленным ошибкам
+      begin
+          for select distinct cke.cke_from_k_id
+          from cib_kontract_errors cke
+          inner join cib_pocket cp on cp.cp_id = cke.cke_from_cp_id
+          -- отталкиваюсь именно от даты создания пакета, т.к если пакет был создан сегодня должен содержать ошибки исправленные вчера --&gt;
+          where cke.cke_checked_datetime &gt;= :pocket_create_date - 1
+          and cke.cke_checked_datetime &lt; :pocket_create_date
+          ---------------------------------------------------------------------&lt;
+          and cp.cp_date_end = :rep_date_end
+          and cp.cp_cib_id = :equifax_cib_id
+          into :k_id
+          do
+          begin
+            -- интересуют только кредиты, с даты автоматизации в Эквифакс
+            if (exists (select *
+                        from kontract kont
+                        where kont.k_id = :k_id
+                        and kont.k_disb_date &gt;= :active_date
+                        )) then
+            suspend;
+          end
+      end
+
+      if (pocket_type containing &#x27;.rest_prev_d.&#x27;) then -- все реструктуризации на дату, которые на эту дату в пакет не попали
+      begin
+            for select distinct ok.ok_from_k_id
+            from operkred ok
+            where ok.ok_type = 2
+            and ok.ok_ol_is_active = 1
+            and ok.ok_ol_date = :rep_date_end
+            and ((ok.ok_os &lt;&gt; 0) or
+                 (ok.ok_sh_os &lt;&gt; 0) or
+                 (ok.ok_perc &lt;&gt; 0) or
+                 (ok.ok_sh_perc &lt;&gt; 0) or
+                 (ok.ok_fine &lt;&gt; 0))
+            into :k_id
+            do
+            begin
+                -- интересуют только кредиты, с даты автоматизации в Эквифакс
+                if (exists (select *
+                            from kontract kont
+                            where kont.k_id = :k_id
+                            and kont.k_disb_date &gt;= :active_date
+                            )) then
+                begin
+                    -- если кредит не попадал в пакет на эту дату
+                    if (not exists(
+                                select *
+                                from cib_knclient_in_pocket ckp
+                                inner join knclient kncl on kncl.kc_id = ckp.ckp_from_kc_id
+                                inner join cib_pocket cp on cp.cp_id = ckp.ckp_from_cp_id
+                                where kncl.kc_from_k_id = :k_id
+                                and kncl.kc_amount_approved &gt; 0
+                                and cp.cp_pocket_type containing &#x27;.d.&#x27;
+                                and cp.cp_pocket_type containing &#x27;.kont.&#x27;
+                                and cp.cp_cib_id = :equifax_cib_id -- нас интересует только Эквифакс
+                                and cp.cp_pocket_status &gt; 0 -- негативный статус не учитываю
+                                and :rep_date_end between cp.cp_date_begin and cp.cp_date_end
+            
+                    )) then
+                        suspend;
+                end
+            end
+      end
+
+      if (pocket_type containing &#x27;.okf_pay_prev_d.&#x27;) then  -- все погашения на внесистемном учете, где платеж был посажен задней датой и на эту дату кредит в пакет не попал
+      begin
+            for select distinct okf.oko_from_k_id
+            from operkroff  okf
+            inner join operlist ol on ol.ol_id = okf.oko_from_ol_id
+            where okf.oko_type = 4
+            and okf.oko_ol_is_active = 1
+            and okf.oko_ol_date = :rep_date_end
+            and okf.oko_os + okf.oko_perc &lt;&gt; 0
+            and cast(ol.ol_datetime as date) &gt; okf.oko_ol_date -- платеж посажен задним числом
+            into :k_id
+            do
+            begin
+                -- интересуют только кредиты, с даты автоматизации в Эквифакс
+                if (exists (select *
+                            from kontract kont
+                            where kont.k_id = :k_id
+                            and kont.k_disb_date &gt;= :active_date
+                            )) then
+                begin
+                    -- если кредит не попадал в пакет на эту дату
+                    if (not exists(
+                                select *
+                                from cib_knclient_in_pocket ckp
+                                inner join knclient kncl on kncl.kc_id = ckp.ckp_from_kc_id
+                                inner join cib_pocket cp on cp.cp_id = ckp.ckp_from_cp_id
+                                where kncl.kc_from_k_id = :k_id
+                                and kncl.kc_amount_approved &gt; 0
+                                and cp.cp_pocket_type containing &#x27;.d.&#x27;
+                                and cp.cp_pocket_type containing &#x27;.kont.&#x27;
+                                and cp.cp_cib_id = :equifax_cib_id -- нас интересует только Эквифакс
+                                and cp.cp_pocket_status &gt; 0 -- негативный статус не учитываю
+                                and :rep_date_end between cp.cp_date_begin and cp.cp_date_end
+            
+                    )) then
+                        suspend;  
+                end
+            end
+      end
+
+      if (pocket_type containing &#x27;.ok_pay_prev_d.&#x27;) then -- все погашения на стандатном учете, где платеж был посажен задней датой и на эту дату кредит в пакет не попал
+      begin
+            for select distinct ok.ok_from_k_id
+            from operkred ok
+            inner join operlist ol on ol.ol_id = ok.ok_from_ol_id
+            where ok.ok_ol_date = :rep_date_end
+            and ok.ok_type = 4
+            and ok.ok_ol_is_active = 1
+            and ok.ok_os + ok.ok_perc + ok.ok_fine &lt;&gt; 0
+            and cast(ol.ol_datetime as date) &gt; ok.ok_ol_date -- платеж посажен задним числом  
+            into :k_id
+            do
+            begin
+                -- интересуют только кредиты, с даты автоматизации в Эквифакс
+                if (exists (select *
+                            from kontract kont
+                            where kont.k_id = :k_id
+                            and kont.k_disb_date &gt;= :active_date
+                            )) then
+                begin
+                    -- если кредит не попадал в пакет на эту дату
+                    if (not exists(
+                                select *
+                                from cib_knclient_in_pocket ckp
+                                inner join knclient kncl on kncl.kc_id = ckp.ckp_from_kc_id
+                                inner join cib_pocket cp on cp.cp_id = ckp.ckp_from_cp_id
+                                where kncl.kc_from_k_id = :k_id
+                                and kncl.kc_amount_approved &gt; 0
+                                and cp.cp_pocket_type containing &#x27;.d.&#x27;
+                                and cp.cp_pocket_type containing &#x27;.kont.&#x27;
+                                and cp.cp_cib_id = :equifax_cib_id -- нас интересует только Эквифакс
+                                and cp.cp_pocket_status &gt; 0 -- негативный статус не учитываю
+                                and :rep_date_end between cp.cp_date_begin and cp.cp_date_end
+            
+                    )) then
+                        suspend;
+                end
+            end
+      end
+
+      if (pocket_type containing &#x27;.perc_ch.&#x27;) then -- кредиты по которым было изменение % ставки из-за уровня просрочки
+      begin
+        -- кредиты по которым было измнение % ставки из-за уровня просрочки
+        for select distinct kd.kd_from_k_id
+        from kontdata kd
+        inner join operlist ol on ol.ol_id = kd.kd_from_ol_id
+        where kd.kd_ol_date = :rep_date_end
+        and kd.kd_float_perc_level in (1, 2)
+        and kd.kd_ol_is_delete = 0
+        and ol.ol_oper_type = 1  -- на счет ol_oper_type = 1 и ol_oper_subtype = 12 подсказал Санжар
+        and ol.ol_oper_subtype = 12
+        and cast(ol.ol_datetime as date) &gt; ol.ol_date -- платеж посажен задним числом
+        into :k_id
+        do
+        begin
+             -- интересуют только кредиты, с даты автоматизации в Эквифакс
+            if (exists (select *
+                        from kontract kont
+                        where kont.k_id = :k_id
+                        and kont.k_disb_date &gt;= :active_date
+                        )) then
+            begin
+             if (not exists(
+                            select *
+                            from cib_knclient_in_pocket ckp
+                            inner join knclient kncl on kncl.kc_id = ckp.ckp_from_kc_id
+                            inner join cib_pocket cp on cp.cp_id = ckp.ckp_from_cp_id
+                            where kncl.kc_from_k_id = :k_id
+                            and kncl.kc_amount_approved &gt; 0
+                            and cp.cp_pocket_type containing &#x27;.d.&#x27;
+                            and cp.cp_pocket_type containing &#x27;.kont.&#x27;
+                            and cp.cp_cib_id = :equifax_cib_id -- нас интересует только Эквифакс
+                            and cp.cp_pocket_status &gt; 0 -- негативный статус не учитываю
+                            and :rep_date_end between cp.cp_date_begin and cp.cp_date_end
+        
+                )) then
+                    suspend;    
+            end
+        end
+      end
+    
+      if (pocket_type containing &#x27;.standard_daily.&#x27;)  then  -- ЕСЛИ ЭТО СТАНДАРТНЫЙ ЕЖЕДЕНВНЫЙ ПАКЕТ
+      begin
+        -- активные кредиты на дату (попадает в стандартный дневной пакет)
+        for select ks.ks_from_k_id
+        from kontstate ks
+        where ks.ks_state = 1
+        and ks.ks_ol_is_delete = 0
+        and :rep_date_end between ks.ks_date_begin and ks.ks_date_end
+        and ks_date_begin &gt;= :active_date  -- интересуют только кредиты, с даты автоматизации в Эквифакс
+        into :k_id
+        do
+        begin
+            suspend;
+        end
+
+        -- закрытые кредиты за период (попадает в стандартный дневной пакет)
+        for select ks.ks_from_k_id
+        from kontstate ks
+        where ks.ks_state = 2
+        and ks.ks_ol_is_delete = 0
+        and ks.ks_date_begin between :rep_date_begin and :rep_date_end
+        and ks_date_begin &gt;= :active_date  -- интересуют только кредиты, с даты автоматизации в Эквифакс
+        into :k_id
+        do
+        begin
+            -- интересуют только кредиты, с даты автоматизации в Эквифакс
+            if (exists (select *
+                        from kontract kont
+                        where kont.k_id = :k_id
+                        and kont.k_disb_date &gt;= :active_date
+                        )) then
+            suspend;
+        end
+
+        -- закрытые кредиты с долгом на внесистемке (попадает в стандартный дневной пакет)
+        for select oko_from_k_id
+        from
+        (
+            select okf.oko_from_k_id
+            from operkroff okf
+            inner join kontstate ks on ks.ks_from_k_id = okf.oko_from_k_id
+            where okf.oko_ol_is_active = 1
+            and okf.oko_ol_date &lt;= :rep_date_end
+            and ks.ks_state = 1
+            and ks.ks_date_begin &gt;= :active_date
+            and ks.ks_ol_is_delete = 0
+            group by okf.oko_from_k_id
+            having sum(okf.oko_os + okf.oko_sh_os + okf.oko_perc + okf.oko_sh_perc) &gt; 0
+        ) b
+        inner join kontstate ks_close on ks_close.ks_from_k_id = oko_from_k_id
+        where ks_close.ks_ol_is_delete = 0
+        and ks_date_begin &lt; :rep_date_end
+        and ks_close.ks_state = 2
+        into :k_id
+        do
+        begin
+            -- интересуют только кредиты, с даты автоматизации в Эквифакс
+            if (exists (select *
+                        from kontract kont
+                        where kont.k_id = :k_id
+                        and kont.k_disb_date &gt;= :active_date
+                        )) then
+            suspend;    
+        end
+
+        -- кредиты, по которым долг по внесистемке был закрыт в рамках периода пакета (попадает в стандартный дневной пакет)
+        for select distinct okf.oko_from_k_id -- получаю список погашений и списаний по внесистмке за период
+        from operkroff okf
+        where okf.oko_ol_is_active = 1
+        and okf.oko_type in (4,5)
+        and okf.oko_ol_date between :rep_date_begin and :rep_date_end
+        into :k_id
+        do
+        begin
+            -- интересуют только кредиты, с даты автоматизации в Эквифакс
+            if (exists (select *
+                        from kontract kont
+                        where kont.k_id = :k_id
+                        and kont.k_disb_date &gt;= :active_date
+                        )) then
+            begin
+              -- если после погашения долга по внесистемке больше нет
+              if ((select sum(okf.oko_os + okf.oko_sh_os + okf.oko_perc + okf.oko_sh_perc)
+                   from operkroff okf
+                   where okf.oko_type in (1, 4, 5)
+                   and okf.oko_ol_is_active =1
+                   and okf.oko_from_k_id = :k_id
+                   and okf.oko_ol_date &lt;= :rep_date_end) &lt;= 0) then
+              begin
+                suspend;
+              end
+            end
+        end
+
+        -- кредиты по которым было измнение % ставки из-за уровня просрочки
+        for select distinct kd.kd_from_k_id
+        from kontdata kd
+        inner join operlist ol on ol.ol_id = kd.kd_from_ol_id
+        where kd.kd_ol_date between :rep_date_begin and :rep_date_end
+        and kd.kd_float_perc_level in (1, 2)
+        and kd.kd_ol_is_delete = 0
+        and ol.ol_oper_type = 1  -- на счет ol_oper_type = 1 и ol_oper_subtype = 12 подсказал Санжар
+        and ol.ol_oper_subtype = 12
+        into :k_id
+        do
+        begin
+             -- интересуют только кредиты, с даты автоматизации в Эквифакс
+            if (exists (select *
+                        from kontract kont
+                        where kont.k_id = :k_id
+                        and kont.k_disb_date &gt;= :active_date
+                        )) then
+            begin
+                suspend;    
+            end
+        end
+    end
+  end -- &lt; --- if(CIB_CODE = &#x27;CIB.EQUIFAX&#x27;) then
+  if (cib_code = &#x27;cib.nbki&#x27;) then  -- ЕСЛИ ЭТО ПАКЕТ ПО НБКИ
+  begin
+    for select nkl.nkl_from_k_id
+    from nbki_kontract_list nkl
+    where :rep_date_end between nkl.nkl_date_begin and nkl.nkl_date_end
+    into :k_id
+    do
+    begin
+        suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

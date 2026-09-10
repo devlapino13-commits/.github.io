@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CHECK_PARALLEL_LOAN — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CHECK_PARALLEL_LOAN: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CHECK_PARALLEL_LOAN</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="kontract_full_oper_list_detail.html"><div class="to">KONTRACT_FULL_OPER_LIST_DETAIL</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="cm_az_0056_sql.html"><div class="to">CM_AZ_0056_SQL</div></a><a class="ref-card" href="cm_az_0057_sql.html"><div class="to">CM_AZ_0057_SQL</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CURR_K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CURR_MA_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CHECK_PARALLEL_LOAN(
+    CURR_K_ID D_ID,
+    CURR_MA_ID D_INTEGER = null)
+RETURNS (
+    RES_TEXT D_STR_255)
+AS
+declare variable PR_ID D_INTEGER;
+declare variable C_ID D_ID;
+declare variable CNT D_INTEGER;
+declare variable SCORE D_INTEGER;
+declare variable K_ID D_ID;
+declare variable CURR_AMOUNT D_CURRENCY;
+declare variable ACTIVE_BALANCE D_CURRENCY;
+declare variable MAX_SUM D_CURRENCY;
+declare variable SH_DATE D_DATE;
+declare variable SH_SUM D_CURRENCY;
+declare variable OK_DATE D_DATE;
+declare variable OK_SUM D_CURRENCY;
+declare variable OKS_IS_DELINQ D_BOOL;
+declare variable OKS_DELINQ_DAY D_INTEGER;
+declare variable LAST_YEAR_BEGIN D_DATE;
+begin
+  -- Входящие параметры: curr_k_id - получаемый параллельный кредит, curr_ma_id - заявка получаемого параллельного кредита, если curr_k_id передан, то curr_ma_id не используется.
+
+  -- Процедура проверяет условия для получения параллельного кредита (RFCAZ-280)
+  -- Если условия соблюдены, то res_text = null, иначе res_text содержит нарушенное условие.
+
+  curr_k_id = coalesce(curr_k_id, 0);
+  curr_ma_id = coalesce(curr_ma_id, 0);
+
+  if (curr_k_id = 0 and curr_ma_id = 0) then
+  begin
+    res_text = &#x27;Ошибка: не указан контракт или заявка&#x27;;
+    suspend;
+    exit;
+  end
+
+  if (f_get_db_id() &lt;&gt; 94401) then
+    exit;
+
+  if (curr_k_id &gt; 0) then
+    select k_from_pr_id
+    from kontract
+    where k_id = :curr_k_id
+    into pr_id;
+  else
+    select ma_from_pr_id
+    from miniapp
+    where ma_id = :curr_ma_id and
+          ma_is_active = 1 and
+          ma_date_end = &#x27;31.12.9999&#x27;
+    into pr_id;
+
+  if (not exists(select *
+                 from product
+                 where pr_id = :pr_id and
+                       lower(pr_name) containing &#x27;paralel&#x27;)) then
+    exit; -- проверки касаются только тех продуктов, в названии которых есть слово &quot;paralel&quot; (RFCAZ-454)
+
+  -- В АЗ все кредиты индивидуальные, групповых кредитов нет
+  -- Находим клиента (c_id) и сумму кредита в текущем контракте/заявке
+  if (curr_k_id &gt; 0) then
+    select kc_from_c_id,
+           kc_amount_approved
+    from knclient
+    where kc_from_k_id = :curr_k_id and
+          kc_amount_approved &gt; 0 rows 1
+    into c_id,
+         curr_amount;
+  else
+    select mac_from_c_id,
+           mac_amount
+    from miniappclient
+    where mac_from_ma_id = :curr_ma_id and
+          mac_amount &gt; 0 rows 1
+    into c_id,
+         curr_amount;
+
+  if (coalesce(c_id, 0) = 0) then
+  begin
+    res_text = &#x27;Ошибка: клиент не найден&#x27;;
+    suspend;
+    exit;
+  end
+
+  if (coalesce(curr_amount, 0) = 0) then
+  begin
+    res_text = &#x27;Ошибка: не указана сумма параллельного кредита&#x27;;
+    suspend;
+    exit;
+  end
+
+  -- Проверка условия: У клиента 8 и более баллов по программе лояльности
+  score = f_point(:c_id, current_date);
+  if (coalesce(score, 0) &lt; 8) then
+  begin
+    res_text = &#x27;У клиента недостаточно баллов для параллельного кредита (нужно минимум 8 баллов)&#x27;;
+    suspend;
+    exit;
+  end
+
+  -- RFCAZ-611
+  max_sum = case
+              when score between 0 and 2 then 4500
+              when score between 3 and 5 then 4500
+              when score between 6 and 11 then 5000
+              when score between 12 and 17 then 5500
+              when score between 18 and 23 then 6000
+              when score between 24 and 29 then 6000
+              when score between 30 and 35 then 6500
+              when score between 36 and 41 then 7500
+              when score between 42 and 47 then 8000
+              when score &gt;= 48 then 8500
+              else 0
+            end;
+
+  -- Проверка условия: Сумма получаемого параллельного кредита не должна превышать максимальную сумму согласно накопленным баллам
+  if (curr_amount &gt; max_sum) then
+  begin
+    res_text = &#x27;Сумма получаемого кредита превышает максимальную сумму согласно накопленным баллам&#x27;;
+    suspend;
+    exit;
+  end
+
+  -- Проверка условия: Клиент не допускал просрочек по кредитам в Компании за последний год,
+  -- при этом допускается не более одной просрочки до 3-х дней включительно.
+  last_year_begin = dateadd(year, -1, current_date); -- начало последнего года от текущей даты
+  cnt = 0;
+  k_id = null;
+  for select ks_from_k_id
+      from kontstate
+      inner join knclient on kc_from_k_id = ks_from_k_id
+      where ks_ol_is_delete = 0 and
+            ks_state = 1 and
+            ks_date_end &gt;= :last_year_begin and -- активные кредиты за последний год
+            kc_amount_approved &gt; 0 and
+            kc_from_c_id = :c_id -- фильтр по клиенту
+      into k_id
+  do
+  begin
+    oks_delinq_day = 0;
+    for select oks_delinq_day
+        from oksummary
+        where oks_delinq_day &gt; 0 and
+              oks_delinq_date between :last_year_begin and current_date and -- просроченные платежи по графику за последний год
+              oks_from_k_id = :k_id -- фильтр по контракту клиента
+        into oks_delinq_day -- кол-во просроченных дней
+    do
+    begin
+      if (oks_delinq_day &gt; 3) then
+      begin
+        res_text = &#x27;У клиента за последний год есть просрочка более 3-х дней&#x27;;
+        suspend;
+        exit;
+      end
+      cnt = cnt + 1;
+    end
+  end
+
+  if (cnt &gt; 1) then
+  begin
+    res_text = &#x27;У клиента за последний год есть несколько просрочек до 3-х дней&#x27;;
+    suspend;
+    exit;
+  end
+
+  -- Проверка условия: На одного клиента не может быть более двух кредитов в Компании (1 Основной и 1 Параллельный)
+  cnt = 0;
+  select count(*)
+  from kontstate
+  inner join knclient on kc_from_k_id = ks_from_k_id
+  where ks_ol_is_delete = 0 and
+        ks_state = 1 and
+        current_date between ks_date_begin and ks_date_end and
+        kc_amount_approved &gt; 0 and
+        kc_from_c_id = :c_id
+  into cnt;
+
+  if (coalesce(cnt, 0) &gt;= 2) then
+  begin
+    res_text = &#x27;У клиента не может быть более двух кредитов в Компании&#x27;;
+    suspend;
+    exit;
+  end
+
+  if (cnt = 0) then
+    exit; -- у клиента нет активных кредитов
+
+  select ks_from_k_id
+  from kontstate
+  inner join knclient on kc_from_k_id = ks_from_k_id
+  where ks_ol_is_delete = 0 and
+        ks_state = 1 and
+        current_date between ks_date_begin and ks_date_end and
+        kc_amount_approved &gt; 0 and
+        kc_from_c_id = :c_id
+  into k_id; -- единственный активный на текущий день кредит у клиента
+
+  select oks_balance
+  from oksummary
+  where current_date between oks_date_begin and oks_date_end and
+        oks_from_k_id = :k_id
+  into active_balance; -- баланс активного на текущий день кредита
+
+  if (active_balance is null) then
+    active_balance = 0;
+
+  -- Проверка условия: Общий баланс активного кредита и получаемого параллельного кредита не должен превышать максимальную сумму согласно накопленным баллам
+  if ((active_balance + curr_amount) &gt; max_sum) then
+  begin
+    res_text = &#x27;Общий баланс активного кредита и получаемого параллельного кредита превышает максимальную сумму согласно накопленным баллам&#x27;;
+    suspend;
+    exit;
+  end
+
+  -- Проверка условия: По текущему кредиту полностью оплачено не менее 4 платежей.
+  -- Полностью оплаченными признаются платежи, внесенные не ранее чем за 10 дней до даты платежа по графику.
+  cnt = 0;
+  select count(*)
+  from schedule -- график погашений из деталей контракта
+  where sh_date &lt; current_date and
+        (sh_os + sh_perc) &gt; 0 and
+        sh_from_k_id = :k_id
+  into cnt;
+
+  if (coalesce(cnt, 0) &lt; 4) then
+  begin
+    res_text = &#x27;Клиент по текущему активному кредиту еще не произвел 4 погашения&#x27;;
+    suspend;
+    exit;
+  end
+
+  cnt = 0;
+  for select ok_sh_date,
+             sum_of_ok_os + sum_of_ok_perc
+      from kontract_full_oper_list_detail(:k_id, current_date) -- график погашений из отчета &quot;Детальное распределение погашений&quot;
+      where ok_sh_date &lt; current_date and
+            ok_type = 4 and
+            (sum_of_ok_os + sum_of_ok_perc) &lt; 0
+      into sh_date,
+           sh_sum
+  do
+  begin
+    ok_date = null;
+    ok_sum = 0;
+    select max(ok_ol_date),
+           sum(ok_os + ok_perc)
+    from operkred
+    where ok_ol_is_active = 1 and
+          ok_type = 4 and
+          ok_from_k_id = :k_id and
+          ok_sh_date = :sh_date
+    into ok_date, -- дата последнего фактического платежа по плановому погашению
+         ok_sum; -- сумма платежа (ОС + %)
+
+    if (sh_date - ok_date &lt;= 10 and -- платеж не ранее чем за 10 дней до даты платежа по графику
+        abs(sh_sum) + ok_sum &lt;= 5) then -- платеж полностью закрыл сумму погашения по графику (ok_sum отр. число, а недоплата до 5 манат включительно легитимно, RFCAZ-286)
+      cnt = cnt + 1; -- &quot;правильные&quot; платежи
+  end
+
+  if (cnt &lt; 4) then
+  begin
+    res_text = &#x27;Клиент по текущему активному кредиту еще не произвел 4 погашения&#x27;;
+    suspend;
+    exit;
+  end
+
+  -- Проверка условия: У клиента нет активной просрочки по текущему кредиту в Компании.
+  oks_is_delinq = 0;
+  select oks_is_delinq
+  from oksummary
+  where current_date between oks_date_begin and oks_date_end and
+        oks_from_k_id = :k_id
+  into oks_is_delinq;
+
+  if (oks_is_delinq = 1) then
+  begin
+    res_text = &#x27;У клиента есть активная просрочка по текущему кредиту в Компании&#x27;;
+    suspend;
+    exit;
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

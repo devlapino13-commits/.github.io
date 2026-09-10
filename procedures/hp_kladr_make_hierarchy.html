@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_KLADR_MAKE_HIERARCHY — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_KLADR_MAKE_HIERARCHY: 0 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_KLADR_MAKE_HIERARCHY</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_KLADR_MAKE_HIERARCHY
+RETURNS (
+    ERROR_TEXT D_STR_255)
+AS
+declare variable pki_id d_id;
+declare variable pki_code d_str_20;
+declare variable parent_code d_str_20;
+declare variable parent_id d_id;
+declare variable ksm_status d_smallint;
+begin
+--Структура кодового обозначения в блоке &quot;Код&quot;:
+--СС РРР ГГГ ППП АА, где
+--СС – код субъекта Российской Федерации (региона), коды регионов представлены в Приложении 2 к Описанию классификатора адресов Российской Федерации (КЛАДР);
+--РРР – код района;
+--ГГГ – код города;     
+--ППП – код населенного пункта,
+--АА – признак актуальности адресного объекта.
+--
+--Признак актуальности может принимать следующие значения:
+--            &quot;00” – актуальный объект (его наименование, подчиненность соответствуют состоянию на данный момент адресного пространства).
+--            &quot;01”-&quot;50” – объект был переименован, в данной записи приведено одно из прежних его наименований (актуальный адресный объект присутствует в базе данных с тем же кодом, но с признаком актуальности &quot;00”;
+--            &quot;51” –  объект был переподчинен или влился в состав другого объекта (актуальный адресный объект определяется по базе Altnames.dbf);
+--            &quot;52”-&quot;98” – резервные значения признака актуальности;
+--            ”99” – адресный объект не существует, т.е. нет соответствующего ему актуального адресного объекта.
+
+  error_text = &#x27;&#x27;;
+
+  select ksm_status
+  from kladr_sync_main
+  where ksm_status &lt; 4
+  into ksm_status;
+
+  if (ksm_status is null) then
+  begin
+    error_text = &#x27;Справочник не загружен&#x27;;
+    suspend;
+    exit;
+  end 
+
+  if (ksm_status &lt;&gt; 1) then
+  begin
+    error_text = &#x27;Иерархия уже построена&#x27;;
+    suspend;
+    exit;
+  end 
+
+  -- вставим верхний узел, т.к. индекс с pki_parent is null сразу после обновления не работает
+  insert into places_kladr_import (pki_name, pki_type, pki_code, pki_okatd)
+  values (&#x27;РФ&#x27;, &#x27;&#x27;, rpad(&#x27;&#x27;, 13, &#x27;0&#x27;), &#x27;&#x27;);
+
+  for select pki_id, left(pki_code, 11)
+  from places_kladr_import
+  into pki_id, pki_code
+  do
+  begin
+    if (pki_code = rpad(&#x27;&#x27;, 11, &#x27;0&#x27;)) then
+      continue;
+
+    parent_id = null;
+    parent_code =  case
+                     when right(pki_code, 9) = rpad(&#x27;&#x27;, 9, &#x27;0&#x27;) then rpad(&#x27;&#x27;, 11, &#x27;0&#x27;)  -- первый уровень
+                     when right(pki_code, 6) = rpad(&#x27;&#x27;, 6, &#x27;0&#x27;) then rpad(left(pki_code, 2), 11, &#x27;0&#x27;)
+                     when right(pki_code, 3) = rpad(&#x27;&#x27;, 3, &#x27;0&#x27;) then rpad(left(pki_code, 5), 11, &#x27;0&#x27;)
+                     else rpad(left(pki_code, 8), 11, &#x27;0&#x27;)
+                   end;
+
+    if (parent_code &lt;&gt; &#x27;&#x27;) then
+      select pki_id
+      from places_kladr_import
+      where pki_code starting with :parent_code
+      order by pki_code
+      rows 1
+      into parent_id;
+
+    update places_kladr_import
+    set pki_parent = :parent_id
+    where pki_id = :pki_id;
+  end
+
+  -- осталась запись, которую не приткнуть никуда
+  delete from places_kladr_import
+  where pki_parent is null
+    and pki_code not like &#x27;__000000000__&#x27;;
+
+  --- заполним временную таблицу для облегчения поиска
+  delete from kladr_sync_tmp;
+
+  insert into kladr_sync_tmp (kst_from_pl_id, kst_pl_name, kst_pl_type, kst_pl_type_index, kst_pl_code, kst_pl_parent)
+  with recursive t1 (id, pl_parent, name, pl_type, code) as (
+    select pl_id, parent, pl_name, plt_short_name, pl_code
+  from places, placetype
+  where pl_status = plt_id
+    and plt_can_select &lt; 2
+    and parent = 810000000001
+  union all
+  select pl_id, parent, pl_name, plt_short_name, pl_code
+  from t1, places, placetype
+  where parent = id
+    and pl_status = plt_id
+    and plt_can_select &lt; 2
+  )
+  select id, name, pl_type, replace(pl_type, &#x27;.&#x27;, &#x27;&#x27;), code, pl_parent
+  from t1;
+
+  update kladr_sync_main
+  set ksm_status = 2
+  where ksm_status = 1;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

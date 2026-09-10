@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_KONT_RESTRUCT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_KONT_RESTRUCT: 2 входных, 5 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_KONT_RESTRUCT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_KONTRACT_NO</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OK_NUMBER</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OK_SH_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OK_SH_OS</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OK_SH_PERC</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">INFO</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_KONT_RESTRUCT(
+    REP_KONTRACT_NO D_STR_20,
+    REP_DATE D_DATE)
+RETURNS (
+    OK_NUMBER D_INTEGER,
+    OK_SH_DATE D_DATE,
+    OK_SH_OS D_CURRENCY,
+    OK_SH_PERC D_CURRENCY,
+    INFO BLOB SUB_TYPE TEXT SEGMENT SIZE 80)
+AS
+declare variable k_id d_id;
+declare variable k_disb_date d_date;
+declare variable k_amount_approved d_currency;
+declare variable kf_id d_id;
+declare variable kal_new_kf_name d_str_100;
+declare variable pr_name d_str_code;
+declare variable reg_name d_str_code;
+declare variable clients_fio d_str_255;
+declare variable ol_id d_id;
+declare variable ol_datetime d_datetime;
+declare variable ol_memo d_str_long;
+declare variable ol_from_rd_id d_integer;
+declare variable rd_name d_str_255;
+declare variable un_name d_str_code;
+declare variable eol d_str_10;
+begin
+  -- процедура возвращает информацию о проведенной реструктуризации контракта (RFCKG-3136)
+
+  select k_id,
+         k_from_kf_id,
+         k_disb_date,
+         k_amount_approved,
+         pr_name
+  from kontract
+  inner join kontstate on ks_from_k_id = k_id
+  inner join product on pr_id = k_from_pr_id
+  where k_kontract_no = :rep_kontract_no and
+        current_date between ks_date_begin and ks_date_end and
+        ks_ol_is_delete = 0 and
+        ks_state = 1
+  into k_id,
+       kf_id,
+       k_disb_date,
+       k_amount_approved,
+       pr_name;
+
+  if (k_id is null) then
+    exit;
+
+  select kal.kal_new_kf_name,
+         left(reg.reg_code || &#x27; &#x27; || reg.reg_name, 50)
+  from knaktlist kal
+  inner join region reg on reg.reg_unicode = kal.kal_new_reg_id
+  where kal.kal_from_kf_id = :kf_id and
+        kal.kal_date_end = &#x27;31.12.9999&#x27; and
+        kal.is_delete = 0
+  into kal_new_kf_name,
+       reg_name;
+
+  select left(list(c_name_fio, &#x27;, &#x27;), 255)
+  from clients
+  inner join knclient on kc_from_c_id = c_id
+  where kc_from_k_id = :k_id and
+        kc_amount_approved &gt; 0
+  into clients_fio;
+
+  if (char_length(clients_fio) = 255) then
+    clients_fio = left(clients_fio, 252) || &#x27;...&#x27;;
+
+  select ok_from_ol_id
+  from operkred
+  where ok_ol_is_active = 1 and
+        ok_from_k_id = :k_id and -- фильтр по контракту
+        ok_ol_date = :rep_date and -- фильтр по дате
+        ok_type = 2 -- реструктуризация
+  order by ok_number desc rows 1
+  into ol_id;
+
+  select ol_datetime,
+         ol_memo,
+         ol_from_rd_id,
+         un_name
+  from operlist
+  inner join username on un_id = ol_user_id
+  where ol_id = :ol_id
+  into ol_datetime,
+       ol_memo,
+       ol_from_rd_id,
+       un_name;
+
+  select rd_name
+  from refdata
+  where rd_id = :ol_from_rd_id
+  into rd_name;
+
+  eol = ascii_char(13) || ascii_char(10) || ascii_char(13) || ascii_char(10);
+  info = blob_append(info, &#x27;Контракт: ID &#x27; || k_id || eol);
+  info = blob_append(info, &#x27;Cумма: &#x27; || f_numtostr(k_amount_approved, 0) || &#x27;, дата выдачи &#x27; || f_datetostr(k_disb_date) || eol);
+  info = blob_append(info, &#x27;Кредитный продукт: &#x27; || pr_name || eol);
+  info = blob_append(info, &#x27;Кредитная папка: &#x27; || kal_new_kf_name || &#x27;, офис &#x27; || reg_name || eol);
+  info = blob_append(info, &#x27;Клиенты: &#x27; || clients_fio || eol);
+  info = blob_append(info, &#x27;Операция: &#x27; || ol_memo || &#x27;, ID &#x27; || ol_id || &#x27;, дата &#x27; || left(ol_datetime, 16) || &#x27; (&#x27; || lower(un_name) || &#x27;)&#x27; || eol);
+
+  for select ok_number,
+             ok_sh_date,
+             ok_sh_os,
+             ok_sh_perc
+      from operkred
+      where ok_ol_is_active = 1 and
+            ok_from_k_id = :k_id and -- фильтр по контракту
+            ok_ol_date = :rep_date and -- фильтр по дате
+            ok_type = 2 -- реструктуризация
+      order by ok_number
+      into ok_number,
+           ok_sh_date,
+           ok_sh_os,
+           ok_sh_perc
+  do
+    suspend;
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

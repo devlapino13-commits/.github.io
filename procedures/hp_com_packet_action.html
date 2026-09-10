@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_COM_PACKET_ACTION — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_COM_PACKET_ACTION: 3 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_COM_PACKET_ACTION</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_com_action_add.html"><div class="to">HP_COM_ACTION_ADD</div></a><a class="ref-card" href="hp_com_memo_add.html"><div class="to">HP_COM_MEMO_ADD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_com_list_auto_approve.html"><div class="to">HP_COM_LIST_AUTO_APPROVE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CURR_CMP_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACTION_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CMP_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_IS_ERROR</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_COM_PACKET_ACTION(
+    CURR_CMP_ID D_INTEGER,
+    ACTION_KIND D_STR_CODE,
+    UN_ID D_ID)
+RETURNS (
+    CMP_ID D_INTEGER,
+    RES_IS_ERROR D_SMALLINT,
+    RES_TEXT D_STR_255)
+AS
+declare variable c_id d_id;
+declare variable signing_status d_integer;
+declare variable signing_count d_integer;
+declare variable cml_id d_id;
+declare variable tmp_text d_str_255;
+declare variable pdn_sent_status d_integer;
+declare variable pdn_signed_status d_integer;
+begin
+  res_is_error = 1;
+  res_text = &#x27;&#x27;;
+
+  if (coalesce(action_kind, &#x27;&#x27;) = &#x27;&#x27;) then
+    exception e_default &#x27;Action kind is empty&#x27;;
+
+  if (action_kind not in (&#x27;create&#x27;, &#x27;delete&#x27;, &#x27;close&#x27;)) then
+    exception e_default &#x27;Unknown action kind: &#x27; || action_kind;
+
+  cmp_id = curr_cmp_id;
+
+  if (action_kind = &#x27;create&#x27;) then
+  begin
+    insert into com_packet (cmp_date)
+    values (current_date)
+    returning cmp_id
+    into :cmp_id;
+  
+    select un_from_c_id
+    from username
+    where un_id = :un_id
+    into c_id;
+  
+    if (c_id is not null) then
+    begin
+      insert into com_staff (cms_from_cmp_id, cms_from_c_id, cms_status)
+      values (:cmp_id, :c_id, 2);
+    end
+
+    res_is_error = 0;
+    res_text = &#x27;Новое заседание успешно создано&#x27;;
+  end
+  
+  if (action_kind = &#x27;delete&#x27;) then
+  begin
+    if (exists(select * from com_action
+               where cma_from_cmp_id = :curr_cmp_id)) then
+      res_text = &#x27;Имеются ссылки на удаляемое заседание. Удаление отменяется.&#x27;;
+
+    if (res_text = &#x27;&#x27;) then
+    begin
+      delete from com_packet
+      where cmp_id = :curr_cmp_id;
+
+      res_is_error = 0;
+      res_text = &#x27;Заседание успешно удалено&#x27;;
+    end
+  end
+
+  if (action_kind = &#x27;close&#x27;) then
+  begin
+    signing_status = f_enum(&#x27;com_action_status&#x27;, &#x27;signing&#x27;, &#x27;id&#x27;);
+    pdn_sent_status = f_enum(&#x27;com_action_status&#x27;, &#x27;send_edoc_pdn&#x27;, &#x27;id&#x27;);
+    pdn_signed_status = f_enum(&#x27;com_action_status&#x27;, &#x27;signed_edoc_pdn&#x27;, &#x27;id&#x27;);
+
+    signing_count = 0;
+    select count(*)
+    from com_list
+    where cml_last_cmp_id = :curr_cmp_id and
+          cml_last_status in (:signing_status, :pdn_sent_status, :pdn_signed_status) and
+          cml_date &gt;= current_date
+    into signing_count;
+
+    if (signing_count &gt; 0) then
+    begin
+      res_is_error = 1;
+      res_text = f_format(&#x27;Имеются запросы в ожидании подписания: %1&#x27;, signing_count);
+    end else
+    begin
+      res_is_error = 0;
+      signing_count = 0;
+
+      for select cml_id
+      from com_list
+      where cml_last_cmp_id = :curr_cmp_id and
+            cml_last_status in (:signing_status, :pdn_sent_status, :pdn_signed_status) and
+            cml_date &lt; current_date
+      into cml_id
+      do
+      begin
+        select res_text, res_is_error
+        from hp_com_action_add(:cml_id, :curr_cmp_id, &#x27;cancel_edoc&#x27;, :un_id)
+        into :res_text, :res_is_error;
+
+        if (res_is_error = 0) then
+        begin
+          select res_text, res_is_error
+          from hp_com_action_add(:cml_id, :curr_cmp_id, &#x27;cancelled&#x27;, :un_id)
+          into :res_text, :res_is_error;
+        end
+
+        if (res_is_error = 0) then
+        begin
+          signing_count = signing_count + 1;
+          select res_text
+          from hp_com_memo_add(:cml_id, &#x27;Истек срок подписания&#x27;, 1, :un_id)
+          into :tmp_text;
+        end
+
+        if (res_is_error = 1) then
+          Break;
+      end
+
+      if (res_is_error = 0) then
+      begin
+        update com_packet
+        set cmp_status = 1
+        where cmp_id = :curr_cmp_id;
+
+        if (signing_count = 0)
+        then res_text = &#x27;Заседание успешно завершено&#x27;;
+        else res_text = f_format(&#x27;Заседание успешно завершено. Аннулированы из-за истечения срока подписания: %1&#x27;, signing_count);
+      end
+    end
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

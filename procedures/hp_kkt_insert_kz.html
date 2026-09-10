@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_KKT_INSERT_KZ — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_KKT_INSERT_KZ: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_KKT_INSERT_KZ</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_KKT_INSERT_KZ(
+    OL_ID D_ID,
+    K_ID D_ID)
+AS
+declare variable kkm_id d_id;
+declare variable kkm_id_new d_id;
+declare variable kki_position d_integer;
+declare variable os d_currency;
+declare variable perc d_currency;
+declare variable fine d_currency;
+declare variable amount d_currency;
+declare variable kkm_operation d_smallint;
+declare variable kkt_kind d_smallint;
+declare variable kki_type d_smallint;
+declare variable ol_parent_id d_id;
+declare variable ol_is_delete d_bool;
+begin
+  if (f_get_db_id() &lt;&gt; 39801) then
+    exit;
+
+  kkt_kind = f_enum(&#x27;kkt_kind&#x27;, &#x27;WebKassa&#x27;, &#x27;id&#x27;);
+
+  with t1 as(
+    select ok_os, ok_perc, ok_fine
+    from operkred
+    where ok_from_ol_id = :ol_id
+      and ok_from_k_id = :k_id
+      and ok_type in (8,4,9)
+    union
+    select oko_os, oko_perc, oko_other
+    from operkroff
+    where oko_from_ol_id = :ol_id
+      and oko_from_k_id = :k_id
+      and oko_type = 4
+  )
+  select -sum(ok_os), -sum(ok_perc), -sum(ok_fine)
+  from t1
+  into os, perc, fine;
+
+  select coalesce(ol_parent_id, ol_id), is_delete
+  from operlist
+  where ol_id = :ol_id
+  into ol_parent_id, ol_is_delete;
+
+  for   select f_enum(&#x27;cheque_position_type&#x27;, &#x27;os&#x27;,   &#x27;id&#x27;), :os   from rdb$database
+  union select f_enum(&#x27;cheque_position_type&#x27;, &#x27;perc&#x27;, &#x27;id&#x27;), :perc from rdb$database
+  union select f_enum(&#x27;cheque_position_type&#x27;, &#x27;fine&#x27;, &#x27;id&#x27;), :fine from rdb$database
+  into kki_type, amount
+  do
+  begin
+    if (amount = 0) then
+      continue;
+
+    kkm_id = null;
+    kki_position = null;
+
+    -- найдем чек и позицию, если уже был начат
+    select kkm_id, kkm_operation, kki_position
+    from kkt_main, kkt_items
+    where kkm_from_ol_id = :ol_parent_id
+      and kkm_from_k_id = :k_id
+      and kkm_kkt_kind = :kkt_kind
+      and kkm_is_return = :ol_is_delete
+      and kkm_status = 0
+      and kki_from_kkm_id = kkm_id
+      and kki_type = :kki_type
+    into kkm_id, kkm_operation, kki_position;
+
+    if (kkm_id is null) then
+    begin
+      kkm_operation = 1; -- Приход/Продажа
+  
+      if (amount &lt; 0) then
+      begin
+        kkm_operation = 2; -- Расход/Покупка
+        amount = -amount;
+      end 
+
+      select kkm_id
+      from kkt_main kkm
+      where kkm_from_ol_id = :ol_parent_id
+        and kkm_from_k_id = :k_id
+        and kkm_kkt_kind = :kkt_kind
+        and kkm_operation = :kkm_operation
+        and kkm_is_return = :ol_is_delete
+        and kkm_status = 0
+      into kkm_id;
+  
+      if (kkm_id is null) then
+        insert into kkt_main (kkm_from_ol_id, kkm_from_k_id, kkm_kkt_kind, kkm_is_return, kkm_ol_is_delete, kkm_operation, kkm_uuid)
+        values (:ol_parent_id, :k_id, :kkt_kind, :ol_is_delete, :ol_is_delete, :kkm_operation, gen_uuid())
+        returning kkm_id
+        into :kkm_id;
+
+      insert into kkt_items (kki_from_kkm_id, kki_type, kki_amount)
+      values (:kkm_id, :kki_type, :amount);
+    end
+    else
+    begin
+      if (kkm_operation = 2) then
+        amount = -amount;
+
+      if (amount &gt; 0) then -- всё ок, просто апдейтим
+        update kkt_items
+        set kki_amount = :amount
+        where kki_from_kkm_id = :kkm_id
+          and kki_position = :kki_position;
+      else
+      begin
+        if (amount = 0) then -- если обнулилась, удалим строку
+          delete from kkt_items
+          where kki_from_kkm_id = :kkm_id
+            and kki_position = :kki_position;
+        else
+        begin  -- а вот если сумма стала отрицательной, надо перенести в обратный чек
+          amount = -amount;
+          kkm_operation = iif(kkm_operation = 1, 2, 1);
+  
+          select kkm_id
+          from kkt_main kkm
+          where kkm_from_ol_id = :ol_parent_id
+            and kkm_from_k_id = :k_id
+            and kkm_kkt_kind = :kkt_kind
+            and kkm_operation = :kkm_operation
+            and kkm_is_return = :ol_is_delete
+            and kkm_status = 0
+          into kkm_id_new;
+      
+          if (kkm_id_new is null) then
+            insert into kkt_main (kkm_from_ol_id, kkm_from_k_id, kkm_kkt_kind, kkm_is_return, kkm_ol_is_delete, kkm_operation, kkm_uuid)
+            values (:ol_parent_id, :k_id, :kkt_kind, :ol_is_delete, :ol_is_delete, :kkm_operation, gen_uuid())
+            returning kkm_id
+            into :kkm_id_new;
+  
+          insert into kkt_items (kki_from_kkm_id, kki_type, kki_amount)
+          values (:kkm_id_new, :kki_type, :amount);
+  
+          delete from kkt_items
+          where kki_from_kkm_id = :kkm_id
+            and kki_position = :kki_position;
+        end
+        -- если удалились все позиции из чека, то удалим чек
+        if (not exists(select 1 from kkt_items where kki_from_kkm_id = :kkm_id)) then
+          delete from kkt_main
+          where kkm_id = :kkm_id;
+      end 
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

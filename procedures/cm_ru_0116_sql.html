@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0116_SQL — процедура — схема БД</title>
+<meta name="description" content="«Семья плюс» остается только для повторных групп, чей состав не изменился, но мог уменьшится. Пункт 2.1 Параметров*">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0116_SQL</code></h1>
+<p class="desc">«Семья плюс» остается только для повторных групп, чей состав не изменился, но мог уменьшится. Пункт 2.1 Параметров*</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0116_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare kc_amount curr_type;
+declare kf_disb_date d_date;
+declare kf_client_pass_no varchar(30);
+declare variable KC_FROM_C_ID ID_TYPE;
+declare variable K_FROM_KF_ID ID_TYPE;
+declare variable K_ID_OLD ID_TYPE;
+declare variable K_CIRCLE integer;
+begin
+  /*«Семья плюс» остается только для повторных групп, чей состав не изменился, но мог уменьшится.  Пункт 2.1 Параметров*/
+  select K_DISB_DATE, K_FROM_KF_ID, K_CIRCLE
+  from KONTRACT, PRODUCT
+  where K_ID = :K_ID and
+        K_FROM_PR_ID = PR_ID and
+        PR_CODE containing &#x27;.FAMILY PLUS.&#x27;
+  into KF_DISB_DATE, K_FROM_KF_ID, K_CIRCLE;
+  if (K_FROM_KF_ID is null) then
+    exit;
+  select K_ID
+  from KONTRACT K, PRODUCT PR, KONTSTATE KS
+  where K_FROM_KF_ID = :K_FROM_KF_ID and
+        K_FROM_PR_ID = PR_ID and
+        PR_CODE containing &#x27;.FAMILY PLUS.&#x27; and
+        PR_CODE not containing &#x27;.PAR.&#x27; and
+        K_ID = KS_FROM_K_ID and
+        KS_OL_IS_DELETE = 0 and
+        KS_STATE = 1 and
+        KS_DATE_BEGIN &lt; :KF_DISB_DATE  
+        order by KS_DATE_BEGIN desc rows 1
+  into K_ID_OLD;
+  if (K_CIRCLE &lt; 2 or K_ID_OLD is null) then
+  begin
+    res_error_is_critical = 1;
+    res_error_text = &#x27;Группа ранее не получала займ по данному продукту!&#x27;;
+    suspend;
+    exit;
+  end
+  for select KC_FROM_C_ID, KC_AMOUNT_APPROVED
+      from KNCLIENT
+      where KC_FROM_K_ID = :K_ID and
+            KC_AMOUNT_APPROVED &gt; 0
+      into KC_FROM_C_ID, KC_AMOUNT
+  do
+  begin
+    if (not exists(select *
+                   from KNCLIENT KC
+                   where KC_FROM_K_ID = :K_ID_OLD and
+                         KC_FROM_C_ID = :KC_FROM_C_ID and
+                         KC_AMOUNT_APPROVED &gt; 0)) then
+    begin
+      select C_NAME_FIO, C_PASS_NO
+      from CLIENTS
+      where C_ID = :KC_FROM_C_ID
+      into res_info_text, KF_CLIENT_PASS_NO;
+      res_error_is_critical = 1;
+      res_error_text = &#x27;Клиент ранее не получал займ в составе этой группы!&#x27;;
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_PSK_DISB_NEW — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_PSK_DISB_NEW: 2 входных, 5 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_PSK_DISB_NEW</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_psk_disb_temp_new.html"><div class="to">AAREP_PSK_DISB_TEMP_NEW</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">NUMBER_ITEM</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CATEGORY_LOANS</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KC_AMOUNT_APPROVED</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PERCENT_EFFECT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KOL_KONTRACT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_PSK_DISB_NEW(
+    REP_DATE_BEGIN DATE,
+    REP_DATE_END DATE)
+RETURNS (
+    NUMBER_ITEM VARCHAR(20),
+    CATEGORY_LOANS VARCHAR(255),
+    KC_AMOUNT_APPROVED CURR_TYPE,
+    PERCENT_EFFECT CURR_TYPE,
+    KOL_KONTRACT INTEGER)
+AS
+declare variable ITEM_1 integer;
+declare variable ITEM_2 integer;
+declare variable ITEM_3 integer;
+declare variable SUM_PERCENT_EFFECT decimal(18,4);
+begin
+    -- RFCRU-3364
+  for select item_1, item_2, item_3, sum(kc_amount_approved),
+             sum(cast(kc_amount_approved as double precision) * k_percent_effect), sum(is_kontract)
+      from aarep_psk_disb_temp_new(:rep_date_begin, :rep_date_end)
+      group by item_1, item_2, item_3
+      into item_1, item_2, item_3, kc_amount_approved, sum_percent_effect, kol_kontract
+  do
+  begin
+
+    percent_effect = cast(sum_percent_effect as double precision) / kc_amount_approved;
+
+    number_item = item_1 || iif(item_2 = 0, &#x27;&#x27;, &#x27;.&#x27; || item_2) || iif(item_3 = 0, &#x27;&#x27;, &#x27;.&#x27; || item_3);
+    category_loans = case number_item
+                       when &#x27;1&#x27; then &#x27;Потребительские займы с обеспечением в виде залога (кроме POS-займов и ипотеки)&#x27;
+                       when &#x27;2&#x27; then &#x27;Потребительские займы с иным обеспечением (кроме POS-займов и ипотеки)&#x27;
+                       when &#x27;2.1&#x27; then &#x27;до 365 дней включительно&#x27;
+                       when &#x27;2.2&#x27; then &#x27;свыше 365 дней&#x27;
+                       when &#x27;3&#x27; then &#x27;Потребительские займы без обеспечения (кроме POS-займов)&#x27;
+                       when &#x27;3.1&#x27; then &#x27;до 30 дней включительно, в том числе:&#x27;
+                       when &#x27;3.1.1&#x27; then &#x27;до 30 тыс. руб. включительно&#x27;
+                       when &#x27;3.1.2&#x27; then &#x27;свыше 30 тыс. руб.&#x27;
+                       when &#x27;3.2&#x27; then &#x27;от 31 до 60 дней включительно, в том числе:&#x27;
+                       when &#x27;3.2.1&#x27; then &#x27;до 30 тыс. руб. включительно&#x27;
+                       when &#x27;3.2.2&#x27; then &#x27;свыше 30 тыс. руб.&#x27;
+                       when &#x27;3.3&#x27; then &#x27;от 61 до 180 дней включительно, в том числе:&#x27;
+                       when &#x27;3.3.1&#x27; then &#x27;до 30 тыс. руб. включительно&#x27;
+                       when &#x27;3.3.2&#x27; then &#x27;свыше 30 тыс. руб. до 100 тыс. руб. включительно&#x27;
+                       when &#x27;3.3.3&#x27; then &#x27;свыше 100 тыс. руб.&#x27;
+                       when &#x27;3.4&#x27; then &#x27;от 181 дня до 365 дней включительно, в том числе:&#x27;
+                       when &#x27;3.4.1&#x27; then &#x27;до 100 тыс. руб. включительно&#x27;
+                       when &#x27;3.4.2&#x27; then &#x27;свыше 100 тысяч рублей&#x27;
+
+                       when &#x27;3.5&#x27; then &#x27;свыше 365 дней, в том числе:&#x27;
+                       when &#x27;3.5.1&#x27; then &#x27;до 100 тыс. руб. включительно&#x27;
+                       when &#x27;3.5.2&#x27; then &#x27;свыше 100 тысяч рублей&#x27;
+
+                       when &#x27;4&#x27; then &#x27;POS-займы&#x27;
+                       when &#x27;4.1&#x27; then &#x27;до 180 дней включительно, в том числе:&#x27;
+                       when &#x27;4.1.1&#x27; then &#x27;до 30 тыс. руб. включительно&#x27;
+                       when &#x27;4.1.2&#x27; then &#x27;свыше 30 тыс. руб. &#x27;
+                       when &#x27;4.2&#x27; then &#x27;от 181 до 305 дней включительно, в том числе:&#x27;
+
+                       when &#x27;4.2.1&#x27; then &#x27;до 30 тысяч рублей включительно&#x27;
+                       when &#x27;4.2.2&#x27; then &#x27;свыше 30 тысяч рублей&#x27;
+
+                       when &#x27;4.3&#x27; then &#x27;от 306 до 365 дней включительно, в том числе:&#x27;
+                       when &#x27;4.3.1&#x27; then &#x27;до 30 тысяч рублей включительно&#x27;
+                       when &#x27;4.3.2&#x27; then &#x27;свыше 30 тысяч рублей&#x27;
+
+                       when &#x27;4.4&#x27; then &#x27;свыше 365 дней&#x27;
+
+                       when &#x27;5&#x27; then &#x27;Потребительские займы, обязательства по которым обеспечены ипотекой&#x27;
+
+                       when &#x27;6&#x27; then &#x27;Потребительские займы, полная стоимость потребительского кредита (займа) по которым равна нулю, в том числе:&#x27;
+                       when &#x27;6.1&#x27; then &#x27;потребительские займы без обеспечения (кроме POS-займов)&#x27;
+                       when &#x27;6.2&#x27; then &#x27;POS-займы &#x27;
+
+                     end;
+    number_item = &#x27;2.&#x27; || number_item;
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_KONT_RESCHEDULE_MOVE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_KONT_RESCHEDULE_MOVE: 4 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_KONT_RESCHEDULE_MOVE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_calc_perc_one_saldo.html"><div class="to">AAREP_CALC_PERC_ONE_SALDO</div></a><a class="ref-card" href="aarep_make_zad_list.html"><div class="to">AAREP_MAKE_ZAD_LIST</div></a><a class="ref-card" href="hp_effect_rate_common.html"><div class="to">HP_EFFECT_RATE_COMMON</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_reschedule_kz.html"><div class="to">HP_DO_RESCHEDULE_KZ</div></a><a class="ref-card" href="hp_do_reschedule_kz_dynamic.html"><div class="to">HP_DO_RESCHEDULE_KZ_DYNAMIC</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OL_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KV_PERIOD</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LAST_SH_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_IS_ERROR</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_KONT_RESCHEDULE_MOVE(
+    K_ID D_ID,
+    OL_DATE D_DATE,
+    KV_PERIOD D_INTEGER,
+    UN_ID D_ID = null)
+RETURNS (
+    OL_ID D_ID,
+    LAST_SH_DATE D_DATE,
+    RES_IS_ERROR D_BOOL,
+    RES_TEXT D_STR_255)
+AS
+declare variable REG_ID D_INTEGER;
+declare variable OL_MEMO D_STR_LONG;
+declare variable PERC_SALDO D_CURRENCY; /* Накопленный %% на дату каникул */
+declare variable OKS_BALANCE D_CURRENCY;
+declare variable PERC_BALANCE D_CURRENCY;
+declare variable K_REPAY_DAY D_INTEGER;
+declare variable NEW_DATE D_DATE; /* Дата начала старого графика после каникул */
+declare variable SH_DATE D_DATE;
+declare variable SH_ID D_INTEGER;
+declare variable SH_OS D_CURRENCY;
+declare variable SH_PERC D_CURRENCY;
+declare variable NEW_SH_DATE D_DATE;
+declare variable OK_NUMBER D_INTEGER;
+declare variable KD_PERCENT D_PERCENT;
+declare variable K_PERCENT_FOR_DAYS D_INTEGER;
+declare variable KV_NEW_AMOUNT D_CURRENCY;
+declare variable ZAD_FINE D_CURRENCY;
+declare variable DELINQ_COUNT D_INTEGER;
+declare variable DATE_BEGIN D_DATE;
+declare variable K_STOP_PERC D_DATE;
+declare variable REPAY_COUNT D_INTEGER;
+declare variable ANNU_NEW_AMOUNT D_CURRENCY;
+declare variable KD_PERCENT_PER_DAY D_PERCENT;
+declare variable KD_PERCENT_EFFECT D_PERCENT;
+declare variable KD_PERCENT_EFFECT_FIFD D_PERCENT;
+declare variable EFFECT_RATE D_PERCENT;
+declare variable KD_FINE_PERCENT D_PERCENT;
+begin
+  res_is_error = 1;
+  res_text = &#x27;&#x27;;
+
+  -- Договор для теста: 0103-1343211-01
+  if (k_id is null) then
+    exception e_message &#x27;Договор не указан&#x27;;
+
+  ol_memo = &#x27;&#x27;;
+
+  if (un_id is null) then
+    un_id = uxf$user();
+
+  select k_kontract_no || &#x27; от &#x27; || f_datetostr(k_disb_date),
+         k_percent_for_days, k_stop_perc, iif(k_repay_day &gt; 0, k_repay_day, extract(day from k_disb_date))
+  from kontract
+  where k_id = :k_id
+  into ol_memo, k_percent_for_days, k_stop_perc, k_repay_day;
+
+  if (row_count = 0) then
+    exception e_default &#x27;Договор не найден&#x27;;
+
+  if (k_stop_perc is null) then
+    exception e_default &#x27;Данная реструктуризация действует только на договора с приостановленными процентами&#x27;;
+
+  date_begin = ol_date;
+
+  if (exists(select * from operkred
+  where ok_from_k_id = :k_id and
+        ok_ol_is_active = 1 and
+        ok_ol_date &gt; :date_begin)) then
+  begin
+    res_text = &#x27;По договору имеются записи более поздней датой&#x27;;
+    suspend;
+    exit;
+  end
+
+  oks_balance = 0;
+
+  select oks_region_id, oks_balance
+  from oksummary
+  where oks_from_k_id = :k_id and
+        oks_date_begin &lt;= :date_begin and
+        oks_close_state = 0
+  order by oks_from_k_id desc, oks_date_begin desc
+  rows 1
+  into reg_id, oks_balance;
+
+  if (row_count = 0) then
+  begin
+    res_text = &#x27;Не найден активный договор&#x27;;
+    suspend;
+    exit;
+  end
+
+  perc_saldo = 0;
+
+  select result_perc_end
+  from aarep_calc_perc_one_saldo(:k_id, :date_begin, :date_begin)
+  into :perc_saldo;
+
+  if (perc_saldo is null) then
+    perc_saldo = 0;
+
+  new_date = null;
+  perc_balance = 0;
+
+  delete from temp_schedule
+  where 1 = 1;
+
+  insert into temp_schedule (sh_date, sh_id, sh_os, sh_perc, sh_kommis)
+  select sh_date, sh_id, zad_os, zad_perc, sh_calc_fine
+  from aarep_make_zad_list(:k_id, :date_begin, 0, 0)
+  where sh_date is not null and
+        (zad_os &lt;&gt; 0 or zad_perc &lt;&gt; 0 or sh_calc_fine &lt;&gt; 0)
+  order by sh_date;
+
+  kv_new_amount = 0; -- Сумма ежемесячного платежа (аннуитет)
+  with zad_all
+  as (select sh_os + sh_perc as payment, sh_id
+      from schedule
+      where sh_from_k_id = :k_id and
+            sh_id &gt; 0)
+  select round(avg(payment), 0)
+  from zad_all
+  where sh_id &lt; (select max(sh_id)
+                 from zad_all)
+  into kv_new_amount;
+
+  if (coalesce(kv_new_amount, 0) = 0) then
+    exception e_default &#x27;Сумма ежемесячного платежа не найдена&#x27;;
+
+  select count(*)
+  from temp_schedule
+  where sh_date &lt; :date_begin and
+        (sh_os &lt;&gt; 0 or sh_perc &lt;&gt; 0)
+  into delinq_count;
+
+  select count(*)
+  from temp_schedule
+  where (sh_os &lt;&gt; 0 or sh_perc &lt;&gt; 0)
+  into repay_count;
+
+  annu_new_amount = round(cast((oks_balance + perc_saldo) as double precision) / repay_count, 0);
+  if (kv_new_amount &lt; annu_new_amount) then
+    exception e_default &#x27;Новая сумма ежемесячного платежа больше чем текущий&#x27;;
+
+  kv_new_amount = annu_new_amount;
+
+  zad_fine = 0;
+
+  if (delinq_count is null) then
+    delinq_count = 0;
+
+  perc_balance = oks_balance;   -- База для начисления процентов
+  new_date = null;
+
+  ol_memo = &#x27;Реструктуризация по займу &#x27; || ol_memo;
+
+  insert into operlist (ol_from_reg_id, ol_oper_type, ol_date, ol_doc_kind, ol_memo, ol_user_id, ol_oper_subtype)
+  values (:reg_id, 1, :ol_date, 9, :ol_memo, :un_id, 14)
+  returning (ol_id)
+  into ol_id;
+
+  if (k_percent_for_days &lt; 360) then
+    kd_percent = round(cast(kd_percent as double precision) / 365 * k_percent_for_days, 7);
+
+  new_date = null;
+
+  for select sh_date, sh_id, sh_os, sh_perc, sh_kommis
+  from temp_schedule
+  order by sh_date
+  into sh_date, sh_id, sh_os, sh_perc, zad_fine
+  do
+  begin
+    -- Обнуление платежей
+    insert into operkred
+    (ok_from_ol_id, ok_number, ok_from_k_id, ok_sh_id, ok_sh_date, ok_type, ok_os, ok_perc, ok_fine,
+     ok_pay_type, ok_kommis, ok_sh_os, ok_sh_perc, ok_kommis_adv, ok_tax, ok_ol_date, ok_ol_reg_id, ok_ol_is_active)
+    values (:ol_id, -1, :k_id, :sh_id, :sh_date, 2, 0, 0, 0,
+            3, 0, -:sh_os, -:sh_perc, 0, 0, :ol_date, :reg_id, 1);
+
+    if (sh_date &lt; date_begin and zad_fine &gt; 0) then
+    begin
+      -- Списание пеней
+      insert into operkred
+      (ok_from_ol_id, ok_number, ok_from_k_id, ok_sh_id, ok_sh_date, ok_type, ok_os, ok_perc, ok_fine,
+       ok_pay_type, ok_kommis, ok_sh_os, ok_sh_perc, ok_kommis_adv, ok_tax, ok_ol_date, ok_ol_reg_id, ok_ol_is_active)
+      values (:ol_id, -1, :k_id, :sh_id, :sh_date, 5, 0, 0, -:zad_fine,
+              3, 0, 0, 0, 0, 0, :ol_date, :reg_id, 1);
+    end
+
+    if (new_date is null) then
+    begin
+      new_date = sh_date;
+      if (extract(day from new_date) &lt;&gt; k_repay_day) then
+        new_date = k_repay_day || f_datetostr(new_date, &#x27;.mm.yyyy&#x27;);
+
+      new_date = dateadd(month, kv_period + delinq_count, new_date);
+    end else
+      new_date = dateadd(month, 1, new_date);
+
+    new_sh_date = new_date;
+    new_sh_date = f_date_work_day(new_sh_date);
+
+    if (perc_saldo &gt; kv_new_amount) then
+    begin
+      sh_perc = kv_new_amount;
+      perc_saldo = perc_saldo - sh_perc;
+    end else
+    begin
+      sh_perc = perc_saldo;
+      perc_saldo = 0;
+    end
+
+    sh_os = 0;
+    if (kv_new_amount &gt; sh_perc) then
+      sh_os = kv_new_amount - sh_perc;
+
+    if (sh_os &gt; perc_balance) then
+      sh_os = perc_balance;
+
+    if (abs(perc_balance - sh_os) &lt;= 10) then
+      sh_os = perc_balance;
+
+    perc_balance = perc_balance - sh_os;
+
+    if (sh_os &gt; 0 or sh_perc &gt; 0) then
+    begin
+      last_sh_date = new_date;
+
+      insert into operkred
+      (ok_from_ol_id, ok_number, ok_from_k_id, ok_sh_id, ok_sh_date, ok_type, ok_os, ok_perc, ok_fine,
+       ok_pay_type, ok_kommis, ok_sh_os, ok_sh_perc, ok_kommis_adv, ok_tax, ok_ol_date, ok_ol_reg_id, ok_ol_is_active)
+      values (:ol_id, -1, :k_id, :sh_id, :new_sh_date, 2, 0, 0, 0,
+              3, 0, :sh_os, :sh_perc, 0, 0, :ol_date, :reg_id, 1)
+      returning (ok_number)
+      into ok_number;
+    end
+  end
+
+  if (last_sh_date is null) then
+    exception e_message &#x27;Нет платежей&#x27;;
+
+  insert into operrest (or_from_ol_id, or_from_k_id, or_kind, or_ol_date, or_ol_is_active, or_from_rd_id, or_from_reg_id, or_date_prot)
+  values (:ol_id, :k_id, 4, :ol_date, 1, 0, :reg_id, :ol_date);
+
+  if (perc_balance &gt; 0) then
+  begin
+    update operkred
+    set ok_sh_os = ok_sh_os + :perc_balance
+    where ok_from_ol_id = :ol_id and
+          ok_number = :ok_number;
+
+    perc_balance = 0;
+  end
+
+  select kd_percent, kd_percent_per_day, kd_percent_effect, kd_percent_effect_fifd, kd_fine_percent
+  from kontdata
+  where kd_from_k_id = :k_id
+        and kd_ol_is_delete = 0
+         and :ol_date between kd_ol_date and kd_date_end
+  into kd_percent, kd_percent_per_day, kd_percent_effect, kd_percent_effect_fifd, kd_fine_percent;
+
+
+  select effect_rate
+  from hp_effect_rate_common(:k_id, :ol_id, 1)
+  into :effect_rate;
+
+  insert into kontdata (kd_from_k_id, kd_from_ol_id, kd_ol_date, kd_ol_is_delete,
+                                kd_percent, kd_percent_per_day, kd_percent_effect, kd_percent_effect_fifd, kd_fine_percent)
+  values (:k_id, :ol_id, :ol_date, 0,
+                  :kd_percent, :kd_percent_per_day, :kd_percent_effect, :effect_rate, :kd_fine_percent);
+
+  res_is_error = 0;
+  res_text = &#x27;Реструктуризация успешно оформлена&#x27;;
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_SEND_FREELANCER_AKT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_SEND_FREELANCER_AKT: 6 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_SEND_FREELANCER_AKT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_edoc_insert.html"><div class="to">HP_EDOC_INSERT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SD_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SSH_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SIGNER_C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SSHE_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EDL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_SEND_FREELANCER_AKT(
+    C_ID D_ID,
+    UN_ID D_ID,
+    SD_ID D_INTEGER,
+    SSH_ID D_INTEGER,
+    SIGNER_C_ID D_ID,
+    SSHE_ID D_INTEGER)
+RETURNS (
+    EDL_ID D_ID,
+    RES_TEXT D_STR_255)
+AS
+declare variable edc_id d_integer;
+declare variable object_kind d_integer;
+declare variable signed_date d_date;
+declare variable category d_str_255;
+declare variable edoc_kind d_str_100;
+begin
+  res_text = &#x27;&#x27;;
+  if (signer_c_id = 0 or signer_c_id is null) then
+  begin
+    res_text = &#x27;Необходимо выбрать подписанта.&#x27;;
+    suspend;
+    exit;
+  end
+
+  if (sshe_id &lt;&gt; -1 and f_edoc_status(&#x27;freelancer_akt&#x27;, :sshe_id, current_date) = &#x27;signed&#x27;) then
+  begin
+    res_text = &#x27;Акт уже подписан.&#x27;;
+    suspend;
+    exit;
+  end
+
+  edc_id = f_edoc_kind(&#x27;asp.agreement&#x27;, &#x27;id&#x27;);
+
+  select edc_object_kind
+  from edoc_cfg
+  where edc_id = :edc_id
+  into :object_kind;
+
+  select cast(eds.eds_status_datetime as date)
+  from edoc_list edl
+  inner join edoc_sign eds on eds.eds_from_edl_id = edl.edl_id and
+        eds.eds_status = 1
+  where edl.edl_object_kind = :object_kind and
+        edl.edl_object_id = :c_id and
+        edl.edl_from_edc_id = :edc_id and
+        current_date between edl.edl_blank_date and coalesce(edl.edl_date_end, current_date) and
+        edl.edl_status = 1
+  order by edl.edl_status desc, edl.edl_id desc
+  rows 1
+  into :signed_date;
+
+  select sd.sd_category
+  from servicedog sd
+  where sd.sd_id = :sd_id
+  into :category;
+
+  if (:category containing &#x27;стажер&#x27;) then
+    edoc_kind = &#x27;probationer_kontract&#x27;;
+  else
+    edoc_kind = &#x27;freelancer_kontract&#x27;;
+
+  if (edoc_kind = &#x27;freelancer_kontract&#x27; and (:signed_date &lt; &#x27;11.01.2022&#x27; or :signed_date is null)) then
+  begin
+  /*
+    11.01.2022 был создан новый договор ЭЦП, единый для клиентов, внештатников и продавцов.
+    Если договор был подписан до этой даты, то необходимо переподписать.
+    */
+    res_text = &#x27;Необходимо подписать ЭЦП последней редакции.&#x27;;
+    suspend;
+    exit;
+  end
+  if (edoc_kind = &#x27;probationer_kontract&#x27; and (:signed_date &lt; &#x27;20.05.2022&#x27; or :signed_date is null)) then
+  begin
+  /*
+    20.05.2022 был создан новый договор ЭЦП, единый для клиентов, внештатников и продавцов.
+    Если договор был подписан до этой даты, то необходимо переподписать.
+    */
+    res_text = &#x27;Необходимо подписать ЭЦП последней редакции.&#x27;;
+    suspend;
+    exit;
+  end
+
+  if (f_edoc_status(:edoc_kind, :sd_id, current_date) &lt;&gt; &#x27;signed&#x27;) then
+  begin
+    res_text = &#x27;Необходимо подписать договор на оказание услуг.&#x27;;
+    suspend;
+    exit;
+  end
+  if (:sshe_id = -1) then
+    insert into servicesh_edoc (sshe_from_sd_id, sshe_from_ssh_id)
+    values (:sd_id, :ssh_id)
+    returning sshe_id
+    into sshe_id;
+
+  if (sshe_id is null or sshe_id &lt; 0) then
+  begin
+    res_text = &#x27;Произошла непредвиденная ошибка. Попробуйте позже.&#x27;;
+    suspend;
+    exit;
+  end
+
+  if (res_text = &#x27;&#x27;) then
+    select edl_id, res_text
+    from hp_edoc_insert(&#x27;freelancer_akt&#x27;, f_objkind(&#x27;freelancer_akt&#x27;, &#x27;id&#x27;), :sshe_id, :un_id)
+    into :edl_id, :res_text;
+
+  if (:edl_id is null) then
+    edl_id = 0;
+
+  if (res_text = &#x27;&#x27; and
+      :edl_id &gt; 0) then
+    update edoc_list
+    set edl_manager_c_id = :signer_c_id
+    where edl_id = :edl_id;
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

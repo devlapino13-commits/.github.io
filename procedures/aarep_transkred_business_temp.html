@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_TRANSKRED_BUSINESS_TEMP — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_TRANSKRED_BUSINESS_TEMP: 3 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_TRANSKRED_BUSINESS_TEMP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_transkred_business.html"><div class="to">AAREP_TRANSKRED_BUSINESS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REPORT_REGION_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REPORT_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REPORT_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">TRANS_OS</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">TRANS_REGION_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">TRANS_BT_NAME</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">TRANS_BS_NAME</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_TRANSKRED_BUSINESS_TEMP(
+    REPORT_REGION_ID INTEGER,
+    REPORT_DATE_BEGIN DATE,
+    REPORT_DATE_END DATE)
+RETURNS (
+    TRANS_OS DECIMAL(18,4),
+    TRANS_REGION_NAME VARCHAR(100),
+    TRANS_BT_NAME VARCHAR(50),
+    TRANS_BS_NAME VARCHAR(50))
+AS
+declare variable sum_os decimal(18,4);
+declare variable k_id decimal(18,0);
+declare variable k_all decimal(18,4);
+declare variable c_amount decimal(18,4);
+declare variable cm_is_client_mode integer;
+begin
+-- operkred_fix
+  select cm_is_client_mode
+  from company
+  into cm_is_client_mode;
+
+  if (cm_is_client_mode = 0) then
+  begin
+    for select reg_code || &#x27; &#x27; || reg_name, k_id, k_amount_approved, sum(ok_os * cr_rate)
+        from operkred, kontract, opercurr, region, region_list(:report_region_id, 1, -1, 1)
+        where ok_from_k_id = k_id and
+              k_index_curr_code = cr_from_cu_id and
+              ok_ol_date between cr_date and cr_date_end and
+              ok_ol_is_active = 1 and
+              ok_ol_date between :report_date_begin and :report_date_end and
+              ok_type = 4 and
+              ok_ol_reg_id = reg_unicode and
+              ok_ol_reg_id = id_list and
+              k_amount_approved &lt;&gt; 0 and
+              ok_from_c_id = 0
+        group by reg_code, reg_name, k_id, k_amount_approved
+        into :trans_region_name, :k_id, :k_all, :sum_os
+    do
+    begin
+      for select bt_name, bs_name, kc_amount_approved
+          from knclient, bussubtype, bustype
+          where kc_from_k_id = :k_id and
+                kc_busuness_subtype = bs_id and
+                bs_from_bt_id = bt_id and
+                kc_amount_approved &lt;&gt; 0 and
+                kc_amount_approved is not null
+          into :trans_bt_name, trans_bs_name, c_amount
+      do
+      begin
+        trans_os = cast(:sum_os / :k_all * :c_amount as decimal(15,2));
+        suspend;
+      end
+    end
+    exit;
+  end
+
+  for select sum(ok_os * cr_rate), reg_code || &#x27; &#x27; || reg_name, bt_name, bs_name
+      from operkred, opercurr, kontract, region, region_list(:report_region_id, 1, -1, 1), knclient, bussubtype, bustype
+      where ok_from_k_id = k_id and
+            k_index_curr_code = cr_from_cu_id and
+            ok_ol_date between cr_date and cr_date_end and
+            ok_ol_is_active = 1 and
+            ok_ol_date between :report_date_begin and :report_date_end and
+            ok_type = 4 and
+            ok_ol_reg_id = reg_unicode and
+            ok_ol_reg_id = id_list and
+            k_amount_approved &lt;&gt; 0 and
+            ok_from_c_id = kc_from_c_id and
+            ok_from_k_id = kc_from_k_id and
+            kc_amount_approved &gt; 0 and
+            kc_busuness_subtype = bs_id and
+            bs_from_bt_id = bt_id
+      group by reg_code, reg_name, bt_name, bs_name
+      into trans_os, trans_region_name, trans_bt_name, trans_bs_name
+  do
+  begin
+
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

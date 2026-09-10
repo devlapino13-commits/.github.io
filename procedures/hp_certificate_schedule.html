@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CERTIFICATE_SCHEDULE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CERTIFICATE_SCHEDULE: 4 входных, 5 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CERTIFICATE_SCHEDULE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_html_cert_schedule.html"><div class="to">FM_HTML_CERT_SCHEDULE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_REGION_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">IS_READONLY</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TIME</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_STATUS</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_CAN_RESERV</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_OBJ_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CERTIFICATE_SCHEDULE(
+    UN_ID DECIMAL(18,0),
+    REP_REGION_ID INTEGER,
+    REP_DATE DATE,
+    IS_READONLY INTEGER)
+RETURNS (
+    RES_TIME TIMESTAMP,
+    RES_TEXT VARCHAR(255),
+    RES_STATUS VARCHAR(255),
+    RES_CAN_RESERV INTEGER,
+    RES_OBJ_ID DECIMAL(18,0))
+AS
+declare variable delta_minute integer;
+declare variable res_time_end timestamp;
+declare variable kf_name varchar(100);
+declare variable ma_id integer;
+declare variable has_record integer;
+declare variable k_id decimal(18,0);
+declare variable timezone integer;
+declare variable curr_datetime timestamp;
+declare variable db_id integer;
+declare variable fact_datetime timestamp;
+declare variable ma_is_active integer;
+declare variable c_id decimal(18,0);
+declare variable ma_date_save timestamp;
+begin
+
+-- Скрипт для заполнения случайное время, для теста
+--update miniapp
+--set ma_plan_disb_time=dateadd(minute, (7+mod(ma_id/10, 14))*60+mod(ma_id, 4)*15 ,cast(&#x27;11.11.2016&#x27; as timestamp))
+--where ma_date_app&lt;=current_date
+--and ma_date_end&gt;=current_date
+--and ma_date_oper=&#x27;11.11.2016&#x27;
+--and ma_office_id=1010800
+--and ma_plan_disb_time is null
+
+  res_obj_id = 0;
+  res_text = &#x27;&#x27;;
+  res_can_reserv = 0;
+  res_status = &#x27;&#x27;;
+
+  select un_from_c_id
+  from username
+  where un_id = :un_id
+  into :c_id;
+
+  if (c_id is null) then
+  begin
+    res_text = &#x27;Сотрудник не определен&#x27;;
+    suspend;
+    exit;
+  end
+
+--  if (exists(select * from hr_pstatus, joblist, jobkind
+--      where ps_from_c_id = :c_id
+--      and ps_date_begin &lt;= current_date
+--      and ps_date_end &gt;= current_date
+--      and ps_is_working = 1
+--      and ps_status = 1
+--      and ps_from_jl_id = jl_id
+--      and jl_kind = jk_id
+--      and jk_system_code in (&#x27;JobSystem.Region_KM&#x27;)))
+--  then is_manager = 1;
+
+  if (rep_region_id is null) then
+  begin
+    res_text = &#x27;Офис заявки не определен&#x27;;
+    suspend;
+    exit;
+  end
+
+  delta_minute = 15;
+  timezone = 0;
+
+  :db_id = f_get_db_id();
+  if (db_id = 81001) then
+  begin
+    delta_minute = 10;
+
+    timezone = 3;
+    select coalesce(reg_timezone, 0)
+    from region
+    where reg_unicode = :rep_region_id
+    into :timezone;
+    if (timezone &lt;&gt; 0) then
+      timezone = timezone - 3;
+  end
+  curr_datetime = dateadd(hour, timezone, current_timestamp);
+
+--  curr_plan_disb_time=current_date;
+--  curr_plan_disb_time=dateadd(minute, 600, curr_plan_disb_time);
+
+  res_time = rep_date;
+  res_time = dateadd(minute, 420 - delta_minute, res_time); -- 6:45
+  while (extract(hour from res_time) &lt; 22) do
+  begin
+    res_text = &#x27;&#x27;;
+    res_can_reserv = 0;
+    res_status = &#x27;&#x27;;
+    res_obj_id = 0;
+
+    res_time = dateadd(minute, delta_minute, res_time);
+    res_time_end = dateadd(minute, delta_minute, res_time);
+    kf_name = &#x27;&#x27;;
+    ma_id = 0;
+    ma_is_active = 1;
+    fact_datetime = null;
+
+    has_record = 0;
+    ma_id = 0;
+    for select kal_new_kf_name, ma_id, ma_is_active, ma_date_save
+        from knaktlist, miniapp
+        where ma_office_id = :rep_region_id and
+              ma_date_oper = :rep_date and
+              ma_date_end &gt;= &#x27;31.12.2999&#x27; and
+              ma_from_kf_id = kal_from_kf_id and
+              ma_plan_disb_time &gt;= :res_time and
+              ma_plan_disb_time &lt; :res_time_end and
+              kal_date &lt;= :rep_date and
+              kal_date_end &gt;= :rep_date and
+              knaktlist.is_delete = 0
+        into kf_name, ma_id, ma_is_active, ma_date_save
+    do
+    begin
+      res_text = &#x27;&#x27;;
+      res_can_reserv = 0;
+      res_status = &#x27;&#x27;;
+      res_obj_id = 0;
+      fact_datetime = null;
+      k_id = null;
+
+      has_record = 1;
+      res_text = kf_name;
+
+      if (ma_is_active = 1) then
+      begin
+        res_status = &#x27;Занято&#x27;;
+        select k_id
+        from kontract
+        where k_from_ma_app_id = :ma_id and
+              k_disb_date = :rep_date rows 1
+        into k_id;
+        if (k_id is not null) then
+        begin
+          select ol_datetime
+          from kontstate, operlist
+          where ks_ol_is_delete = 0 and
+                ks_from_k_id = :k_id and
+                ks_state = 1 and
+                ks_from_ol_id = ol_id
+          into :fact_datetime;
+          if (fact_datetime is not null) then
+          begin
+            fact_datetime = dateadd(hour, timezone, fact_datetime);
+            res_status = &#x27;Выдан &#x27; || right(&#x27;00&#x27; || extract(hour from fact_datetime), 2) || &#x27;:&#x27; || right(&#x27;00&#x27; || extract(minute from fact_datetime), 2);
+
+          end
+        end
+        if (res_time_end &lt; curr_datetime and
+            fact_datetime is null) then
+        begin
+          res_status = &#x27;Истёк&#x27;;
+        end
+      end
+      else
+      begin
+        res_status = iif(ma_is_active = 0, &#x27;Отменен &#x27;, &#x27;Отказан &#x27;) || right(&#x27;00&#x27; || extract(hour from ma_date_save), 2) || &#x27;:&#x27; || right(&#x27;00&#x27; || extract(minute from ma_date_save), 2);
+--        if (is_readonly=0) then has_record=0;
+      end
+
+      res_obj_id = ma_id;
+
+      if (has_record = 1) then
+        suspend;
+
+-- Если время по графику еще не истек, и произведена выдача либо аннулирование заявки,
+-- то даем возможность выбрать эту строку
+      if (res_time_end &gt; curr_datetime and
+          is_readonly = 0) then
+      begin
+        if (fact_datetime is not null and
+            fact_datetime &lt; res_time) then
+          has_record = 0;
+        if (ma_is_active = 0) then
+          has_record = 0;
+      end
+    end
+    if (has_record = 0) then
+    begin
+      if (res_time_end &gt; curr_datetime and
+          is_readonly = 0) then
+        res_can_reserv = 1;
+      else
+        res_can_reserv = 0;
+      res_obj_id = 0;
+      res_text = &#x27;&#x27;;
+      res_status = &#x27;&#x27;;
+      suspend;
+    end
+  end
+
+  if (is_readonly = 0) then
+    exit;
+
+-- Список групп, без времени сертификации
+  res_time = null;
+  res_text = &#x27;&#x27;;
+  res_can_reserv = 0;
+  res_obj_id = 0;
+
+  for select kal_new_kf_name, ma_id, ma_is_active, ma_date_save
+      from knaktlist, miniapp
+      where ma_office_id = :rep_region_id and
+            ma_date_oper = :rep_date and
+            ma_date_end &gt;= &#x27;31.12.2999&#x27; and
+            ma_from_kf_id = kal_from_kf_id and
+            ma_plan_disb_time is null and
+            kal_date &lt;= :rep_date and
+            kal_date_end &gt;= :rep_date and
+            knaktlist.is_delete = 0
+      into kf_name, ma_id, ma_is_active, ma_date_save
+  do
+  begin
+    res_obj_id = ma_id;
+    res_status = &#x27;Не назначено&#x27;;
+    fact_datetime = null;
+    k_id = null;
+    res_text = kf_name;
+
+    if (ma_is_active = 1) then
+    begin
+      select k_id
+      from kontract
+      where k_from_ma_app_id = :ma_id and
+            k_disb_date = :rep_date rows 1
+      into k_id;
+      if (k_id is not null) then
+      begin
+        select ol_datetime
+        from kontstate, operlist
+        where ks_ol_is_delete = 0 and
+              ks_from_k_id = :k_id and
+              ks_state = 1 and
+              ks_from_ol_id = ol_id
+        into :fact_datetime;
+        if (fact_datetime is not null) then
+        begin
+          fact_datetime = dateadd(hour, timezone, fact_datetime);
+          res_status = &#x27;Выдан &#x27; || right(&#x27;00&#x27; || extract(hour from fact_datetime), 2) || &#x27;:&#x27; || right(&#x27;00&#x27; || extract(minute from fact_datetime), 2);
+
+        end
+      end
+    end
+    if (ma_is_active &lt;= 0) then
+    begin
+      res_status = iif(ma_is_active = 0, &#x27;Отменен &#x27;, &#x27;Отказан &#x27;) || right(&#x27;00&#x27; || extract(hour from ma_date_save), 2) || &#x27;:&#x27; || right(&#x27;00&#x27; || extract(minute from ma_date_save), 2);
+    end
+
+    suspend;
+  end
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

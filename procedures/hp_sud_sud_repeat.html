@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_SUD_SUD_REPEAT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_SUD_SUD_REPEAT: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_SUD_SUD_REPEAT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_sud_set_memo.html"><div class="to">HP_SUD_SET_MEMO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SMR_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">NEW_SMR_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_SUD_SUD_REPEAT(
+    SMR_ID D_ID NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    NEW_SMR_ID D_ID)
+AS
+declare variable k_id d_id;
+  declare variable kc_id d_id;
+  declare variable sld_id d_id;
+  declare variable slc_id d_id;
+  declare variable new_slc_id d_id;
+  declare variable new_sld_id d_id;
+  declare variable sld_inactive d_bool;
+  declare variable scd_code d_str_code;
+begin
+  -- новый повторный запрос в случае отказа от суда.
+  if (not exists(select * from sud_mainlist
+  where sml_id = :smr_id and
+        sml_status = -2)) then
+    exception e_message &#x27;Данный запрос не подходит к повторной отправке.&#x27;;
+
+  insert into sud_mainreq (smr_from_k_id, smr_from_smr_id, smr_from_un_id)
+  select smr_from_k_id, :smr_id, :un_id
+  from sud_mainreq
+  where smr_id = :smr_id
+  returning smr_id, smr_from_k_id
+  into new_smr_id, k_id;
+
+  execute procedure hp_sud_set_memo(:new_smr_id, 0, 0, &#x27;Повторная подача в суд&#x27;, :un_id);
+
+  --записать клиентов с пересчетом задолженности
+  insert into sud_loanclient (slc_from_smr_id, slc_from_kc_id, slc_sum_date, slc_sum_os, slc_sum_perc,
+                              slc_sum_fine, slc_sum_other, slc_sum_all, slc_auto_worldcourt, slc_auto_federalcourt)
+  select :new_smr_id, slc_from_kc_id, current_date, cur_cl_os, cur_cl_perc, cur_cl_fine, 0, cur_cl_all,
+         slc_auto_worldcourt, slc_auto_federalcourt
+  from sud_loanclient, knclient kc, print_client_zadol(:k_id)
+  where slc_from_smr_id = :smr_id
+    and kc_id = slc_from_kc_id
+    and kc_from_c_id = cz_from_c_id;
+
+  -- отправить на комплектацию документов
+  update sud_mainreq
+  set smr_status = 2
+  where smr_id = :new_smr_id;
+
+  -- копирование документов
+  for select sld_id, sld_from_slc_id, scd_code, sld_inactive
+  from sud_loandocs, sud_cfgdockind
+  where sld_from_smd_id = :smr_id
+    and scd_id = sld_doc_kind
+    and sld_inactive = 0
+  into sld_id, slc_id, scd_code, sld_inactive
+  do
+  begin
+    kc_id = (select slc_from_kc_id from sud_loanclient where slc_id = :slc_id);
+    new_slc_id = (select slc_id from sud_loanclient where slc_from_kc_id = :kc_id and slc_from_smr_id = :new_smr_id);
+
+    insert into sud_loandocs (sld_from_smd_id, sld_from_slc_id, sld_kind, sld_doc_kind, sld_status, sld_from_un_id, sld_datetime)
+    select :new_smr_id, :new_slc_id, sld_kind, sld_doc_kind, sld_status, sld_from_un_id, sld_datetime
+    from sud_loandocs
+    where sld_id = :sld_id
+    returning sld_id
+    into new_sld_id;
+
+    if (sld_inactive = 0 and scd_code not in (&#x27;court_app&#x27;, &#x27;debt_calculation&#x27;)) then
+      insert into sud_loanbls (slb_from_sld_id, slb_from_bls_id, slb_from_un_id)
+      select :new_sld_id, slb_from_bls_id, slb_from_un_id
+      from sud_loanbls
+      where slb_from_sld_id = :sld_id
+        and slb_is_delete = 0;
+  end
+
+  -- отправить на комплектацию документов
+  update sud_maindocs
+  set smd_status = 1
+  where smd_id = :new_smr_id;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_SAFE_SOUND_BASIC_DATA — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_SAFE_SOUND_BASIC_DATA: 2 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_SAFE_SOUND_BASIC_DATA</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="get_fm_data_safe_sound.html"><div class="to">GET_FM_DATA_SAFE_SOUND</div></a><a class="ref-card" href="hp_get_blobex_blob.html"><div class="to">HP_GET_BLOBEX_BLOB</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_html_get_loan_status.html"><div class="to">HP_HTML_GET_LOAN_STATUS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OBJECT_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_KIND</div><div class="ptype">VARCHAR(10)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CLIENT_DATA</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_SAFE_SOUND_BASIC_DATA(
+    OBJECT_ID D_ID,
+    OBJ_KIND D_STR_10)
+RETURNS (
+    C_ID D_ID,
+    CLIENT_DATA BLOB SUB_TYPE TEXT SEGMENT SIZE 80)
+AS
+declare variable c_name_fio d_str_100;
+declare variable ma_id d_integer;
+declare variable bls_id d_id;
+declare variable eil_date d_date;
+declare variable json d_blob_text;
+declare variable base_path d_str_100;
+declare variable ma_date_app d_date;
+declare variable outstanding_other d_currency; /* активный баланс в других фку */
+declare variable amount_other d_integer; /* кол-во активных займов в других фку */
+declare variable max_past_due d_integer;
+declare variable max_past_due_str d_str_100;
+declare variable max_past_due_days d_integer;
+declare variable outstanding_not_our d_currency;
+declare variable amount_not_our d_currency;
+declare variable guarantor d_integer;
+declare variable guarantor_other d_integer;
+declare variable pr_code d_str_100;
+declare variable base_k_id d_id;
+declare variable base_ma_id d_integer;
+declare variable insur_ma_id d_integer;
+begin
+  obj_kind = trim(coalesce(obj_kind, &#x27;&#x27;));
+
+  if ((obj_kind is null) or (object_id is null)) then
+    exit;
+  client_data = &#x27;&#x27;;
+
+  ma_id = 0;
+  if (obj_kind in (&#x27;kontract&#x27;, &#x27;9&#x27;)) then
+    select k_from_ma_app_id
+    from kontract
+    where k_id = :object_id
+    into ma_id;
+  else
+  if (obj_kind in (&#x27;miniapp&#x27;, &#x27;11&#x27;)) then
+    ma_id = object_id;
+
+  select pr.pr_code
+  from miniapp ma
+  inner join product pr on pr.pr_id = ma.ma_from_pr_id
+  where ma.ma_id = :ma_id and
+        ma.ma_is_active = 1 and
+        ma.ma_date_end &gt;= &#x27;31.12.2999&#x27;
+  into pr_code;
+
+  if (pr_code containing &#x27;.insur_kontrakt.&#x27;) then  -- RFCKG-5051
+  begin
+    select lir.lir_kontract_base
+    from kontract k
+    inner join loan_insurance_relation lir on k.k_id = lir.lir_kontract_insurance
+    where k.k_from_ma_app_id = :ma_id
+    into base_k_id;
+
+    select k.k_from_ma_app_id
+    from kontract k
+    where k.k_id = :base_k_id
+    into base_ma_id;
+
+    if (coalesce(base_ma_id, 0) &lt;&gt; 0) then
+    begin
+      insur_ma_id = ma_id;
+      ma_id = base_ma_id;
+    end
+  end
+
+  for select c.c_id, c.c_name_fio
+  from clients c
+  inner join miniappclient mac on c.c_id = mac.mac_from_c_id
+  inner join miniapp ma on ma.ma_id = mac.mac_from_ma_id
+  where ma.ma_id = :ma_id
+  and ma.ma_date_end = &#x27;31.12.9999&#x27;
+  into :c_id, :c_name_fio
+  do
+  begin
+    client_data = blob_append(client_data, &#x27;&lt;b&gt;&#x27; || c_name_fio || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;);
+
+    select ma.ma_date_app
+    from miniapp ma
+    where ma.ma_id = :ma_id
+    order by ma.ma_date_app
+    rows 1
+    into ma_date_app;
+
+    select eil.eil_from_bls_id, cast(eil.eil_status_datetime as date)
+    from extinfolist eil
+    inner join extinfocfg eic on eil.eil_from_eic_id = eic.eic_id and
+          eic.eic_code = &#x27;ss_cib_report&#x27;
+    where eil.eil_from_c_id = :c_id and
+          eil.eil_is_json = 1 and
+          eil.eil_status = 2 and
+          ((eil.eil_date between :ma_date_app - 1 and :ma_date_app)
+          or
+          (eil.eil_object_kind = f_objkind(&#x27;miniapp&#x27;, &#x27;id&#x27;) and eil.eil_object_id = :ma_id))  -- RFCKG-5396
+    order by eil.eil_id desc
+    rows 1
+    into bls_id, eil_date;
+
+    select blx_blob
+    from hp_get_blobex_blob(:bls_id)
+    into :json;
+  
+    if (row_count is null or coalesce(:json, &#x27;&#x27;) = &#x27;&#x27;) then
+    begin
+        client_data = BLOB_APPEND(client_data, &#x27;&amp;nbsp&amp;nbspКлиент еще не проверен&lt;br&gt;&lt;br&gt;&#x27;);
+        suspend;
+        exit;
+    end
+  
+    if (f_json_blob_get_value(:json, &#x27;result&#x27;, &#x27;&#x27;) = &#x27;NO SUBJECT FOUND&#x27;) then
+    begin
+        client_data = BLOB_APPEND(client_data, &#x27;&amp;nbsp&amp;nbspКлиент не найден&lt;br&gt;&lt;br&gt;&#x27;);
+        suspend;
+        exit;
+    end
+
+    client_data = blob_append(client_data, &#x27;&amp;nbsp&amp;nbspДата проверки: &lt;b&gt;&#x27; || :eil_date || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;);
+    base_path = &#x27;other_element.monitoring_enquiry.credit_report.contracts_history&#x27;;
+
+    max_past_due_days = 0;
+    outstanding_other = 0;
+    amount_other = 0;
+    guarantor_other = 0;
+    for select max_past_due, total_outstanding_not_our, total_amount_not_our, guarantor
+    from get_fm_data_safe_sound(&#x27;installments&#x27;, :bls_id, :base_path)
+    into :max_past_due, outstanding_not_our, amount_not_our, guarantor
+    do
+    begin
+      if (max_past_due &gt; max_past_due_days) then
+          max_past_due_days = max_past_due;
+      outstanding_other = outstanding_not_our;
+      amount_other = amount_not_our;
+      guarantor_other = guarantor_other + guarantor;
+    end
+
+    max_past_due_str = case
+                        when max_past_due_days = 0 then &#x27;Слишком новый&#x27;
+                        when max_past_due_days = 1 then &#x27;Плата по согласованию&#x27;
+                        when max_past_due_days = 2 then &#x27;Задержка 1-29 дней&#x27;
+                        when max_past_due_days = 3 then &#x27;Задержка 30-59 дней&#x27;
+                        when max_past_due_days = 4 then &#x27;Задержка 60-89 дней&#x27;
+                        when max_past_due_days = 5 then &#x27;Задержка 90-119 дней&#x27;
+                        when max_past_due_days = 6 then &#x27;Задержка 120-149 дней&#x27;
+                        when max_past_due_days = 7 then &#x27;Задержка 150-179 дней&#x27;
+                        when max_past_due_days = 8 then &#x27;Более 180 дней задержки&#x27;
+                        else &#x27;--&#x27;
+                       end;
+    if (max_past_due_days = 0 or max_past_due_days = 1) then
+      client_data = blob_append(client_data, &#x27;&amp;nbsp&amp;nbsp&lt;b&gt;В других ФКУ нарушений не обнаружено&lt;/b&gt;&lt;br&gt;&#x27;);
+
+    client_data = BLOB_APPEND(client_data, &#x27;&amp;nbsp&amp;nbspМакс. дни просрочки в других ФКУ&lt;br&gt;&#x27; || &#x27;&amp;nbsp&amp;nbsp&amp;nbsp&amp;nbsp&lt;b&gt;&#x27;);
+    if (max_past_due_days = 0 or max_past_due_days = 1) then
+      client_data = BLOB_APPEND(client_data, &#x27;0 дней&lt;/b&gt;&lt;br&gt;&#x27;);
+    else
+    begin
+      client_data = BLOB_APPEND(client_data, max_past_due_str || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;);
+    end
+    
+    client_data = BLOB_APPEND(client_data, &#x27;&amp;nbsp&amp;nbspАктивный баланс в других ФКУ&lt;br&gt;&#x27; || &#x27;&amp;nbsp&amp;nbsp&amp;nbsp&amp;nbsp&lt;b&gt;&#x27; || cast(round(outstanding_other) as d_str_10) || &#x27; сом&lt;/b&gt;&lt;br&gt;&#x27;);
+    client_data = BLOB_APPEND(client_data, &#x27;&amp;nbsp&amp;nbspАктивные займы в других ФКУ&lt;br&gt;&#x27; || &#x27;&amp;nbsp&amp;nbsp&amp;nbsp&amp;nbsp&lt;b&gt;&#x27; || cast(amount_other as d_str_10) || &#x27; кредит(ов)&lt;/b&gt;&lt;br&gt;&#x27;);
+    client_data = BLOB_APPEND(client_data, &#x27;&amp;nbsp&amp;nbspАктивные в других ФКУ, где он(а) поручитель&lt;br&gt;&#x27; || &#x27;&amp;nbsp&amp;nbsp&amp;nbsp&amp;nbsp&lt;b&gt;&#x27; || cast(guarantor_other as d_str_10) || &#x27; кредит(ов)&lt;/b&gt;&lt;br&gt;&#x27;);
+      
+    if (ma_id &lt;&gt; 0) then
+        client_data = BLOB_APPEND(client_data, f_uri_html(&#x27;Просмотр отчета&#x27;, &#x27;ssound_report&#x27;,
+          &#x27;Отчет КИБ&#x27;, &#x27;miniapp&#x27;, iif(coalesce(:insur_ma_id, 0) &lt;&gt; 0, :insur_ma_id, :ma_id), current_date, current_date,
+          &#x27;{&quot;c_id&quot;:&#x27; || :c_id || &#x27;}&#x27;) || &#x27;&lt;br&gt;&#x27;);
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

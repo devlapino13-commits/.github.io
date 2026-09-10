@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$UXCODE_CONVERT_FROM_DFM — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$UXCODE_CONVERT_FROM_DFM: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$UXCODE_CONVERT_FROM_DFM</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UNT_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$UXCODE_CONVERT_FROM_DFM(
+    UNT_CODE D_STR_CODE)
+AS
+declare variable fr_uuid d_uuid;
+declare variable fr_is_grid d_bool;
+declare variable fr_code d_str_code;
+declare variable fr_name d_str_100;
+declare variable create_kind d_str_code;
+declare variable uf_uuid d_uuid;
+declare variable ufi_parent_uuid d_uuid;
+declare variable uni_control d_str_code;
+declare variable fr_uni_uuid d_uuid;
+declare variable unt_uuid d_uuid;
+declare variable uni_uuid d_uuid;
+declare variable unt_source d_str_code;
+declare variable unt_is_cmd d_bool;
+declare variable is_mainframe d_bool;
+declare variable ux_owner d_uuid;
+declare variable fr_source d_str_code;
+declare variable ux_fcode d_str_100;
+declare variable ux_uuid d_uuid;
+declare variable db_id d_integer;
+begin
+  db_id = uxf$db_id();
+
+  select unt_uuid, unt_is_cmd, unt_source
+  from ux$unit
+  where unt_code = :unt_code
+  into unt_uuid, unt_is_cmd, unt_source;
+
+  if (unt_uuid is null) then
+    exception e_message &#x27;Модуль не найден&#x27;;
+
+  if (exists(select * from ux$unitimport
+             where uim_db_id = :db_id and
+                   uim_unt_code = :unt_code)) then
+    exception e_message &#x27;Модуль ранее конвертирован&#x27;;
+
+  ux_fcode = &#x27;&#x27;;
+
+  if (unt_source is null) then
+    unt_source = &#x27;&#x27;;
+
+  select iif(coalesce(unf_code, &#x27;&#x27;) &lt;&gt; &#x27;&#x27; and unf_code &lt;&gt; unf_name, unf_code, uds_dataset),
+         iif(coalesce(unf_code, &#x27;&#x27;) &lt;&gt; &#x27;&#x27; and unf_code &lt;&gt; unf_name, unf_name, &#x27;&#x27;),
+         unf_sql_select, unf_is_grid, unf_uni_uuid
+  from ux$unitframe, ux$unitsource, ux$unitdata
+  where unf_owner = :unt_uuid and
+        unf_is_mainframe = 1 and
+        unf_uni_uuid is not null and
+        unf_usr_uuid = usr_uuid and
+        usr_uds_uuid = uds_uuid
+  into fr_code, fr_name, fr_source, fr_is_grid, fr_uni_uuid;
+
+  if (coalesce(fr_source, &#x27;&#x27;) = &#x27;&#x27;) then
+    exception e_message f_format(&#x27;Не указан источник фрейма %1. Создайте процедуру из Select SQL&#x27;, fr_code);
+
+  if (fr_uni_uuid is null) then
+    exception e_message f_format(&#x27;В структуре не указан главный фрейм: &#x27;, fr_code);
+
+  if (unt_is_cmd = 0) then
+  begin
+    create_kind = &#x27;uxform_one&#x27;;
+  
+    if (fr_is_grid = 1) then
+      create_kind = &#x27;uxform&#x27;;
+  end else
+  begin
+    create_kind = &#x27;uxcommand&#x27;;
+
+    if (unt_source = &#x27;&#x27;) then
+      unt_source = fr_source;
+  end
+
+  if (ux_owner is null and unt_source &lt;&gt; &#x27;&#x27;) then
+  begin
+    execute procedure uxp$uxsource_create(:unt_source, &#x27;&#x27;, null, 0, &#x27;&#x27;, 1);
+    ux_owner = uxf$uniq(unt_source);
+  end
+
+  if (ux_owner is null) then
+  begin
+    execute procedure uxp$uxsource_create(:fr_source, &#x27;&#x27;, null, 0, &#x27;&#x27;, 1);
+
+    if (unt_source = &#x27;&#x27;) then
+    begin
+      select us_main_table
+      from ux$source
+      where us_code = :fr_source
+      into unt_source;
+
+      if (unt_source &lt;&gt; &#x27;&#x27;) then
+      begin
+        execute procedure uxp$uxsource_create(:unt_source, &#x27;&#x27;, null, 0, &#x27;&#x27;, 1);
+        ux_owner = uxf$uniq(unt_source);
+
+        update ux$unit
+        set unt_source = :unt_source
+        where unt_code = :unt_code;
+      end else
+        exception e_message &#x27;Таблица-владелец не указана&#x27;;
+    end
+  end
+
+  select res_fr_uuid, res_ux_uuid
+  from uxp$uxform_create(:create_kind, :ux_owner, :fr_code, :fr_name, :fr_source)
+  into :fr_uuid, :ux_uuid;
+
+  select ux_fcode
+  from ux$code
+  where ux_uuid = :ux_uuid
+  into ux_fcode;
+
+  update or insert into ux$unitimport (uim_db_id, uim_unt_code, uim_ux_fcode)
+  values (:db_id, :unt_code, :ux_fcode)
+  matching (uim_db_id, uim_unt_code);
+
+  for select iif(coalesce(unf_code, &#x27;&#x27;) &lt;&gt; &#x27;&#x27; and unf_code &lt;&gt; unf_name, unf_code, uds_dataset),
+         iif(coalesce(unf_code, &#x27;&#x27;) &lt;&gt; &#x27;&#x27; and unf_code &lt;&gt; unf_name, unf_name, &#x27;&#x27;),
+         unf_sql_select, unf_is_grid, unf_uni_uuid, unf_is_mainframe
+  from ux$unitframe, ux$unitsource, ux$unitdata
+  where unf_owner = :unt_uuid and
+        unf_uni_uuid is not null and
+        unf_usr_uuid = usr_uuid and
+        usr_uds_uuid = uds_uuid
+  order by unf_is_mainframe desc
+  into fr_code, fr_name, fr_source, fr_is_grid, fr_uni_uuid, is_mainframe
+  do
+  begin
+    if (is_mainframe = 0) then
+    begin
+      select res_fr_uuid
+      from uxp$uxframe_add(:ux_owner, :fr_code, :fr_name, :fr_is_grid, :fr_source)
+      into :fr_uuid;
+    end else
+    begin
+      if (fr_uni_uuid is null) then
+        Continue;
+  
+      if (coalesce(fr_source, &#x27;&#x27;) = &#x27;&#x27;) then
+        exception e_message f_format(&#x27;Не указан источник фрейма %1. Создайте процедуру из Select SQL&#x27;, fr_code);
+    end
+
+    delete from ux$fritem
+    where ufi_parent_uuid = :fr_uuid;
+  
+    for select uni_uuid, uni_parent_uuid, uni_kind, uni_control,
+               uni_caption,
+               uni_caption_align, uni_hint, uni_hidden, uni_readonly,
+               uni_group_direction, uni_h_align, uni_v_align, uni_width, uni_height, 
+               uni_sizable, uni_order_index, uni_group_index, uni_fixed_kind, uni_summary_kind,
+               uni_fieldname
+    from uxp$unititem_tree(:unt_uuid, :fr_uni_uuid, :fr_uni_uuid, 1)
+    where uni_uuid &lt;&gt; :fr_uni_uuid
+    as cursor cur
+    do
+    begin
+      uf_uuid = null;
+  
+      if (coalesce(cur.uni_fieldname, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+      begin
+        select uf_uuid
+        from ux$source, ux$field
+        where us_code = :fr_source and
+              us_uuid = uf_owner and
+              uf_field_name = cur.uni_fieldname
+        into uf_uuid;
+      end
+  
+      uni_uuid = cur.uni_uuid;
+      ufi_parent_uuid = cur.uni_parent_uuid;
+  
+      if (ufi_parent_uuid = fr_uni_uuid) then
+        ufi_parent_uuid = fr_uuid;
+  
+      if (uni_uuid = fr_uni_uuid) then
+      begin
+        uni_uuid = fr_uuid;
+        ufi_parent_uuid = null;
+      end
+  
+      uni_control = cur.uni_control;
+      if (uni_control = &#x27;button&#x27;) then
+        uni_control = &#x27;text&#x27;;
+  
+      insert into ux$fritem (ufi_uuid, ufi_parent_uuid, ufi_owner, ufi_ufr_uuid, ufi_uf_uuid, ufi_kind, ufi_control,
+                             ufi_name,
+                             ufi_caption_align, ufi_hint, ufi_hidden, ufi_readonly,
+                             ufi_group_direction, ufi_h_align, ufi_v_align, ufi_width, ufi_height, ufi_sizable,
+                             ufi_order_index, ufi_group_index, ufi_fixed_kind, ufi_summary_kind)
+      values (:uni_uuid, :ufi_parent_uuid, :fr_uuid, :fr_uuid, :uf_uuid, cur.uni_kind, cur.uni_control,
+              cur.uni_caption,
+              cur.uni_caption_align, cur.uni_hint, cur.uni_hidden, cur.uni_readonly,
+              cur.uni_group_direction, cur.uni_h_align, cur.uni_v_align, cur.uni_width, cur.uni_height,
+              cur.uni_sizable, cur.uni_order_index, cur.uni_group_index, cur.uni_fixed_kind, cur.uni_summary_kind);
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

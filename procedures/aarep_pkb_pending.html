@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_PKB_PENDING — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_PKB_PENDING: 3 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_PKB_PENDING</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_parse_pkb_miniapp_info.html"><div class="to">HP_PARSE_PKB_MINIAPP_INFO</div></a><a class="ref-card" href="region_list.html"><div class="to">REGION_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_REGION_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_NAME_FIO</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KONTRACT_NO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REPORT_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PENDING_CNT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_PKB_PENDING(
+    REP_REGION_ID D_ID,
+    REP_DATE_BEGIN D_DATE,
+    REP_DATE_END D_DATE)
+RETURNS (
+    C_NAME_FIO D_STR_255,
+    KONTRACT_NO D_STR_100,
+    REPORT_DATE D_DATE,
+    PENDING_CNT D_INTEGER)
+AS
+declare variable C_ID D_ID;
+declare variable OBJECT_ID D_ID;
+declare variable BLS_ID D_ID;
+declare variable CREATED D_STR_10;
+begin
+  for select 
+        eil.eil_object_id,
+        eil.eil_from_c_id,
+        cast(eil.eil_status_datetime as date)
+      from extinfolist eil
+      inner join extinfocfg eic on eic.eic_id = eil.eil_from_eic_id
+      inner join miniapp ma on ma.ma_id = eil.eil_object_id
+      where eic.eic_code = &#x27;pkb_cib_report&#x27; 
+        and eil.eil_status = 2 
+        and cast(eil.eil_status_datetime as date) between :rep_date_begin and :rep_date_end
+        and (:rep_region_id is null or ma.ma_office_id in (select id_list from region_list(:rep_region_id, 1, 3, 1)))
+        
+      order by eil.eil_status_datetime desc
+  into :object_id, :c_id, :report_date
+  do
+  begin
+    select cl.c_name_fio
+    from clients cl
+    where cl.c_id = :c_id
+    into :c_name_fio;
+
+    kontract_no = null;
+    select max(cast(kn.k_kontract_no as varchar(100)))
+    from kontract kn
+    where kn.k_from_ma_app_id = :object_id
+    into :kontract_no;
+
+    pending_cnt = 0;
+
+    select pmi.pmi_bls_id
+    from pkb_miniapp_info pmi
+    where pmi.pmi_from_ma_id = :object_id
+      and pmi.pmi_is_sent = 1
+    order by pmi.pmi_last_datetime desc rows 1
+    into :bls_id;
+
+    if (bls_id is not null) then
+    begin
+      select total_created_miniapp
+      from hp_parse_pkb_miniapp_info(:bls_id)
+      into :created;
+
+      if (created is not null and created &lt;&gt; &#x27;&#x27;) then
+        pending_cnt = cast(created as d_integer);
+    end
+    
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

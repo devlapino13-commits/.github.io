@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_STAT_DISB — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_STAT_DISB: 3 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_STAT_DISB</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_stat_disb_temp.html"><div class="to">AAREP_STAT_DISB_TEMP</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REPORT_REGION_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REPORT_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REPORT_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ST_PERIOD_KIND</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ST_AMOUNT_KIND</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ST_VALUE</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ST_LEVEL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_STAT_DISB(
+    REPORT_REGION_ID INTEGER,
+    REPORT_DATE_BEGIN DATE,
+    REPORT_DATE_END DATE)
+RETURNS (
+    ST_PERIOD_KIND INTEGER,
+    ST_AMOUNT_KIND INTEGER,
+    ST_VALUE DECIMAL(18,4),
+    ST_LEVEL INTEGER)
+AS
+declare variable amount_kind_old integer;
+declare variable cl_kolich integer;
+declare variable disb decimal(18,4);
+declare variable perc decimal(18,4);
+declare variable n2 integer;
+declare variable cl_t integer;
+declare variable disb_t decimal(18,4);
+declare variable perc_t decimal(18,4);
+declare variable period_t integer;
+declare variable st_perc decimal(18,4);
+declare variable st_avg_perc_koef decimal(18,7);
+declare variable st_disb decimal(18,4);
+declare variable st_client_kolich integer;
+begin
+  amount_kind_old = 0;
+  cl_kolich = 0;
+  disb = 0;
+  perc = 0;
+  st_avg_perc_koef = 0;
+  st_perc = 0;
+  for select st_period_kind, st_amount_kind, sum(st_client_kolich), sum(st_disb), sum(st_perc)
+      from aarep_stat_disb_temp(:report_region_id, :report_date_begin, :report_date_end)
+      group by st_period_kind, st_amount_kind
+      order by st_amount_kind, st_period_kind
+      into :st_period_kind, :st_amount_kind, :st_client_kolich, :st_disb, :st_perc
+  do
+  begin
+    if (st_disb &lt;&gt; 0) then
+      st_avg_perc_koef = cast(st_perc / st_disb * 100 as decimal(15,1));
+    else
+      st_avg_perc_koef = 0;
+    st_value = st_client_kolich;
+    st_level = 1;
+    suspend;
+    st_value = st_disb;
+    st_level = 2;
+    suspend;
+    st_value = st_avg_perc_koef;
+    st_level = 3;
+    suspend;
+    if ((amount_kind_old = st_amount_kind) or (amount_kind_old = 0)) then
+    begin
+      cl_kolich = cl_kolich + st_client_kolich;
+      disb = disb + st_disb;
+      perc = perc + st_perc;
+      amount_kind_old = st_amount_kind;
+    end
+    else
+    begin
+      n2 = st_amount_kind;
+      st_amount_kind = amount_kind_old;
+      period_t = st_period_kind;
+      st_period_kind = 0;
+      cl_t = st_client_kolich;
+      st_client_kolich = cl_kolich;
+      disb_t = st_disb;
+      st_disb = disb;
+      perc_t = st_perc;
+      st_perc = perc;
+      if (st_disb &lt;&gt; 0) then
+        st_avg_perc_koef = cast(st_perc / st_disb * 100 as decimal(15,1));
+      else
+        st_avg_perc_koef = 0;
+      st_value = st_client_kolich;
+      st_level = 1;
+      suspend;
+      st_value = st_disb;
+      st_level = 2;
+      suspend;
+      st_value = st_avg_perc_koef;
+      st_level = 3;
+      suspend;
+      st_amount_kind = n2;
+      st_period_kind = period_t;
+      st_client_kolich = cl_t;
+      st_disb = disb_t;
+      st_perc = perc_t;
+
+      cl_kolich = st_client_kolich;
+      disb = st_disb;
+      perc = st_perc;
+      amount_kind_old = st_amount_kind;
+    end
+  end
+  st_period_kind = 0;
+  st_client_kolich = cl_kolich;
+  st_disb = disb;
+  st_perc = perc;
+  if (st_disb &lt;&gt; 0) then
+    st_avg_perc_koef = cast(st_perc / st_disb * 100 as decimal(15,1));
+  else
+    st_avg_perc_koef = 0;
+  st_value = st_client_kolich;
+  st_level = 1;
+  suspend;
+  st_value = st_disb;
+  st_level = 2;
+  suspend;
+  st_value = st_avg_perc_koef;
+  st_level = 3;
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

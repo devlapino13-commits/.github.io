@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EXTINFO_POLICY_INFO_PROCESS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EXTINFO_POLICY_INFO_PROCESS: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EXTINFO_POLICY_INFO_PROCESS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="mc_send_push.html"><div class="to">MC_SEND_PUSH</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_extinfotask_process.html"><div class="to">HP_EXTINFOTASK_PROCESS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EIL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EXTINFO_POLICY_INFO_PROCESS(
+    EIL_ID D_ID)
+AS
+declare variable mcl_id d_id;
+declare variable subject d_str_255;
+declare variable msg_body d_str_long;
+declare variable k_kontract_no d_str_20;
+declare variable eil_from_eic_id d_id;
+declare variable eil_object_kind d_integer;
+declare variable eil_object_id d_id;
+declare variable eil_from_c_id d_id;
+declare variable eil_status d_smallint;
+declare variable eic_code d_str_code;
+begin
+    select
+        eil.eil_from_eic_id,
+        eil.eil_object_kind,
+        eil.eil_object_id,
+        eil.eil_from_c_id,
+        eil.eil_status,
+        eic.eic_code
+    from extinfolist eil
+    inner join extinfocfg eic on eil.eil_from_eic_id = eic.eic_id
+        and eic.eic_code = &#x27;policy_info&#x27;
+    where eil.eil_id = :eil_id
+    into
+        :eil_from_eic_id,
+        :eil_object_kind,
+        :eil_object_id,
+        :eil_from_c_id,
+        :eil_status,
+        :eic_code;
+
+    if (:eic_code &lt;&gt; &#x27;policy_info&#x27; or :eic_code is null) then
+        exit;
+
+    subject = &#x27;Страховой сертификат&#x27;;
+
+    select mcl_id
+    from mc_login mcl
+    where mcl.mcl_from_c_id = :eil_from_c_id
+        and mcl.mcl_is_delete = 0
+    order by mcl_id desc
+    rows  1
+    into :mcl_id;
+
+    if (:eil_status = 2) then
+    begin
+        select k.k_kontract_no
+        from kontract k
+        where k.k_id = :eil_object_id
+        into k_kontract_no;
+
+        msg_body = &#x27;Страховой сертификат был успешно получен по займу: &#x27;||:k_kontract_no;
+    end
+
+    if (:eil_status &lt; 0) then
+        msg_body = &#x27;При получении страхового сертификата возникла ошибка. Сертификат будет получен в течении дня&#x27;;
+
+       if(coalesce(:mcl_id, 0) &gt; 0 and
+           :msg_body &lt;&gt; &#x27;&#x27;) then
+        execute procedure mc_send_push(&#x27;mc_login&#x27;, :mcl_id, :subject, :msg_body, 1);
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

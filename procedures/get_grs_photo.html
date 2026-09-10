@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GET_GRS_PHOTO — процедура — схема БД</title>
+<meta name="description" content="Процедура GET_GRS_PHOTO: 4 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>GET_GRS_PHOTO</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">3</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_blobex_blob.html"><div class="to">HP_GET_BLOBEX_BLOB</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_edoc_face_validation.html"><div class="to">HP_EDOC_FACE_VALIDATION</div></a><a class="ref-card" href="hp_verify_webcam_photo_add.html"><div class="to">HP_VERIFY_WEBCAM_PHOTO_ADD</div></a><a class="ref-card" href="mc_verify_check.html"><div class="to">MC_VERIFY_CHECK</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CONTINUE_SEARCH</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MCL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">GET_BLOB</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">BLS_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">BLOB_PHOTO</div><div class="ptype">BLOB SUB_TYPE BINARY SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MATCHING_PERC</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE GET_GRS_PHOTO(
+    C_ID D_ID,
+    CONTINUE_SEARCH D_BOOL = 0,
+    MCL_ID D_ID = null,
+    GET_BLOB D_BOOL = 1)
+RETURNS (
+    BLS_ID D_ID,
+    BLOB_PHOTO D_BLOB_BINARY,
+    MATCHING_PERC D_CURRENCY)
+AS
+declare variable pass_date_begin d_date;
+declare variable db_id d_integer;
+begin
+    db_id = f_get_db_id();
+
+    select
+      eib_from_bls_id
+    from extinfolist
+      inner join extinfolistbls
+        on eib_from_eil_id = eil_id
+      inner join extinfocfg
+        on eic_id = eil_from_eic_id
+    where (eil_from_c_id = :c_id or eil_from_mcl_id = :mcl_id)
+      and eil_status = 2
+      and eic_code = &#x27;Tunduk&#x27;
+    order by eil_create_datetime desc
+    rows 1
+    into
+      :bls_id;
+
+    if (bls_id is null and continue_search = 1) then
+      select cds_doc_blob_1
+      from clientdocs
+      inner join passkind on pk_id = cds_from_pk_id
+      inner join passdoctype on pdt_id = pk_from_pdt_id
+        and pdt_code = &#x27;foto_on_date_disb&#x27;
+      where :db_id &lt;&gt; 39801
+        and cds_from_c_id = :c_id
+        and cds_is_delete = 0
+        and cds_doc_blob_1 &gt; 0
+        and cds_verify_status = 2
+      order by cds_doc_date_begin desc
+      rows 1
+      into
+        :bls_id;
+
+    if (bls_id is null and continue_search = 1) then
+      select
+        c_blob_photo_id
+      from clients
+      where c_id = :c_id
+      into
+        :bls_id;
+
+    select first 1 cds.cds_doc_date_begin
+    from clientdocs cds
+    where cds.cds_from_c_id = :c_id and
+          cds.cds_is_delete = 0 and
+          cds.cds_is_main_doc = 1 and
+          current_date between cds.cds_doc_date_begin and cds.cds_doc_date_end
+    order by cds.cds_create_datetime desc
+    into pass_date_begin;
+
+    if (db_id = 41701) then
+        -- RFCKG-4339: Все проценты снижены на 2 пункта
+        -- RFCKG-4661: Все проценты снижены на 3 пункта
+        matching_perc = case
+                          when datediff(year, pass_date_begin, current_date) &lt; 5 then 93
+                          when datediff(year, pass_date_begin, current_date) between 5 and 10 then 90
+                          when datediff(year, pass_date_begin, current_date) &gt; 10 then 85
+                          else 98
+                        end;
+    else if (db_id = 39801) then  -- RFCKG-4276
+        matching_perc = 0.85;
+    else
+        matching_perc = case
+                          when datediff(year, pass_date_begin, current_date) &lt; 5 then 98
+                          when datediff(year, pass_date_begin, current_date) between 5 and 10 then 95
+                          when datediff(year, pass_date_begin, current_date) &gt; 10 then 90
+                          else 98
+                        end;
+
+    ------  Для теста ---------------------- &gt;
+    if (f_get_const(&#x27;grs_fake_photo&#x27;) = 1) then
+        bls_id = (select bls_id from get_fake_grs_photo_id);
+    ---------------------------------------- &lt;
+    if ((coalesce(:bls_id, 0) &gt; 0) and (get_blob = 1)) then
+      blob_photo = (select blx_blob from hp_get_blobex_blob(:bls_id));
+
+    suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

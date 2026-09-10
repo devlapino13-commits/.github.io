@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DO_PERC_SET_KN_SALDO — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DO_PERC_SET_KN_SALDO: 3 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DO_PERC_SET_KN_SALDO</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_calc_perc_one_cls.html"><div class="to">AAREP_CALC_PERC_ONE_CLS</div></a><a class="ref-card" href="hp_devide_kn_amount.html"><div class="to">HP_DEVIDE_KN_AMOUNT</div></a><a class="ref-card" href="hp_kn_oksummary_kont_insert.html"><div class="to">HP_KN_OKSUMMARY_KONT_INSERT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_perc_to_pereplata.html"><div class="to">HP_DO_PERC_TO_PEREPLATA</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OL_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEW_PERC_SALDO</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DO_PERC_SET_KN_SALDO(
+    K_ID D_ID,
+    OL_DATE D_DATE,
+    NEW_PERC_SALDO D_CURRENCY)
+AS
+declare variable client_count d_integer;
+declare variable kc_id d_id;
+declare variable res_amount d_currency;
+declare variable oks_bal_perc d_currency;
+begin
+  if (new_perc_saldo is null) then
+  begin
+    select result_perc_end
+    from aarep_calc_perc_one_cls(:k_id, :ol_date, :ol_date, 0, 1, 1)
+    into :new_perc_saldo;
+  end
+
+  if (not exists(select *
+                 from kn_oksummary
+                 where oks_from_k_id = :k_id and
+                       oks_date_begin = :ol_date)) then
+    execute procedure hp_kn_oksummary_kont_insert(:k_id, :ol_date, 1);
+
+  select sum(oks_bal_perc)
+  from kn_oksummary
+  where oks_from_k_id = :k_id and
+        oks_date_begin = :ol_date
+  into oks_bal_perc;
+
+  if (oks_bal_perc is null) then
+    oks_bal_perc = 0;
+
+  if (oks_bal_perc &lt;&gt; new_perc_saldo) then
+  begin
+    select count(*)
+    from knclient
+    where kc_from_k_id = :k_id and
+          kc_amount_approved &gt; 0
+    into client_count;
+
+    if (client_count = 1) then
+    begin
+      update kn_oksummary
+      set oks_need_recalc = 1,
+          oks_is_fix_bal_perc = 1,
+          oks_bal_perc_fixed = :new_perc_saldo
+      where oks_from_k_id = :k_id and
+            oks_date_begin = :ol_date;
+    end else
+    begin
+      for select kc_id, res_amount
+      from hp_devide_kn_amount(:k_id, 0, :new_perc_saldo, 0)
+      into :kc_id, :res_amount
+      do
+      begin
+        update kn_oksummary
+        set oks_need_recalc = 1,
+            oks_is_fix_bal_perc = 1,
+            oks_bal_perc_fixed = :res_amount
+        where oks_from_kc_id = :kc_id and
+              oks_date_begin = :ol_date;
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

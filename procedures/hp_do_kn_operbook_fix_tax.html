@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DO_KN_OPERBOOK_FIX_TAX — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DO_KN_OPERBOOK_FIX_TAX: 1 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DO_KN_OPERBOOK_FIX_TAX</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">TOTAL_LINE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHANGED_LINE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DO_KN_OPERBOOK_FIX_TAX(
+    REP_DATE D_DATE)
+RETURNS (
+    TOTAL_LINE D_INTEGER,
+    CHANGED_LINE D_INTEGER)
+AS
+declare variable kob_id d_id;
+declare variable kob_summa d_currency;
+declare variable kob_summa_tax_dt d_currency;
+declare variable kob_summa_tax_kt d_currency;
+declare variable tax_kind_dt d_smallint;
+declare variable tax_kind_kt d_smallint;
+declare variable orig_summa_tax_dt d_currency;
+declare variable orig_summa_tax_kt d_currency;
+declare variable b_acc_dt d_str_code;
+declare variable b_acc_kt d_str_code;
+begin
+  total_line = 0;
+  changed_line = 0;
+  for select kob_id, kob_summa, kob_summa_tax_dt, kob_summa_tax_kt,
+             b_dt.ab_tax_kind,
+             b_kt.ab_tax_kind,
+             b_dt.ab_code,
+             b_kt.ab_code
+      from kn_operbook, ref_account a_dt, ref_account a_kt, ref_accbalance b_dt, ref_accbalance b_kt
+      where kob_ol_date &gt;= :rep_date and
+            kob_acc_dt = a_dt.acc_id and
+            kob_acc_kt = a_kt.acc_id and
+            a_dt.acc_from_add_ab_id = b_dt.ab_id and
+            a_kt.acc_from_add_ab_id = b_kt.ab_id and
+            kob_acc_dt &lt;&gt; 0 and
+            kob_acc_kt &lt;&gt; 0
+      into kob_id, kob_summa, orig_summa_tax_dt, orig_summa_tax_kt, tax_kind_dt, tax_kind_kt, b_acc_dt, b_acc_kt
+  do
+  begin
+    if (b_acc_dt = &#x27;60324 (23)&#x27; and b_acc_kt = &#x27;60323 (20)&#x27;) then
+    begin
+      update kn_operbook
+      set kob_summa_tax_dt = 0,
+          kob_summa_tax_kt = 0
+      where kob_id = :kob_id;
+
+      changed_line = changed_line + 1;
+      Continue;
+    end
+
+    if (b_acc_dt = &#x27;71802 (556061)&#x27; and b_acc_kt = &#x27;60323 (20)&#x27;) then
+      Continue;
+
+    total_line = total_line + 1;
+    kob_summa_tax_dt = orig_summa_tax_dt;
+    kob_summa_tax_kt = orig_summa_tax_kt;
+
+    if (tax_kind_dt = 0) then
+      kob_summa_tax_dt = kob_summa;
+    if (tax_kind_dt = 1) then
+      kob_summa_tax_dt = 0;
+
+    if (tax_kind_kt = 0) then
+      kob_summa_tax_kt = kob_summa;
+    if (tax_kind_kt = 1) then
+      kob_summa_tax_kt = 0;
+
+    if (tax_kind_dt = 2 and
+        tax_kind_kt in (0, 1)) then
+      kob_summa_tax_dt = kob_summa_tax_kt;
+    if (tax_kind_kt = 2 and
+        tax_kind_dt in (0, 1)) then
+      kob_summa_tax_kt = kob_summa_tax_dt;
+
+    if (tax_kind_dt = 2 and
+        tax_kind_kt = 2 and
+        kob_summa &lt;&gt; 0) then
+    begin
+      if (kob_summa_tax_dt &lt;&gt; 0 and
+          kob_summa_tax_dt &lt;&gt; kob_summa) then
+        kob_summa_tax_dt = kob_summa;
+      if (kob_summa_tax_kt &lt;&gt; 0 and
+          kob_summa_tax_kt &lt;&gt; kob_summa) then
+        kob_summa_tax_kt = kob_summa;
+    end
+
+    if (orig_summa_tax_dt &lt;&gt; kob_summa_tax_dt or orig_summa_tax_kt &lt;&gt; kob_summa_tax_kt) then
+    begin
+      update kn_operbook
+      set kob_summa_tax_dt = :kob_summa_tax_dt,
+          kob_summa_tax_kt = :kob_summa_tax_kt
+      where kob_id = :kob_id;
+
+      changed_line = changed_line + 1;
+    end
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

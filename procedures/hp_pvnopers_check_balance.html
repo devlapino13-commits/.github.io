@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_PVNOPERS_CHECK_BALANCE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_PVNOPERS_CHECK_BALANCE: 9 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_PVNOPERS_CHECK_BALANCE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">9</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="find_client_by_mb_card.html"><div class="to">FIND_CLIENT_BY_MB_CARD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">9 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PO_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OPER_TYPE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CARD_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OFFICE_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACC_KT</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">NEW_PO_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_PVNOPERS_CHECK_BALANCE(
+    PO_ID D_INTEGER,
+    OPER_TYPE D_SMALLINT,
+    C_ID D_ID,
+    CARD_ID D_INTEGER,
+    AMOUNT D_CURRENCY,
+    OFFICE_ID D_INTEGER,
+    ACC_KT D_STR_20,
+    K_ID D_ID,
+    UN_ID D_ID)
+RETURNS (
+    NEW_PO_ID D_INTEGER)
+AS
+declare variable STATUS D_INTEGER;
+declare variable CS_REQUEST_JSON D_STR_8100;
+declare variable CS_ID D_INTEGER;
+declare variable ACC_DT D_STR_20;
+declare variable IS_CASHING D_BOOL;
+declare variable IS_MB_CARD D_BOOL;
+declare variable CS_FROM_CSC_ID D_INTEGER;
+declare variable CS_OBJECT_KIND D_INTEGER;
+declare variable CS_UPD_DATETIME timestamp;
+declare variable PO_CARD_OFFICE_ID D_INTEGER;
+begin
+  amount = coalesce(amount, 0);
+  is_mb_card = 1;
+  cs_from_csc_id = f_get_cardsynccfg(&#x27;check_balance&#x27;, &#x27;id&#x27;);
+  cs_object_kind = f_objkind(&#x27;pvnopers&#x27;, &#x27;id&#x27;);
+
+  -- &gt; --------- валидация данных ----------------------------------------------
+
+  -- Проверка на утвержденный кредит
+  if (not exists(
+                    select 1
+                    from cardlistlnk cll
+                      inner join kontract k on cll.cll_from_k_id = k.k_id
+                    where cll.cll_card_id = :card_id
+                      and current_date between cll.cll_date_begin and cll.cll_date_end
+                      and k.k_status = 1
+                 )) then
+    exception e_message &#x27;Кредит по карте не утвержден&#x27;;
+
+  -- Ограничение проверки баланса за последние 30 сек
+  select first 1 cs.cs_upd_datetime
+  from cardsync cs
+  where
+    cs.cs_from_csc_id = :cs_from_csc_id
+    and cs.cs_object_kind = :cs_object_kind
+    and cs.cs_card_id = :card_id
+  order by cs.cs_upd_datetime desc
+  into :cs_upd_datetime;
+
+  if (datediff(second, coalesce(:cs_upd_datetime,cast(&#x27;01.01.1900&#x27; as timestamp)), current_timestamp) &lt;= 30) then
+    exception e_message &#x27;С момента последней проверки баланса не прошло 30 секунд, повторите попытку позже&#x27;;
+
+  if (oper_type is null) then
+    exception e_message &#x27;Не передан тип операции&#x27;;
+
+  if (c_id is null) then
+    exception e_message &#x27;Не передан id клиента&#x27;;
+
+  if (card_id is null) then
+    exception e_message &#x27;Не передан id карты&#x27;;
+
+  if (amount &lt;= 0) then
+    exception e_message &#x27;Сумма операции должна быть больше 0&#x27;;
+
+  if (office_id &lt;= 0) then
+    exception e_message &#x27;Не передан офис операции&#x27;;
+
+  if (office_id &lt;= 0) then
+    exception e_message &#x27;не передан пользователь - автор записи&#x27;;
+
+  if (oper_type = 0) then
+  begin
+      if (coalesce(acc_kt, &#x27;&#x27;) = &#x27;&#x27;) then
+        exception e_message &#x27;Счет Кт не определен&#x27;;
+    
+      acc_dt = (select al_id from acc_list where al_from_reg_id = :office_id and al_currency = 417 and al_account = &#x27;10024/2&#x27;); -- Операции по ПВН
+    
+      if (coalesce(acc_dt, &#x27;&#x27;) = &#x27;&#x27;) then
+        exception e_message &#x27;Счет Дт не определен&#x27;;
+    
+      select c_id,
+             is_cashing
+      from find_client_by_mb_card(:card_id)
+      into :c_id,
+           :is_cashing;
+    
+      if (c_id is null) then
+        exception e_message &#x27;Клиент (владелец) карты не определен&#x27;;
+    
+      if (is_cashing &lt;&gt; 1) then
+        exception e_message &#x27;С данной карты запрещено обналичивание&#x27;;
+
+      if (k_id is not null) then
+        exception e_message &#x27;Передан id кредита, хотя не должен был предаваться&#x27;;
+  end
+  else if (oper_type = 1) then
+  begin
+      if (k_id is null) then
+        exception e_message &#x27;id кредита не предано&#x27;;
+
+      if (coalesce(acc_kt, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+        exception e_message &#x27;Счет Кт не должен передваться&#x27;;
+  end
+  -- &lt; -------------------------------------------------------------------------
+
+-- Опеределяем филиал карты
+
+  select cpl.cpl_from_reg_id
+  from cardlist cal
+  inner join cardplace cpl on cal.cal_last_cpl_id = cpl.cpl_id
+  where cal.cal_card_id = :card_id
+  into :po_card_office_id;
+
+
+  if (po_id is null) then
+  begin
+      insert into pvnopers (po_date, po_oper_type, po_card_id, po_from_c_id, po_amount, po_un_id, po_office_id, po_status, po_is_mb_card, po_acc_kt, po_from_k_id, po_card_office_id)
+      values (current_date, :oper_type, :card_id, :c_id, :amount, :un_id, :office_id, 0, :is_mb_card, :acc_kt, :k_id, :po_card_office_id)
+      returning po_id
+      into :new_po_id;
+  end
+  else
+  begin
+    new_po_id = po_id;
+
+    select po.po_status
+    from pvnopers po
+    where po.po_id = :po_id
+    into :status;
+
+    if (status &gt; 2) then -- если уже отправлен запрос на списание с карты
+        exception e_message &#x27;Вы не можете осуществить проверку баланса карты, после того как осуществлен запрос на списание с карты&#x27;;
+
+    update pvnopers po
+    set po.po_date = current_date,
+        po.po_oper_type = :oper_type,
+        po.po_from_c_id = :c_id,
+        po.po_card_id = :card_id,
+        po.po_amount = :amount,
+        po.po_un_id = :un_id,
+        po.po_office_id = :office_id,
+        po.po_status = 0,
+        po_is_mb_card = :is_mb_card,
+        po.po_acc_kt = :acc_kt,
+        po.po_from_k_id = :k_id,
+        po.po_card_office_id = :po_card_office_id
+    where po.po_id = :po_id;
+  end
+
+  cs_request_json = f_format(&#x27;{&quot;card_id&quot;: %1}&#x27;, :card_id);
+
+  insert into cardsync(
+      cs_from_csc_id,
+      cs_card_id,
+      cs_object_kind,
+      cs_object_id,
+      cs_request_json,
+      cs_office_id,
+      cs_from_un_id
+      )
+  values(
+      :cs_from_csc_id,
+      :card_id,
+      :cs_object_kind,
+      :new_po_id,
+      :cs_request_json,
+      :office_id,
+      :un_id
+  )
+  returning cs_id
+  into :cs_id;
+
+  update pvnopers po
+  set po.po_balance_cs_id = :cs_id
+  where po.po_id = :new_po_id;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_POS_PAYMENTS — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_POS_PAYMENTS: 3 входных, 7 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_POS_PAYMENTS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">7</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_TYPE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">7 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PARENT_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OFFICE_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">TERM_NAME</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SUM_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KOLVO_TRANS</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">TERM_TYPE</div><div class="ptype">VARCHAR(10)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">COMMIS_PERC</div><div class="ptype">DECIMAL(18,7)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_POS_PAYMENTS(
+    REP_DATE_BEGIN D_DATE,
+    REP_DATE_END D_DATE,
+    REP_TYPE D_SMALLINT)
+RETURNS (
+    PARENT_NAME D_STR_100,
+    OFFICE_NAME D_STR_100,
+    TERM_NAME D_STR_255,
+    SUM_AMOUNT CURR_TYPE,
+    KOLVO_TRANS D_INTEGER,
+    TERM_TYPE D_STR_10,
+    COMMIS_PERC D_PERCENT)
+AS
+declare variable trm_id d_id;
+declare variable rd_id_tsp d_integer;
+declare variable rd_id_tsp_ipf d_integer;
+declare variable ag_id d_integer;
+declare variable cs_obj_kind d_integer;
+declare variable cl_obj_kind d_integer;
+begin
+  rep_type = coalesce(rep_type, 0);
+
+  if (rep_type = 1) then  -- Для всех ПВН кроме МБулак
+  begin
+    rd_id_tsp = f_get_rd_id(&#x27;AgreementKinds.tsp&#x27;);
+    rd_id_tsp_ipf = f_get_rd_id(&#x27;AgreementKinds.tsp_and_ipf&#x27;);
+    cs_obj_kind = f_objkind(&#x27;clientshops&#x27;, &#x27;id&#x27;);
+    cl_obj_kind = f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;);
+
+    for select ita.ita_term_name, rg.reg_name, rg2.reg_name, its.trm_id, coalesce(ag.ag_commis_cards_other, 0)
+        from ipc_terminals its
+        inner join ipc_terminal_app ita on ita.ita_from_trm_id = its.trm_id
+        inner join ipc_terminal_ownership ito on ito.ito_trm_id = its.trm_id
+        inner join region rg on rg.reg_unicode = ita.ita_from_reg_id
+        inner join region rg2 on rg2.reg_unicode = rg.parent
+        inner join clientshops cs on cs.cs_id = ito.ito_object_id and
+            cs.cs_from_rd_id = :rd_id_tsp
+        inner join agreements ag on ag.ag_object_id = cs.cs_from_c_id
+        where :rep_date_end between ito.ito_date_begin and ito.ito_date_end and
+              ito.ito_status &gt; -1 and
+              rg.reg_unicode &gt; 0 and
+              rg2.reg_unicode &gt; 0 and
+              ita.ita_term_name &lt;&gt; &#x27;М Булак&#x27; and
+              ita.ita_doc_date between ito.ito_date_begin and ito.ito_date_end and
+              ito.ito_object_kind = :cs_obj_kind and
+              ag.ag_object_kind = :cl_obj_kind and
+              ag.ag_status = 1 and
+              ag.ag_from_rd_id in (:rd_id_tsp, :rd_id_tsp_ipf) and
+              :rep_date_end between ag.ag_date_begin and coalesce(ag.ag_date_end, &#x27;31.12.9999&#x27;)
+        into term_name, office_name, parent_name, trm_id, commis_perc
+    do
+    begin
+      kolvo_trans = null;
+      sum_amount = null;
+
+      select count(t.igdp_terminal_id), sum(t.igdp_amount)
+      from ipc_gc_analiz_detail_pos t
+      inner join ipc_gc_analiz iga on iga.iga_id = t.igdp_from_iga_id
+      inner join ipc_file_analiz ifa on ifa.ifa_id = iga.iga_from_ifa_id
+      where ifa.ifa_date between :rep_date_begin and :rep_date_end and
+            t.igdp_terminal_id = :trm_id
+      group by igdp_from_ag_id
+      into kolvo_trans, sum_amount;
+
+      sum_amount = coalesce(sum_amount, 0);
+      kolvo_trans = coalesce(kolvo_trans, 0);
+      term_type = &#x27;POS&#x27;;
+
+      suspend;
+    end
+  end
+  else  -- Для ПВН МБулак
+  if (rep_type = 0) then
+  begin
+    for select ita.ita_term_name, rg.reg_name, rg2.reg_name, its.trm_id
+        from ipc_terminals its
+        inner join ipc_terminal_app ita on ita.ita_from_trm_id = its.trm_id
+        inner join ipc_terminal_ownership ito on ito.ito_trm_id = its.trm_id
+        inner join region rg on rg.reg_unicode = ita.ita_from_reg_id
+        inner join region rg2 on rg2.reg_unicode = rg.parent
+        where :rep_date_end between ito.ito_date_begin and ito.ito_date_end and
+              ito.ito_status &gt; -1 and
+              rg.reg_unicode &gt; 0 and
+              rg2.reg_unicode &gt; 0 and
+              ita.ita_term_name = &#x27;М Булак&#x27; and
+              ita.ita_doc_date between ito.ito_date_begin and ito.ito_date_end
+        into term_name, office_name, parent_name, trm_id
+    do
+    begin
+      kolvo_trans = null;
+      sum_amount = null;
+
+      select count(t.igdp_terminal_id), sum(t.igdp_amount)
+      from ipc_gc_analiz_detail_pos t
+      inner join ipc_gc_analiz iga on iga.iga_id = t.igdp_from_iga_id
+      inner join ipc_file_analiz ifa on ifa.ifa_id = iga.iga_from_ifa_id
+      where ifa.ifa_date between :rep_date_begin and :rep_date_end and
+            t.igdp_terminal_id = :trm_id
+      group by igdp_from_ag_id
+      into kolvo_trans, sum_amount;
+
+      commis_perc = 0;
+      sum_amount = coalesce(sum_amount, 0);
+      kolvo_trans = coalesce(kolvo_trans, 0);
+      term_type = &#x27;POS&#x27;;
+
+      suspend;
+    end
+  end 
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

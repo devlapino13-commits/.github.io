@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLC_ONE_INFO — процедура — схема БД</title>
+<meta name="description" content="Процедура LLC_ONE_INFO: 2 входных, 6 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>LLC_ONE_INFO</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="deliq_temp_one.html"><div class="to">DELIQ_TEMP_ONE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="llc_deliq_info.html"><div class="to">LLC_DELIQ_INFO</div></a><a class="ref-card" href="llc_last_llc_list.html"><div class="to">LLC_LAST_LLC_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">KONT_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">DELIQ_DAY_KOL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">BALANCE</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LOAN_TYPE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PERCENT_KOEF</div><div class="ptype">DECIMAL(18,7)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">STATUS_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REG_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE LLC_ONE_INFO(
+    KONT_ID DECIMAL(18,0),
+    REP_DATE DATE)
+RETURNS (
+    DELIQ_DAY_KOL INTEGER,
+    BALANCE DECIMAL(18,4),
+    LOAN_TYPE SMALLINT,
+    PERCENT_KOEF DECIMAL(18,7),
+    STATUS_ID INTEGER,
+    REG_ID INTEGER)
+AS
+declare variable pros_date date;
+declare variable perc_ind decimal(18,7);
+declare variable perc_gr decimal(18,7);
+begin
+  /* Procedure Text */
+  select min(sh_date)
+  from deliq_temp_one(:kont_id, :rep_date)
+  into :pros_date;
+
+  if (pros_date is null) then
+    deliq_day_kol = 0;
+  else
+    deliq_day_kol = cast((rep_date - pros_date) as integer);
+
+  select min(pr_loan_type), sum(ok_os), min(kal_new_reg_id)
+  from operkred, kontract, product, knaktlist
+  where k_from_pr_id = pr_id and
+        kal_from_kf_id = k_from_kf_id and
+        kal_date &lt;= :rep_date and
+        kal_date_end &gt;= :rep_date and
+        knaktlist.is_delete = 0 and
+        ok_ol_is_active = 1 and
+        ok_from_k_id = k_id and
+        ok_from_k_id = :kont_id and
+        ok_ol_date &lt;= :rep_date and
+        ok_type &gt; 3 and
+        ok_type &lt;= 8 and
+        ok_from_c_id = 0
+  into :loan_type, :balance, :reg_id;
+
+  if (balance is null) then
+    balance = 0;
+  if (loan_type is null) then
+    loan_type = 0;
+  if (reg_id is null) then
+    reg_id = 1000000;
+
+  select cs_is_for_group, cs_is_for_indiv, cs_id
+  from classific
+  where cs_day_min &lt;= :deliq_day_kol and
+        cs_day_max &gt;= :deliq_day_kol
+  order by cs_id desc
+  rows 1
+  into :perc_gr, :perc_ind, :status_id;
+
+  if (loan_type = 0) then
+    percent_koef = :perc_gr;
+  else
+    percent_koef = :perc_ind;
+  if (percent_koef is null) then
+    percent_koef = 0;
+  if (status_id is null) then
+    status_id = 1;
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

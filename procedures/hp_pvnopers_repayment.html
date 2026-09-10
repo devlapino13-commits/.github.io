@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_PVNOPERS_REPAYMENT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_PVNOPERS_REPAYMENT: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_PVNOPERS_REPAYMENT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_repayment.html"><div class="to">HP_DO_REPAYMENT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_cardsync_action_exec_one.html"><div class="to">HP_CARDSYNC_ACTION_EXEC_ONE</div></a><a class="ref-card" href="hp_pvnopers_save.html"><div class="to">HP_PVNOPERS_SAVE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PO_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CS_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_PVNOPERS_REPAYMENT(
+    PO_ID D_INTEGER NOT NULL,
+    CS_ID D_INTEGER = null)
+AS
+declare variable acc_dt d_str_20;
+declare variable is_ipf d_bool;
+declare variable ol_id d_id;
+declare variable c_id d_id;
+declare variable card_id d_integer;
+declare variable k_id d_id;
+declare variable amount d_currency;
+declare variable ticket_no d_str_code;
+declare variable office_id d_integer;
+declare variable un_id d_id;
+declare variable is_mb_card d_bool;
+declare variable card_acc_no d_str_code;
+begin
+  select po.po_from_c_id,
+         po.po_card_id,
+         po.po_from_k_id,
+         po.po_amount,
+         po.po_ticket_no,
+         po.po_office_id,
+         po.po_un_id,
+         po.po_is_mb_card
+  from pvnopers po
+  where po.po_id = :po_id
+  into :c_id,
+       :card_id,
+       :k_id,
+       :amount,
+       :ticket_no,
+       :office_id,
+       :un_id,
+       :is_mb_card;
+
+  select iif(pr_code like &#x27;%.ipf.%&#x27;, 1, 0)
+  from kontract kont
+  inner join product pr on pr.pr_id = kont.k_from_pr_id
+  where kont.k_id = :k_id
+  into :is_ipf;
+
+  if (is_mb_card = 1) then
+  begin
+    acc_dt = (
+      select al_id
+      from acc_list
+      where al_from_reg_id = :office_id
+        and al_account = &#x27;20001/1&#x27;);
+  end
+  else
+  begin
+      acc_dt = (
+          select al_id
+          from acc_list
+          where al_from_reg_id = :office_id
+            and al_account = iif(:is_ipf = 1, &#x27;10024/102&#x27;, &#x27;10024/2&#x27;));
+  end
+
+  select
+      ol_id
+  from  hp_do_repayment (
+      :k_id,
+      0,                    -- c_id
+      current_date,           -- rep_date
+      :amount,              -- repay_amount
+      1,                    -- repay_to_os
+      1,                    -- repay_to_perc
+      1,                    -- repay_to_fine
+      1,                    -- repay_to_kommis
+      1,                    -- need_save
+      0,                    -- is_full_repay
+      0,                    -- is_writeoff
+      :office_id,           -- repay_fact_office_id
+      18,                    -- repay_dt_account_kind
+      :acc_dt,              -- repay_dt_account_no
+      0,                    -- repay_curr_rate
+      :un_id,               -- repay_user_id
+      :c_id,                -- repay_document_client
+      null,   -- repay_doc_client_name_reason
+      0,                    -- repay_manager_c_id
+      0)                    -- repay_from_rd_id
+  into
+    :ol_id;
+
+  if (:is_mb_card = 1) then
+    select cca.cca_code
+    from cardlist cal
+       inner join cardclientacc cca on cal.cal_from_cca_id = cca.cca_id
+    where cal.cal_card_id = :card_id
+    into :card_acc_no;
+
+  update operlist
+  set ol_memo = iif(:is_mb_card = 0, f_format(&#x27;Погашение кредита по ПВН согласно чека № %1 от %2 &#x27;, :ticket_no, f_datetostr(current_date)), f_format(&#x27;Погашение кредита по ПВН: ID %1 (сч.%2) &#x27;, :card_id, :card_acc_no)) || ol_memo
+  where ol_id = :ol_id;
+
+  if (ol_id is null) then
+      exception e_message &#x27;Не удается сохранить платеж. ol_id = null&#x27;;
+    
+  update pvnopers po
+  set po.po_status = f_enum(&#x27;pvnopers_status&#x27;, &#x27;operation_ok&#x27;, &#x27;id&#x27;),
+      po.po_from_ol_id = :ol_id
+  where po.po_id = :po_id;
+
+  if (:cs_id is not null) then
+    insert into cardsyncopers (cso_from_cs_id, cso_from_ol_id, cso_after_exec)
+    values (:cs_id, :ol_id,  1);
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

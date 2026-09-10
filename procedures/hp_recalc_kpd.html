@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_RECALC_KPD — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_RECALC_KPD: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_RECALC_KPD</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_calc_repayment_obligations.html"><div class="to">HP_CALC_REPAYMENT_OBLIGATIONS</div></a><a class="ref-card" href="print_client_analiz.html"><div class="to">PRINT_CLIENT_ANALIZ</div></a><a class="ref-card" href="save_cfp_kpd.html"><div class="to">SAVE_CFP_KPD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_RECALC_KPD
+AS
+declare variable i d_integer;
+declare variable ca_id d_id;
+declare variable repayment_obligations decimal(15,2);
+declare variable current_repayment_obligations decimal(15,2);
+declare variable k_id d_id;
+declare variable mac_id d_id;
+declare variable ma_id d_id;
+declare variable kc_id d_id;
+declare variable c_id d_id;
+declare variable kpd_err d_str_255;
+declare variable const_max_index d_integer;
+begin
+  -- RFCKG-4535 Робот делает пересчет КПД
+  -- если repayment_obligations (Погашение других долговых обязательств) из анкеты не совпадает с расчетом по текущей формуле
+  i = 0;
+  const_max_index = 300; -- количество контрактов для расчета
+
+  for select k.k_from_ma_app_id,
+             k.k_id
+  from kontstate ks
+  inner join kontract k on ks.ks_from_k_id = k.k_id
+  where ks.ks_ol_is_delete = 0 and
+        ks.ks_state = 1 and
+        ks.ks_date_end = &#x27;31.12.9999&#x27; and
+        ks.ks_date_begin &gt;= &#x27;24.11.2024&#x27; and
+        ks.ks_date_begin &lt;= &#x27;19.06.2025&#x27;
+      into ma_id,
+           k_id
+  do
+  begin
+    if (i = const_max_index) then    -- так как расчет КПД тяжелый есть ограничение по количеству контрактов
+      exit;
+
+    select mac.mac_id,
+           mac.mac_from_c_id
+    from miniappclient mac
+    where mac.mac_from_ma_id = :ma_id and
+          mac.mac_amount &gt; 0 rows 1
+    into mac_id,
+         c_id;
+
+    select ca.ca_id
+    from cfp_anketa ca
+    where ca.ca_object_kind = f_objkind(&#x27;miniappclient&#x27;, &#x27;id&#x27;) and
+          ca.ca_object_id = :mac_id and
+          ca.ca_from_c_id = :c_id rows 1
+    into ca_id;
+
+    ca_id = coalesce(:ca_id, -1);
+
+    if (ca_id &lt;= 0) then
+      continue;
+
+    select kc.kc_id
+    from knclient kc
+    where kc.kc_from_k_id = :k_id and
+          kc.kc_amount_approved &gt; 0 rows 1
+    into kc_id;
+
+    select repayment_obligations
+    from print_client_analiz(:kc_id)
+    into current_repayment_obligations;
+
+    select repayment_obligations
+    from hp_calc_repayment_obligations(:ma_id)
+    into :repayment_obligations;
+
+    if (current_repayment_obligations &lt;&gt; repayment_obligations) then
+    begin
+
+      select kpd_err
+      from save_cfp_kpd(:mac_id)       -- Делаем расчет
+      into :kpd_err;
+
+      if (coalesce(kpd_err, &#x27;&#x27;) = &#x27;&#x27;) then
+        i = i + 1;
+    end
+
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CRIF_GET_KONTRACT_DATA_TMP — процедура — схема БД</title>
+<meta name="description" content="Процедура CRIF_GET_KONTRACT_DATA_TMP: 1 входных, 7 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CRIF_GET_KONTRACT_DATA_TMP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">7</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="crif_get_loan_categ.html"><div class="to">CRIF_GET_LOAN_CATEG</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="crif_get_cl_data.html"><div class="to">CRIF_GET_CL_DATA</div></a><a class="ref-card" href="crif_get_kont_data.html"><div class="to">CRIF_GET_KONT_DATA</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">POCKET_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">7 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_KONTRACT_NO</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ORDER_MARK</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PHASEOFCONTRACT</div><div class="ptype">VARCHAR(10)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DAYS_PAST_DUE_DOMAIN</div><div class="ptype">VARCHAR(10)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DAYS_PAST_DUE_DOMAIN_PREV</div><div class="ptype">VARCHAR(10)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LOCAL_STATUS</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CRIF_GET_KONTRACT_DATA_TMP(
+    POCKET_ID INTEGER)
+RETURNS (
+    K_ID ID_TYPE,
+    K_KONTRACT_NO D_STR_CODE,
+    ORDER_MARK D_SMALLINT,
+    PHASEOFCONTRACT D_STR_10,
+    DAYS_PAST_DUE_DOMAIN D_STR_10,
+    DAYS_PAST_DUE_DOMAIN_PREV D_STR_10,
+    LOCAL_STATUS D_STR_CODE)
+AS
+declare variable K_ID_OLD ID_TYPE;
+declare variable REP_DATE_BEGIN D_DATE;
+declare variable REP_DATE_END D_DATE;
+declare variable POCKET_TYPE D_STR_10;
+declare variable DO_SUSPEND D_BOOL;
+declare variable DISB_DATE D_DATE;
+declare variable DATE_TYPE D_STR_20;
+declare variable DAYS_PAST_DUE_DOMAIN_TMP D_STR_10;
+begin
+  k_id_old = 0;
+
+  select cp.cp_date_begin, --
+         cp.cp_date_end, --
+         cp.cp_pocket_type
+  from cib_pocket cp
+  where cp.cp_id = :pocket_id
+  into :rep_date_begin,
+       :rep_date_end,
+       :pocket_type;
+
+  if ((rep_date_end is null) or (pocket_type is null)) then
+    exit;
+
+  for select ks_from_k_id,
+             order_mark,
+             phaseofcontract
+      from (
+            -- получаю список закрытых займов
+            select ks_from_k_id,
+                   order_mark, &#x27;CL&#x27; as phaseofcontract
+            from (select ks.ks_from_k_id,
+                         0 as order_mark -- &lt;-- важно!
+                  from kontstate ks
+                  where ks.ks_state = 2 and
+                        ks.ks_date_begin between :rep_date_begin and :rep_date_end and
+                        ks.ks_ol_is_delete = 0) closedkont
+            union
+            -- получаю список активных займов
+            select ks_from_k_id,
+                   order_mark,
+                   &#x27;AC&#x27; as phaseofcontract
+            from (select ks.ks_from_k_id, 2 as order_mark
+                  from kontstate ks
+                  where ks.ks_state = 1 and
+                        :rep_date_end between ks.ks_date_begin and ks.ks_date_end and
+                        ks.ks_ol_is_delete = 0) activekont
+            ---------------- Актуализаци информации в CC ----------------- &gt;
+            -- &gt; Активные в КИБ, но закрытые в МБулак +
+            -- &gt; Активные в МБулак, которые в КИБ не были отпралены
+            union
+            select ks_from_k_id,
+                   order_mark,
+                   phaseofcontract
+            from (select ks.ks_from_k_id,
+                         0 as order_mark,
+                         iif(ks.ks_state = 1, &#x27;AC&#x27;, &#x27;CL&#x27;) as phaseofcontract
+                  from cib_actuality cke
+                  inner join kontstate ks  on ks.ks_from_k_id = cke.k_id
+                  where :rep_date_end between ks.ks_date_begin and ks.ks_date_end and
+                        ks.ks_ol_is_delete = 0) CheckedKont
+      ) total
+      order by ks_from_k_id,
+               order_mark
+      into :k_id,
+           :order_mark,
+           :phaseofcontract
+  do
+  begin
+    if (k_id &lt;&gt; k_id_old) then
+    begin
+      k_id_old = k_id;
+
+
+
+      -- если крежит в игнор листе, его не отправляем
+      if (exists(select * from kib_ignore where ki_from_k_id = :k_id)) then
+        continue;
+
+      select kont.k_kontract_no,
+             kont.k_disb_date
+      from kontract kont
+      where kont.k_id = :k_id
+      into :k_kontract_no,
+           :disb_date;
+
+      do_suspend = 0;
+    
+      if (phaseofcontract = &#x27;CL&#x27;) then  -- если крежит был закрыт отпраляем его в любом случае
+      begin
+        days_past_due_domain = &#x27;1&#x27;;
+        local_status = &#x27;closed&#x27;;
+        do_suspend = 1;
+      end
+      else -- если это активный заем
+      begin
+           days_past_due_domain = &#x27;&#x27;;
+        
+           -- если у кредита изменился статус просрочки по отновшению к предыдущему дню, отправляем его
+           for select date_type,
+                      days_past_due_domain
+           from crif_get_loan_categ(:k_id, :rep_date_end)
+           into :date_type,
+                :days_past_due_domain_tmp
+           do
+           begin
+               if (date_type = &#x27;rep_date&#x27;) then
+                   days_past_due_domain = days_past_due_domain_tmp;
+               else
+                   days_past_due_domain_prev = days_past_due_domain_tmp;
+           end
+           if (days_past_due_domain &lt;&gt; days_past_due_domain_prev) then
+           begin
+               local_status = &#x27;chacnged_delinq_status&#x27;;
+               do_suspend = 1;
+           end
+           -- &lt; ---------
+           -- если это выдача займа
+           if ((do_suspend = 0) and (disb_date between rep_date_begin and rep_date_end)) then
+           begin
+               local_status = &#x27;disb&#x27;;
+               do_suspend = 1;
+           end
+           -- если на период пакета по кредиту была оплата, добавляем кредит в пакет
+           if (do_suspend = 0) then
+           begin
+               if (exists(select *
+                       from operkred ok
+                       where ok.ok_type in (2, 4, 9) and
+                             ok.ok_ol_is_active = 1 and
+                             ok.ok_from_k_id = :k_id and
+                             ok.ok_ol_date between :rep_date_begin and :rep_date_end)) then
+               begin
+                   local_status = &#x27;payed&#x27;;
+                   do_suspend = 1;
+               end
+           end
+           -- &lt; --
+      end
+
+      if (do_suspend = 1) then
+           suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

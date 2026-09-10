@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DO_KN_OPERBOOK_FIX_SALDO_TAX — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DO_KN_OPERBOOK_FIX_SALDO_TAX: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DO_KN_OPERBOOK_FIX_SALDO_TAX</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">BALANCE_ACCOUNT</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DO_KN_OPERBOOK_FIX_SALDO_TAX(
+    REP_DATE D_DATE,
+    BALANCE_ACCOUNT D_STR_CODE)
+AS
+declare variable ol_id d_id;
+declare variable diff_amount d_currency;
+declare variable acc_dt d_id;
+declare variable acc_kt d_id;
+declare variable line_id d_integer;
+declare variable acc_id d_id;
+declare variable kob_summa_bal d_currency;
+declare variable kob_summa_tax d_currency;
+declare variable tax_kind d_smallint;
+declare variable add_ab_id d_id;
+begin
+  -- Процедура показывает и если надо исправляет сальдо НУ по лицевым счетам через 0-й счет.
+
+  -- Если передать NEED_CREATE_OPERLIST = 1, будет создан мем.ордер для исправления остатков.
+  -- Иначе будет отображен только как список.
+
+  select ab_id, ab_tax_kind
+  from ref_accbalance
+  where ab_code = :balance_account
+  into add_ab_id, tax_kind;
+
+  if (row_count = 0) then
+    exit;
+
+  line_id = 0;
+  for select acc_id
+  from ref_account
+  where acc_from_add_ab_id = :add_ab_id
+  into acc_id
+  do
+  begin
+    for select kobs_bal_sum, kobs_bal_tax
+    from kn_obsummary
+    where kobs_acc_id = :acc_id and
+          kobs_date &lt;= :rep_date
+    order by kobs_acc_id desc, kobs_date desc
+    rows 1
+    into kob_summa_bal, kob_summa_tax
+    do
+    begin
+      if (tax_kind = 0 and kob_summa_bal = kob_summa_tax) then
+        Continue;
+
+      if (tax_kind = 1 and kob_summa_tax = 0) then
+        Continue;
+
+      line_id = line_id + 1;
+  
+      --0 - Всегда БУ = НУ
+      --1 - Всегда НУ = 0
+  
+      if (ol_id is null) then
+      begin
+        insert into operlist (ol_from_reg_id, ol_oper_type, ol_oper_subtype, ol_date, ol_doc_kind, ol_doc_no, ol_doc_no_str,
+                              ol_memo, ol_parent_id, is_delete, ol_user_id)
+        values (1010100, 2, 11, :rep_date, 9, 0, &#x27;&#x27;, &#x27;Корректировка суммы НУ по счету &#x27; || :balance_account, null, 0, 1000000000001)
+        returning ol_id
+        into :ol_id;
+      end
+  
+      if (tax_kind = 0) then
+        diff_amount = kob_summa_bal - kob_summa_tax;
+      else
+        diff_amount = -kob_summa_tax;
+  
+      if (diff_amount = 0) then
+        Continue;
+  
+      if (diff_amount &gt; 0) then
+      begin
+        acc_dt = acc_id;
+        acc_kt = 0;
+      end else
+      begin
+        acc_dt = 0;
+        acc_kt = acc_id;
+        diff_amount = -diff_amount;
+      end
+  
+      insert into kn_operbook (kob_currency, kob_curr_rate, kob_acc_dt, kob_acc_kt, kob_summa, kob_summa_val,
+                               kob_summa_tax_dt, kob_summa_tax_kt, kob_from_ol_id, kob_ol_date, kob_ol_reg_id, kob_ol_is_active)
+      values (&#x27;810&#x27;, 1, :acc_dt, :acc_kt, 0, 0,
+              :diff_amount, :diff_amount, :ol_id, :rep_date, 1010100, 1);
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

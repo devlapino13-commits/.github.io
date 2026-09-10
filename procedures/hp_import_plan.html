@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_IMPORT_PLAN — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_IMPORT_PLAN: 4 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_IMPORT_PLAN</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">IMP_TXT1</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">IMP_TXT2</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DT_PLAN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_IMPORT_PLAN(
+    IMP_TXT1 D_BLOB_TEXT,
+    IMP_TXT2 D_BLOB_TEXT,
+    DT_PLAN DATE,
+    UN_ID ID_TYPE)
+AS
+declare variable imp_txt d_blob_text;
+declare variable db_id integer;
+declare variable c_id id_type;
+declare variable reg_id integer;
+declare variable regp_id integer;
+declare variable c_name str_100;
+declare variable sum_classic_all integer;
+declare variable sum_classic integer;
+declare variable sum_ipf_all integer;
+declare variable sum_ipf integer;
+declare variable rd_classic_id integer;
+declare variable rd_ipf_id integer;
+declare variable pp_classic_id integer;
+declare variable pp_ipf_id integer;
+declare variable pm_id integer;
+declare variable pr_plan integer;
+declare variable rec_txt str_255;
+declare variable rec_len integer;
+declare variable rec_posp integer;
+declare variable rec_posc integer;
+declare variable fld_pos1 integer;
+declare variable fld_pos2 integer;
+declare variable iter integer;
+begin
+  imp_txt = imp_txt1 || imp_txt2;
+
+  db_id = f_get_db_id();
+  rd_classic_id = f_get_rd_id(&#x27;PlanIndicators.Disb_Amount&#x27;);
+  rd_ipf_id = f_get_rd_id(&#x27;PlanIndicators.Disb_Amount_IPF&#x27;);
+
+  dt_plan = dateadd(1 - extract(day from dt_plan) day to dt_plan);
+  pr_plan = 100 * extract(year from dt_plan) + extract(month from dt_plan);
+
+-- Чистка данных
+  delete from planoper
+  where po_date = :dt_plan and
+        po_from_pm_id in (select pm_id
+                          from planmain
+                          where pm_from_rd_id in (:rd_classic_id, :rd_ipf_id));
+  rec_posp = 0;
+  sum_classic_all = 0;
+  sum_ipf_all = 0;
+  while (1 = 1) do
+  begin
+    rec_posc = position(&#x27;|&#x27;, imp_txt, rec_posp + 1);
+    if (rec_posc &gt; rec_posp) then
+    begin
+      rec_txt = substring(imp_txt from rec_posp + 1 for rec_posc - rec_posp - 1);
+      rec_len = char_length(rec_txt);
+      fld_pos1 = position(&#x27;;&#x27;, rec_txt);
+      if (fld_pos1 &gt; 0) then
+      begin
+        fld_pos2 = position(&#x27;;&#x27;, rec_txt, fld_pos1 + 1);
+        c_name = left(rec_txt, fld_pos1 - 1);
+
+        regp_id = (select reg_unicode
+                   from region
+                   where reg_name = :c_name and
+                         reg_date_close is null);
+        if (regp_id is not null) then
+        begin
+          reg_id = regp_id;
+          c_id = 0;
+        end
+        else
+        begin
+          if ((db_id = 81001) and
+              (c_name = &#x27;КЦ Сирена&#x27;)) then
+            c_id = (select first 1 c_id
+                    from clients
+                    where c_name_fio = :c_name);
+          else
+            c_id = (select first 1 c_id
+                    from clients
+                    where c_name_fio = :c_name and
+                          exists(select *
+                                 from hr_pstatus
+                                 inner join hr_orders on ho_id = ps_from_ho_id and
+                                       ho_status = 1
+                                 where ps_from_c_id = c_id and
+                                       current_date between ps_date_begin and ps_date_end and
+                                       ps_is_working = 1));
+        end
+        if (c_id is not null) then
+        begin
+-- Классика
+          sum_classic = iif(fld_pos2 = 0, right(rec_txt, rec_len - fld_pos1), substring(rec_txt from fld_pos1 + 1 for fld_pos2 - fld_pos1 - 1));
+          if (sum_classic &gt; 0) then
+          begin
+            if (c_id &gt; 0) then
+            begin
+              if (pp_classic_id is null) then
+              begin
+                insert into planpocket (pp_date, pp_memo, pp_from_un_id)
+                values (:dt_plan,
+                        &#x27;План выдач на &#x27; || f_monthname(:dt_plan) || &#x27;(классика/импорт)&#x27;,
+                        :un_id)
+                returning pp_id
+                into :pp_classic_id;
+              end
+
+              pm_id = (select pm_id
+                       from planmain
+                       where pm_from_rd_id = :rd_classic_id and
+                             pm_from_reg_id = :reg_id and
+                             pm_from_c_id = :c_id and
+                             pm_is_mgr = 0);
+              if (pm_id is null) then
+                insert into planmain (pm_from_rd_id, pm_from_reg_id, pm_from_c_id)
+                values (:rd_classic_id, :reg_id, :c_id)
+                returning pm_id
+                into :pm_id;
+              insert into planoper (po_from_pp_id, po_from_pm_id, po_date, po_period, po_calc, po_minus)
+              values (:pp_classic_id, :pm_id, :dt_plan, :pr_plan, :sum_classic, 0);
+            end
+            else
+              sum_classic_all = sum_classic_all + sum_classic;
+          end
+
+-- ИПФ
+          sum_ipf = iif(fld_pos2 = 0, 0, right(rec_txt, rec_len - fld_pos2));
+          if (sum_ipf &gt; 0 and
+              db_id in (39801, 41701)) then
+          begin
+            if (c_id &gt; 0) then
+            begin
+              if (pp_ipf_id is null) then
+              begin
+                insert into planpocket (pp_date, pp_memo, pp_from_un_id)
+                values (:dt_plan, &#x27;План выдач на &#x27; || f_monthname(:dt_plan) || &#x27;(ИПФ/импорт)&#x27;,
+                        :un_id)
+                returning pp_id
+                into :pp_ipf_id;
+              end
+
+              pm_id = (select pm_id
+                       from planmain
+                       where pm_from_rd_id = :rd_ipf_id and
+                             pm_from_reg_id = :reg_id and
+                             pm_from_c_id = :c_id and
+                             pm_is_mgr = 0);
+              if (pm_id is null) then
+                insert into planmain (pm_from_rd_id, pm_from_reg_id, pm_from_c_id)
+                values (:rd_ipf_id, :reg_id, :c_id)
+                returning pm_id
+                into :pm_id;
+              insert into planoper (po_from_pp_id, po_from_pm_id, po_date, po_period, po_calc, po_minus)
+              values (:pp_ipf_id, :pm_id, :dt_plan, :pr_plan, :sum_ipf, 0);
+            end
+            else
+              sum_ipf_all = sum_ipf_all + sum_ipf;
+          end
+        end
+      end
+    end
+    else
+      leave;
+    rec_posp = rec_posc;
+  end
+
+-- Группировка (офисы)
+  insert into planoper (po_from_pp_id, po_from_pm_id, po_date, po_period, po_calc, po_minus)
+  select a.pp_id, pm_id, :dt_plan, :pr_plan, a.po_calc, 0
+  from (select pm_from_reg_id as reg_id, po_from_pp_id as pp_id, sum(po_calc) as po_calc
+        from planoper
+        inner join planmain on pm_id = po_from_pm_id and
+              pm_from_c_id &gt; 0
+        where po_from_pp_id in (:pp_classic_id, :pp_ipf_id)
+        group by pm_from_reg_id, po_from_pp_id) as a
+  inner join planmain on pm_from_reg_id = a.reg_id and
+        pm_from_c_id = 0 and
+        pm_is_mgr = 0 and
+        pm_from_rd_id = iif(a.pp_id = :pp_classic_id, :rd_classic_id, :rd_ipf_id);
+
+-- Группировка (регионы)
+  reg_id = 1000000;
+  iter = 0;
+  while (iter &lt; 3) do
+  begin
+    iter = iter + 1;
+    insert into planoper (po_from_pp_id, po_from_pm_id, po_date, po_period, po_calc, po_minus)
+    select a.pp_id, pm_id, :dt_plan, :pr_plan,
+           iif(:iter = 3, iif(pm_from_rd_id = :rd_classic_id, :sum_classic_all, :sum_ipf_all), a.po_calc), 0
+    from (select parent as reg_id, po_from_pp_id as pp_id, sum(po_calc) as po_calc
+          from planoper
+          inner join planmain on pm_id = po_from_pm_id and
+                pm_from_c_id = 0
+          inner join region on reg_unicode = pm_from_reg_id and
+                reg_status = iif(:iter = 1, 3, 2) and
+                iif(:iter = 3, parent = :reg_id, parent &lt;&gt; :reg_id)
+          where po_from_pp_id in (:pp_classic_id, :pp_ipf_id)
+          group by parent, po_from_pp_id) as a
+    inner join planmain on pm_from_reg_id = a.reg_id and
+          pm_from_c_id = 0 and
+          pm_is_mgr = 0 and
+          pm_from_rd_id = iif(a.pp_id = :pp_classic_id, :rd_classic_id, :rd_ipf_id);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

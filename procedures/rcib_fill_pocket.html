@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RCIB_FILL_POCKET — процедура — схема БД</title>
+<meta name="description" content="Процедура RCIB_FILL_POCKET: 5 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>RCIB_FILL_POCKET</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RCP_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">POCKET_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">IS_KREDIT</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RCP_TYPE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">BASE_RCP_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RCP_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RCP_VERSION</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RCP_FILENAME</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE RCIB_FILL_POCKET(
+    RCP_DATE_BEGIN DATE,
+    POCKET_DATE DATE,
+    IS_KREDIT SMALLINT,
+    RCP_TYPE SMALLINT,
+    BASE_RCP_ID ID_TYPE)
+RETURNS (
+    RCP_ID ID_TYPE,
+    RCP_VERSION INTEGER,
+    RCP_FILENAME STR_255)
+AS
+declare variable y varchar(4);
+declare variable m varchar(2);
+declare variable d varchar(2);
+declare variable v varchar(1);
+declare variable kredit_active_date date;
+declare variable rcp_date date;
+declare variable ma_active_date date;
+begin
+  if (base_rcp_id = 0) then
+    base_rcp_id = null;
+
+  kredit_active_date = cast(&#x27;01.07.2014&#x27; as date); -- дата запуска проекта по выгрузке кредитных историй
+  ma_active_date = cast(&#x27;01.03.2015&#x27; as date); -- дата запуска проекта по выгрузке ФИЧ-файла
+
+  if (base_rcp_id is null) then -- если это не пакет по ошибкам
+  begin
+    select rcp.rcp_date, rcp.rcp_version
+    from rcib_pocket rcp
+    where rcp.rcp_date &lt;= :pocket_date and
+          rcp.rcp_is_kredit = :is_kredit
+    order by rcp.rcp_date desc
+    rows 1
+    into :rcp_date, rcp_version;
+
+    if (rcp_date = pocket_date) then
+      rcp_version = rcp_version + 1;
+    else
+    begin
+      rcp_date_begin = rcp_date + 1;
+      rcp_version = 1;
+    end
+  end
+  else
+  begin
+    select rcp.rcp_date_begin, rcp.rcp_date
+    from rcib_pocket rcp
+    where rcp.rcp_id = :base_rcp_id
+    into :rcp_date_begin, :pocket_date;
+  end
+
+  if (is_kredit = 1) then
+  begin
+    if (rcp_date_begin is null) then
+    begin
+      rcp_date_begin = kredit_active_date;
+    end
+  end
+  else
+  if (rcp_date_begin is null) then
+    rcp_date_begin = ma_active_date;
+
+  if (rcp_date_begin &lt; ma_active_date) then
+    rcp_date_begin = ma_active_date;
+
+  if (rcp_type = 2) then
+    rcp_date_begin = &#x27;01.01.1900&#x27;;
+------------------------------------------------------------------------
+  select max(rcp.rcp_id)
+  from rcib_pocket rcp
+  into :rcp_id;
+  rcp_id = coalesce(rcp_id, 0) + 1;
+
+  if (is_kredit = 0) then
+    y = cast(extract(year from pocket_date) as varchar(4));
+  else
+    y = substring(cast(extract(year from :pocket_date) as varchar(4)) from 4 for 1);
+  m = cast(extract(month from :pocket_date) as varchar(2));
+  d = cast(extract(day from :pocket_date) as varchar(2));
+
+  if (is_kredit = 1) then -- кредитный пакет
+  begin
+    if (m = &#x27;10&#x27;) then
+      m = &#x27;A&#x27;;
+    else
+    if (m = &#x27;11&#x27;) then
+      m = &#x27;B&#x27;;
+    else
+    if (m = &#x27;12&#x27;) then
+      m = &#x27;C&#x27;;
+
+    if (d = &#x27;10&#x27;) then
+      d = &#x27;A&#x27;;
+    else
+    if (d = &#x27;11&#x27;) then
+      d = &#x27;B&#x27;;
+    else
+    if (d = &#x27;12&#x27;) then
+      d = &#x27;C&#x27;;
+    else
+    if (d = &#x27;13&#x27;) then
+      d = &#x27;D&#x27;;
+    else
+    if (d = &#x27;14&#x27;) then
+      d = &#x27;E&#x27;;
+    else
+    if (d = &#x27;15&#x27;) then
+      d = &#x27;F&#x27;;
+    else
+    if (d = &#x27;16&#x27;) then
+      d = &#x27;J&#x27;;
+    else
+    if (d = &#x27;17&#x27;) then
+      d = &#x27;H&#x27;;
+    else
+    if (d = &#x27;18&#x27;) then
+      d = &#x27;I&#x27;;
+    else
+    if (d = &#x27;19&#x27;) then
+      d = &#x27;J&#x27;;
+    else
+    if (d = &#x27;20&#x27;) then
+      d = &#x27;K&#x27;;
+    else
+    if (d = &#x27;21&#x27;) then
+      d = &#x27;L&#x27;;
+    else
+    if (d = &#x27;22&#x27;) then
+      d = &#x27;M&#x27;;
+    else
+    if (d = &#x27;23&#x27;) then
+      d = &#x27;N&#x27;;
+    else
+    if (d = &#x27;24&#x27;) then
+      d = &#x27;O&#x27;;
+    else
+    if (d = &#x27;25&#x27;) then
+      d = &#x27;P&#x27;;
+    else
+    if (d = &#x27;26&#x27;) then
+      d = &#x27;Q&#x27;;
+    else
+    if (d = &#x27;27&#x27;) then
+      d = &#x27;R&#x27;;
+    else
+    if (d = &#x27;28&#x27;) then
+      d = &#x27;S&#x27;;
+    else
+    if (d = &#x27;29&#x27;) then
+      d = &#x27;T&#x27;;
+    else
+    if (d = &#x27;30&#x27;) then
+      d = &#x27;U&#x27;;
+    else
+    if (d = &#x27;31&#x27;) then
+      d = &#x27;V&#x27;;
+
+    if (rcp_version &lt; 10) then
+      v = cast(rcp_version as varchar(1));
+
+-- if (is_kredit = 1) then
+--begin
+    if (rcp_version = 10) then
+      v = &#x27;A&#x27;;
+    if (rcp_version = 11) then
+      v = &#x27;B&#x27;;
+    else
+    if (rcp_version = 12) then
+      v = &#x27;C&#x27;;
+    else
+    if (rcp_version = 13) then
+      v = &#x27;D&#x27;;
+    else
+    if (rcp_version = 14) then
+      v = &#x27;E&#x27;;
+    else
+    if (rcp_version = 15) then
+      v = &#x27;F&#x27;;
+    else
+    if (rcp_version = 16) then
+      v = &#x27;J&#x27;;
+    else
+    if (rcp_version = 17) then
+      v = &#x27;H&#x27;;
+    else
+    if (rcp_version = 18) then
+      v = &#x27;I&#x27;;
+    else
+    if (rcp_version = 19) then
+      v = &#x27;J&#x27;;
+    else
+    if (rcp_version = 20) then
+      v = &#x27;K&#x27;;
+    else
+    if (rcp_version = 21) then
+      v = &#x27;L&#x27;;
+    else
+    if (rcp_version = 22) then
+      v = &#x27;M&#x27;;
+    else
+    if (rcp_version = 23) then
+      v = &#x27;N&#x27;;
+    else
+    if (rcp_version = 24) then
+      v = &#x27;O&#x27;;
+    else
+    if (rcp_version = 25) then
+      v = &#x27;P&#x27;;
+--end
+--else
+--begin
+    /*  if (RCP_VERSION = 1) then V = &#x27;Q&#x27;; else
+                if (RCP_VERSION = 2) then V = &#x27;R&#x27;; else
+                if (RCP_VERSION = 3) then V = &#x27;S&#x27;; else
+                if (RCP_VERSION = 4) then V = &#x27;T&#x27;; else
+                if (RCP_VERSION = 5) then V = &#x27;U&#x27;; else
+                if (RCP_VERSION = 6) then V = &#x27;V&#x27;; else
+                if (RCP_VERSION = 7) then V = &#x27;X&#x27;; else
+                if (RCP_VERSION = 8) then V = &#x27;Y&#x27;; else
+                if (RCP_VERSION = 9) then V = &#x27;Z&#x27;;    */
+--end
+    rcp_filename = &#x27;47L&#x27; || &#x27;U&#x27; || y || m || d || v; -- формирую название файла
+  end
+  else -- пакет по заявкам
+  begin
+    if (char_length(m) &lt; 2) then
+      m = &#x27;0&#x27; || m;
+    if (char_length(d) &lt; 2) then
+      d = &#x27;0&#x27; || d;
+
+    rcp_filename = &#x27;47L&#x27; || &#x27;_&#x27; || y || m || d || &#x27;_&#x27; ||(case
+                                                           when char_length(rcp_version) = 4 then rcp_version
+                                                           when char_length(rcp_version) = 3 then &#x27;0&#x27; || rcp_version
+                                                           when char_length(rcp_version) = 2 then &#x27;00&#x27; || rcp_version
+                                                           when char_length(rcp_version) = 1 then &#x27;000&#x27; || rcp_version
+                                                         end);
+  end
+
+  insert into rcib_pocket (rcp_id, rcp_filename, rcp_date_begin, rcp_date, rcp_version, rcp_is_kredit, rcp_base_rcp_id,
+                           rcp_type)
+  values (:rcp_id, :rcp_filename, :rcp_date_begin, :pocket_date, :rcp_version, :is_kredit, :base_rcp_id, :rcp_type);
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_OPEREXTRA_EXECUTION_SAVE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_OPEREXTRA_EXECUTION_SAVE: 8 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_OPEREXTRA_EXECUTION_SAVE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">8</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="get_kv.html"><div class="to">GET_KV</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">8 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_RD_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_OBJECT_KIND</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_OBJECT_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DETAIL</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_OPER_MEMO</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_OPEREXTRA_EXECUTION_SAVE(
+    REP_RD_ID INTEGER,
+    REP_OBJECT_KIND INTEGER,
+    REP_OBJECT_ID DECIMAL(18,0),
+    REP_DATE DATE,
+    REP_AMOUNT DECIMAL(18,4),
+    REP_DETAIL VARCHAR(255),
+    REP_OPER_MEMO VARCHAR(1024),
+    UN_ID DECIMAL(18,0))
+AS
+declare variable DB_ID d_integer;
+declare variable LAST_KN_DATE D_DATE;
+declare variable rd_id_cancel d_integer;
+declare variable rd_id_restoration d_integer;
+declare variable rep_region_id d_integer;
+declare variable ol_id d_id;
+declare variable ox_id d_integer;
+declare variable cancel_ol_id d_id;
+declare variable cancel_ox_id d_integer;
+declare variable restoration_ol_id d_id;
+declare variable restoration_ox_id d_integer;
+declare variable ol_parent_id d_id;
+declare variable ox_from_rd_id d_integer;
+declare variable oen_id d_id;
+begin
+  -- RFCKZ-639 сохраненеие для модуля Отмена/Восстановление исполнительной надписи OperExtraCancelAndRestorationForm
+  rd_id_cancel = f_get_rd_id(&#x27;OperExtraKind.LawClientExpenseCancel&#x27;);
+  rd_id_restoration = f_get_rd_id(&#x27;OperExtraKind.LawClientExpenseRestoration&#x27;);
+  ox_from_rd_id = f_get_rd_id(&#x27;OperExtraKind.ExecutiveInscription&#x27;);
+  db_id = f_get_db_id();
+
+  if (f_objkind(:rep_object_kind, &#x27;code&#x27;) = &#x27;kontract&#x27;) then
+  begin
+    select k_last_reg_id
+    from kontract
+    where k_id = :rep_object_id
+    into :rep_region_id;
+  end
+
+  select kv
+  from get_kv(:rep_region_id, 5)
+  into :ol_id;
+
+  select ox.ox_from_ol_id
+  from operextra ox
+  inner join refdata rd on rd.rd_id = ox.ox_from_rd_id
+  where ox_object_kind = :rep_object_kind
+    and ox_object_id = :rep_object_id
+    and ox_ol_is_active = 1
+    and rd.rd_code in (&#x27;OperExtraKind.ExecutiveInscription&#x27;)
+    and ox_amount_plus = :rep_amount
+  order by ox.ox_from_ol_id desc
+  rows 1
+  into ol_parent_id;
+
+  insert into operlist (ol_id, ol_parent_id, ol_from_reg_id, ol_oper_type, ol_oper_subtype, ol_date, ol_doc_kind,
+                        ol_memo, ol_status, is_delete, ol_user_id)
+  values (:ol_id, :ol_parent_id, :rep_region_id, 2, 29, :rep_date, 9, :rep_oper_memo, 0, 0, :un_id);
+
+  if (rep_rd_id = rd_id_cancel) then
+  begin
+
+    insert into operextra (ox_from_ol_id, ox_from_reg_id, ox_ol_date, ox_ol_is_active, ox_object_kind, ox_object_id,
+                           ox_from_rd_id, ox_amount_plus, ox_amount_minus, ox_amount_writeoff, ox_detail)
+    values (:ol_id, :rep_region_id, :rep_date, 1, :rep_object_kind, :rep_object_id, :ox_from_rd_id, 0.0, :rep_amount, 0.0,
+            :rep_detail)
+    returning ox_from_ol_id, ox_id
+    into cancel_ol_id, cancel_ox_id;
+
+    select ox.ox_from_ol_id, ox.ox_id
+    from operextra ox
+    where ox.ox_object_kind = :rep_object_kind and
+          ox.ox_object_id = :rep_object_id and
+          ox.ox_from_rd_id = :rd_id_restoration and
+          ox_ol_is_active = 1
+    order by ox.ox_from_ol_id desc
+    rows 1
+    into restoration_ol_id, restoration_ox_id;
+
+    insert into operextra_execution_note (oen_from_ol_id_cancel, oen_from_ox_id_cancel, oen_from_rd_id, oen_object_kind, oen_object_id, oen_from_ol_id_restoration, oen_from_ox_id_restoration)
+    values (:cancel_ol_id, :cancel_ox_id, :rep_rd_id, :rep_object_kind, :rep_object_id, :restoration_ol_id, :restoration_ox_id)
+    returning oen_id
+    into :oen_id;
+
+    if (not exists(select *
+                   from restruct_block_cancel rbc
+                   where rbc.rbc_from_k_id = :rep_object_id and
+                         rbc.rbc_date_begin = current_date and
+                         rbc.rbc_date_end = dateadd(day, cast(f_get_const(&#x27;kz_restruct_block_cancel_days&#x27;) as integer), current_date))
+    ) then
+    begin
+        -- RFCKZ-705. При отмене испол. надписи блок на реструктуризацию снимается на период 30 календарных дней
+        insert into restruct_block_cancel (rbc_from_k_id, rbc_date_begin, rbc_date_end, rbc_from_oen_id)
+        values (:rep_object_id, current_date, dateadd(day, cast(f_get_const(&#x27;kz_restruct_block_cancel_days&#x27;) as integer), current_date), :oen_id);
+    end
+  end
+  else
+  begin
+    insert into operextra (ox_from_ol_id, ox_from_reg_id, ox_ol_date, ox_ol_is_active, ox_object_kind, ox_object_id,
+                           ox_from_rd_id, ox_amount_plus, ox_amount_minus, ox_amount_writeoff, ox_detail)
+    values (:ol_id, :rep_region_id, :rep_date, 1, :rep_object_kind, :rep_object_id, :ox_from_rd_id, :rep_amount, 0.0, 0.0,
+            :rep_detail)
+    returning ox_from_ol_id, ox_id
+    into restoration_ol_id, restoration_ox_id;
+
+    select ox.ox_from_ol_id, ox.ox_id
+    from operextra ox
+    where ox.ox_object_kind = :rep_object_kind and
+          ox.ox_object_id = :rep_object_id and
+          ox.ox_from_rd_id = :rd_id_cancel and
+          ox_ol_is_active = 1
+    order by ox.ox_from_ol_id desc
+    rows 1
+    into cancel_ol_id, cancel_ox_id;
+
+    insert into operextra_execution_note (oen_from_ol_id_cancel, oen_from_ox_id_cancel, oen_from_rd_id, oen_object_kind, oen_object_id, oen_from_ol_id_restoration, oen_from_ox_id_restoration)
+    values (:cancel_ol_id, :cancel_ox_id, :rep_rd_id, :rep_object_kind, :rep_object_id, :restoration_ol_id, :restoration_ox_id);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

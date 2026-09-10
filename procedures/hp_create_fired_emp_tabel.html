@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CREATE_FIRED_EMP_TABEL — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CREATE_FIRED_EMP_TABEL: 4 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CREATE_FIRED_EMP_TABEL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SAT_FROM_C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SAT_YEAR_MONTH</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SAT_OFFICE_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SAT_FROM_SAWT_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CREATE_FIRED_EMP_TABEL(
+    SAT_FROM_C_ID D_ID,
+    SAT_YEAR_MONTH D_INTEGER,
+    SAT_OFFICE_ID D_INTEGER,
+    SAT_FROM_SAWT_ID D_INTEGER)
+AS
+declare variable date_begin d_date;
+declare variable date_end d_date;
+declare variable date_gone_number d_smallint;
+declare variable sql_request_select d_str_long;
+declare variable sql_request_update d_str_long;
+declare variable sql_request_update_tmp d_str_100;
+declare variable tmp_var d_smallint;
+declare variable tmp_hours d_smallint;
+declare variable tmp_qty d_integer;
+declare variable i d_smallint;
+begin
+  if (exists(select *
+             from region rg
+             inner join refdata rd on rd.rd_id = rg.reg_office_hours_id
+             where rg.reg_unicode = :sat_office_id and
+                   rd.rd_code in (&#x27;office_hours_5&#x27;, &#x27;office_hours_5mob&#x27;))) then
+    exit;
+
+  date_begin = &#x27;01.&#x27; || right(:sat_year_month, 2) || &#x27;.&#x27; || left(:sat_year_month, 4);
+  date_end = dateadd(month, 1, date_begin) - 1;
+
+  date_gone_number = null;
+  select extract(day from ps.ps_date_begin)
+  from hr_pstatus ps
+  inner join hr_orders ho on ho.ho_id = ps.ps_from_ho_id and
+        ho.ho_order_type = 6 --увольнение сотрудника
+  where ps.ps_from_c_id = :sat_from_c_id and
+        ps.ps_from_reg_id = :sat_office_id and
+        ps.ps_date_begin between :date_begin and :date_end and
+        ps.ps_status = 1 and
+        ps.ps_is_working = 0
+  into date_gone_number;
+
+  --Заполняю дни согласно составленному табелю, но только до дня увольнения
+  sql_request_update_tmp = &#x27;update sa_tabel sat set sat_day_&#x27;;
+
+  i = 1;
+  tmp_var = 0;
+  tmp_hours = 0;
+  tmp_qty = 0;
+  while (i &lt; date_gone_number)
+  do
+  begin
+    sql_request_select = &#x27;select sat_day_&#x27; || :i || &#x27; &#x27; ||
+                         &#x27;from sa_tabelo sat
+                          where sat.sat_year_month = &#x27; || :sat_year_month || &#x27; and &#x27; ||
+                             &#x27;sat.sat_from_c_id = &#x27; || :sat_from_c_id || &#x27; and &#x27; ||
+                             &#x27;sat.sat_from_sawt_id = &#x27; || :sat_from_sawt_id || &#x27; and &#x27; ||
+                             &#x27;sat.sat_office_id = &#x27; || :sat_office_id;
+    execute statement sql_request_select
+    into tmp_var;
+
+    tmp_hours = tmp_hours + tmp_var;   --Количество часов
+    tmp_qty = tmp_qty + iif(tmp_var &gt; 0, 1, 0); --Количество дней (оператор iif добавлен на случай когда есть 7часовые рабочие дни в календаре)
+
+    sql_request_update = sql_request_update_tmp || :i || &#x27; = &#x27; || :tmp_var || &#x27; where sat.sat_year_month = &#x27; || :sat_year_month || &#x27; and &#x27; ||
+                                                                           &#x27;sat.sat_from_c_id = &#x27; || :sat_from_c_id || &#x27; and &#x27; ||
+                                                                           &#x27;sat.sat_from_sawt_id = &#x27; || :sat_from_sawt_id || &#x27; and &#x27; ||
+                                                                           &#x27;sat.sat_office_id = &#x27; || :sat_office_id;
+    execute statement sql_request_update;
+
+    i = i + 1;
+  end 
+
+  --Дозаполняю оставшиеся дни
+  i = date_gone_number;
+  while (i &lt;= 31)
+  do
+  begin
+    sql_request_update = sql_request_update_tmp || :i || &#x27; = 0&#x27; || &#x27; where sat.sat_year_month = &#x27; || :sat_year_month || &#x27; and &#x27; ||
+                                                                 &#x27;sat.sat_from_c_id = &#x27; || :sat_from_c_id || &#x27; and &#x27; ||
+                                                                 &#x27;sat.sat_from_sawt_id = &#x27; || :sat_from_sawt_id || &#x27; and &#x27; ||
+                                                                 &#x27;sat.sat_office_id = &#x27; || :sat_office_id;
+    execute statement sql_request_update;
+    i = i + 1;
+  end
+
+  update sa_tabel sat
+  set sat_total_hours = :tmp_hours,
+      sat_total_calc = :tmp_hours,
+      sat_days_total = :tmp_qty,
+      sat_days_calc = :tmp_qty
+  where sat_year_month = :sat_year_month and
+        sat_from_c_id = :sat_from_c_id and
+        sat_office_id = :sat_office_id and
+        sat_from_sawt_id = :sat_from_sawt_id;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

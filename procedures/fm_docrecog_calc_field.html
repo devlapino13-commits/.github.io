@@ -1,0 +1,1015 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_DOCRECOG_CALC_FIELD — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_DOCRECOG_CALC_FIELD: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_DOCRECOG_CALC_FIELD</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_docrecog_action.html"><div class="to">FM_DOCRECOG_ACTION</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">DRL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">IS_DRAFT</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_DOCRECOG_CALC_FIELD(
+    DRL_ID D_ID,
+    IS_DRAFT D_BOOL)
+AS
+declare variable DRM_ID D_INTEGER;
+declare variable DRF_ID D_INTEGER;
+declare variable TMP_DRF_ID D_INTEGER;
+declare variable RECOG_FIO D_STR_255;
+declare variable FINAL_FIO D_STR_255;
+declare variable RECOG_VALUE D_STR_255;
+declare variable FINAL_VALUE D_STR_255;
+declare variable ABC_TO D_STR_CODE;
+declare variable ABC_FROM D_STR_CODE;
+declare variable DRM_ENG_FIO_KIND D_INTEGER;
+declare variable DB_ID D_INTEGER;
+declare variable IS_ACCEPTED D_BOOL;
+declare variable DRV_IS_ACCEPTED D_BOOL;
+declare variable DRV_IS_ACCEPTED_CALC D_BOOL;
+declare variable NEW_RECOG_VALUE D_STR_255;
+declare variable NEW_FINAL_VALUE D_STR_255;
+declare variable RECOG_FIO_ENG D_STR_255;
+declare variable FINAL_FIO_ENG D_STR_255;
+declare variable TMP_ABC_FROM D_STR_10;
+declare variable CREATE_CLIENT_MODE D_BOOL = 0;
+declare variable TMP_RECOG_VALUE D_STR_255;
+declare variable TMP_FINAL_VALUE D_STR_255;
+declare variable LEN D_SMALLINT;
+declare variable N D_SMALLINT;
+declare variable PK_ID D_INTEGER;
+declare variable TMP_RECOG_DATE D_DATE;
+declare variable TMP_FINAL_DATE D_DATE;
+declare variable COUNTRY_CODE D_STR_255;
+declare variable DOC_IS_PASSPORT D_BOOL;
+declare variable BIRTH_COUNTRY_CODE D_STR_255;
+declare variable COUNTRY_SYM D_STR_10;
+declare variable DRM_CODE D_STR_CODE;
+begin
+  -- процедура вычисляет и заполняет авто-вычисляемые поля
+  -- например, полное ФИО формируется из полей фамилия, имя и отчетство
+
+  db_id = f_get_db_id();
+
+  select drl_from_drm_id, drm_main_fio_kind, drm_alt_fio_kind, iif(drl_from_c_id is null, 1, 0),
+    drl_from_pk_id, drm_code
+  from docrecoglist, docrecogmain
+  where drl_id = :drl_id and
+        drl_from_drm_id = drm_id
+  into :drm_id, abc_from, drm_eng_fio_kind, create_client_mode, pk_id, drm_code;
+  if (drm_id is null) then
+    exit;
+
+  if (abc_from is null) then
+    abc_from = &#x27;orig&#x27;;
+  if (drm_eng_fio_kind is null) then
+    drm_eng_fio_kind = 0;
+
+  select rd_code, pdt_is_main_doc
+  from passkind, refdata, passdoctype
+  where pk_id = :pk_id and
+        pk_country_id = rd_id and
+        pk_from_pdt_id = pdt_id
+  into :country_code, doc_is_passport;
+
+  country_sym = right(country_code, 2);
+
+  abc_to = &#x27;orig&#x27;;
+  if (db_id = 81001 or (db_id in (39801, 41701) and
+      abc_from &lt;&gt; &#x27;cyr&#x27;)) then
+    abc_to = &#x27;cyr&#x27;;
+  else
+    abc_from = &#x27;orig&#x27;; -- abc_from с какого алфавита переводить
+
+  -- формирование полного ФИО, перевод основного ФИО на нужный алфавит при необходимости
+  drf_id = null;
+  recog_fio = &#x27;&#x27;;
+  final_fio = &#x27;&#x27;;
+  drv_is_accepted = 1;
+
+  -- обрабатываем вычисляемое поле, если:
+  -- режим &quot;is_draft&quot;, где только отсканировали и хотим показать как результат.
+  -- Берем все поля, а не только действующие.
+
+  -- режим НЕ &quot;is_draft&quot;, то берем только неактивные поля,
+  -- так как активные уже подтверждаются, возможно и отредактировано пользователем
+
+  select drf_id
+  from docrecogfield
+  where drf_code = &#x27;calc_name_full&#x27; and
+        drf_inactive = 0 and
+        drf_is_extra = 1 and
+        drf_from_drm_id = :drm_id and
+        (:is_draft = 1 or
+        (:create_client_mode = 0 and
+        drf_invisible_on_doc = 1) or -- если создается клиент, включаем невидимые в этом режиме
+        (:create_client_mode = 1 and
+        drf_invisible_on_client = 1)) -- если создается документ, включаем невидимые в этом режиме
+  into drf_id;
+
+  if (drf_id is not null) then
+  begin
+    tmp_drf_id = null;
+    for select drf_id
+        from docrecogfield
+        where drf_from_drm_id = :drm_id and
+              drf_inactive = 0 and
+              drf_code in (&#x27;name&#x27;, &#x27;surname&#x27;, &#x27;patronymic&#x27;)
+        order by case drf_code
+                   when &#x27;surname&#x27; then 1
+                   when &#x27;name&#x27; then 2
+                   else 3
+                 end
+        into :tmp_drf_id
+    do
+    begin
+      recog_value = &#x27;&#x27;;
+      final_value = &#x27;&#x27;;
+
+      select coalesce(drv_recog_value, &#x27;&#x27;), coalesce(drv_final_value, &#x27;&#x27;),
+             minvalue(drv_is_accepted, drv_is_accepted_calc)
+      from docrecogvalue
+      where drv_from_drl_id = :drl_id and
+            drv_from_drf_id = :tmp_drf_id
+      into recog_value, final_value, is_accepted;
+      if (is_accepted is null) then
+        is_accepted = 1;
+
+      if (abc_from in (&#x27;lat&#x27;, &#x27;eng&#x27;)) then
+      begin
+        recog_value = replace(recog_value, &#x27;0&#x27;, &#x27;O&#x27;); -- цифра 0 на lat O
+        final_value = replace(final_value, &#x27;0&#x27;, &#x27;O&#x27;); -- цифра 0 на lat O
+      end
+      else
+      begin
+        recog_value = replace(recog_value, &#x27;0&#x27;, &#x27;О&#x27;); -- цифра 0 на cyr О
+        final_value = replace(final_value, &#x27;0&#x27;, &#x27;О&#x27;); -- цифра 0 на cyr О
+        recog_value = replace(recog_value, &#x27;3&#x27;, &#x27;З&#x27;); -- цифра 3 на cyr З
+        final_value = replace(final_value, &#x27;3&#x27;, &#x27;З&#x27;); -- цифра 3 на cyr З
+      end
+      -- если одно из полей распознано некачественно, полное ФИО тоже отметим как некачественное
+      if (is_accepted &lt; drv_is_accepted) then
+        drv_is_accepted = is_accepted;
+
+      if (recog_value &lt;&gt; &#x27;&#x27;) then
+        recog_fio = recog_fio || &#x27; &#x27; || recog_value;
+      if (final_value &lt;&gt; &#x27;&#x27;) then
+        final_fio = final_fio || &#x27; &#x27; || final_value;
+
+      recog_value = trim(recog_value);
+      final_value = trim(final_value);
+
+      new_recog_value = upper(f_translit_fio(abc_from, abc_to, recog_value, country_sym));
+      new_final_value = upper( f_translit_fio(abc_from, abc_to, final_value, country_sym));
+
+      update docrecogvalue d
+      set d.drv_is_accepted = :drv_is_accepted,
+          d.drv_recog_value = :new_recog_value,
+          d.drv_final_value = :new_final_value
+      where d.drv_from_drl_id = :drl_id and
+          d.drv_from_drf_id = :tmp_drf_id;
+    end
+
+    recog_fio = trim(recog_fio);
+    final_fio = trim(final_fio);
+
+    new_recog_value = f_translit_fio(abc_from, abc_to, recog_fio, country_sym);
+    new_final_value = f_translit_fio(abc_from, abc_to, final_fio, country_sym);
+
+    -- если был перевод на другой алфавит, вычисляемое качество делаем 0 (Сомнительным)
+    drv_is_accepted_calc = drv_is_accepted;
+    if (new_recog_value &lt;&gt; recog_fio or new_final_value &lt;&gt; final_fio) then
+      drv_is_accepted_calc = 0;
+
+    update or insert into docrecogvalue (drv_from_drl_id, drv_from_drf_id, drv_is_accepted, drv_recog_value,
+                                         drv_final_value, drv_is_accepted_calc)
+    values (:drl_id, :drf_id, :drv_is_accepted, :new_recog_value, :new_final_value, :drv_is_accepted_calc)
+    matching (drv_from_drl_id, drv_from_drf_id);
+  end
+
+  -- формирование английского ФИО, перевод основного ФИО на ENG алфавит при необходимости
+  drf_id = null;
+  recog_fio_eng = &#x27;&#x27;;
+  final_fio_eng = &#x27;&#x27;;
+
+  -- обрабатываем вычисляемое поле, если:
+  -- режим &quot;is_draft&quot;, где только отсканировали и хотим показать как результат.
+  -- Берем все поля, а не только действующие.
+
+  -- режим НЕ &quot;is_draft&quot;, то берем только неактивные поля,
+  -- так как активные уже подтверждаются, возможно и отредактировано пользователем
+  if (drm_eng_fio_kind &lt;&gt; 0) then
+  begin
+    select drf_id
+    from docrecogfield
+    where drf_code = &#x27;calc_name_full_eng&#x27; and
+          drf_inactive = 0 and
+          drf_is_extra = 1 and
+          drf_from_drm_id = :drm_id and
+          (:is_draft = 1 or
+          (:create_client_mode = 0 and
+          drf_invisible_on_doc = 1) or -- если создается клиент, включаем невидимые в этом режиме
+          (:create_client_mode = 1 and
+          drf_invisible_on_client = 1)) -- если создается документ, включаем невидимые в этом режиме
+    into drf_id;
+
+    if (drf_id is not null) then
+    begin
+      -- drm_eng_fio_kind: Как заполнять английское ФИО:
+      -- 0 - Не заполнять
+      -- 1 - Заполнять из _ENG полей
+      -- 2 - Переводить из оригинального ФИО
+      -- 3 - Копировать оригинальное ФИО
+
+      if (drm_eng_fio_kind = 1) then -- Заполнять из _ENG полей
+      begin
+        tmp_drf_id = null;
+        drv_is_accepted = 1;
+        for select drf_id
+            from docrecogfield
+            where drf_from_drm_id = :drm_id and
+                  drf_inactive = 0 and
+                  drf_code in (&#x27;name_eng&#x27;, &#x27;surname_eng&#x27;, &#x27;patronymic_eng&#x27;)
+            order by case drf_code
+                       when &#x27;surname_eng&#x27; then 1
+                       when &#x27;name_eng&#x27; then 2
+                       else 3
+                     end
+            into :tmp_drf_id
+        do
+        begin
+          recog_value = &#x27;&#x27;;
+          final_value = &#x27;&#x27;;
+
+          select coalesce(drv_recog_value, &#x27;&#x27;), coalesce(drv_final_value, &#x27;&#x27;),
+                 minvalue(drv_is_accepted, drv_is_accepted_calc)
+          from docrecogvalue
+          where drv_from_drl_id = :drl_id and
+                drv_from_drf_id = :tmp_drf_id
+          into recog_value, final_value, is_accepted;
+          if (is_accepted is null) then
+            is_accepted = 1;
+
+          recog_value = replace(recog_value, &#x27;0&#x27;, &#x27;O&#x27;); -- цифра 0 на lat O
+          final_value = replace(final_value, &#x27;0&#x27;, &#x27;O&#x27;); -- цифра 0 на lat O
+
+          -- если одно из полей распознано некачественно, полное ФИО тоже отметим как некачественное
+          if (is_accepted &lt; drv_is_accepted) then
+            drv_is_accepted = is_accepted;
+
+          if (recog_value &lt;&gt; &#x27;&#x27;) then
+            recog_fio_eng = recog_fio_eng || &#x27; &#x27; || recog_value;
+          if (final_value &lt;&gt; &#x27;&#x27;) then
+            final_fio_eng = final_fio_eng || &#x27; &#x27; || final_value;
+        end
+
+        recog_value = trim(recog_value);
+        final_value = trim(final_value);
+      end
+
+      if (drm_eng_fio_kind = 2) then -- Переводить из оригинального ФИО
+      begin
+        tmp_abc_from = abc_from;
+        if (tmp_abc_from = &#x27;orig&#x27;) then
+        begin
+          if (db_id = 94401) then
+            tmp_abc_from = &#x27;lat&#x27;;
+          else
+            tmp_abc_from = &#x27;cyr&#x27;;
+        end
+        recog_fio_eng = f_translit_fio(tmp_abc_from, &#x27;eng&#x27;, recog_fio, country_sym);
+        final_fio_eng = f_translit_fio(tmp_abc_from, &#x27;eng&#x27;, final_fio, country_sym);
+      end
+
+      if (drm_eng_fio_kind = 3) then -- Копировать оригинальное ФИО
+      begin
+        recog_fio_eng = recog_fio;
+        final_fio_eng = final_fio;
+      end
+
+      recog_fio_eng = trim(recog_fio_eng);
+      final_fio_eng = trim(final_fio_eng);
+
+      drv_is_accepted_calc = drv_is_accepted;
+
+      if (drm_eng_fio_kind = 2) then
+        drv_is_accepted_calc = 0;
+
+      update or insert into docrecogvalue (drv_from_drl_id, drv_from_drf_id, drv_is_accepted, drv_recog_value,
+                                           drv_final_value, drv_is_accepted_calc)
+      values (:drl_id, :drf_id, :drv_is_accepted, :recog_fio_eng, :final_fio_eng, :drv_is_accepted_calc)
+      matching (drv_from_drl_id, drv_from_drf_id);
+    end
+  end
+
+  -- формирование альтернативного ФИО, на национальном языке, берем без конвертации из name, surname, patronymic
+  drf_id = null;
+  recog_fio = &#x27;&#x27;;
+  final_fio = &#x27;&#x27;;
+  drv_is_accepted = 1;
+
+  -- обрабатываем вычисляемое поле, если:
+  -- режим &quot;is_draft&quot;, где только отсканировали и хотим показать как результат.
+  -- Берем все поля, а не только действующие.
+
+  -- режим НЕ &quot;is_draft&quot;, то берем только неактивные поля,
+  -- так как активные уже подтверждаются, возможно и отредактировано пользователем
+  select drf_id
+  from docrecogfield
+  where drf_code = &#x27;calc_name_full_alt&#x27; and
+        drf_inactive = 0 and
+        drf_is_extra = 1 and
+        drf_from_drm_id = :drm_id and
+        (:is_draft = 1 or
+        (:create_client_mode = 0 and
+        drf_invisible_on_doc = 1) or -- если создается клиент, включаем невидимые в этом режиме
+        (:create_client_mode = 1 and
+        drf_invisible_on_client = 1)) -- если создается документ, включаем невидимые в этом режиме
+  into drf_id;
+
+  if (drf_id is not null) then
+  begin
+    tmp_drf_id = null;
+    for select drf_id
+        from docrecogfield
+        where drf_from_drm_id = :drm_id and
+              drf_inactive = 0 and
+              drf_code in (&#x27;name&#x27;, &#x27;surname&#x27;, &#x27;patronymic&#x27;)
+        order by case drf_code
+                   when &#x27;surname&#x27; then 1
+                   when &#x27;name&#x27; then 2
+                   else 3
+                 end
+        into :tmp_drf_id
+    do
+    begin
+      recog_value = &#x27;&#x27;;
+      final_value = &#x27;&#x27;;
+
+      select coalesce(drv_recog_value, &#x27;&#x27;), coalesce(drv_final_value, &#x27;&#x27;),
+             minvalue(drv_is_accepted, drv_is_accepted_calc)
+      from docrecogvalue
+      where drv_from_drl_id = :drl_id and
+            drv_from_drf_id = :tmp_drf_id
+      into recog_value, final_value, is_accepted;
+      if (is_accepted is null) then
+        is_accepted = 1;
+
+      -- В результате - латиница, поэтому
+      recog_value = replace(recog_value, &#x27;0&#x27;, &#x27;O&#x27;); -- цифра 0 на lat O
+      final_value = replace(final_value, &#x27;0&#x27;, &#x27;O&#x27;); -- цифра 0 на lat O
+
+      -- если одно из полей распознано некачественно, полное ФИО тоже отметим как некачественное
+      if (is_accepted &lt; drv_is_accepted) then
+        drv_is_accepted = is_accepted;
+
+      if (recog_value &lt;&gt; &#x27;&#x27;) then
+        recog_fio = recog_fio || &#x27; &#x27; || recog_value;
+      if (final_value &lt;&gt; &#x27;&#x27;) then
+        final_fio = final_fio || &#x27; &#x27; || final_value;
+    end
+
+    new_recog_value = trim(recog_fio);
+    new_final_value = trim(final_fio);
+    drv_is_accepted_calc = drv_is_accepted;
+
+    update or insert into docrecogvalue (drv_from_drl_id, drv_from_drf_id, drv_is_accepted, drv_recog_value,
+                                         drv_final_value, drv_is_accepted_calc)
+    values (:drl_id, :drf_id, :drv_is_accepted, :new_recog_value, :new_final_value, :drv_is_accepted_calc)
+    matching (drv_from_drl_id, drv_from_drf_id);
+  end
+
+  -- формирование пола клиента (0 = женщина, 1 - мужчина)
+  drf_id = null;
+
+  select drf_id
+  from docrecogfield
+  where drf_code = &#x27;calc_gender&#x27; and
+        drf_inactive = 0 and
+        drf_is_extra = 1 and
+        drf_from_drm_id = :drm_id and
+        (:is_draft = 1 or
+        (:create_client_mode = 0 and
+        drf_invisible_on_doc = 1) or -- если создается клиент, включаем невидимые в этом режиме
+        (:create_client_mode = 1 and
+        drf_invisible_on_client = 1)) -- если создается документ, включаем невидимые в этом режиме
+  into drf_id;
+
+  if (drf_id is not null) then
+  begin
+    tmp_drf_id = null;
+    drv_is_accepted = 1;
+    tmp_recog_value = &#x27;0&#x27;;
+    tmp_final_value = &#x27;0&#x27;;
+
+    for select drf_id
+        from docrecogfield
+        where drf_from_drm_id = :drm_id and
+              drf_inactive = 0 and
+              drf_code = &#x27;gender&#x27;
+        into :tmp_drf_id
+    do
+    begin
+      recog_value = &#x27;&#x27;;
+      final_value = &#x27;&#x27;;
+
+      select coalesce(drv_recog_value, &#x27;&#x27;), coalesce(drv_final_value, &#x27;&#x27;),
+             minvalue(drv_is_accepted, drv_is_accepted_calc)
+      from docrecogvalue
+      where drv_from_drl_id = :drl_id and
+            drv_from_drf_id = :tmp_drf_id
+      into recog_value, final_value, is_accepted;
+      if (is_accepted is null) then
+        is_accepted = 1;
+
+      -- если одно из полей распознано некачественно, полное ФИО тоже отметим как некачественное
+      if (is_accepted &lt; drv_is_accepted) then
+        drv_is_accepted = is_accepted;
+
+      if (recog_value in (&#x27;M&#x27;, &#x27;Э&#x27;) or (recog_value starting &#x27;М&#x27;)) then
+        tmp_recog_value = &#x27;1&#x27;;
+      else
+        tmp_recog_value = &#x27;0&#x27;;
+
+      if (final_value in (&#x27;M&#x27;, &#x27;Э&#x27;) or (final_value starting &#x27;М&#x27;)) then
+        tmp_final_value = &#x27;1&#x27;;
+      else
+        tmp_final_value = &#x27;0&#x27;;
+    end
+
+    drv_is_accepted_calc = drv_is_accepted;
+    update or insert into docrecogvalue (drv_from_drl_id, drv_from_drf_id, drv_is_accepted, drv_recog_value,
+                                         drv_final_value, drv_is_accepted_calc)
+    values (:drl_id, :drf_id, :drv_is_accepted, :tmp_recog_value, :tmp_final_value, :drv_is_accepted_calc)
+    matching (drv_from_drl_id, drv_from_drf_id);
+  end
+
+  -- формирование полного номера документа (серия + номер)
+  drf_id = null;
+
+  select drf_id
+  from docrecogfield
+  where drf_code = &#x27;doc_no&#x27; and
+        drf_inactive = 0 and
+        drf_is_extra = 1 and
+        drf_from_drm_id = :drm_id and
+        (:is_draft = 1 or
+        (:create_client_mode = 0 and
+        drf_invisible_on_doc = 1) or -- если создается клиент, включаем невидимые в этом режиме
+        (:create_client_mode = 1 and
+        drf_invisible_on_client = 1)) -- если создается документ, включаем невидимые в этом режиме
+  into drf_id;
+
+  if (drf_id is not null) then
+  begin
+    tmp_drf_id = null;
+    drv_is_accepted = 1;
+    tmp_recog_value = &#x27;&#x27;;
+    tmp_final_value = &#x27;&#x27;;
+
+    for select drf_id
+        from docrecogfield
+        where drf_from_drm_id = :drm_id and
+              drf_inactive = 0 and
+              drf_code in (&#x27;series&#x27;, &#x27;number&#x27;)
+        order by case drf_code
+                   when &#x27;series&#x27; then 1
+                   else 2
+                 end
+        into :tmp_drf_id
+    do
+    begin
+      recog_value = &#x27;&#x27;;
+      final_value = &#x27;&#x27;;
+
+      select coalesce(drv_recog_value, &#x27;&#x27;), coalesce(drv_final_value, &#x27;&#x27;),
+             minvalue(drv_is_accepted, drv_is_accepted_calc)
+      from docrecogvalue
+      where drv_from_drl_id = :drl_id and
+            drv_from_drf_id = :tmp_drf_id
+      into recog_value, final_value, is_accepted;
+      if (is_accepted is null) then
+        is_accepted = 1;
+
+      -- если одно из полей распознано некачественно, результат - некачественное
+      if (is_accepted &lt; drv_is_accepted) then
+        drv_is_accepted = is_accepted;
+
+      if (tmp_recog_value = &#x27;&#x27;) then
+        tmp_recog_value = trim(recog_value);
+      else
+        tmp_recog_value = tmp_recog_value || &#x27; &#x27; || trim (recog_value);
+
+      if (tmp_final_value = &#x27;&#x27;) then
+        tmp_final_value = trim(final_value);
+      else
+        tmp_final_value = tmp_final_value || &#x27; &#x27; || trim (final_value);
+    end
+
+    drv_is_accepted_calc = drv_is_accepted;
+    update or insert into docrecogvalue (drv_from_drl_id, drv_from_drf_id, drv_is_accepted, drv_recog_value,
+                                         drv_final_value, drv_is_accepted_calc)
+    values (:drl_id, :drf_id, :drv_is_accepted, :tmp_recog_value, :tmp_final_value, :drv_is_accepted_calc)
+    matching (drv_from_drl_id, drv_from_drf_id);
+  end
+
+  -- формирование кода органа выдавщего паспорт, если поле добавлено вручную
+  drf_id = null;
+  tmp_drf_id = null;
+  drv_is_accepted = 1;
+  tmp_recog_value = &#x27;&#x27;;
+  tmp_final_value = &#x27;&#x27;;
+
+  select drf_id
+  from docrecogfield
+  where drf_code = &#x27;authority_code&#x27; and
+        drf_inactive = 0 and
+        drf_is_extra = 1 and
+        drf_from_drm_id = :drm_id and
+        (:is_draft = 1 or
+        (:create_client_mode = 0 and
+        drf_invisible_on_doc = 1) or -- если создается клиент, включаем невидимые в этом режиме
+        (:create_client_mode = 1 and
+        drf_invisible_on_client = 1)) -- если создается документ, включаем невидимые в этом режиме
+  into drf_id;
+
+  if (drf_id is not null) then
+  begin
+    select drf_id
+    from docrecogfield
+    where drf_code = &#x27;authority&#x27; and
+          drf_inactive = 0 and
+          drf_from_drm_id = :drm_id
+    into tmp_drf_id;
+
+    if (tmp_drf_id is not null) then
+    begin
+      select coalesce(drv_recog_value, &#x27;&#x27;), coalesce(drv_final_value, &#x27;&#x27;), drv_is_accepted, drv_is_accepted_calc
+      from docrecogvalue
+      where drv_from_drl_id = :drl_id and
+            drv_from_drf_id = :tmp_drf_id
+      into recog_value, final_value, drv_is_accepted, drv_is_accepted_calc;
+
+      if (coalesce(recog_value, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+      begin
+        n = 0;
+        len = char_length(recog_value);
+        while (n &lt; len) do
+        begin
+          n = n + 1;
+          if (substring(recog_value from n for 1) in (&#x27;0&#x27;, &#x27;1&#x27;, &#x27;2&#x27;, &#x27;3&#x27;, &#x27;4&#x27;, &#x27;5&#x27;, &#x27;6&#x27;, &#x27;7&#x27;, &#x27;8&#x27;, &#x27;9&#x27;)) then
+          begin
+            tmp_recog_value = substring(recog_value from n);
+            break;
+          end
+        end
+        if (char_length(tmp_recog_value) &gt; 6) -- слишком длинный для кода
+        then
+          tmp_recog_value = &#x27;&#x27;;
+        tmp_recog_value = replace(tmp_recog_value, &#x27;О&#x27;, &#x27;0&#x27;); -- кирилл О на 0
+        tmp_recog_value = replace(tmp_recog_value, &#x27;O&#x27;, &#x27;0&#x27;); -- латин O на 0
+      end
+
+      if (coalesce(final_value, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+      begin
+        n = 0;
+        len = char_length(final_value);
+        while (n &lt; len) do
+        begin
+          n = n + 1;
+          if (substring(final_value from n for 1) in (&#x27;0&#x27;, &#x27;1&#x27;, &#x27;2&#x27;, &#x27;3&#x27;, &#x27;4&#x27;, &#x27;5&#x27;, &#x27;6&#x27;, &#x27;7&#x27;, &#x27;8&#x27;, &#x27;9&#x27;)) then
+          begin
+            tmp_final_value = substring(final_value from n);
+            break;
+          end
+        end
+        if (char_length(tmp_final_value) &gt; 6) -- слишком длинный для кода
+        then
+          tmp_final_value = &#x27;&#x27;;
+        tmp_final_value = replace(tmp_final_value, &#x27;О&#x27;, &#x27;0&#x27;); -- кирилл О на 0
+        tmp_final_value = replace(tmp_final_value, &#x27;O&#x27;, &#x27;0&#x27;); -- латин O на 0
+      end
+    end
+
+    if (tmp_drf_id is not null) then
+    begin
+      update or insert into docrecogvalue (drv_from_drl_id, drv_from_drf_id, drv_is_accepted, drv_recog_value,
+                                           drv_final_value, drv_is_accepted_calc)
+      values (:drl_id, :drf_id, :drv_is_accepted, :tmp_recog_value, :tmp_final_value, :drv_is_accepted_calc)
+      matching (drv_from_drl_id, drv_from_drf_id);
+    end
+  end
+
+  -------
+  -- Расчет даты окончания для паспорта РФ
+  if (country_code = &#x27;citizen.ru&#x27; and
+      doc_is_passport = 1) then
+  begin
+    drf_id = null;
+
+    select drf_id
+    from docrecogfield
+    where drf_code = &#x27;date_end&#x27; and
+          drf_inactive = 0 and
+          drf_is_extra = 1 and
+          drf_from_drm_id = :drm_id and
+          (:is_draft = 1 or
+          (:create_client_mode = 0 and
+          drf_invisible_on_doc = 1) or -- если создается клиент, включаем невидимые в этом режиме
+          (:create_client_mode = 1 and
+          drf_invisible_on_client = 1)) -- если создается документ, включаем невидимые в этом режиме
+    into drf_id;
+
+    if (drf_id is not null) then
+    begin
+      tmp_drf_id = null;
+      drv_is_accepted = 1;
+      tmp_recog_date = null;
+      tmp_final_date = null;
+
+      for select drf_id
+          from docrecogfield
+          where drf_from_drm_id = :drm_id and
+                drf_inactive = 0 and
+                drf_code = &#x27;birth_date&#x27;
+          into :tmp_drf_id
+      do
+      begin
+        recog_value = &#x27;&#x27;;
+        final_value = &#x27;&#x27;;
+
+        select coalesce(drv_recog_value, &#x27;&#x27;), coalesce(drv_final_value, &#x27;&#x27;),
+               minvalue(drv_is_accepted, drv_is_accepted_calc)
+        from docrecogvalue
+        where drv_from_drl_id = :drl_id and
+              drv_from_drf_id = :tmp_drf_id
+        into recog_value, final_value, is_accepted;
+        if (is_accepted is null) then
+          is_accepted = 1;
+        if (recog_value = &#x27;&#x27;) then
+          recog_value = null;
+        if (final_value = &#x27;&#x27;) then
+          final_value = null;
+
+        -- если одно из полей распознано некачественно,  ДР тоже отметим как некачественное
+        if (is_accepted &lt; drv_is_accepted) then
+          drv_is_accepted = is_accepted;
+
+        begin
+          tmp_recog_date = cast(recog_value as date);
+          when any do
+            tmp_recog_date = null;
+        end
+        begin
+          tmp_final_date = cast(final_value as date);
+          when any do
+            tmp_final_date = null;
+        end
+
+        if (tmp_recog_date is null or tmp_final_date is null) then
+          drv_is_accepted = 0;
+
+        if (tmp_recog_date is not null) then
+          if (dateadd(year, 20, tmp_recog_date) &gt; current_date) then
+            tmp_recog_date = dateadd(year, 20, tmp_recog_date);
+          else
+          if (dateadd(year, 45, tmp_recog_date) &gt; current_date) then
+            tmp_recog_date = dateadd(year, 45, tmp_recog_date);
+          else
+            tmp_recog_date = dateadd(year, 100, tmp_recog_date);
+
+        if (tmp_final_date is not null) then
+          if (dateadd(year, 20, tmp_final_date) &gt; current_date) then
+            tmp_final_date = dateadd(year, 20, tmp_final_date);
+          else
+          if (dateadd(year, 45, tmp_final_date) &gt; current_date) then
+            tmp_final_date = dateadd(year, 45, tmp_final_date);
+          else
+            tmp_final_date = dateadd(year, 100, tmp_final_date);
+      end
+
+      drv_is_accepted_calc = drv_is_accepted;
+      update or insert into docrecogvalue (drv_from_drl_id, drv_from_drf_id, drv_is_accepted, drv_recog_value,
+                                           drv_final_value, drv_is_accepted_calc)
+      values (:drl_id, :drf_id, :drv_is_accepted, f_datetostr(:tmp_recog_date), f_datetostr(:tmp_final_date),
+              :drv_is_accepted_calc)
+      matching (drv_from_drl_id, drv_from_drf_id);
+    end
+  end
+  if (drm_code = &#x27;aze.id.type2&#x27;) then
+  begin
+    drf_id = null;
+
+    select drf_id
+    from docrecogfield
+    where drf_code = &#x27;date_begin&#x27; and
+          drf_inactive = 0 and
+          drf_is_extra = 1 and
+          drf_from_drm_id = :drm_id and
+          (:is_draft = 1 or
+          (:create_client_mode = 0 and
+          drf_invisible_on_doc = 1) or -- если создается клиент, включаем невидимые в этом режиме
+          (:create_client_mode = 1 and
+          drf_invisible_on_client = 1)) -- если создается документ, включаем невидимые в этом режиме
+    into drf_id;
+
+    if (drf_id is not null) then
+    begin
+      tmp_drf_id = null;
+      drv_is_accepted = 1;
+      tmp_recog_date = null;
+      tmp_final_date = null;
+
+      for select drf_id
+          from docrecogfield
+          where drf_from_drm_id = :drm_id and
+                drf_inactive = 0 and
+                drf_code = &#x27;date_end&#x27;
+          into :tmp_drf_id
+      do
+      begin
+        recog_value = &#x27;&#x27;;
+        final_value = &#x27;&#x27;;
+
+        select coalesce(drv_recog_value, &#x27;&#x27;), coalesce(drv_final_value, &#x27;&#x27;),
+               minvalue(drv_is_accepted, drv_is_accepted_calc)
+        from docrecogvalue
+        where drv_from_drl_id = :drl_id and
+              drv_from_drf_id = :tmp_drf_id
+        into recog_value, final_value, is_accepted;
+        if (is_accepted is null) then
+          is_accepted = 1;
+        if (recog_value = &#x27;&#x27;) then
+          recog_value = null;
+        if (final_value = &#x27;&#x27;) then
+          final_value = null;
+
+        -- если одно из полей распознано некачественно,  ДР тоже отметим как некачественное
+        if (is_accepted &lt; drv_is_accepted) then
+          drv_is_accepted = is_accepted;
+
+        begin
+          tmp_recog_date = cast(recog_value as date);
+          when any do
+            tmp_recog_date = null;
+        end
+        begin
+          tmp_final_date = cast(final_value as date);
+          when any do
+            tmp_final_date = null;
+        end
+        if (tmp_recog_date is null or tmp_final_date is null) then
+          drv_is_accepted = 0;
+        if (tmp_recog_date is not null) then
+            tmp_recog_date = dateadd(year, -10, tmp_recog_date);
+
+        if (tmp_final_date is not null) then
+            tmp_final_date = dateadd(year, -10, tmp_final_date);
+      end
+
+      drv_is_accepted_calc = drv_is_accepted;
+      update or insert into docrecogvalue (drv_from_drl_id, drv_from_drf_id, drv_is_accepted, drv_recog_value,
+                                           drv_final_value, drv_is_accepted_calc)
+      values (:drl_id, :drf_id, :drv_is_accepted, f_datetostr(:tmp_recog_date), f_datetostr(:tmp_final_date),
+              :drv_is_accepted_calc)
+      matching (drv_from_drl_id, drv_from_drf_id);
+    end
+  end
+  if (drm_code = &#x27;aze.id.type1&#x27;) then
+  begin
+    drf_id = null;
+
+    select drf_id
+    from docrecogfield
+    where drf_code = &#x27;date_end&#x27; and
+          drf_inactive = 0 and
+          drf_from_drm_id = :drm_id and
+          (:is_draft = 1 or
+          (:create_client_mode = 0 and
+          drf_invisible_on_doc = 1) or -- если создается клиент, включаем невидимые в этом режиме
+          (:create_client_mode = 1 and
+          drf_invisible_on_client = 1)) -- если создается документ, включаем невидимые в этом режиме
+    into drf_id;
+
+    if (drf_id is not null) then
+    begin
+      tmp_drf_id = null;
+      drv_is_accepted = 1;
+      tmp_recog_date = null;
+      tmp_final_date = null;
+      if (&#x27;&lt;&lt;.&lt;&lt;.&lt;&lt;&lt;&lt;&#x27; = (select coalesce(drv_recog_value, &#x27;&#x27;)
+                          from docrecogvalue
+                          where drv_from_drl_id = :drl_id and
+                                drv_from_drf_id = :drf_id) ) then
+        begin
+            recog_value = &#x27;&#x27;;
+            final_value = &#x27;&#x27;;
+
+            select drf_id
+            from docrecogfield
+            where drf_from_drm_id = :drm_id and
+                  drf_inactive = 0 and
+                  drf_code = &#x27;birth_date&#x27;
+            into :tmp_drf_id;
+
+            select coalesce(drv_recog_value, &#x27;&#x27;), coalesce(drv_final_value, &#x27;&#x27;),
+                   minvalue(drv_is_accepted, drv_is_accepted_calc)
+            from docrecogvalue
+            where drv_from_drl_id = :drl_id and
+                  drv_from_drf_id = :tmp_drf_id
+            into recog_value, final_value, is_accepted;
+
+            if (is_accepted is null) then
+              is_accepted = 1;
+            if (recog_value = &#x27;&#x27;) then
+              recog_value = null;
+            if (final_value = &#x27;&#x27;) then
+              final_value = null;
+
+        -- если одно из полей распознано некачественно,  ДР тоже отметим как некачественное
+        if (is_accepted &lt; drv_is_accepted) then
+          drv_is_accepted = is_accepted;
+
+        begin
+          tmp_recog_date = cast(recog_value as date);
+          when any do
+            tmp_recog_date = null;
+        end
+        begin
+          tmp_final_date = cast(final_value as date);
+          when any do
+            tmp_final_date = null;
+        end
+        if (tmp_recog_date is null or tmp_final_date is null) then
+          drv_is_accepted = 0;
+        if (tmp_recog_date is not null) then
+            tmp_recog_date = cast(f_format(&#x27;%1.%2.2100&#x27;, extract(day from tmp_recog_date), extract(month from tmp_recog_date)) as date) ;
+
+        if (tmp_final_date is not null) then
+            tmp_final_date = cast(f_format(&#x27;%1.%2.2100&#x27;, extract(day from tmp_final_date), extract(month from tmp_final_date)) as date);
+        drv_is_accepted_calc = drv_is_accepted;
+         update or insert into docrecogvalue (drv_from_drl_id, drv_from_drf_id, drv_is_accepted, drv_recog_value,
+                                              drv_final_value, drv_is_accepted_calc)
+         values (:drl_id, :drf_id, :drv_is_accepted, f_datetostr(:tmp_recog_date), f_datetostr(:tmp_final_date),
+                :drv_is_accepted_calc)
+       matching (drv_from_drl_id, drv_from_drf_id);
+      end
+     end
+    end
+  -- вычисление страны рождения
+  drf_id = null;
+  tmp_drf_id = null;
+  drv_is_accepted = 1;
+  tmp_recog_value = &#x27;&#x27;;
+  tmp_final_value = &#x27;&#x27;;
+
+  birth_country_code = &#x27;&#x27;;
+  select drf_id
+  from docrecogfield
+  where drf_code = &#x27;birth_country&#x27; and
+        drf_inactive = 0 and
+        drf_is_extra = 1 and
+        drf_from_drm_id = :drm_id and
+        (:is_draft = 1 or
+        (:create_client_mode = 0 and
+        drf_invisible_on_doc = 1) or -- если создается клиент, включаем невидимые в этом режиме
+        (:create_client_mode = 1 and
+        drf_invisible_on_client = 1)) -- если создается документ, включаем невидимые в этом режиме
+  into drf_id;
+
+  if (drf_id is not null) then
+  begin
+    drv_is_accepted_calc = 0;
+    birth_country_code = country_code;
+
+    select drf_id
+    from docrecogfield
+    where drf_code = &#x27;birth_place&#x27; and
+          drf_inactive = 0 and
+          drf_from_drm_id = :drm_id
+    into tmp_drf_id;
+
+    if (tmp_drf_id is not null) then
+    begin
+      select coalesce(drv_recog_value, &#x27;&#x27;), coalesce(drv_final_value, &#x27;&#x27;), drv_is_accepted, drv_is_accepted_calc
+      from docrecogvalue
+      where drv_from_drl_id = :drl_id and
+            drv_from_drf_id = :tmp_drf_id
+      into recog_value, final_value, drv_is_accepted, drv_is_accepted_calc;
+
+      if (coalesce(recog_value, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+      begin
+        if (recog_value containing &#x27;россия&#x27; or recog_value containing &#x27;russia&#x27;) then
+        begin
+          drv_is_accepted_calc = 1;
+          birth_country_code = &#x27;citizen.ru&#x27;;
+        end
+
+        if (recog_value containing &#x27;кыргыз&#x27; or recog_value containing &#x27;киргиз&#x27; or recog_value containing &#x27;қирғиз&#x27; or recog_value containing &#x27;kyrgyz&#x27; or recog_value containing &#x27;qirgiz&#x27; or recog_value containing &#x27;qirh&#x27;&#x27;z&#x27;) then
+        begin
+          drv_is_accepted_calc = 1;
+          birth_country_code = &#x27;citizen.kg&#x27;;
+        end
+
+        if (recog_value containing &#x27;узбек&#x27; or recog_value containing &#x27;ӯзбек&#x27; or recog_value containing &#x27;�©zbek&#x27; or recog_value containing &#x27;uzbek&#x27; or recog_value containing &#x27;ozbek&#x27; or recog_value containing &#x27;o&#x27;&#x27;zbek&#x27;) then
+        begin
+          drv_is_accepted_calc = 1;
+          birth_country_code = &#x27;citizen.uz&#x27;;
+        end
+
+        if (recog_value containing &#x27;точик&#x27; or recog_value containing &#x27;тоҷик&#x27; or recog_value containing &#x27;тожик&#x27; or recog_value containing &#x27;тажик&#x27; or recog_value containing &#x27;таджик&#x27; or recog_value containing &#x27;tojik&#x27; or recog_value containing &#x27;tajik&#x27;) then
+        begin
+          drv_is_accepted_calc = 1;
+          birth_country_code = &#x27;citizen.tj&#x27;;
+        end
+        if (recog_value containing &#x27;azerb&#x27; or recog_value containing &#x27;azәrb&#x27; or recog_value containing &#x27;азерб&#x27;) then
+        begin
+          drv_is_accepted_calc = 1;
+          birth_country_code = &#x27;citizen.az&#x27;;
+        end
+
+      end
+    end
+
+    select rd_name
+    from refdata
+    where rd_code = :birth_country_code
+    into tmp_recog_value;
+
+    tmp_final_value = tmp_recog_value;
+
+    if (drf_id is not null and is_draft = 1) then
+    begin
+      update or insert into docrecogvalue (drv_from_drl_id, drv_from_drf_id, drv_is_accepted, drv_recog_value,
+                                           drv_final_value, drv_is_accepted_calc)
+      values (:drl_id, :drf_id, :drv_is_accepted, :tmp_recog_value, :tmp_final_value, :drv_is_accepted_calc)
+      matching (drv_from_drl_id, drv_from_drf_id);
+    end
+  end
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

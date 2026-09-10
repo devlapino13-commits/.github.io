@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CLIENTSTATE_ORDER_HANDLE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CLIENTSTATE_ORDER_HANDLE: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CLIENTSTATE_ORDER_HANDLE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_clientstate_order_err_notification.html"><div class="to">HP_CLIENTSTATE_ORDER_ERR_NOTIFICATION</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CLIENTSTATE_ORDER_HANDLE
+AS
+declare variable sql_text d_str_long;
+declare variable c_id d_id;
+declare variable field d_str_100;
+declare variable state d_smallint;
+begin
+
+    for select
+        cso_c_id,
+        cso_upd_field,
+        cso_upd_state
+    from clientstate_order cso
+    where cso.cso_handled = 0
+    into
+        :c_id,
+        :field,
+        :state
+    do
+    begin
+        /*
+            ПРОШУ ОЗНАКОМИТЬСЯ ДЛЯ ЛУЧШЕГО ПОНИМАНИЯ !!!
+
+            Возможно скрипт ниже выгляжит трудно читаемым, но это единственный наиболее оптимальный, а также наикратчайший способ реализации,
+            который не разведёт &quot;лапша-кода&quot; на пятьсот с лишним строк
+
+            Пример полноценного запроса с уже подставленными параметрами
+            update clientstate_ru
+            set csr_edoc_asp_signed = 1
+            where csr_from_c_id = 1010101173339
+                 and csr_edoc_asp_signed &lt;&gt; 1;
+    
+            %1 - id клиента (c_id)
+            %2 - названием одного из полей таблицы clientstate_ru (на вход поля проверяются в процедуре hp_clientstate_order_create)
+            %3 - само состояние
+        */
+
+
+        sql_text = f_format(
+        &#x27;
+            update clientstate_ru
+            set %2 = %3
+            where csr_from_c_id = %1
+                and %2 &lt;&gt; %3;
+        &#x27;,
+        :c_id, :field, :state);
+
+        execute statement (:sql_text);
+
+
+        -- Удаляем успешно обработанную задачу + все записи с идентичными значениями (дубликаты)
+        delete from clientstate_order cso
+        where cso.cso_c_id = :c_id
+            and cso.cso_upd_field = :field
+            and cso.cso_upd_state = :state;
+
+        when gdscode deadlock do
+        begin
+            -- Прячем исключение при параллельном выполнении
+            -- В таком случае задача будет обработана следующим кругом
+
+        end
+    
+        when any do
+        begin
+            -- Помечаем запись как -1
+            -- Когда таких записей накопиться 20 шт (на момент реализации), то придёт письмо программистам на почту, о неисправном механизме
+            update clientstate_order cso
+            set cso.cso_handled = -1
+            where cso.cso_c_id = :c_id
+                and cso.cso_upd_field = :field;
+
+        end
+    end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_COM_LIST_SEND_KK — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_COM_LIST_SEND_KK: 2 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_COM_LIST_SEND_KK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">4 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_check_psk_limit.html"><div class="to">HP_CHECK_PSK_LIMIT</div></a><a class="ref-card" href="hp_com_action_add.html"><div class="to">HP_COM_ACTION_ADD</div></a><a class="ref-card" href="hp_com_list_auto_approve.html"><div class="to">HP_COM_LIST_AUTO_APPROVE</div></a><a class="ref-card" href="hp_objectprops_set_with_rd.html"><div class="to">HP_OBJECTPROPS_SET_WITH_RD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_cmd.html"><div class="to">FM_REPORT_CMD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CML_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_IS_ERROR</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_COM_LIST_SEND_KK(
+    CML_ID D_ID,
+    UN_ID D_ID)
+RETURNS (
+    RES_IS_ERROR D_SMALLINT,
+    RES_TEXT D_STR_255)
+AS
+declare variable cmc_com_kind d_str_code;
+declare variable obj_id d_id;
+declare variable curr_balance d_currency;
+declare variable new_balance d_currency;
+declare variable c_id d_id;
+declare variable c_name_fio d_str_255;
+declare variable asp_status d_str_code;
+declare variable cml_date d_date;
+declare variable lang d_str_lang;
+declare variable cmc_auto_approve d_smallint;
+declare variable db_id d_integer;
+declare variable cml_add_params d_str_long;
+declare variable monthly_income d_integer;
+declare variable cmc_id d_integer;
+begin
+  -- Процедура отправляет запрос на кредитный комитет
+  res_text = &#x27;&#x27;;
+  res_is_error = 0;
+  lang = f_get_lang_code(un_id, null);
+  db_id = f_get_db_id();
+
+  select cmc_id, cml_object_id, cml_date, cmc_auto_approve, f_enum(&#x27;com_kind&#x27;, cmc_com_kind, &#x27;code&#x27;), cml_add_params
+  from com_list, com_cfg
+  where cml_id = :cml_id and
+        cml_from_cmc_id = cmc_id
+  into cmc_id, obj_id, cml_date, cmc_auto_approve, cmc_com_kind, cml_add_params;
+
+  if (exists(select * from com_cfg_params
+             where cmcp_from_cmc_id = :cmc_id and cmcp_param_name = &#x27;reason&#x27;)) then
+  begin
+    if (f_json_str_get_value(cml_add_params, &#x27;reason&#x27;, &#x27;0&#x27;) = &#x27;0&#x27;) then
+    begin
+      res_is_error = 1;
+      res_text = f_lang(lang, &#x27;Не определена причина реструктуризации&#x27;);
+    end
+  end
+
+  if (cmc_com_kind = &#x27;reschedule&#x27;) then
+  begin
+    if (cml_date &lt;&gt; current_date) then
+    begin
+      res_is_error = 1;
+      res_text = f_lang(lang, &#x27;Обновите дату запроса на текущую&#x27;);
+    end
+
+    if (res_text = &#x27;&#x27; and not exists(select *
+                   from com_list_resh
+                   where cmr_from_cml_id = :cml_id)) then
+    begin
+      res_is_error = 1;
+      res_text = f_lang(lang, &#x27;Новый график погашения не построен&#x27;);
+    end
+
+    if (res_text = &#x27;&#x27;) then
+    begin
+      if (exists(select *
+                 from com_list_resh
+                 where cmr_from_cml_id = :cml_id and
+                       (cmr_sh_os &lt; 0 or
+                       cmr_sh_perc &lt; 0))) then
+      begin
+        res_is_error = 1;
+        res_text = f_lang(lang, &#x27;В графике погашений имеются отрицательные суммы&#x27;);
+      end
+    end
+
+    if (res_text = &#x27;&#x27;) then
+    begin
+      curr_balance = 0;
+      new_balance = 0;
+      select sum(ok_os + ok_sh_os)
+      from operkred
+      where ok_from_k_id = :obj_id and
+            ok_ol_is_active = 1 and
+            ok_type &lt;= 6
+      into curr_balance;
+      if (curr_balance is null) then
+        curr_balance = 0;
+
+      select sum(cmr_sh_os)
+      from com_list_resh
+      where cmr_from_cml_id = :cml_id
+      into new_balance;
+      if (new_balance is null) then
+        new_balance = 0;
+
+      if (new_balance &lt;&gt; curr_balance) then
+      begin
+        res_is_error = 1;
+        res_text = f_lang(lang, &#x27;Имеется расхождение в сумме основного долга&#x27;);
+      end
+    end
+
+    if (res_text = &#x27;&#x27;) then
+    begin
+      for select kc_from_c_id, c_name_fio
+          from knclient, clients
+          where kc_from_k_id = :obj_id and
+                kc_amount_approved &gt; 0 and
+                kc_from_c_id = c_id
+          into c_id, c_name_fio
+      do
+      begin
+        if (db_id not in (39801, 41701)) then
+        begin
+          asp_status = f_edoc_status(&#x27;asp.agreement&#x27;, c_id, current_date);
+          if (asp_status not in (&#x27;signed&#x27;, &#x27;inactive&#x27;)) then
+            res_is_error = 1;
+        end
+        else
+        begin
+          if (f_asp_signed(:c_id, current_date) = 0) then
+            res_is_error = 1;
+        end
+
+        if (res_is_error = 1) then
+        begin
+          if (res_text &lt;&gt; &#x27;&#x27;) then
+            res_text = res_text || &#x27;, &#x27;;
+          res_text = res_text || c_name_fio;
+        end
+      end
+      if (res_text &lt;&gt; &#x27;&#x27;) then
+        res_text = f_lang(lang, f_format(&#x27;Нет договора %1: &#x27;, iif(db_id = 81001, &#x27;АСП&#x27;, &#x27;ЭЦП&#x27;))) || res_text;
+    end
+  end
+
+  if (res_text = &#x27;&#x27; and exists(select * from com_cfg_params
+             where cmcp_from_cmc_id = :cmc_id and cmcp_param_name = &#x27;monthly_income&#x27;)) then
+  begin
+    -- Для РФ ежемесячный доход клиента попадает в эл. док. Уведомление о рассчитанном ПДН (реструктуризация)
+    -- Поэтому обязателен к заполнению
+    begin
+      monthly_income = f_json_str_get_value(cml_add_params, &#x27;monthly_income&#x27;, &#x27;0&#x27;);
+    when any do
+      monthly_income = 0;
+    end
+    if (monthly_income = 0) then
+    begin
+      res_is_error = 1;
+      res_text = f_lang(lang, &#x27;Неверно указан Доход клиента в месяц&#x27;);
+    end
+    else
+    begin
+      select kc_from_c_id
+      from knclient
+      where kc_from_k_id = :obj_id and
+            kc_amount_approved &gt; 0
+      into c_id;
+      execute procedure hp_objectprops_set_with_rd(0, c_id, -1, &#x27;work_monthly_income&#x27;, cml_date, &#x27;&#x27;, 0, f_get_rd_id(&#x27;Results.StrValue&#x27;), un_id, monthly_income);
+      -- Доп. доход обнуляем, т.к. в окне заявки на КК вводится только доход в месяц
+      execute procedure hp_objectprops_set_with_rd(0, c_id, -1, &#x27;work_extra_amount&#x27;, cml_date, &#x27;&#x27;, 0, f_get_rd_id(&#x27;Results.StrValue&#x27;), un_id, 0);
+    end
+  end
+/*
+  if (res_text = &#x27;&#x27; and db_id = 81001) then
+  begin
+    -- Законом 353-ФЗ установлен ограничитель по соотношению суммы доходов (процентов и пеней)
+    -- к сумме займа, при превышении которого МФО обязана прекратить начисление дохода
+    -- Также проверяется превышение лимита по ПСК
+    if (cmc_com_kind &lt;&gt; &#x27;termination&#x27;) then -- для рассторжение не проверяем ПСК
+    begin
+      select res_text
+      from hp_check_psk_limit(&#x27;com_list&#x27;, :cml_id, :cml_date)
+      into res_text;
+    end
+  end
+*/
+
+  if (res_text = &#x27;&#x27;) then
+  begin
+    select res_text, res_is_error
+    from hp_com_action_add(:cml_id, null, f_enum(&#x27;com_action_status&#x27;, &#x27;sent&#x27;, &#x27;id&#x27;), :un_id)
+    into res_text, res_is_error;
+
+    if (res_is_error = 0 and cmc_auto_approve = 1) then
+    begin
+      if (db_id = 81001) then
+      begin
+        res_text = &#x27;Автоподтверждение отключено, т.к. подписание ПДН в автоматическом режиме не реализовано.&#x27;;
+        res_is_error = 1;
+      end
+      else
+      begin
+        -- автоподтверждение
+        select res_is_error, res_text
+        from hp_com_list_auto_approve(:cml_id)
+        into :res_is_error, :res_text;
+      end
+    end
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

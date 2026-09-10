@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PRINT_GET_DELINQ_REASONS — процедура — схема БД</title>
+<meta name="description" content="Процедура PRINT_GET_DELINQ_REASONS: 1 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>PRINT_GET_DELINQ_REASONS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_objectprops_anketa_get.html"><div class="to">HP_OBJECTPROPS_ANKETA_GET</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">KC_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ANALIZ_DATE_HIS</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DELINQ_REASON_HIS</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE PRINT_GET_DELINQ_REASONS(
+    KC_ID D_ID)
+RETURNS (
+    ANALIZ_DATE_HIS D_DATE,
+    DELINQ_REASON_HIS D_STR_LONG)
+AS
+declare variable RD_ID D_INTEGER;
+declare variable ACL_DATE D_DATE;
+declare variable RES_STR_VALUES D_STR_255;
+declare variable UN_ID D_ID;
+declare variable C_ID D_ID;
+declare variable OBJ_KIND D_STR_100;
+declare variable OBJ_ID D_ID;
+begin
+    rd_id = f_get_rd_id(&#x27;anketa.delinq.1&#x27;);
+    un_id = 1000000000001;
+
+    select kc_from_c_id
+    from knclient
+    where kc_id = :kc_id
+    into :c_id;
+
+    obj_kind = &#x27;KnClient&#x27;;
+    obj_id = kc_id;
+    if (not exists
+        (
+            select *
+            from actionlist
+            where acl_object_kind = f_objkind(:obj_kind, &#x27;id&#x27;)
+              and acl_object_id = :obj_id
+              and acl_from_rd_id = :rd_id
+        )
+    ) then
+    begin
+        obj_kind = &#x27;Clients&#x27;;
+        obj_id = c_id;
+    end
+
+
+    for select cast(acl_last_datetime as date) -- RFCKG-4267
+    from actionlist
+    inner join clients on c_id = acl_respons_c_id
+    where acl_object_kind = f_objkind(:obj_kind, &#x27;id&#x27;)
+      and acl_object_id = :obj_id
+      and acl_date &lt; current_date
+      and acl_status = 2
+      and acl_from_un_id &lt;&gt; :un_id
+      and acl_from_rd_id = :rd_id
+    order by acl_date desc
+    into :acl_date
+    do
+    begin
+        select coalesce(res_str_values, &#x27;&#x27;)
+        from hp_objectprops_anketa_get(:obj_kind, :obj_id, -1, &#x27;delinqreport.reason&#x27;, :acl_date, null)
+        into :delinq_reason_his;
+
+        analiz_date_his = :acl_date;
+    
+        if (delinq_reason_his &lt;&gt; &#x27;&#x27; and delinq_reason_his &lt;&gt; &#x27;0&#x27;) then
+        begin
+            analiz_date_his = :acl_date;
+            suspend;  -- возвращаем результат для каждой анкеты
+        end
+    end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_AKB_DATA — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_AKB_DATA: 2 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_AKB_DATA</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_akb_data_html.html"><div class="to">FM_AKB_DATA_HTML</div></a><a class="ref-card" href="hp_client_relation_tmp.html"><div class="to">HP_CLIENT_RELATION_TMP</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OBJECT_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJECT_KIND</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_AKB_DATA(
+    OBJECT_ID D_ID,
+    OBJECT_KIND D_STR_20)
+RETURNS (
+    RES_TEXT D_BLOB_TEXT,
+    C_ID D_ID)
+AS
+declare variable MA_ID D_ID;
+declare variable C_ID_REL D_ID;
+declare variable IS_PORUCH D_SMALLINT;
+declare variable PERSON_INFO D_BLOB_TEXT;
+begin
+  if ((object_kind is null) or (object_id is null)) then
+    exit;
+  res_text = &#x27;&#x27;;
+
+  for select mac.mac_from_c_id, ma.ma_id, mac.mac_is_poruch
+      from miniappclient mac
+      inner join miniapp ma on mac.mac_from_ma_id = ma.ma_id
+      where ma.ma_id = :object_id and
+            ma.ma_is_active = 1  and
+            ma.ma_date_end = &#x27;31.12.9999&#x27; and
+            mac.mac_is_poruch in (-1, 0, 1)
+      union all
+      select mac.mac_from_c_id, ma.ma_id, mac.mac_is_poruch
+      from kontract k
+      inner join knclient kc on k.k_id = kc.kc_from_k_id
+      inner join miniapp ma on k.k_from_ma_app_id = ma.ma_id
+      inner join miniappclient mac on ma.ma_id = mac.mac_from_ma_id
+      where k.k_id = :object_id and
+            mac.mac_is_poruch in (-1, 0, 1) and
+            ma.ma_is_active = 1 and
+            ma.ma_date_end = &#x27;31.12.9999&#x27;
+      into :c_id, :ma_id, :is_poruch
+  do
+  begin
+    person_info = &#x27;&#x27;;
+    select person_info
+    from fm_akb_data_html(:ma_id, :c_id)
+    into :person_info;
+
+    res_text = BLOB_APPEND(res_text, person_info);
+
+    if (is_poruch = 0) then
+    begin
+        if (exists(select *
+               from miniappclient mac
+               where mac.mac_from_ma_id = :ma_id and
+                     mac.mac_is_poruch = 0 and
+                     mac.mac_from_c_id = :c_id)) then
+        begin
+        for select cr.rel_other_c_id
+            from hp_client_relation_tmp(:c_id, 4) cr
+            inner join relationtype rt on cr.rel_code = rt.rel_id
+            where cr.rel_level in (0, 1) and
+                  rt.rel_id between 1 and 4 and
+                  cr.rel_is_active = 1
+            into :c_id_rel
+            do
+        begin
+        person_info = &#x27;&#x27;;
+        select person_info
+        from fm_akb_data_html(:ma_id, :c_id_rel)
+        into :person_info;
+
+        res_text = BLOB_APPEND(res_text, person_info);
+        end
+      end
+    end
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

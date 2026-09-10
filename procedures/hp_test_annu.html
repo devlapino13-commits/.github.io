@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_TEST_ANNU — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_TEST_ANNU: 3 входных, 8 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_TEST_ANNU</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">8</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">8 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CURR_ANNU</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CURR_LAST_PAY</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEW_ANNU</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEW_LAST_PAY</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_PERCENT_DAY</div><div class="ptype">DECIMAL(18,7)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DAYS_LIST</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_TEST_ANNU(
+    REP_DATE_BEGIN D_DATE,
+    REP_DATE_END D_DATE,
+    REP_K_ID D_ID = 0)
+RETURNS (
+    K_ID D_ID,
+    CURR_ANNU D_CURRENCY,
+    CURR_LAST_PAY D_CURRENCY,
+    NEW_ANNU D_CURRENCY,
+    NEW_LAST_PAY D_CURRENCY,
+    K_AMOUNT D_CURRENCY,
+    K_PERCENT_DAY D_PERCENT,
+    DAYS_LIST D_STR_LONG)
+AS
+declare variable sh_date d_date;
+declare variable sh_grace d_smallint;
+declare variable sh_date_prv d_date;
+declare variable days d_integer;
+begin
+  if (rep_k_id is null) then
+    rep_k_id = 0;
+
+  for select ks_from_k_id, k_amount_approved, k_percent_per_day
+  from kontstate, kontract
+  where k_id = ks_from_k_id and
+        ks_state = 1 and
+        ks_ol_is_delete = 0 and
+        ((:rep_k_id = 0 and ks_date_begin between :rep_date_begin and :rep_date_end) or
+          ks_from_k_id = :rep_k_id)
+  into k_id, k_amount, k_percent_day
+  do
+  begin
+    curr_annu = 0;
+    curr_last_pay = 0;
+
+    select sh_os + sh_perc
+    from schedule
+    where sh_from_k_id = :k_id and
+          sh_grace = 0 and
+          sh_id &gt; 0
+    group by sh_os + sh_perc
+    order by count(*) desc
+    rows 1
+    into curr_annu;
+
+    if (curr_annu is null) then
+      curr_annu = 0;
+
+    select sh_os + sh_perc
+    from schedule
+    where sh_from_k_id = :k_id and
+          sh_id &gt; 0
+    order by sh_id desc
+    rows 1
+    into curr_last_pay;
+
+    if (curr_last_pay is null) then
+      curr_last_pay = 0;
+
+    days_list = &#x27;&#x27;;
+    sh_date_prv = null;
+    for select sh_date, sh_grace
+    from schedule
+    where sh_from_k_id = :k_id
+    order by sh_id
+    into sh_date, sh_grace
+    do
+    begin
+      if (sh_date_prv is not null) then
+      begin
+        days = sh_date - sh_date_prv;
+        if (sh_grace = 1) then
+          days = -days;
+
+        if (days_list &lt;&gt; &#x27;&#x27;) then
+          days_list = days_list || &#x27;,&#x27;;
+
+        days_list = days_list || days;
+      end
+
+      sh_date_prv = sh_date;
+    end
+
+    new_annu = f_annu(k_amount, 0, 0, k_percent_day, days_list, 0, 0, 0, 0, 0);
+    new_last_pay = f_annu(k_amount, 0, 0, k_percent_day, days_list, 0, 0, 0, 0, 1);
+
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

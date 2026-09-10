@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_DO_QR_VERIFY — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_DO_QR_VERIFY: 4 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_DO_QR_VERIFY</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_check_oivo_assignment.html"><div class="to">HP_CHECK_OIVO_ASSIGNMENT</div></a><a class="ref-card" href="hp_uuid.html"><div class="to">HP_UUID</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">QR_CODE</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">GPS_LAT</div><div class="ptype">DOUBLE PRECISION</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">GPS_LONG</div><div class="ptype">DOUBLE PRECISION</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_IS_ERROR</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_DO_QR_VERIFY(
+    QR_CODE D_STR_100,
+    GPS_LAT D_DOUBLE,
+    GPS_LONG D_DOUBLE,
+    UN_ID D_ID)
+RETURNS (
+    RES_IS_ERROR D_SMALLINT,
+    RES_TEXT D_STR_255)
+AS
+declare variable C_ID D_ID;
+declare variable QRL_ID D_ID;
+declare variable OBJ_KIND D_INTEGER;
+declare variable QRL_FROM_C_ID D_ID;
+declare variable MAX_DISTANCE D_INTEGER;
+declare variable MAX_TIME_SECOND D_INTEGER;
+declare variable GPS_DISTANCE D_DOUBLE;
+declare variable DIFF_SECOND D_INTEGER;
+declare variable C_NAME_FIO D_STR_100;
+declare variable MCL_ID D_ID;
+declare variable CLT_ID D_INTEGER;
+declare variable FOUND_COUNT D_INTEGER;
+declare variable MCL_LOGIN D_STR_CODE;
+declare variable DB_ID D_INTEGER;
+begin
+  -- Процедура проводит QR-верификацию ранее сгенерированного в МП клиенте QR-кода
+  -- Вызывается из МП сотрудников
+
+  db_id = f_get_db_id();
+
+  res_is_error = 1;
+  res_text = &#x27;&#x27;;
+
+  max_distance = 500; -- максимально допустимая дистанция в метрах
+  max_time_second = 10; -- максимально допустимая разница по времени между генерацией и верификацией QR кода
+
+  select un_from_c_id
+  from username
+  where un_id = :un_id
+  into c_id;
+
+  if (res_text = &#x27;&#x27; and
+      c_id is null) then
+    res_text = &#x27;ID сотрудника не определен&#x27;;
+
+  if (res_text = &#x27;&#x27; and
+      coalesce(trim(qr_code), &#x27;&#x27;) = &#x27;&#x27;) then
+    res_text = &#x27;QR код пустой&#x27;;
+
+  if (res_text = &#x27;&#x27; and
+      (coalesce(gps_lat, 0) = 0 or
+      coalesce(gps_long, 0) = 0)) then
+    res_text = &#x27;Местонахождение не определено&#x27;;
+
+  if (res_text = &#x27;&#x27;) then
+  begin
+    select obj_kind, obj_id
+    from hp_uuid(:qr_code)
+    into :obj_kind, :qrl_id;
+
+    if (res_text = &#x27;&#x27; and
+        qrl_id is null) then
+      res_text = &#x27;QR код не найден в БД&#x27;;
+
+    if (res_text = &#x27;&#x27; and f_objkind(obj_kind, &#x27;name&#x27;) &lt;&gt; &#x27;qr_list&#x27;) then
+      res_text = &#x27;Несоответствующий QR код&#x27;;
+  end
+
+  if (res_text = &#x27;&#x27; and
+      exists(select *
+             from qr_verify
+             where qrv_from_qrl_id = :qrl_id)) then
+    res_text = &#x27;Этот QR-код ранее уже был отсканирован. Для верификации клиент должен повторно сгенерировать QR-код.&#x27;;
+
+  if (res_text = &#x27;&#x27;) then
+  begin
+    insert into qr_verify (qrv_from_qrl_id, qrv_from_c_id, qrv_gps_lat, qrv_gps_long)
+    values (:qrl_id, :c_id, :gps_lat, :gps_long);
+
+    select qrl_from_mcl_id, qrl_from_c_id, f_gps_distance(qrl_gps_lat, qrl_gps_long, qrv_gps_lat, qrv_gps_long),
+           datediff(second, qrl_datetime, qrv_datetime)
+    from qr_list, qr_verify
+    where qrl_id = :qrl_id and
+          qrl_id = qrv_from_qrl_id
+    into mcl_id, qrl_from_c_id, gps_distance, diff_second;
+
+    if (res_text = &#x27;&#x27; and
+        coalesce(gps_distance, max_distance + 1) &gt; max_distance) then
+      res_text = &#x27;QR код не верифицирован: дистанция&#x27;;
+
+    if (res_text = &#x27;&#x27; and
+        coalesce(diff_second, max_time_second + 1) &gt; max_time_second) then
+      res_text = &#x27;QR код не верифицирован: устарел&#x27;;
+
+    -- если клиент не идентифицирован в МП, пробуем найти по номеру телефону
+    if (res_text = &#x27;&#x27; and
+        qrl_from_c_id is null) then
+    begin
+      select mcl_login, mcl_from_c_id
+      from mc_login
+      where mcl_id = :mcl_id
+      into mcl_login, qrl_from_c_id; -- mcl_login - номер телефона
+
+      if (qrl_from_c_id is null) then
+      begin
+        clt_id = f_cont_id(mcl_login, &#x27;null&#x27;);
+
+        if (clt_id is not null) then
+        begin
+          -- Получаем количество клиентов с таким основным номером телефона
+          select max(cda_from_c_id), count(*)
+          from contdata
+          where cda_cont_kind = f_enum(&#x27;cont_kind&#x27;, &#x27;cell&#x27;, &#x27;id&#x27;) and 
+                cda_from_clt_id = :clt_id and
+                cda_is_delete = 0 and
+                cda_is_main = 1
+          into qrl_from_c_id, found_count;
+
+          -- Если найден один клиент, прикрепляем C_ID к пользователю
+          if (found_count = 1) then
+          begin
+            update mc_login
+            set mcl_from_c_id = :qrl_from_c_id
+            where mcl_id = :mcl_id;
+          end
+
+          if (found_count &gt; 1) then
+          begin
+            qrl_from_c_id = null;
+            res_text = &#x27;Найдено несколько клиентов с основным номером %1. Требуется прикрепление паспорта через МП клиента.&#x27;;
+            res_text = f_format(res_text, mcl_login);
+          end
+        end
+      end
+
+      if (res_text = &#x27;&#x27;) then
+      begin
+        if (qrl_from_c_id is not null) then
+        begin
+          update qr_list
+          set qrl_from_c_id = :qrl_from_c_id
+          where qrl_id = :qrl_id;
+        end
+        else
+          res_text = &#x27;ID клиента не определен, возможно клиент еще не создан в БД&#x27;;
+      end
+    end
+  end
+
+  if (db_id = 81001 and qrl_from_c_id is not null) then
+  begin
+    if (exists(select *
+               from hp_check_oivo_assignment(:qrl_from_c_id, :un_id)
+               where is_oivo = 1 and
+                     res_id &lt;&gt; 1)) then
+    begin
+      res_text = &#x27;Верификация не прошла, так как клиент закреплен не за Вами!&#x27;;
+      suspend;
+      exit;
+    end
+  end
+
+  if (res_text = &#x27;&#x27;) then
+  begin
+    update qr_list
+    set qrl_state = 2
+    where qrl_id = :qrl_id;
+
+    select c_name_fio
+    from clients
+    where c_id = :qrl_from_c_id
+    into c_name_fio;
+
+    res_is_error = 0;
+    res_text = f_format(&#x27;%1,&lt;br&gt;QR верификация прошла успешно!&#x27;, c_name_fio);
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

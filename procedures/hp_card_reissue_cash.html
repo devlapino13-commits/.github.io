@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CARD_REISSUE_CASH — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CARD_REISSUE_CASH: 1 входных, 8 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CARD_REISSUE_CASH</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">8</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CARD_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">8 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CAC_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CCA_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REASON</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REG_NAME</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_NAME_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_KONTRACT_NO</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">STATUS</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CARD_REISSUE_CASH(
+    CARD_ID D_INTEGER)
+RETURNS (
+    CAC_ID D_INTEGER,
+    CCA_ID D_INTEGER,
+    REASON D_STR_255,
+    REG_NAME D_STR_CODE,
+    C_NAME_FIO D_STR_100,
+    K_KONTRACT_NO D_STR_20,
+    AMOUNT D_CURRENCY,
+    STATUS D_STR_100)
+AS
+declare variable c_id d_id;
+declare variable cac_status1 d_integer;
+declare variable pay_amount d_currency;
+begin
+  cac_status1 = f_enum_id(&#x27;cardaktclient&#x27;, &#x27;issued_delayed&#x27;);
+  pay_amount = 350.00;
+  status = &#x27;карта не определена&#x27;;
+
+  select first 1
+    cac_id,
+    cac_from_cca_id,
+    cac_from_c_id,
+    cac_amount,
+    rd_name,
+    reg_name,
+    c_name_fio,
+    k_kontract_no,
+    &#x27;акт выдачи №&#x27; || cac_id
+  from cardaktclient
+    inner join refdata
+      on rd_id = cac_from_rd_id
+    inner join region
+      on reg_unicode = cac_from_reg_id
+    inner join clients
+      on c_id = cac_from_c_id
+    left join kontract
+      on k_id = cac_from_k_id
+  where cac_card_id = :card_id
+    and cac_status = cac_status
+    and cac_amount &lt; :pay_amount
+    and cac_from_edl_id is null
+  order by cac_id desc
+  into
+    :cac_id,
+    :cca_id,
+    :c_id,
+    :amount,
+    :reason,
+    :reg_name,
+    :c_name_fio,
+    :k_kontract_no,
+    :status;
+
+  if (cac_id &gt; 0 and cca_id is null) then
+    cca_id = (
+      select
+        max(cca_id)
+      from cardclientid
+        inner join cardclientacc
+          on cca_from_cci_id = cci_id
+            and cca_status = 0
+      where cci_from_c_id = :c_id
+        and cci_is_stopped = 0
+        and cci_status = 1);
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

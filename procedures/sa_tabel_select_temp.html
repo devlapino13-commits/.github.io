@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SA_TABEL_SELECT_TEMP — процедура — схема БД</title>
+<meta name="description" content="Процедура SA_TABEL_SELECT_TEMP: 3 входных, 6 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>SA_TABEL_SELECT_TEMP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="sa_tabel_select.html"><div class="to">SA_TABEL_SELECT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SA_REGION_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SA_YEAR</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SA_MONTH</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SAT_FROM_C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SAT_OFFICE_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SAT_TOTAL_NORMA</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SAT_TOTAL_WORKED</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SAT_TOTAL_OTPUSK</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SAT_TOTAL_BOLNICH</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE SA_TABEL_SELECT_TEMP(
+    SA_REGION_ID INTEGER,
+    SA_YEAR INTEGER,
+    SA_MONTH INTEGER)
+RETURNS (
+    SAT_FROM_C_ID DECIMAL(18,0),
+    SAT_OFFICE_ID INTEGER,
+    SAT_TOTAL_NORMA INTEGER,
+    SAT_TOTAL_WORKED INTEGER,
+    SAT_TOTAL_OTPUSK INTEGER,
+    SAT_TOTAL_BOLNICH INTEGER)
+AS
+declare variable sat_total_calc integer;
+declare variable sat_base_type integer;
+declare variable tnorm integer;
+begin
+  select sum(scd_work_hours)
+  from sa_calendays
+  where scd_year_month = (:sa_year * 100 + :sa_month)
+  into :tnorm;
+  if (tnorm is null) then
+    tnorm = 0;
+
+  for select sat_from_c_id, sat_office_id, sum(iif(sat_from_sawt_id = 0, :tnorm, 0)), sum(sat_total_calc),
+             sawt_base_type
+      from sa_tabel, sa_worktype, region_list(:sa_region_id, 1, -1, 1)
+      where sawt_id = sat_from_sawt_id and
+            sat_is_ready = 1 and
+            sat_year_month = (:sa_year * 100 + :sa_month) and
+            (sat_office_id = id_list)
+      group by sat_from_c_id, sat_office_id, sawt_base_type
+      order by sat_from_c_id, sat_office_id, sawt_base_type
+      into :sat_from_c_id, :sat_office_id, :sat_total_norma, :sat_total_calc, :sat_base_type
+
+  do
+  begin
+    sat_total_worked = 0;
+    sat_total_otpusk = 0;
+    sat_total_bolnich = 0;
+    if (sat_base_type = 0) then
+      sat_total_worked = sat_total_calc;
+    if (sat_base_type = 4) then
+      sat_total_otpusk = sat_total_calc;
+    if (sat_base_type = 5) then
+      sat_total_bolnich = sat_total_calc;
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

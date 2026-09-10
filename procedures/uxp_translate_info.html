@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$TRANSLATE_INFO — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$TRANSLATE_INFO: 0 входных, 9 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$TRANSLATE_INFO</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">9</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">9 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_LANG_CODE</div><div class="ptype">VARCHAR(10)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TOTAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_NEW</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TRANSLATED</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_UNCHECKED</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_CHECKED</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ENUM</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ENUM_ERROR</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$TRANSLATE_INFO
+RETURNS (
+    RES_LANG_CODE D_STR_10,
+    RES_TOTAL D_INTEGER,
+    RES_NEW D_INTEGER,
+    RES_TRANSLATED D_INTEGER,
+    RES_UNCHECKED D_INTEGER,
+    RES_CHECKED D_INTEGER,
+    RES_ERROR D_INTEGER,
+    RES_ENUM D_STR_100,
+    RES_ENUM_ERROR D_BOOL)
+AS
+begin
+  select count(*)
+  from ux$transmain
+  into res_total;
+
+  for select distinct trl_lang_code
+  from ux$translate
+  union
+  select el_code
+  from enum_list
+  where el_kind = &#x27;user_language&#x27; and
+        el_id &lt;&gt; 0
+  into res_lang_code
+  do
+  begin
+    res_enum = &#x27;Отсутствует в справочнике&#x27;;
+    res_enum_error = 1;
+
+    select el_name
+    from enum_list
+    where el_kind = &#x27;user_language&#x27; and
+          el_code = :res_lang_code
+    into res_enum;
+
+    if (row_count = 1) then
+      res_enum_error = 0;
+
+    res_new = 0;
+    res_translated = 0;
+    res_checked = 0;
+    res_error = 0;
+    res_unchecked = 0;
+    select sum(iif(trl_from_trm_id is null, 1, 0)),
+           sum(iif(trl_from_trm_id is not null, 1, 0)),
+           sum(iif(trl_from_trm_id is not null and trl_checked = 1, 1, 0)),
+           sum(iif(trl_from_trm_id is not null and trl_checked = 0, 1, 0)),
+           sum(iif(trl_from_trm_id is not null and trl_checked is null, 1, 0))
+    from ux$transmain
+         left join ux$translate on (trl_from_trm_id = trm_id and trl_lang_code = :res_lang_code)
+    into res_new, res_translated, res_checked, res_error, res_unchecked;
+
+    if (res_new is null) then
+      res_new = 0;
+    if (res_translated is null) then
+      res_translated = 0;
+    if (res_checked is null) then
+      res_checked = 0;
+    if (res_error is null) then
+      res_error = 0;
+    if (res_unchecked is null) then
+      res_unchecked = 0;
+
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

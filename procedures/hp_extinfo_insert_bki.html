@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EXTINFO_INSERT_BKI — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EXTINFO_INSERT_BKI: 4 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EXTINFO_INSERT_BKI</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_extinfo_insert.html"><div class="to">HP_EXTINFO_INSERT</div></a><a class="ref-card" href="hp_extinfo_insert_bki_cfg.html"><div class="to">HP_EXTINFO_INSERT_BKI_CFG</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_edoc_after_sign_action.html"><div class="to">HP_EDOC_AFTER_SIGN_ACTION</div></a><a class="ref-card" href="hp_pdn_recalclist_send_req_ko.html"><div class="to">HP_PDN_RECALCLIST_SEND_REQ_KO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OBJ_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FORCE_INSERT</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EXTINFO_INSERT_BKI(
+    OBJ_KIND D_STR_CODE,
+    OBJ_ID D_ID,
+    FORCE_INSERT D_SMALLINT,
+    UN_ID D_ID)
+AS
+declare variable main_config d_str_code;
+declare variable add_config d_str_code;
+declare variable obj_kind_str d_str_code;
+declare variable pr_code d_str_100;
+declare variable c_id d_id;
+declare variable ma_id d_id;
+declare variable ma_kind_id d_integer;
+declare variable k_refund d_integer;
+declare variable z_from_c_id d_id;
+declare variable k_id d_id;
+begin
+  main_config = f_get_const(&#x27;main_bki_config&#x27;);
+
+  execute procedure hp_extinfo_insert(main_config, obj_kind, obj_id, force_insert, un_id);
+
+  -- RFCRU-3290 Проверка на Самозапрет осуществлять отдельно по каждой заявке на заем
+  obj_kind_str = f_objkind(obj_kind, &#x27;name&#x27;);
+
+  if (obj_kind_str = &#x27;Kontract&#x27;) then
+  begin
+    select pr_code, kc_from_c_id, k_from_ma_app_id, k_refund, k_id
+    from kontract, product, knclient
+    where k_id = :obj_id
+      and k_from_pr_id = pr_id
+      and kc_from_k_id = k_id
+      and kc_amount_approved &gt; 0
+    into pr_code, c_id, ma_id, k_refund, k_id;
+  end
+  else if (obj_kind_str = &#x27;Miniapp&#x27;) then
+  begin
+    ma_id = obj_id;
+
+    select pr_code, mac_from_c_id
+    from miniapp, product, miniappclient
+    where ma_id = :obj_id
+      and ma_from_pr_id = pr_id
+      and mac_from_ma_id = ma_id
+    order by ma_number desc
+    rows 1
+    into pr_code, c_id;
+
+    select k_id, k_refund
+    from kontract
+    where k_from_ma_app_id = :ma_id
+    order by k_status desc
+    rows 1
+    into k_id, k_refund;
+  end
+
+  ma_kind_id = f_objkind(&#x27;Miniapp&#x27;, &#x27;id&#x27;);
+
+  execute procedure hp_extinfo_insert_bki_cfg(&#x27;bki_ssp_40&#x27;, :c_id, :ma_kind_id, :ma_id, :force_insert, :un_id);
+
+  if (obj_kind_str = &#x27;Kontract&#x27; and
+      pr_code containing &#x27;.zalog&#x27;) then
+  begin
+    select z_from_c_id
+    from zalog
+    where z_from_k_id = :obj_id and
+          z_subtype = 4 and
+          z_type = 1 and
+          z_from_c_id is not null and
+          current_date between coalesce(z_date_begin, &#x27;01.01.1990&#x27;) and coalesce(z_date_end, &#x27;31.12.9999&#x27;)
+    order by coalesce(z_date_begin, &#x27;01.01.1990&#x27;) rows 1
+    into z_from_c_id;
+
+    if (c_id &lt;&gt; z_from_c_id) then
+    begin
+      execute procedure hp_extinfo_insert_bki_cfg(&#x27;equifax_40&#x27;, :z_from_c_id, :ma_kind_id, :ma_id, :force_insert, :un_id);
+      execute procedure hp_extinfo_insert_bki_cfg(&#x27;nbki_40&#x27;, :z_from_c_id, :ma_kind_id, :ma_id, :force_insert, :un_id);
+    end
+  end
+
+  -- дополнительная проверка
+  add_config = &#x27;nbki_40&#x27;;
+
+  -- если основная и дополнительная конфигурации совпадают, то ничего не делаем
+  if (add_config = main_config) then
+    exit;
+
+  if (pr_code containing &#x27;.zalog&#x27; or
+      pr_code containing &#x27;.reliable_emp.&#x27; or
+      pr_code containing &#x27;.refinance.&#x27; or -- RFCRU-4976
+      pr_code containing &#x27;.refinance_oivo.&#x27; or
+      coalesce(k_refund, 0) = 1 or
+      pr_code containing &#x27;.education.&#x27;)
+  then
+  begin
+    -- RFCRU-4976 НБКИ нужен только один на контракт/заявку, т.к. в ПДН не участвует
+    -- исключение повторый выбор рефинансов, но там решается ручным запросом
+    -- поэтому если есть по заявке/договору уже запрос повторно автоматически не запрашиваем
+    if (exists(select eil_id
+              from extinfolist, extinfocfg
+              where eic_code = :add_config
+                and eil_from_eic_id = eic_id
+                and eil_from_c_id = :c_id
+                and eil_status &gt;= 0
+                and ((eil_object_kind = 11 and eil_object_id = :ma_id)
+                  or (eil_object_kind = 9 and eil_object_id = coalesce(:k_id, 0)))))
+    then
+      exit;
+
+    execute procedure hp_extinfo_insert(add_config, obj_kind, obj_id, 0, un_id);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

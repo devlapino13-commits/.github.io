@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_FPS_NAME_ACTION — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_FPS_NAME_ACTION: 4 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_FPS_NAME_ACTION</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="moneta_client_fps_names.html"><div class="to">MONETA_CLIENT_FPS_NAMES</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ACTION_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FCB_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FCN_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">FCB_STATUS</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FCB_STATUS_STR</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_FPS_NAME_ACTION(
+    ACTION_KIND D_STR_CODE,
+    FCB_ID D_INTEGER,
+    FCN_NAME D_STR_100,
+    UN_ID D_ID)
+RETURNS (
+    FCB_STATUS D_INTEGER,
+    FCB_STATUS_STR D_STR_100)
+AS
+declare variable c_id d_id;
+declare variable min_distance d_integer;
+begin
+  -- Процедура для проверки и подтверждения имен получателей по СБП.
+  -- Вызывается из Finstart в процессе выдачи по № телефона
+
+  if (fcb_id is null) then
+    exception e_default &#x27;fcb_id is null&#x27;;
+
+  if (action_kind = &#x27;verify&#x27;) then
+  begin
+    -- Сохраняет статус проверки банка клиента по СБП.
+    -- Если банк не возвращает PAM-фразу (fcn_name = &#x27;&#x27;), причины могут быть:
+    -- 1. Неверно указан банк, где обслуживается клиент
+    -- 2. Клиент не ключил получение денег по СБП (Сбер так любит делать)
+    -- 3. В банке у клиента другой номер, не тот что подтвержден у нас
+    -- Иначе в Client_name лежит ФИО из ответа банка
+
+    fcb_status = null;
+    fcb_status_str = &#x27;ОШИБКА статуса&#x27;;
+
+    -- Логируем проверку
+    insert into fps_client_banks_checks (fcc_from_fcb_id, fcc_from_un_id)
+    values (:fcb_id, :un_id);
+
+    if (fcn_name = &#x27;&#x27;) then
+    begin
+      fcb_status = -1; -- PAM-фразы нет, см. выше
+      fcb_status_str = &#x27;Клиент НЕ НАЙДЕН в банке получателе&#x27;;
+    end
+    else
+    begin
+      select fcb_from_c_id
+      from fps_client_banks
+      where fcb_id = :fcb_id
+      into c_id;
+  
+      fcb_status = 1;
+      fcb_status_str = &#x27;ФИО ОТЛИЧАЕТСЯ, требуется подтверждение&#x27;;
+
+      if (exists(select * from moneta_client_fps_names(:c_id, &#x27;list&#x27;)
+                 where client_names = :fcn_name))
+      then
+      begin
+        fcb_status = 2;
+        fcb_status_str = &#x27;ФИО СОВПАДАЮТ&#x27;;
+      end
+      else
+      begin
+        -- Если минимальное расстояние редактирования больше пяти, акцентируем
+        select min(f_levenstain2(client_names, :fcn_name, 5))
+        from moneta_client_fps_names(:c_id, &#x27;list&#x27;)
+        into min_distance;
+        min_distance = coalesce(min_distance, 255); -- Перестраховка
+        if (min_distance &gt; 5) then
+        begin
+          fcb_status = 1;
+          fcb_status_str = &#x27;ФИО ЗНАЧИТЕЛЬНО ОТЛИЧАЕТСЯ!!!&#x27;;
+        end
+      end
+
+      if (not exists(
+      select * from fps_client_names
+      where fcn_from_fcb_id = :fcb_id and
+            fcn_name = :fcn_name)) then
+      begin
+        -- Имя добавляем даже если совпадает, на случай, если потом андеррайтеры изменят
+        insert into fps_client_names (fcn_from_fcb_id, fcn_name, fcn_status)
+        values (:fcb_id, :fcn_name, iif(:fcb_status = 2, 2, 0));
+      end
+      else
+      begin
+        -- Если имя есть, контрольно обновляем статус
+        update fps_client_names
+        set fcn_status = iif(:fcb_status = 2, 2, 0)
+        where fcn_from_fcb_id = :fcb_id and
+            fcn_name = :fcn_name and
+            fcn_status &lt;&gt; iif(:fcb_status = 2, 2, 0);
+      end
+    end
+  
+    update fps_client_banks
+    set fcb_status = :fcb_status
+    where fcb_id = :fcb_id and
+          fcb_status &lt;&gt; :fcb_status;
+
+    suspend;
+  end
+  else if (action_kind = &#x27;approve&#x27;) then
+  begin
+    -- Ручное подтверждение имени клиента пользователем (fcb_status = 1)
+    -- Если на этапе проверки (verify) оказалось что ФИО отличается,
+    -- пользователь проверил, решил что имена похожие и можно перечислять
+    update fps_client_names
+    set fcn_status = 2,
+        fcn_approve_un_id = :un_id
+    where fcn_from_fcb_id = :fcb_id and
+        fcn_name = :fcn_name and
+        fcn_status = 0;
+    -- fps_client_bank.fcb_status обновится через триггер
+    fcb_status = 2;
+    fcb_status_str = &#x27;ФИО подтверждено ВРУЧНУЮ&#x27;;
+    suspend;
+  end
+  else
+    exception e_default &#x27;Invalid action_kind:&#x27; || coalesce(action_kind, &#x27;null&#x27;);
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_AZ_0045_SQL — процедура — схема БД</title>
+<meta name="description" content="Проверка максимально допустимой суммы займа">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_AZ_0045_SQL</code></h1>
+<p class="desc">Проверка максимально допустимой суммы займа</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_AZ_0045_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare kc_amount curr_type;
+declare kf_disb_date d_date;
+declare variable c_id d_id;
+declare variable kol d_smallint;
+declare variable k_id_last d_id;
+declare variable max_continuing_deling d_integer;
+declare variable kc_amount_approved_max d_currency;
+declare variable kc_amount_approved_tmp d_currency;
+declare variable k_id_tmp d_id;
+begin
+  res_error_is_critical = 1;
+  for select knc.kc_from_c_id, knc.kc_amount_approved, k.k_disb_date, cl.c_name_fio
+      from knclient knc
+      inner join clients cl on cl.c_id = knc.kc_from_c_id
+      inner join kontract k on k.k_id = knc.kc_from_k_id
+      where knc.kc_from_k_id = :k_id and
+            knc.kc_amount_approved &gt; 0
+      into :c_id, :kc_amount, :kf_disb_date, :res_info_text
+  do
+  begin
+       k_id_last = null;
+       max_continuing_deling = 0;
+       kc_amount_approved_max = 0;
+       -- нахожу послдний займ клиента
+       for select ks.ks_from_k_id,
+              kncl.kc_amount_approved
+       from kontstate ks
+       inner join knclient kncl on ks.ks_from_k_id = kncl.kc_from_k_id
+       where kncl.kc_from_c_id = :c_id
+       and kncl.kc_amount_approved &gt; 0
+       and ks.ks_state = 1
+       and ks.ks_ol_is_delete = 0
+       and ks.ks_date_begin &lt;= :kf_disb_date
+       and ks.ks_from_k_id &lt;&gt; :k_id
+       order by ks.ks_date_begin desc -- выжно именно последний поймать
+       into :k_id_tmp,
+            :kc_amount_approved_tmp
+       do
+       begin
+        if (k_id_last is null) then
+            k_id_last = k_id_tmp;
+        if (kc_amount_approved_max &lt; kc_amount_approved_tmp) then
+            kc_amount_approved_max = kc_amount_approved_tmp;
+       end
+       if (kc_amount_approved_max &gt; 2000) then
+        kc_amount_approved_max = 2000;
+       if (kc_amount_approved_max &lt; 1000) then
+        kc_amount_approved_max = 1000;
+       select coalesce(max(ok.ok_ol_date - ok_sh_date), 0)
+       from operkred ok
+       where ok.ok_ol_is_active = 1
+       and ok.ok_ol_date  &lt;= :kf_disb_date
+       and ok.ok_ol_date &gt; ok_sh_date
+       and ok_type &lt; 7
+       and ok_from_k_id = :k_id_last
+       and ok_os + ok_perc &lt; 0
+       and ok_from_c_id=0
+       into :max_continuing_deling;
+       if (((k_id_last is null) or (max_continuing_deling &gt; 7)) and (kc_amount &gt; 1000)) then
+       begin
+            res_error_text = &#x27;Новым клиентам и повторным клиентам, с просрочкой более 7 дней максимальная сумма займа 1000 AZN&#x27;;
+            suspend;
+            exit;
+       end
+       if ((k_id_last is not null) and (max_continuing_deling &lt;= 7)) then
+       begin
+            if (kc_amount &gt; kc_amount_approved_max) then
+            begin
+                res_error_text = &#x27;Повторным клиентам у которых не было просрочек и у которых были просрочки до 7 дней включительно на предыдущем цикле, выдаем до максимальной суммы займа на любом из циклов. Но не более 2000 AZN&#x27;;
+                suspend;
+                exit;
+            end
+       end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

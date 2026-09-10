@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_SUD_GET_CONTRACT_HISTORY — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_SUD_GET_CONTRACT_HISTORY: 1 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_SUD_GET_CONTRACT_HISTORY</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_sud_get_clientslist_ux.html"><div class="to">HP_SUD_GET_CLIENTSLIST_UX</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">STAGE_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">STAGE_STR</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">STATUS_USER</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">STATUS_DATE_STR</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_SUD_GET_CONTRACT_HISTORY(
+    REP_K_ID D_ID)
+RETURNS (
+    STAGE_CODE D_STR_CODE,
+    STAGE_STR D_STR_255,
+    STATUS_USER D_STR_100,
+    STATUS_DATE_STR D_STR_CODE)
+AS
+declare variable REQUEST_ID D_ID;
+declare variable STAGE_ID D_INTEGER;
+declare variable STATUS D_INTEGER;
+declare variable SUL_FROM_UN_ID D_ID;
+declare variable MIN_SLD_STATUS D_INTEGER;
+declare variable PRESENT_DOC_OFFICE D_BOOL;
+declare variable PRESENT_DOC_ARCHIVE D_BOOL;
+declare variable DECISION_BLS_ID D_ID;
+declare variable LAWSUIT_NO D_STR_100;
+declare variable EXDOC_BLS_ID D_ID;
+declare variable SLC_ID D_ID;
+declare variable SLC_ID_TMP D_ID;
+declare variable STAGE_CODE_TMP D_STR_CODE;
+declare variable PARAM_JSON D_STR_255;
+begin
+  -- Цикл по всей истории логов для конкретного контракта
+  for select 
+      smr.smr_id,
+      sul.sul_object_kind,
+      sul.sul_status,
+      f_datetimetostr(sul.sul_datetime),
+      sul.sul_from_un_id
+  from sud_mainreq smr
+  inner join sud_mainlog sul on sul.sul_from_smr_id = smr.smr_id
+  where smr.smr_from_k_id = :rep_k_id
+  order by sul.sul_datetime desc, sul.sul_id desc
+  into :request_id, :stage_id, :status, :status_date_str, :sul_from_un_id
+  do
+  begin
+    status_user = (select un_fio from username where un_id = :sul_from_un_id);
+    
+    -- Определение базового кода этапа (как в оригинале)
+    stage_code = case stage_id
+                    when f_objkind(&#x27;sud_mainreq&#x27;,     &#x27;id&#x27;) then &#x27;R&#x27;
+                    when f_objkind(&#x27;sud_maindocs&#x27;,    &#x27;id&#x27;) then &#x27;D&#x27;
+                    when f_objkind(&#x27;sud_mainpay&#x27;,     &#x27;id&#x27;) then &#x27;P&#x27;
+                    when f_objkind(&#x27;sud_mainlist&#x27;,    &#x27;id&#x27;) then &#x27;J&#x27;
+                    when f_objkind(&#x27;sud_maincollect&#x27;, &#x27;id&#x27;) then &#x27;JC&#x27;
+                    else &#x27;error&#x27;
+                  end;
+    if (stage_code = &#x27;error&#x27;) then
+      continue;
+
+    -- ВЕТКА R (Заявка)
+    if (stage_code = &#x27;R&#x27;) then
+    begin
+      stage_code = case status
+                     when 0 then &#x27;|R1|&#x27;
+                     when 1 then &#x27;|R2|&#x27;
+                     when -1 then &#x27;|R1|&#x27;
+                     when -2 then &#x27;|R3|&#x27;
+                     else &#x27;|R0|&#x27;
+                   end;
+    end
+
+    -- ВЕТКА D (Документы)
+    else if (stage_code = &#x27;D&#x27;) then
+    begin
+      select
+        min(iif(scd_on_request &gt; 1 or scd_on_client &gt; 1, sld_status, 2)),
+        max(iif(sld_kind = 1 and sld_status &lt; 1, 1, 0)),
+        max(iif(sld_kind = 2 and sld_status &lt; 1, 1, 0))
+      from sud_loandocs, sud_cfgdockind
+      where sld_from_smd_id = :request_id
+        and sld_inactive = 0
+        and scd_id = sld_doc_kind
+      into min_sld_status, present_doc_office, present_doc_archive;
+
+      stage_code = &#x27;&#x27;;
+      if (status = 0) then stage_code = &#x27;|D1|&#x27;;
+      else if (status &lt; 0) then stage_code = &#x27;|D6|&#x27;;
+      else if (status = 1) then
+      begin
+        if (min_sld_status &lt; 2) then stage_code = stage_code || &#x27;|D2|&#x27;;
+        if (present_doc_office = 1) then stage_code = stage_code || &#x27;|D3|&#x27;;
+        if (present_doc_archive = 1) then stage_code = stage_code || &#x27;|D4|&#x27;;
+        if (min_sld_status = 2) then stage_code = stage_code || &#x27;|D5|&#x27;;
+      end
+      if (stage_code = &#x27;&#x27;) then stage_code = &#x27;|D0|&#x27;;
+    end
+
+    -- ВЕТКА P (Оплата)
+    else if (stage_code = &#x27;P&#x27;) then
+    begin
+      stage_code = case status
+                     when 0 then &#x27;|P1|&#x27;
+                     when 1 then &#x27;|P1|&#x27;
+                     when -1 then &#x27;|P2|&#x27;
+                     when -2 then &#x27;|P2|&#x27;
+                     else &#x27;|P0|&#x27;
+                   end;
+    end
+
+    -- ВЕТКА J (Суд/Иски)
+    else if (stage_code = &#x27;J&#x27;) then
+    begin
+      select sml_lawsuit_no, sml_decision_bls_id, sml_exdoc_bls_id
+      from sud_mainlist where sml_id = :request_id
+      into lawsuit_no, decision_bls_id, exdoc_bls_id;
+
+      stage_code = case
+                     when status = 0 then &#x27;|J1|&#x27;
+                     when status = 2 then &#x27;|J5|&#x27;
+                     when status = -2 then &#x27;|J6|&#x27;
+                     when decision_bls_id is null then &#x27;|J2|&#x27;
+                     when decision_bls_id is not null and lawsuit_no is null then &#x27;|J3|&#x27;
+                     when decision_bls_id is not null and lawsuit_no is not null and exdoc_bls_id is null then &#x27;|J4|&#x27;
+                     else &#x27;|J0|&#x27;
+                   end;
+    end
+
+    -- ВЕТКА JC (Взыскание)
+    else if (stage_code = &#x27;JC&#x27;) then
+    begin
+      stage_code = &#x27;&#x27;;
+      slc_id_tmp = 0;
+      param_json = f_json_str_set_value(&#x27;{}&#x27;, &#x27;request_id&#x27;, request_id);
+
+      for select slc_id, stage_code
+      from hp_sud_get_clientslist_ux(f_json_str_set_value(f_json_str_set_value(:param_json, &#x27;param&#x27;, &#x27;C0&#x27;), &#x27;stage_code&#x27;, &#x27;|C0|&#x27;))
+      into slc_id, stage_code_tmp
+      do
+      begin
+        if (slc_id_tmp &lt;&gt; slc_id) then
+        begin
+          slc_id_tmp = slc_id;
+          if (stage_code not containing stage_code_tmp) then
+            stage_code = stage_code || stage_code_tmp;
+        end
+      end 
+      if (stage_code = &#x27;&#x27;) then stage_code = &#x27;|JC0|&#x27;; -- Технический код, если пусто
+    end
+
+    -- Формирование итоговой строки этапа (как в оригинале)
+    stage_str = (select list(name || trim(iif(:status = -1, &#x27;_(Доработка)&#x27;, &#x27;&#x27;))) 
+                 from hp_sud_get_stages 
+                 where :stage_code containing (&#x27;|&#x27; || code || &#x27;|&#x27;));
+
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

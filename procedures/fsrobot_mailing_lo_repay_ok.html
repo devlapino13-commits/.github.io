@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FSROBOT_MAILING_LO_REPAY_OK — процедура — схема БД</title>
+<meta name="description" content="Процедура FSROBOT_MAILING_LO_REPAY_OK: 3 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FSROBOT_MAILING_LO_REPAY_OK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_make_zad_list_temp.html"><div class="to">AAREP_MAKE_ZAD_LIST_TEMP</div></a><a class="ref-card" href="hp_contdata_get_email_valid.html"><div class="to">HP_CONTDATA_GET_EMAIL_VALID</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_PARAMS</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_EMAIL</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">USER_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_SUBJECT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_BODY</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_MAILLIST</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FSROBOT_MAILING_LO_REPAY_OK(
+    REP_PARAMS VARCHAR(255),
+    REP_EMAIL VARCHAR(255),
+    USER_FIO VARCHAR(100))
+RETURNS (
+    RES_SUBJECT VARCHAR(255),
+    RES_BODY BLOB SUB_TYPE TEXT SEGMENT SIZE 80,
+    RES_MAILLIST VARCHAR(255),
+    RES_C_ID DECIMAL(18,0))
+AS
+declare variable ol_date date;
+declare variable kol integer;
+declare variable date_format_str varchar(20);
+declare variable k_id decimal(18,0);
+declare variable amount decimal(18,4) = 0;
+declare variable doc_no varchar(20);
+declare variable amount_str varchar(20);
+declare variable reg_id integer;
+declare variable cm_database_id integer;
+declare variable amount_sym varchar(10);
+declare variable ks_state integer;
+declare variable oks_delinq_date_str varchar(20);
+declare variable kont_last_date date;
+declare variable oks_delinq_date date;
+declare variable repay_date_str varchar(10);
+declare variable kf_id decimal(18,0);
+declare variable lo_id decimal(18,0);
+declare variable kf_name varchar(100);
+declare variable lo_fio varchar(255);
+declare variable lo_sex integer;
+declare variable repay_kind varchar(255);
+declare variable ol_parent_id decimal(18,0);
+declare variable ol_doc_kind integer;
+declare variable ol_doc_client_name varchar(255);
+declare variable repay_reg_name varchar(100);
+declare variable ol_datetime timestamp;
+declare variable repay_time varchar(20);
+declare variable ol_document_client decimal(18,0);
+declare variable repay_fio varchar(100);
+begin
+-- Процедура вызывается из FSROBOT_ON_MAILING
+-- Процедура готовит список уведомлений для отправки роботом по почте или sms
+-- REP_COMMAND_KIND. Настройки сообщения хранятся в таблице RefData:
+-- справочник NotifyMail || &#x27;.&#x27; || Rep_Command_Kind - строка настроек email
+-- справочник NotifySMS  || &#x27;.&#x27; || Rep_Command_Kind - строка настроек SMS
+
+-- RefData.RD_Memo    - Список получателей
+-- RefData.RD_Tag     - Срок жизни сообщения
+-- RefData.RD_STR_ID  - Название хранимой процедуры, которая готовит текст сообщения
+
+-- Rep_Params - входящий параметры в зависимости от команды
+-- Rep_UN_ID - пользователь
+
+-- СМС после погашения кредита
+  if (user_fio is null) then
+    user_fio = &#x27;&#x27;;
+  res_maillist = :rep_email;
+
+  :cm_database_id = f_get_db_id();
+  amount_sym = (case
+                  when (cm_database_id = 81001) then &#x27;p.&#x27;
+                  when (cm_database_id in (39801, 41701)) then &#x27;c.&#x27;
+                  when (cm_database_id = 94401) then &#x27;AZN&#x27;
+                end);
+
+  res_body = &#x27;&#x27;;
+  kol = 0;
+
+  for select distinct ok_from_k_id, k_from_kf_id, ok_ol_date, iif(coalesce(ol_doc_no, &#x27;0&#x27;) = &#x27;0&#x27;, &#x27;Б/Н&#x27;, ol_doc_no),
+                      ol_from_reg_id, k_kredline_end, ol_datetime, ol_parent_id, ol_doc_kind, ol_doc_client_name,
+                      ol_document_client
+      from operkred, operlist, kontract
+      where ok_from_ol_id = :rep_params and
+            ol_id = :rep_params and
+            ol_oper_type = 1 -- Погашение
+            and
+            ol_oper_subtype = 2 -- Погашение
+            and
+            ok_ol_is_active = 1 -- Действующая проводка
+            and
+            ok_type in (4, 9) -- Погашение
+            and
+            ok_from_k_id = k_id
+      into :k_id, :kf_id, :ol_date, doc_no, reg_id, :kont_last_date, :ol_datetime, ol_parent_id, ol_doc_kind,
+           ol_doc_client_name, ol_document_client
+  do
+  begin
+    repay_time = right(&#x27;0&#x27; || extract(day from ol_datetime), 2) || &#x27;.&#x27; || right(&#x27;0&#x27; || extract(month from ol_datetime), 2) || &#x27;.&#x27; || extract(year from ol_datetime) || &#x27; &#x27; || extract(hour from ol_datetime) || &#x27;:&#x27; || extract(minute from ol_datetime);
+
+    select kal_new_kf_name, kal_new_kf_officer
+    from knaktlist
+    where kal_date_end &gt;= &#x27;31.12.2999&#x27; and
+          knaktlist.is_delete = 0 and
+          kal_from_kf_id = :kf_id and
+          kal_date &lt;= :ol_date
+    into :kf_name, :lo_id;
+
+    res_c_id = lo_id;
+
+    if (lo_id &lt;= 1000000000004) then
+      exit; -- для виртуальных сотрудников не отправляем почту
+    if (not exists(select 1
+                   from hr_pstatus
+                   where ps_from_c_id = :lo_id and
+                         ps_date_begin &lt;= :ol_date and
+                         ps_date_end &gt;= :ol_date and
+                         ps_status = 1 and
+                         ps_is_working = 1)) then
+      exit; -- Также не отправляем уволенным
+
+    select c_name_fio, c_sex,
+           (select cont_value
+            from hp_contdata_get_email_valid(0, :lo_id))
+    from clients
+    where c_id = :lo_id
+    into :lo_fio, lo_sex, :res_maillist;
+
+    if (coalesce(res_maillist, &#x27;&#x27;) = &#x27;&#x27;) then
+      exit;
+    if (res_maillist = &#x27;mbf@molbulak.com&#x27;) then
+      exit;
+
+    if (lo_sex = 1) then
+      res_body = &#x27;Уважаемый &#x27;;
+    else
+      res_body = &#x27;Уважаемая &#x27;;
+    res_body = BLOB_APPEND(res_body, &#x27;&lt;b&gt;&#x27; || lo_fio || &#x27;&lt;/b&gt;,&lt;br&gt;&lt;br&gt;&#x27;);
+
+    repay_kind = &#x27;&#x27;;
+    ol_parent_id = null;
+    if (ol_parent_id is not null) then
+    begin
+      select ol_from_reg_id, ol_doc_kind, ol_doc_client_name, ol_document_client
+      from operlist
+      where ol_id = :ol_parent_id
+      into :reg_id, :ol_doc_kind, ol_doc_client_name, ol_document_client;
+
+      select esm_project
+      from extsysmain, extsysoper
+      where eso_from_esm_id = esm_id and
+            eso_from_ol_id = :ol_parent_id
+      into :repay_kind;
+
+      if (repay_kind is null) then
+        repay_kind = &#x27;&#x27;;
+    end
+
+    repay_fio = &#x27;&#x27;;
+    if (ol_document_client is not null) then
+    begin
+      select c_name_fio
+      from clients
+      where c_id = :ol_document_client
+      into :repay_fio;
+    end
+    if (repay_kind = &#x27;&#x27;) then
+    begin
+      if (ol_doc_kind = 1) then
+        repay_kind = &#x27;Касса&#x27;;
+      else
+        repay_kind = &#x27;Банк&#x27;;
+    end
+    if (coalesce(ol_doc_client_name, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+      repay_kind = repay_kind || &#x27;, &#x27; || ol_doc_client_name;
+    else
+      repay_kind = repay_kind || &#x27;, клиент клиент платил сам.&#x27;;
+
+    select reg_code || &#x27; &#x27; || reg_name
+    from region
+    where reg_unicode = :reg_id
+    into :repay_reg_name;
+
+    date_format_str = right(&#x27;0&#x27; || extract(day from ol_date), 2) || &#x27;.&#x27; || right(&#x27;0&#x27; || extract(month from ol_date), 2) || &#x27;.&#x27; || extract(year from ol_date);
+    repay_date_str = date_format_str;
+
+    select -sum(ok_os + ok_perc + ok_fine + ok_kommis_adv + ok_tax)
+    from operkred
+    where ok_from_ol_id = :rep_params and
+          ok_type in (4, 9)
+    into :amount;
+    if (amount is null) then
+      amount = 0;
+    amount_str = round(amount, 0);
+    if (char_length(amount_str) &gt; 6) then
+      amount_str = left(amount_str, char_length(amount_str) - 6) || &#x27;,&#x27; || left(right(amount_str, 6), 3) || &#x27;,&#x27; || right(amount_str, 3);
+    else
+    if (char_length(amount_str) &gt; 3) then
+      amount_str = left(amount_str, char_length(amount_str) - 3) || &#x27;,&#x27; || right(amount_str, 3);
+    amount_str = amount_str || amount_sym;
+    kol = kol + 1;
+
+-- инфо о транзакции
+    res_subject = &#x27;Погашение кредита, &#x27; || kf_name;
+    res_body = BLOB_APPEND(res_body, &#x27;Поступлило погашение от Вашей группы.&lt;br&gt;&#x27;);
+    res_body = BLOB_APPEND(res_body, &#x27;Номер группы &lt;b&gt;&#x27; || :kf_name || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;);
+    res_body = BLOB_APPEND(res_body, &#x27;Сумма: &lt;b&gt;&#x27; || amount_str || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;);
+    res_body = BLOB_APPEND(res_body, &#x27;№ квитанции: &lt;b&gt;&#x27; || doc_no || &#x27;&lt;/b&gt; от &lt;b&gt;&#x27; || :date_format_str || &#x27;&lt;/b&gt; г.&lt;br&gt;&#x27;);
+    res_body = BLOB_APPEND(res_body, &#x27;Место погашения: &lt;b&gt;&#x27; || repay_reg_name || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;);
+    res_body = BLOB_APPEND(res_body, &#x27;Клиент: &lt;b&gt;&#x27; || repay_fio || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;);
+
+    res_body = BLOB_APPEND(res_body, &#x27;&lt;b&gt;&#x27; || repay_kind || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;);
+    res_body = BLOB_APPEND(res_body, &#x27;Время: &lt;b&gt;&#x27; || repay_time || &#x27; Мск.&lt;/b&gt;&lt;br&gt;&#x27;);
+
+-- инфо о состоянии
+    ks_state = null;
+    select ks_state
+    from kontstate
+    where ks_from_k_id = :k_id and
+          ks_ol_is_delete = 0 and
+          ks_date_end &gt;= &#x27;31.12.2999&#x27;
+    into :ks_state;
+
+    if (ks_state = 1) then
+    begin
+-- Кредит все еще активный, показываем состояние
+      select oks_delinq_date
+      from oksummary
+      where oks_from_k_id = :k_id and
+            oks_date_begin &lt;= :ol_date and
+            oks_date_end &gt;= :ol_date and
+            oks_close_state = 0
+      into :oks_delinq_date;
+
+      oks_delinq_date_str = right(&#x27;0&#x27; || extract(day from oks_delinq_date), 2) || &#x27;.&#x27; || right(&#x27;0&#x27; || extract(month from oks_delinq_date), 2) || &#x27;.&#x27; || extract(year from oks_delinq_date);
+
+      if (oks_delinq_date &gt; ol_date) then
+      begin
+        res_body = BLOB_APPEND(res_body, &#x27;&lt;br&gt;Просроченной задолженности нет. Следующий платеж: &lt;b&gt;&#x27; || oks_delinq_date_str || &#x27;&lt;/b&gt; г.&lt;br&gt;&#x27;);
+      end
+      else
+      begin
+        amount = 0;
+        if (kont_last_date &gt; ol_date) then
+        begin
+          select sum(zad_os + zad_perc + sh_calc_fine)
+          from aarep_make_zad_list_temp(:k_id, :ol_date, 0)
+          where sh_date &lt;= :ol_date
+          into :amount;
+        end
+        else
+        begin
+          select sum(zad_os + sh_calc_perc + sh_calc_fine)
+          from aarep_make_zad_list_temp(:k_id, :ol_date, 1)
+          where sh_date &lt;= :ol_date
+          into :amount;
+        end
+        if (amount is null) then
+          amount = 0;
+        if (amount &gt; 0) then
+        begin
+          amount_str = round(amount, 0);
+          if (char_length(amount_str) &gt; 6) then
+            amount_str = left(amount_str, char_length(amount_str) - 6) || &#x27;,&#x27; || left(right(amount_str, 6), 3) || &#x27;,&#x27; || right(amount_str, 3);
+          else
+          if (char_length(amount_str) &gt; 3) then
+            amount_str = left(amount_str, char_length(amount_str) - 3) || &#x27;,&#x27; || right(amount_str, 3);
+          amount_str = amount_str || amount_sym;
+
+          res_body = BLOB_APPEND(res_body, &#x27;&lt;br&gt;Остается текущий долг. На &lt;b&gt;&#x27; || repay_date_str || &#x27;&lt;/b&gt; г. сумма: &lt;b&gt;&#x27; || amount_str || &#x27; р.&lt;/b&gt;&lt;br&gt;&#x27;);
+        end
+        else
+          res_body = BLOB_APPEND(res_body, &#x27;&lt;br&gt;Задолженности нет.&lt;br&gt;&#x27;);
+      end
+    end
+
+    if (ks_state = 2) then
+    begin
+-- Кредит закрыт
+      res_body = BLOB_APPEND(res_body, &#x27;&lt;br&gt;Заем полностью погашен. &lt;b&gt;Спасибо!&lt;/b&gt;&lt;br&gt;&#x27;);
+    end
+    suspend;
+
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

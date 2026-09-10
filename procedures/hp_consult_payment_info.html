@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CONSULT_PAYMENT_INFO — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CONSULT_PAYMENT_INFO: 1 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CONSULT_PAYMENT_INFO</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_consult_installment_amount.html"><div class="to">HP_CONSULT_INSTALLMENT_AMOUNT</div></a><a class="ref-card" href="hp_opercash_default_info.html"><div class="to">HP_OPERCASH_DEFAULT_INFO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">NEXT_SH_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEXT_SH_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DELINQ_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CONSULT_PAYMENT_INFO(
+    K_ID D_ID)
+RETURNS (
+    NEXT_SH_DATE D_DATE,
+    NEXT_SH_AMOUNT D_CURRENCY,
+    DELINQ_AMOUNT D_CURRENCY,
+    RES_TEXT D_STR_255)
+AS
+begin
+  -- возвращает дату/сумму ближайщего планового платежа + сумму просрочки по предыдущим платежам
+  -- платежи по конс. услугам в рассрочку (RFCKG-4900)
+
+  next_sh_amount = 0;
+  delinq_amount = 0;
+  res_text = &#x27;&#x27;;
+
+  if (not exists(select *
+                 from kontract
+                 where k_id = :k_id and
+                       k_cons_kind &gt; 0)) then
+  begin
+    suspend;
+    exit;
+  end
+
+  select oc_schedule_date,
+         oc_schedule_principal + oc_paid_principal
+  from opercons
+  where oc_from_k_id = :k_id and
+        oc_ol_is_active = 1 and
+        oc_schedule_date &gt;= current_date and
+        (oc_schedule_principal + oc_paid_principal) &gt; 0
+  order by oc_schedule_date
+  rows 1
+  into next_sh_date, -- дата планового не закрытого платежа -- 12.04.2026
+       next_sh_amount; -- сумма (остаток долга) планового платежа
+
+  if (next_sh_amount is null) then
+    next_sh_amount = 0;
+
+  select sum(oc_schedule_principal + oc_paid_principal)
+  from opercons
+  where oc_from_k_id = :k_id and
+        oc_ol_is_active = 1 and
+        oc_schedule_date &lt; current_date
+  into delinq_amount; -- общая сумма просрочки
+
+  if (delinq_amount is null) then
+    delinq_amount = 0;
+
+  -- компоновка res_text
+  if (delinq_amount &gt; 0 and
+      next_sh_amount &gt; 0) then
+  begin
+    res_text = &#x27;Просрочка: &#x27; || round(delinq_amount, 2) || &#x27;, платеж по графику: &#x27; || f_datetostr(next_sh_date) || &#x27; - &#x27; || round(next_sh_amount, 2) || &#x27; &#x27;;
+    res_text = res_text || ascii_char(10) || &#x27;Итого рекомендуемая сумма оплаты: &#x27; || round(delinq_amount + next_sh_amount, 2) || &#x27; &#x27;;
+  end
+  else if (delinq_amount &gt; 0) then
+    res_text = &#x27;Сумма просрочки: &#x27; || round(delinq_amount, 2) || &#x27; &#x27;;
+  else if (next_sh_amount &gt; 0) then
+    res_text = &#x27;Платеж по графику: &#x27; || f_datetostr(next_sh_date) || &#x27; - &#x27; || round(next_sh_amount, 2) || &#x27; &#x27;;
+
+  if (res_text is null) then
+    res_text = &#x27;&#x27;;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$UXGRID_COPY_LIST — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$UXGRID_COPY_LIST: 2 входных, 6 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$UXGRID_COPY_LIST</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">GRID_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SAME_FIELD_COUNT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SRC_GRID_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_FRAME</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_FORM</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_COUNT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_FIELDS</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$UXGRID_COPY_LIST(
+    GRID_UUID D_UUID,
+    SAME_FIELD_COUNT D_INTEGER = 3)
+RETURNS (
+    SRC_GRID_UUID D_UUID,
+    RES_FRAME D_STR_255,
+    RES_FORM D_STR_255,
+    RES_KIND D_STR_CODE,
+    RES_COUNT D_INTEGER,
+    RES_FIELDS D_STR_LONG)
+AS
+declare variable us_uuid d_uuid;
+declare variable ufr_add_table_fields d_str_code;
+declare variable main_us_uuid d_uuid;
+begin
+  if (coalesce(same_field_count, 0) = 0) then
+    same_field_count = 3;
+
+  select ufr_us_uuid, ufr_add_table_fields
+  from ux$grid, ux$frame
+  where ugr_uuid = :grid_uuid and
+        ugr_ufr_uuid = ufr_uuid
+  into us_uuid, ufr_add_table_fields;
+
+  if (ufr_add_table_fields &lt;&gt; &#x27;&#x27;) then
+  begin
+    select us_uuid
+    from ux$source
+    where us_code = :ufr_add_table_fields
+    into main_us_uuid;
+  end
+
+  if (main_us_uuid is null) then
+    main_us_uuid = us_uuid;
+
+  for select src.ugi_ugr_uuid, count(*)
+  from ux$field fld, ux$gritem src, ux$field sf
+  where fld.uf_owner in (:us_uuid, :main_us_uuid) and
+        fld.uf_is_param = 0 and
+        fld.uf_field_name = sf.uf_field_name and
+        src.ugi_uf_uuid = sf.uf_uuid and
+        src.ugi_ugr_uuid &lt;&gt; :grid_uuid
+  group by 1
+  into src_grid_uuid, res_count
+  do
+  begin
+    if (res_count &lt; same_field_count) then
+      Continue;
+
+    res_fields = &#x27;&#x27;;
+    for select ufr_name,
+               iif(ufr_name = ux_name, ufr_fcode, left(ufr_fcode || &#x27;  - &#x27; || ux_name, 255)),
+               uxf$kind(uu_kind, &#x27;caption&#x27;)
+    from ux$grid, ux$frame, ux$form, ux$code, ux$uniq
+    where ugr_uuid = :src_grid_uuid and
+          ugr_ufr_uuid = ufr_uuid and
+          ufr_owner = ufm_uuid and
+          ufm_ux_uuid = ux_uuid and
+          (ux_draft_uuid = ufm_uuid or ux_release_uuid = ufm_uuid) and
+          ux_uuid = uu_id
+    into :res_frame, :res_form, :res_kind
+    do
+    begin
+      select left(list(uf_field_name), 1020)
+      from ux$gritem, ux$field
+      where ugi_ugr_uuid = :src_grid_uuid and
+            ugi_uf_uuid = uf_uuid
+      into res_fields;
+
+      if (char_length(res_fields) = 1020) then
+        res_fields = res_fields || &#x27;...&#x27;;
+
+      suspend;
+    end
+  end
+
+  res_kind = &#x27;FinStart форма&#x27;;
+  for select par.uni_uuid, count(*)
+  from ux$field fld, ux$unititem sf, ux$unititem par
+  where fld.uf_owner = :us_uuid and
+        fld.uf_is_param = 0 and
+        fld.uf_field_name = sf.uni_fieldname and
+        par.uni_uuid = sf.uni_parent_uuid and
+        par.uni_name in (&#x27;TcxGridDBTableView&#x27;, &#x27;TcxGridDbBandedTableView&#x27;, &#x27;TcxDBTreeList&#x27;)
+  group by 1
+  into src_grid_uuid, res_count
+  do
+  begin
+    if (res_count &lt; same_field_count) then
+      Continue;
+
+    if (src_grid_uuid = grid_uuid) then
+      Continue;
+
+    res_fields = &#x27;&#x27;;
+    for select uni.uni_datasource || &#x27;  - &#x27; || uni.uni_code,
+               itm.uni_code || &#x27;   - &#x27; || itm.uni_caption
+    from ux$unititem uni,ux$unititem itm
+    where uni.uni_uuid = :src_grid_uuid and
+          uni.uni_unt_uuid = itm.uni_uuid
+    into :res_frame, :res_form
+    do
+    begin
+      select left(list(uni_fieldname), 1020)
+      from ux$unititem uni
+      where uni.uni_parent_uuid = :src_grid_uuid
+      into res_fields;
+
+      if (char_length(res_fields) = 1020) then
+        res_fields = res_fields || &#x27;...&#x27;;
+
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

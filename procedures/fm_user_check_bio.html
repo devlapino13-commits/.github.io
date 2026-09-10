@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_USER_CHECK_BIO — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_USER_CHECK_BIO: 3 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_USER_CHECK_BIO</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_msgquota_process.html"><div class="to">HP_MSGQUOTA_PROCESS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UN_NAME</div><div class="ptype">VARCHAR(50)</div><div class="pdesc">Имя пользователя</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc">ID клиента (пользователя)</div></div><div class="prow"><div class="pname">JSON_VALIDATION_DETAILS</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc">Данные проверки из сервиса биометрии</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ERR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc">Текст ошибки отображаемый пользователю МП</div></div><div class="prow"><div class="pname">SAME_PERSON</div><div class="ptype">SMALLINT</div><div class="pdesc">Флаг успешной верификации</div></div><div class="prow"><div class="pname">P_INFO</div><div class="ptype">VARCHAR(255)</div><div class="pdesc">Подсказка пользователю, в случае неуспешной верификации</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_USER_CHECK_BIO(
+    UN_NAME D_STR_CODE,
+    C_ID D_ID,
+    JSON_VALIDATION_DETAILS D_STR_8100)
+RETURNS (
+    ERR_TEXT D_STR_255,
+    SAME_PERSON SMALLINT,
+    P_INFO VARCHAR(255))
+AS
+declare variable un_fio d_str_255;
+declare variable job_name d_str_255;
+declare variable quota_exceeded d_smallint;
+declare variable msg_subject d_str_code;
+declare variable msg_body d_str_255;
+declare variable un_id d_id;
+declare variable liveness_score d_percent;
+begin
+  /* RFCKG-3940
+    Первым делом в ответе от /user/check_bio/ проверяю поле err_text. Если оно
+    не пустое, то я его показываю и выхожу из окна Фотоидентификации в окно Логина.
+    (причиной непустого err_text могут быть закончившиеся попытки или критические ошибки)
+
+    Если в ответ на /user/check_bio/ поле same_person = 1, т.е. фотоидентификация
+    прошла успешно, я показываю сообщение &quot;Подтверждаете отправку пароля на номер XXXXXXX?&quot;
+    и выхожу из окна Фотоидентификации в окно Логина.
+
+    Если в ответ на /user/check_bio/ поле same_person = 0, т.е. фотоидентификация
+    прошла неуспешно (но попытки есть), я показываю сообщение из поля p_info и
+    предлагаю пройти фотоидентификацию повторно.
+  */
+  same_person = 0;
+  err_text = &#x27;&#x27;;
+  quota_exceeded = 0;
+
+  select un_id, un_fio
+  from username
+  where un_name = :un_name and
+        un_from_c_id = :c_id rows 1
+  into un_id, un_fio;
+
+  select quota_exceeded
+  from hp_msgquota_process(&#x27;mobile.staff.bio_reset_pwd&#x27;, :un_name)
+  into quota_exceeded;
+
+  if (quota_exceeded = 1) then
+  begin
+      err_text = &#x27;Количество попыток превышено, повторите попытку через 15 минут&#x27;;
+
+      select jl.jl_name
+      from hr_pstatus ps
+      inner join joblist jl on jl.jl_id = ps.ps_from_jl_id
+      where ps.ps_from_c_id = :c_id and
+            ps.ps_is_working = 1 and
+            current_date between ps.ps_date_begin and ps.ps_date_end
+      into job_name;
+
+      msg_subject = &#x27;Неудачная попытка смены пароля&#x27;;
+      msg_body = :un_fio || &#x27;, &#x27; || :job_name || &#x27;, &#x27; || cast(current_timestamp as timestamp) || &#x27;, не смог(ла) завершить процесс смены пароля телефона в мобильном приложении сотрудника.&#x27;;
+
+      insert into fsrobot_msgbox (msg_type, msg_mail_to, msg_subject, msg_body, msg_lifetime_days, msg_from_un_id,
+                                  msg_object_kind, msg_object_id)
+      values (0, &#x27;control_kg.mirm@mbulak.kg&#x27;, :msg_subject, :msg_body, 7, 1000000000000, 0, 0); -- на время проверки
+      --        values (0, &#x27;h.raimjanov@mbulak.kg&#x27;, :msg_subject, :msg_body, 1, 1000000000000, 0, 0); -- на время проверки
+      --        values (0, &#x27;control_kg.mirm@mbulak.kg&#x27;, :msg_subject, :msg_body, 7, 1000000000000, 0, 0);
+
+      suspend;
+      exit;
+  end
+
+  same_person = f_json_blob_get_value(:json_validation_details, &#x27;same_person&#x27;, 0);
+  liveness_score = f_json_blob_get_value(:json_validation_details, &#x27;liveness_score&#x27;, 0);
+  p_info = f_json_blob_get_value(:json_validation_details, &#x27;p_info&#x27;, &#x27;&#x27;);
+
+  insert into bio_results (br_from_un_id, br_result, br_match_percentage, br_attempts_number, br_validation_details)
+  values (:un_id, :same_person, :liveness_score, 1, :json_validation_details);
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

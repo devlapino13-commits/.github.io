@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_KN_OPERKRED_FIX_ZAD — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_KN_OPERKRED_FIX_ZAD: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_KN_OPERKRED_FIX_ZAD</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_KN_OPERKRED_FIX_ZAD(
+    K_ID D_ID,
+    REP_DATE_BEGIN D_DATE)
+AS
+declare variable ok_from_kc_id d_id;
+declare variable ok_sh_date d_date;
+declare variable zad_os d_currency;
+declare variable ol_id d_id;
+begin
+  for with tab as
+  (select ok_from_kc_id, ok_sh_date, sum(ok_os + ok_sh_os) as zad_os
+  from kn_operkred, knclient
+  where kc_from_k_id = :k_id and
+        kc_id = ok_from_kc_id and
+        ok_ol_is_active = 1 and
+        ok_type &lt; 8
+  group by ok_from_kc_id, ok_sh_date
+  having min(ok_os + ok_sh_os) &lt; 0 and max(ok_os + ok_sh_os) &gt; 0)
+  select ok_sh_date
+  from tab
+  group by ok_sh_date
+  having min(zad_os) &lt; 0 and max(zad_os) &gt; 0
+  into ok_sh_date
+  do
+  begin
+    zad_os = 0;
+    select sum(ok_os + ok_sh_os)
+    from kn_operkred, knclient
+    where ok_sh_date = :ok_sh_date and
+          ok_ol_is_active = 1 and
+          ok_type &lt; 8 and
+          ok_from_kc_id = kc_id and
+          kc_from_k_id = :k_id and
+          kc_amount_approved &gt; 0
+    into zad_os;
+    if (zad_os is null) then zad_os = 0;
+
+    if (zad_os &lt;&gt; 0) then
+      exception e_default &#x27;zad_os is not zero&#x27;;
+
+    ol_id = null;
+    select ok_from_ol_id
+    from kn_operkred, knclient
+    where ok_ol_date &gt;= :rep_date_begin and
+          ok_sh_date = :ok_sh_date and
+          ok_os &lt;&gt; 0 and
+          ok_from_kc_id = kc_id and
+          kc_from_k_id = :k_id and
+          kc_amount_approved &gt; 0
+    order by ok_ol_date desc, ok_from_ol_id desc
+    rows 1
+    into ol_id;
+
+    if (ol_id is null) then
+      exception e_default &#x27;ol_id nor found&#x27;;
+
+    for select ok_from_kc_id, sum(ok_os + ok_sh_os)
+    from kn_operkred, knclient
+    where ok_sh_date = :ok_sh_date and
+          ok_ol_is_active = 1 and
+          ok_type &lt; 8 and
+          ok_from_kc_id = kc_id and
+          kc_from_k_id = :k_id and
+          kc_amount_approved &gt; 0
+    group by ok_from_kc_id
+    having sum(ok_os + ok_sh_os) &lt;&gt; 0
+    into ok_from_kc_id, zad_os
+    do
+    begin
+      update kn_operkred
+      set ok_sh_os = ok_sh_os - :zad_os
+      where ok_from_ol_id = :ol_id and
+            ok_sh_date = :ok_sh_date and
+            ok_from_kc_id = :ok_from_kc_id
+      order by iif(ok_sh_os &lt;&gt; 0, 0, 1), iif(ok_os &lt;&gt; 0, 0, 1)
+      rows 1;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

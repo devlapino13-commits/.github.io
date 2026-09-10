@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_FIND_KONTRACT_UX_TMP — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_FIND_KONTRACT_UX_TMP: 5 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_FIND_KONTRACT_UX_TMP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_find_clients_ux_tmp.html"><div class="to">HP_FIND_CLIENTS_UX_TMP</div></a><a class="ref-card" href="region_list.html"><div class="to">REGION_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_find_kontract_ux.html"><div class="to">HP_FIND_KONTRACT_UX</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">FIND_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_REGION_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KONT_STATE</div><div class="ptype">SMALLINT</div><div class="pdesc">Знак операции: -1 Все займы, 0 = в процессе, 1 активные, 2 закрытые</div></div><div class="prow"><div class="pname">DISB_KIND</div><div class="ptype">SMALLINT</div><div class="pdesc">0 - Все виды, 1 - Наличными, 2 - Другие виды</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_FIND_KONTRACT_UX_TMP(
+    FIND_TEXT D_STR_100,
+    REP_REGION_ID D_INTEGER,
+    KONT_STATE D_SMALLINT,
+    DISB_KIND D_SMALLINT,
+    UN_ID D_ID)
+RETURNS (
+    RES_K_ID D_ID)
+AS
+declare variable c_id d_id;
+declare variable reg_status d_smallint;
+declare variable res_region_id d_integer;
+declare variable find_digit d_str_code;
+declare variable sym d_str_sym;
+declare variable p d_integer;
+declare variable len d_integer;
+declare variable find_id d_id;
+begin
+  if (disb_kind is null) then
+    disb_kind = 0;
+
+  if (kont_state is null) then
+    kont_state = 0;
+
+  if (un_id is null) then
+    un_id = uxf$user();
+
+  if (coalesce(rep_region_id, 0) = 0) then
+    rep_region_id = 1000000;
+
+  select reg_status
+  from region
+  where reg_unicode = :rep_region_id
+  into reg_status;
+
+  find_text = trim(coalesce(find_text, &#x27;&#x27;));
+
+  if (find_text = &#x27;&#x27;) then
+  begin
+    if (kont_state &lt;&gt; 0 or reg_status &lt;&gt; 3) then
+      Exit;
+
+    for select lnd_from_k_id
+    from loantodisb
+    where lnd_disb_office_id = :rep_region_id
+    into res_k_id
+    do
+      suspend;
+
+    exit;
+  end
+
+  find_digit = &#x27;&#x27;;
+  len = char_length(find_text);
+  p = 0;
+  while (p &lt; len) do
+  begin
+    p = p + 1;
+
+    sym = substring(find_text from p for 1);
+    if (sym in (&#x27;0&#x27;, &#x27;1&#x27;, &#x27;2&#x27;, &#x27;3&#x27;, &#x27;4&#x27;, &#x27;5&#x27;, &#x27;6&#x27;, &#x27;7&#x27;, &#x27;8&#x27;, &#x27;9&#x27;)) then
+      find_digit = find_digit || sym;
+    else
+    begin
+      find_digit = &#x27;&#x27;;
+      Break;
+    end
+  end
+
+  if (find_digit = &#x27;&#x27;) then
+    find_digit = &#x27;0&#x27;;
+
+  find_id = 0;
+  begin
+    find_id = find_digit;
+    when any do
+      find_id = 0;
+  end
+
+  -- Поиск по номеру договора или его Id
+  if (char_length(find_text) &lt;= 20) then
+  begin
+    for select k_id
+    from kontract
+    where k_kontract_no = :find_text or
+          k_id = :find_id
+    into res_k_id
+    do
+    begin
+      if (kont_state in (-1, 0)) then
+      begin
+        -- Список займов к выдаче
+  
+        for select lnd_disb_office_id
+        from loantodisb, kontract
+        where lnd_from_k_id = :res_k_id and
+              lnd_from_k_id = k_id and
+              (:disb_kind = 0 or (:disb_kind =1 and k_disb_kind = 1) or (:disb_kind &gt; 1 and k_disb_kind &lt;&gt; 1))
+        into res_region_id
+        do
+        begin
+          if (reg_status = 3) then
+          begin
+            if (rep_region_id &lt;&gt; res_region_id) then
+              Continue;
+          end else
+          begin
+            if (not exists(select * from region_list(:res_region_id, 0, -1, 0)
+            where id_list = :rep_region_id)) then
+              Continue;
+          end
+  
+          suspend;
+        end
+      end
+      if (kont_state in (-1, 1)) then
+      begin
+        -- Список займов для приема погашений
+        if (exists(select *
+        from oksummary
+        where oks_from_k_id = :res_k_id and
+              oks_date_begin &lt;= current_date and
+              oks_date_end &gt;= current_date and
+              oks_close_state in (0, 1))) then
+          suspend;
+      end
+      if (kont_state in (-1, 2)) then
+      begin
+        -- Список займов для возврата переплаты
+        if (exists(select *
+        from kontstate
+        where ks_from_k_id = :res_k_id and
+              ks_ol_is_delete = 0 and
+              ks_date_begin &lt;= current_date and
+              ks_date_end &gt;= current_date and
+              ks_state = 2)) then
+          suspend;
+      end
+    end
+
+    if (res_k_id is not null) then
+      exit;
+  end
+
+  -- Поиск по Id займа клиента
+  if (find_id &lt;&gt; 0) then
+  begin
+    for select kc_from_k_id
+    from knclient
+    where kc_id = :find_id
+    into res_k_id
+    do
+    begin
+      if (kont_state in (-1, 0)) then
+      begin
+        -- Список займов к выдаче
+  
+        for select lnd_disb_office_id
+        from loantodisb, kontract
+        where lnd_from_k_id = :res_k_id and
+              lnd_from_k_id = k_id and
+              (:disb_kind = 0 or (:disb_kind =1 and k_disb_kind = 1) or (:disb_kind &gt; 1 and k_disb_kind &lt;&gt; 1))
+        into res_region_id
+        do
+        begin
+          if (reg_status = 3) then
+          begin
+            if (rep_region_id &lt;&gt; res_region_id) then
+              Continue;
+          end else
+          begin
+            if (not exists(select * from region_list(:res_region_id, 0, -1, 0)
+            where id_list = :rep_region_id)) then
+              Continue;
+          end
+  
+          suspend;
+        end
+      end
+      if (kont_state in (-1, 1)) then
+      begin
+        -- Список займов для приема погашений
+        if (exists(select *
+        from oksummary
+        where oks_from_k_id = :res_k_id and
+              oks_date_begin &lt;= current_date and
+              oks_date_end &gt;= current_date and
+              oks_close_state in (0, 1))) then
+          suspend;
+      end
+      if (kont_state in (-1, 2)) then
+      begin
+        -- Список займов для возврата переплаты
+        if (exists(select *
+        from kontstate
+        where ks_from_k_id = :res_k_id and
+              ks_ol_is_delete = 0 and
+              ks_date_begin &lt;= current_date and
+              ks_date_end &gt;= current_date and
+              ks_state = 2)) then
+          suspend;
+      end
+    end
+
+    if (res_k_id is not null) then
+      exit;
+  end
+
+  for select res_c_id
+  from hp_find_clients_ux_tmp(:find_text, -1, :un_id)
+  group by res_c_id
+  order by min(res_priority), res_c_id
+  into :c_id
+  do
+  begin
+    if (kont_state in (-1, 0)) then
+    begin
+      -- Список займов к выдаче
+
+      for select lnd_from_k_id, lnd_disb_office_id
+      from loantodisb, knclient, kontract
+      where lnd_from_k_id = kc_from_k_id and
+            kc_from_c_id = :c_id and
+            kc_amount_approved &gt; 0 and
+            kc_from_k_id = k_id and
+            (:disb_kind = 0 or (:disb_kind =1 and k_disb_kind = 1) or (:disb_kind &gt; 1 and k_disb_kind &lt;&gt; 1))
+      into res_k_id, res_region_id
+      do
+      begin
+        if (reg_status = 3) then
+        begin
+          if (rep_region_id &lt;&gt; res_region_id) then
+            Continue;
+        end else
+        begin
+          if (not exists(select * from region_list(:res_region_id, 0, -1, 0)
+          where id_list = :rep_region_id)) then
+            Continue;
+        end
+
+        suspend;
+      end
+    end
+    if (kont_state in (-1, 1)) then
+    begin
+      -- Список займов для приема погашений
+
+      for select kc_from_k_id
+      from knclient, oksummary
+      where kc_from_c_id = :c_id and
+            kc_amount_approved &gt; 0 and
+            oks_from_k_id = kc_from_k_id and
+            oks_date_begin &lt;= current_date and
+            oks_date_end &gt;= current_date and
+            oks_close_state in (0, 1)
+      into res_k_id
+      do
+        suspend;
+    end
+    if (kont_state in (-1, 2)) then
+    begin
+      -- Список займов для возврата переплаты
+      for select kc_from_k_id
+      from kontstate, knclient
+      where kc_from_c_id = :c_id and
+            kc_amount_approved &gt; 0 and
+            ks_from_k_id = kc_from_k_id and
+            ks_ol_is_delete = 0 and
+            ks_date_begin &lt;= current_date and
+            ks_date_end &gt;= current_date and
+            ks_state = 2
+      into res_k_id
+      do
+        suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

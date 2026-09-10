@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_GET_ACTIONLIST_QUOTA — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_GET_ACTIONLIST_QUOTA: 1 входных, 8 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_GET_ACTIONLIST_QUOTA</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">8</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">8 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_ACL_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TOTAL_QUOTA</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_QUOTA_SALDO</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CURR_IN_ORDER</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ESTIMATE_IN_ORDER</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TOTAL_QUOTED</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_GET_ACTIONLIST_QUOTA(
+    K_ID DECIMAL(18,0))
+RETURNS (
+    RES_ACL_ID DECIMAL(18,0),
+    RES_ID INTEGER,
+    RES_TXT VARCHAR(255),
+    RES_TOTAL_QUOTA INTEGER,
+    RES_QUOTA_SALDO INTEGER,
+    CURR_IN_ORDER INTEGER,
+    ESTIMATE_IN_ORDER INTEGER,
+    RES_TOTAL_QUOTED INTEGER)
+AS
+declare variable total_quota_used integer;
+declare variable acl_from_reg_id integer;
+declare variable acl_quota_used integer;
+declare variable rd_id integer;
+declare variable total_in_order integer;
+declare variable acl_id decimal(18,0);
+declare variable aco_orderno decimal(18,0);
+begin
+  select first 1 acl_id, acl_from_reg_id, coalesce(acl_quota_used, 0), acl_from_rd_id
+  from actionlist
+  where acl_object_kind = 9 and
+        acl_object_id = :k_id
+  order by acl_datetime desc
+  into :res_acl_id, :acl_from_reg_id, :acl_quota_used, :rd_id;
+
+  res_id = 1;
+  res_txt = &#x27;&#x27;;
+  res_total_quota = 0;
+  res_quota_saldo = 0;
+  total_quota_used = 0;
+
+  if (acl_quota_used &lt;&gt; 0) then
+  begin
+    res_id = -1;
+    res_txt = &#x27;Договор уже находится в приортитетном обслуживании.&#x27;;
+    suspend;
+    exit;
+  end
+
+  -- Лимит трех офисов увеличен согласно письма Ю.Каштановой от 27.04.2021
+  if (acl_from_reg_id in (
+        1150100, -- Южно-Сахалинск
+        1180100, -- Хабаровск
+        1190100) -- Владивосток
+      ) then
+    res_total_quota = 5;
+  else
+  if (exists(select *
+             from region
+             where reg_unicode = :acl_from_reg_id and
+                   reg_logic_label like &#x27;%.mega_office.%&#x27;)) then
+    res_total_quota = 5;
+  else
+    res_total_quota = 3;
+
+  select sum(iif(coalesce(acl_quota_used, 0) &gt; 0, 1, 0))
+  from actionlist
+  where acl_date = current_date and
+        acl_parent_id is null and
+        acl_object_kind = 9 and
+        acl_from_rd_id = :rd_id and
+        acl_from_reg_id = :acl_from_reg_id
+  into :total_quota_used;
+  if (total_quota_used is null) then
+    total_quota_used = 0;
+
+  res_quota_saldo = res_total_quota - total_quota_used;
+  if (res_quota_saldo &lt; 0) then
+    res_quota_saldo = 0;
+
+  total_in_order = 0;
+  estimate_in_order = 0;
+  res_total_quoted = 0;
+
+  for select aco_orderno, aco_id
+      from actionorder
+      where aco_from_rd_id = :rd_id
+      order by aco_orderno, aco_id
+      into :aco_orderno, :acl_id
+  do
+  begin
+    total_in_order = total_in_order + 1;
+    if (acl_id = res_acl_id) then
+      curr_in_order = total_in_order; -- Текущий номер в очереди
+    if (aco_orderno = 0 and
+        acl_id &lt; res_acl_id) then
+      estimate_in_order = estimate_in_order + 1; -- ожидаемый номер в очереди если перевести на приоритетный
+    if (aco_orderno = 0) then
+      res_total_quoted = res_total_quoted + 1; -- Всего приоритетных
+  end
+  estimate_in_order = estimate_in_order + 1;
+
+  if (res_quota_saldo = 0) then
+  begin
+    res_id = -1;
+    res_txt = &#x27;Ежедневная квота на офис: &#x27; || res_total_quota || &#x27;. На сегодня лимит исчерпан. Ваш номер в очереди: &#x27; || curr_in_order;
+    suspend;
+    exit;
+  end
+
+  if (curr_in_order &lt;= 2) then
+  begin
+    res_id = -1;
+    res_txt = &#x27;Вы уже &#x27; || iif(curr_in_order = 2, &#x27;второй&#x27;, &#x27;первый&#x27;) || &#x27; в очереди. Нельзя использовать квоту.&#x27;;
+    suspend;
+    exit;
+  end
+
+  res_id = 1;
+  res_txt = &#x27;&#x27;;
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

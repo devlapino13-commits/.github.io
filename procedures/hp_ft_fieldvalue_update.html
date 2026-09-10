@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_FT_FIELDVALUE_UPDATE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_FT_FIELDVALUE_UPDATE: 8 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_FT_FIELDVALUE_UPDATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">8</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">4</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">4 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_fill_ft_info.html"><div class="to">HP_FILL_FT_INFO</div></a><a class="ref-card" href="hp_ft_fieldvalue_restore.html"><div class="to">HP_FT_FIELDVALUE_RESTORE</div></a><a class="ref-card" href="hp_recreate_ft_info.html"><div class="to">HP_RECREATE_FT_INFO</div></a><a class="ref-card" href="hp_recreate_ft_info_orig.html"><div class="to">HP_RECREATE_FT_INFO_ORIG</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">8 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">FIL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FIF_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEW_VALUE</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">IS_EDITED</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ORIG_TEXT</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_FT_FIELDVALUE_UPDATE(
+    FIL_ID D_ID,
+    C_ID D_ID,
+    FIF_ID D_ID,
+    REP_DATE D_DATE,
+    NEW_VALUE D_STR_LONG,
+    UN_ID D_ID,
+    IS_EDITED D_SMALLINT,
+    ORIG_TEXT D_STR_LONG)
+AS
+declare variable old_value d_str_long;
+declare variable fif_field_kind d_str_code;
+declare variable fic_id d_id;
+declare variable fiv_date_end d_date;
+begin
+  select fif_field_kind
+  from ft_infofield
+  where fif_id = :fif_id
+  into fif_field_kind;
+
+  select fiv_date_end, fiv_value
+  from ft_infovalue
+  where fiv_from_c_id = :c_id and
+        fiv_from_fif_id = :fif_id and
+        fiv_date_begin &lt; :rep_date
+  order by fiv_date_begin desc
+  rows 1
+  into fiv_date_end, old_value;
+
+  if (row_count = 0 or
+      old_value &lt;&gt; new_value) then
+  begin
+    update or insert into ft_infovalue (fiv_from_c_id, fiv_from_fif_id, fiv_date_begin, fiv_value)
+    values (:c_id, :fif_id, :rep_date, :new_value)
+    matching (fiv_from_c_id, fiv_from_fif_id, fiv_date_begin);
+
+    if (fil_id is not null) then
+    begin
+      select fic_id
+      from ft_infocheck
+      where fic_from_fil_id = :fil_id and
+            fic_date = :rep_date
+      into fic_id;
+
+      if (fic_id is not null) then
+      begin
+        update ft_infocheck
+        set fic_data_changed = iif(:fif_field_kind = &#x27;&#x27;, 1, fic_data_changed),
+            fic_found_in_bl = iif(:fif_field_kind = &#x27;stop_list&#x27;, 1, fic_found_in_bl),
+            fic_from_un_id = :un_id
+        where fic_id = :fic_id;
+      end
+      else
+      begin
+        insert into ft_infocheck (fic_from_fil_id, fic_date, fic_data_changed, fic_found_in_bl, fic_from_un_id)
+        values (:fil_id, :rep_date, iif(:fif_field_kind = &#x27;&#x27;, 1, 0), iif(:fif_field_kind = &#x27;stop_list&#x27;, 1, 0), :un_id);
+      end
+    end
+  end
+  else
+  begin
+    if (fiv_date_end &lt; cast(&#x27;31.12.9999&#x27; as date) and fiv_date_end + 1 = rep_date) then
+    begin
+      delete from ft_infovalue
+      where fiv_from_c_id = :c_id and
+            fiv_from_fif_id = :fif_id and
+            fiv_date_begin = :rep_date;
+
+      if (fil_id is not null) then
+      begin
+        if (not exists(select fil_date_open
+                       from ft_infolist
+                       where fil_id = :fil_id and
+                             fil_date_open = :rep_date)) then
+        begin
+          if (not exists(select *
+                         from ft_infovalue
+                         where fiv_from_c_id = :c_id and
+                               fiv_date_begin = :rep_date)) then
+          begin
+            delete from ft_infocheck
+            where fic_from_fil_id = :fil_id and
+                  fic_date = :rep_date;
+          end
+        end
+      end
+    end
+  end
+
+  if (coalesce(is_edited, 0) = 1) then
+  begin
+    if (orig_text is null) then orig_text = &#x27;&#x27;;
+
+    if (not exists(select * from ft_infoeditvalue
+                   where fie_from_c_id = :c_id and
+                         fie_from_fif_id = :fif_id and
+                         fie_date = :rep_date)) then
+    begin
+      insert into ft_infoeditvalue (fie_from_c_id, fie_from_fif_id, fie_date, fie_edit_value, fie_from_un_id)
+      values (:c_id, :fif_id, :rep_date, :orig_text, :un_id);
+    end
+
+    insert into ft_infoeditvalue (fie_from_c_id, fie_from_fif_id, fie_date, fie_edit_value, fie_from_un_id)
+    values (:c_id, :fif_id, :rep_date, :new_value, :un_id);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

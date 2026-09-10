@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0045_SQL — процедура — схема БД</title>
+<meta name="description" content="Проверка клиентов на досрочные погашении">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0045_SQL</code></h1>
+<p class="desc">Проверка клиентов на досрочные погашении</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0045_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare kc_amount curr_type;
+declare kf_disb_date d_date;
+declare kf_client_pass_no varchar(30);
+declare variable c_id id_type;
+declare variable kc_circle integer;
+declare variable las_k_id id_type;
+declare variable las_max_delinq_day integer;
+declare variable las_delinq_day date;
+declare variable las_disb_date date;
+declare variable las_close_date date;
+declare variable las_kredline_end date;
+begin
+   for
+   select kc_from_c_id,
+          kc_circle,
+          kc_amount_approved
+   from knclient
+   where kc_from_k_id = :k_id
+   and kc_amount_approved &gt; 30000
+   into c_id,
+        kc_circle,
+        kc_amount
+   do
+   begin
+       select c_name_fio, c_pass_no
+       from clients
+       where c_id = :c_id
+       into res_info_text, kf_client_pass_no;
+     if (kc_circle &lt;= 1) then
+     begin
+       res_error_text = &#x27;У нового клиента сумма не должна превышать 30 тыс. руб.&#x27;;
+       res_error_is_critical = 1;
+       suspend;
+     end else
+     begin
+--     проверка предыдущего цикла клиента на просрочки
+       las_k_id = null;
+       select ks_from_k_id
+       from knclient, kontstate
+       where kc_from_c_id = :c_id
+       and kc_from_k_id = ks_from_k_id
+       and ks_state = 1
+       and ks_from_k_id &lt;&gt; :k_id
+       and ks_date_begin &lt; current_date
+       and KC_Amount_Approved&gt;0 --Добавлено в 260216 Музаффар
+       order by  ks_date_begin desc
+       rows 1
+       into las_k_id;
+       if (las_k_id is null) then
+       begin
+         res_error_text = &#x27;У нового клиента сумма не должна превышать 30 тыс. руб.&#x27;;
+         res_error_is_critical = 1;
+         suspend;
+       end else
+       begin
+         las_max_delinq_day = null;
+         select max(ok_ol_date - ok_sh_date)
+         from operkred
+         where ok_from_k_id = :las_k_id
+         and ok_ol_is_active = 1
+         and ok_type in (4,5)
+         and ok_os + ok_perc &lt; -100 -- суммы до 100 руб. не считать
+         and ok_ol_date &lt;= current_date
+         and ok_ol_date &gt; ok_sh_date
+         into las_max_delinq_day;
+         if (las_max_delinq_day is null) then las_max_delinq_day = 0;
+         if (las_max_delinq_day &gt; 7) then
+         begin
+           res_error_text = &#x27;У клиента в предыдущем цикле просрочка более 7 дней, более 30тыс. руб. не положено&#x27;;
+           res_error_is_critical = 1;
+           suspend;
+         end else
+         begin
+--2.4.1.    Ограничения по суммам микрозаймов:
+--         проверка клиента на досрочно закрытые кредиты
+--         проверяется все предыдущие циклы клиента
+           if (exists(
+               select *
+               from knclient, kontstate
+               where kc_from_c_id = :c_id
+               and kc_amount_approved &gt; 0
+               and kc_from_k_id = ks_from_k_id
+               and ks_state = 1
+               and KC_Amount_Approved&gt;0 --Добавлено в 260216 Музаффар
+               --and ks_date_end &lt;= current_date --Убрал 08.07.16 Музаффар 
+               and iif(ks_date_end &gt; :kf_disb_date, :kf_disb_date, ks_date_end)  - ks_date_begin &lt; 80)) then
+           begin
+             res_error_text = &#x27;Предыдущие циклы закрыты досрочно, более 30 тыс. руб. не положено&#x27;;
+             res_error_is_critical = 1;
+             suspend;
+           end
+        /*   
+           --Добавлено в 310316 Музаффар, тут проверим есть ли кредит больше 30000 р
+           if (not exists(
+               select 1
+               from knclient, kontstate
+               where kc_from_c_id = :c_id
+               and kc_amount_approved &gt; 30000
+               and kc_from_k_id = ks_from_k_id
+               and ks_state = 1
+               and ks_date_end &lt;= current_date
+               and KC_Amount_Approved&gt;0 
+               and ks_date_end - ks_date_begin &gt; 80)) then
+           begin
+             res_error_text = &#x27;Сумма предыдущих циклов клиента меньше 30000 рублей, более 30 тыс. руб. не положено&#x27;;
+             res_error_is_critical = 1;
+             suspend;
+           end
+          
+            6.5.    Клиенты не могут получить повторный микрозаем в день закрытия предыдущего микрозайма в следующих случаях:
+            •    в случае закрытия мирозайма, по которому на момент закрытия была активная просрочка;
+            •    в случае закрытия микрозайма по которому на предыдущем платеже была непрерывная просрочка более 7 дней;
+            •    в случае полного досрочного закрытия микрозайма менее чем на половине срока. 
+            Добавлено 31 марта 16 года, Музаффар
+            
+            
+            select min(oks_date_begin)oks_date_begin,
+                   max(oks_date_end)+1 oks_date_end,
+                   max(oks_delinq_date)oks_delinq_date
+            from oksummary
+            where oks_close_state = 0
+            and oks_from_k_id = :las_k_id
+            into las_DISB_DATE, las_close_date, las_delinq_day;
+            select k_kredline_end from kontract where k_id = :las_k_id
+            into las_kredline_end;
+            if (las_close_date - las_delinq_day &gt; 0) then
+            begin 
+              res_error_text = &#x27;Клиенты не могут получить повторный микрозайм, при закрытии кредита была активная просрочка&#x27;;
+              res_error_is_critical = 1;
+              suspend;
+            end 
+            if ((las_kredline_end - las_DISB_DATE) / 2 &gt; las_close_date - las_DISB_DATE) then
+            begin 
+              res_error_text = &#x27;Клиенты не могут получить повторный микрозайм, так как последний кредит закрыт досрочно&#x27;;
+              res_error_is_critical = 1;
+              suspend;
+            end 
+            --Конец добавлении от 31 марта 16 года (Уточнить на счет повторного клиента с нарушениями любых условии но с суммой меньше 30 000р)*/
+         end
+       end
+     end
+   end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

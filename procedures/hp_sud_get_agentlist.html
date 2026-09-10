@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_SUD_GET_AGENTLIST — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_SUD_GET_AGENTLIST: 3 входных, 5 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_SUD_GET_AGENTLIST</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">TAG</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJECT_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PROC_TYPE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SAG_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NAME</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ADDRESS</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OKTMO</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CLIENT_DEFAULT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_SUD_GET_AGENTLIST(
+    TAG D_INTEGER = 0,
+    OBJECT_ID D_ID = null,
+    PROC_TYPE D_SMALLINT = null)
+RETURNS (
+    SAG_ID D_ID,
+    NAME D_STR_255,
+    ADDRESS D_STR_255,
+    OKTMO D_STR_20,
+    CLIENT_DEFAULT D_STR_255)
+AS
+declare variable sag_kind d_integer;
+begin
+  -- Список контрагентов
+  -- tag: 0 - все (по умолчанию), 1 - ответственные (те кто может вести дело), 2 - суды, 3 - коллекторы, 4 - контрагенты по ФССП, 5 - контрагенты по судам
+  -- object_id для tag = 2 - smr_id, для tag = 3 - slc_id
+  -- выход:
+  -- client_default: для tag = 2 и 3 - клиенты для которых контрагенты определены внешним сервисом автоматически
+
+  if (tag is null) then tag = 0;
+
+  if (tag = 0) then
+  begin
+    for select sag_id, sag_name
+    from sud_agents
+    into sag_id, name
+    do
+      suspend;
+  end
+
+  else if (tag = 1) then
+  begin
+    for select sag_id, sag_name
+    from sud_agents
+    where sag_kind in (0, 1)
+    into sag_id, name
+    do
+      suspend;
+  end
+
+  else if (tag = 2) then
+  begin
+    if (object_id is null and proc_type is null) then
+      exit;
+
+    if (proc_type is null) then
+      proc_type = (select smd_proc_type from sud_maindocs where smd_id = :object_id);
+
+    if (proc_type is null) then
+      exception e_message &#x27;Не выбран тип делопроизводства!&#x27;;
+
+    sag_kind = iif(proc_type = 0, 2, 3);
+
+    -- определенные внешнием сервисом
+    for select iif(:proc_type = 0, slc_auto_worldcourt, slc_auto_federalcourt) as sag_id,
+               c_name_fio
+    from sud_loanclient, knclient, clients
+    where slc_from_smr_id = :object_id
+      and kc_id = slc_from_kc_id
+      and c_id = kc_from_c_id
+    into sag_id, client_default
+    do
+    begin
+      select sag_name, sag_address, sag_oktmo
+      from sud_agents
+      where sag_id = :sag_id
+      into name, address, oktmo;
+
+      suspend;
+    end 
+
+    for select sag_id, sag_name, sag_address, sag_oktmo, &#x27;Из справочника&#x27;
+    from sud_agents
+    where sag_kind = :sag_kind
+    into sag_id, name, address, oktmo, client_default
+    do
+      suspend;
+  end
+
+  else if (tag = 3) then
+  begin
+    if (object_id is not null) then
+    begin
+      select smc_auto_collect, c_name_fio
+      from sud_loanclient, sud_maincollect, knclient, clients
+      where smc_id = :object_id
+        and smc_from_slc_id = slc_id
+        and kc_id = slc_from_kc_id
+        and c_id = kc_from_c_id
+      into sag_id, client_default;
+
+      select sag_name, sag_address, sag_oktmo
+      from sud_agents
+      where sag_id = :sag_id
+      into name, address, oktmo;
+
+      suspend;
+    end
+
+    for select sag_id, sag_name, sag_address, sag_oktmo, &#x27;Из справочника&#x27;
+    from sud_agents
+    where sag_kind = 4
+    into sag_id, name, address, oktmo, client_default
+    do
+      suspend;
+  end
+
+  else if (tag in (4, 5)) then
+  begin
+    for select sag_id, sag_name
+    from sud_agents
+    where sag_kind = 1
+    into sag_id, name
+    do
+      suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

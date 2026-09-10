@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DAILY_CHECK_BALANCE_CLOSING — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DAILY_CHECK_BALANCE_CLOSING: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DAILY_CHECK_BALANCE_CLOSING</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="card_check_balance_new.html"><div class="to">CARD_CHECK_BALANCE_NEW</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DAILY_CHECK_BALANCE_CLOSING
+AS
+declare variable k_id d_id;
+declare variable cs_id d_integer;
+declare variable csc_id d_integer;
+declare variable dt_curr d_date;
+declare variable dt_begin d_date;
+declare variable dt_end d_date;
+begin
+  /*
+    Используется в роботе (fsm_id = 114) для генерации запросов баланса
+    в МПЦ по закрытым, в течении последних двух дней, займам
+   ( для определения существования пере-платы ).
+  */
+  dt_curr = current_date;
+  dt_begin = dt_curr - 2;
+  dt_end = dt_curr - 1;
+  csc_id = f_get_cardsynccfg_id(&#x27;check_balance_on_closing&#x27;);
+
+  for
+    select
+      k_id
+    from kontstate
+      inner join kontract
+        on k_id = ks_from_k_id
+          and k_disb_kind = 6
+    where ks_date_begin between :dt_begin and :dt_end
+      and ks_state = 2
+      and ks_ol_is_delete = 0
+  into
+    :k_id
+  do
+  begin
+    -- пропускаем если баланс нынче уже проверялся
+    if (exists(
+      select *
+      from cardsync
+      where cs_from_k_id = :k_id
+        and cs_from_csc_id = :csc_id
+        and cs_date = :dt_curr))
+    then continue;
+
+    execute procedure card_check_balance_new(&#x27;kontract&#x27;, :k_id, true)
+    returning_values :cs_id;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

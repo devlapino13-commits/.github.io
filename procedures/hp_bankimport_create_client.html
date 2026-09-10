@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_BANKIMPORT_CREATE_CLIENT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_BANKIMPORT_CREATE_CLIENT: 6 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_BANKIMPORT_CREATE_CLIENT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="get_kv_id.html"><div class="to">GET_KV_ID</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OL_C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OL_CLIENT_NAME</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OL_CLIENT_ACCOUNT</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OL_CLIENT_BANK</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OL_CLIENT_INN</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_BANKIMPORT_CREATE_CLIENT(
+    OL_C_ID DECIMAL(18,0),
+    OL_CLIENT_NAME VARCHAR(255),
+    OL_CLIENT_ACCOUNT VARCHAR(20),
+    OL_CLIENT_BANK VARCHAR(20),
+    OL_CLIENT_INN VARCHAR(20),
+    UN_ID DECIMAL(18,0))
+RETURNS (
+    C_ID DECIMAL(18,0))
+AS
+declare variable short_status varchar(20);
+declare variable c_type integer;
+declare variable c_from_reg_id integer;
+begin
+  if (coalesce(ol_c_id, 0) &lt;&gt; 0) then
+  begin
+    c_id = ol_c_id;
+    if (coalesce(ol_client_account, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+    begin
+      if (not(exists(select *
+                     from bankclient
+                     where bc_from_c_id = :c_id and
+                           bc_account_no = :ol_client_account))) then
+      begin
+        if (not(exists(select *
+                       from banks
+                       where b_id = :ol_client_bank))) then
+        begin
+          insert into banks (b_id, b_name)
+          values (:ol_client_bank, &#x27;без имени&#x27;);
+        end
+        insert into bankclient (bc_from_c_id, bc_account_no, bc_name, bc_is_main, bc_is_active, bc_from_b_id)
+        values (:c_id, :ol_client_account, &#x27;Текущий счет&#x27;, 1, 1, :ol_client_bank);
+      end
+    end
+    suspend;
+    exit;
+  end
+  c_id = 0;
+  if (char_length(ol_client_name) &gt; 100) then
+  begin
+    ol_client_name = left(ol_client_name, 100);
+  end
+
+  select bc_from_c_id
+  from bankclient
+  where bc_account_no = :ol_client_account
+  order by bc_from_c_id desc
+  rows 1
+  into c_id;
+  if (coalesce(c_id, 0) &gt; 0) then
+  begin
+    suspend;
+    exit;
+  end
+
+  if (ol_client_name &lt;&gt; &#x27;&#x27; and
+      ol_client_account &lt;&gt; &#x27;&#x27; and
+      ol_client_inn &lt;&gt; &#x27;&#x27;) then
+  begin
+    select c_id
+    from clients
+    where c_name_fio = :ol_client_name and
+          c_account = :ol_client_account and
+          c_inn = :ol_client_inn
+    into :c_id;
+    if (coalesce(c_id, 0) &gt; 0) then
+    begin
+      suspend;
+      exit;
+    end
+  end
+  if (ol_client_name &lt;&gt; &#x27;&#x27; and
+      ol_client_account &lt;&gt; &#x27;&#x27; and
+      ol_client_inn = &#x27;&#x27;) then
+  begin
+    select c_id
+    from clients
+    where c_name_fio = :ol_client_name and
+          c_account = :ol_client_account
+    into :c_id;
+    if (coalesce(c_id, 0) &gt; 0) then
+    begin
+      suspend;
+      exit;
+    end
+  end
+
+  c_from_reg_id = f_hq_id();
+
+  short_status = &#x27;&#x27;;
+  c_type = 0;
+  if (ol_client_inn &lt;&gt; &#x27;&#x27;) then
+  begin
+    c_type = 1;
+    if (ol_client_name like &#x27;% ИП&#x27; or ol_client_name like &#x27;ИП %&#x27;) then
+    begin
+      short_status = &#x27;ИП&#x27;;
+    end
+  end
+  else
+  begin
+    if (ol_client_name like &#x27;%альфа%&#x27;) then
+      c_type = 1;
+  end
+
+  select result
+  from get_kv_id(2)
+  into :c_id;
+
+  insert into clients (c_id, c_type, c_name_fio, c_sex, c_org_type_short, c_nation, c_citizen, c_from_reg_id, c_family,
+                       c_education, c_kol_family, c_inn, c_is_resident, c_army, c_doc_type, c_from_un_id, c_kol_child)
+  values (:c_id, :c_type, :ol_client_name, 2, :short_status, 0, 0, :c_from_reg_id, 0, 0, 0, :ol_client_inn, 1, 0, 0,
+          :un_id, 0);
+
+  if (ol_client_bank &lt;&gt; &#x27;&#x27; and
+      ol_client_account &lt;&gt; &#x27;&#x27;) then
+  begin
+    if (not(exists(select *
+                   from banks
+                   where b_id = :ol_client_bank))) then
+    begin
+      insert into banks (b_id, b_name)
+      values (:ol_client_bank, &#x27;без имени&#x27;);
+    end
+
+    insert into bankclient (bc_from_c_id, bc_account_no, bc_name, bc_is_main, bc_is_active, bc_from_b_id)
+    values (:c_id, :ol_client_account, &#x27;Текущий счет&#x27;, 1, 1, :ol_client_bank);
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

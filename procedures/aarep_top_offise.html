@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_TOP_OFFISE — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_TOP_OFFISE: 1 входных, 7 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_TOP_OFFISE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">7</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_top_offise_ex.html"><div class="to">AAREP_TOP_OFFISE_EX</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">7 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_NAME_FIO_ALL</div><div class="ptype">VARCHAR(512)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CELL_NO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REG_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PLACE</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_KOL</div><div class="ptype">DECIMAL(18,2)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_TOP_OFFISE(
+    REP_DATE D_DATE)
+RETURNS (
+    C_NAME_FIO_ALL VARCHAR(512),
+    CELL_NO D_STR_100,
+    REG_NAME D_STR_100,
+    PLACE D_STR_100,
+    K_KOL DECIMAL(18,2),
+    DATE_BEGIN DATE,
+    DATE_END DATE)
+AS
+declare variable kc_id d_id;
+declare variable reg_id d_integer;
+declare variable kol d_integer;
+declare variable svz_kol d_currency;
+declare variable otpusk_days d_smallint;
+declare variable n d_smallint;
+declare variable dd_tmp date;
+declare variable lo_work_days d_smallint;
+begin
+  --отчет будет формироваться в субботу, за отчетный период прошлая суббота - текущая пятница
+
+  --ФИО менеджера, город, ср кол-во выдач на 1 випс.
+  date_begin = dateadd(-7 day to :rep_date); --прошлая суббота
+  date_end = dateadd(-1 day to :rep_date); --текущая пятница
+
+  for select reg.reg_unicode, reg.reg_name, pl.pl_name
+      from region reg
+      inner join addrlist al on adl_id = reg_address_fact
+      inner join places pl on al.adl_from_pl_id = pl.pl_id
+      where reg.reg_status = 3 and
+            reg.is_delete = 0 and
+            current_date &lt;= coalesce(reg.reg_date_close, &#x27;31.12.9999&#x27;) and
+            reg.reg_unicode not in (1012100, 1012300, 1010100, 1012700)
+      into :reg_id, reg_name, place
+  do
+  begin
+    k_kol = 0;
+    svz_kol = 0;
+    c_name_fio_all = &#x27;&#x27;;
+    for select hps.ps_from_c_id
+        from hr_pstatus hps
+        inner join joblist jl on jl.jl_id = ps_from_jl_id
+        inner join jobkind jk on jk.jk_id = jl.jl_kind and
+              jk.jk_system_code in (&#x27;JobSystem.LO_Standart&#x27;, &#x27;JobSystem.LO_Senior&#x27;)
+        where :rep_date between ps_date_begin and ps_date_end and
+              ps_is_working = 1 and
+              hps.ps_status = 1 and
+              hps.ps_from_reg_id = :reg_id
+        into :kc_id
+    do
+    begin
+      -- Общее количество СВЗ, за исключением сотрудников в отпуске
+      -- Проверяем статус отпуска на каждый день недели:
+      -- если все 7 дней был в отпуске, исключаем из списка
+      otpusk_days = 0;
+      n = 0;
+      while (n &lt;= 6) do
+      begin
+        dd_tmp = dateadd(day, n, date_begin);
+        if (exists(select *
+                   from hr_voctravel, hr_orders, sa_worktype
+                   where hrv_from_ho_id = ho_id and
+                         ho_order_type = sawt_id and
+                         hrv_from_c_id = :kc_id and
+                         sawt_base_type in (4, 5) and -- отпуск, декретный отпуск
+                         sawt_id &lt;&gt; 20 and
+                         sawt_hours_real &gt;= 0 and
+                         hrv_date_begin &lt;= :dd_tmp and
+                         hrv_date_end_fact &gt;= :dd_tmp and
+                         hrv_status = 1)) then
+          otpusk_days = otpusk_days + 1;
+        n = n + 1;
+      end
+      lo_work_days = 7 - otpusk_days;
+
+      if (lo_work_days &gt; 0) then
+        svz_kol = svz_kol + 1;
+
+    end
+
+    if (svz_kol &gt; 0) then
+    begin
+      select list(cl.c_name_fio), list(f_cont_info(&#x27;Clients&#x27;, c_id, &#x27;cell_main&#x27;, &#x27;ok&#x27;),&#x27;,&#x27;)
+      from hr_pstatus hps
+      inner join clients cl on cl.c_id = hps.ps_from_c_id
+      inner join joblist jl on jl.jl_id = ps_from_jl_id
+      inner join jobkind jk on jk.jk_id = jl.jl_kind
+      where :rep_date between ps_date_begin and ps_date_end and
+            ps_is_working = 1 and
+            hps.ps_status = 1 and
+            jk.jk_system_code containing &#x27;JobSystem.Region_KM&#x27; and
+            hps.ps_from_reg_id = :reg_id
+      into :c_name_fio_all, cell_no; --находим МО офиса
+
+      select coalesce(count(distinct k.k_id), 0)
+      from kontstate, kontract k
+      where ks_from_k_id = k_id and
+            ks_state = 1 and
+            ks_ol_is_delete = 0 and
+            ks_date_begin between :date_begin and :date_end and
+            k.k_last_reg_id = :reg_id
+      into :k_kol; -- количество выдач
+      k_kol = k_kol / svz_kol;
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

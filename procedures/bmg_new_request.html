@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BMG_NEW_REQUEST — процедура — схема БД</title>
+<meta name="description" content="Процедура BMG_NEW_REQUEST: 3 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>BMG_NEW_REQUEST</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_send_client_gbdfl.html"><div class="to">FM_SEND_CLIENT_GBDFL</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">BY_VERIFY_PHONE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE BMG_NEW_REQUEST(
+    C_ID D_ID,
+    UN_ID D_ID,
+    BY_VERIFY_PHONE D_BOOL)
+AS
+declare variable EIC_ID D_ID;
+declare variable INN D_STR_20;
+declare variable PHONE_NUMBER D_STR_20;
+declare variable EIL_ID D_ID;
+declare variable REQUEST_JSON D_STR_100;
+begin
+  eic_id = (select t.eic_id from extinfocfg t where t.eic_code = &#x27;bmg&#x27;);
+
+  if (eic_id is null) then
+    exception e_message &#x27;конфигурация extinfocfg = bmg не найдена&#x27;;
+
+  inn = (select cl.c_inn from clients cl where cl.c_id = :c_id);
+
+  if (by_verify_phone = 1) then
+    phone_number = f_cont_info(&#x27;clients&#x27;, :c_id, &#x27;cell_main&#x27;, &#x27;ok&#x27;);
+  else
+    phone_number = f_cont_info(&#x27;clients&#x27;, :c_id, &#x27;cell_main&#x27;, &#x27;last&#x27;);
+
+  if (coalesce(phone_number, &#x27;&#x27;) = &#x27;&#x27;) then
+    exception e_message &#x27;телефонный номер не найден&#x27;;
+
+  insert into extinfolist (eil_from_c_id, eil_from_eic_id, eil_object_kind, eil_object_id, eil_is_json, eil_from_un_id)
+  values (:c_id, :eic_id, 0, :c_id, 1, :un_id)
+  returning eil_id
+  into :eil_id;
+
+  request_json = f_format(&#x27;{&quot;inn&quot;:&quot;%1&quot;, &quot;phone_number&quot;:&quot;%2&quot;}&#x27;, inn, phone_number);
+
+  insert into bmg_clients (bc_from_c_id, bc_from_eil_id, bc_request)
+  values (:c_id, :eil_id, :request_json);
+
+  post_event &#x27;bmg&#x27;;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

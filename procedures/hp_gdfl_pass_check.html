@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_GDFL_PASS_CHECK — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_GDFL_PASS_CHECK: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_GDFL_PASS_CHECK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_blobex_blob.html"><div class="to">HP_GET_BLOBEX_BLOB</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="cm_kz_0005_sql.html"><div class="to">CM_KZ_0005_SQL</div></a><a class="ref-card" href="fm_html_grs_verify_details.html"><div class="to">FM_HTML_GRS_VERIFY_DETAILS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">DESCRIPTION</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_GDFL_PASS_CHECK(
+    C_ID D_ID)
+RETURNS (
+    DESCRIPTION D_STR_255)
+AS
+declare variable JSON_STR D_BLOB_TEXT;
+declare variable C_PASS_NO D_STR_CODE;
+declare variable ARR_LENGTH D_INTEGER;
+declare variable I D_INTEGER;
+declare variable DOCUMENT D_STR_4096;
+declare variable TYPE_CODE D_INTEGER;
+declare variable STATUS_CODE D_INTEGER;
+declare variable DOCUMENT_END_DATE D_DATE;
+declare variable DOCUMENT_PASS_NO D_STR_CODE;
+declare variable bls_id D_ID;
+begin
+  -- RFCKG-4180 Процедура сверяет паспорт записанный в clients с ответом полученным от ГДФЛ
+  c_pass_no = trim((select c.c_pass_no from clients c where c.c_id = :c_id));
+  i = 0;
+  description = &#x27;&#x27;;
+
+  select eil.eil_from_bls_id
+  from extinfolist eil
+  join extinfocfg ext on ext.eic_id = eil.eil_from_eic_id
+     and ext.eic_code in (&#x27;gbdfl_get_cli_data&#x27;, &#x27;bioguard_info&#x27;)
+  where eil.eil_status = 2
+    and eil.eil_from_c_id = :c_id
+    and eil.eil_date = current_date
+    and coalesce(eil.eil_from_bls_id, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;
+  order by eil.eil_status_datetime desc
+  rows 1
+  into :bls_id;
+
+  if (:bls_id is not null) then
+  begin
+    select blx_blob
+    from hp_get_blobex_blob(:bls_id)
+    into json_str;
+  end
+
+  if (coalesce(json_str, &#x27;&#x27;) = &#x27;&#x27;) then
+  begin
+    description = &#x27;Запрос в ГДФЛ не отправлен.&#x27;;
+    suspend;
+    exit;
+  end
+
+  arr_length = f_json_blob_get_count(json_str, &#x27;documents.document&#x27;);
+
+  if (arr_length = -1) then
+    exit;
+
+  while (arr_length &lt;&gt; i)
+  do
+  begin
+
+    document = f_json_blob_get_value(json_str, f_format(&#x27;documents.document[%1]&#x27;, i), null);  -- получаем паспорт клиента
+    i = i + 1;
+
+    document_pass_no = trim(f_json_blob_get_value(document, &#x27;number&#x27;, null));
+
+    if(document_pass_no &lt;&gt; c_pass_no) then
+      continue;
+
+    document_end_date = cast(f_json_blob_get_value(document, &#x27;end_date&#x27;, null) as d_date);
+    type_code = cast(f_json_blob_get_value(document, &#x27;type.code&#x27;, null) as d_integer);
+    status_code = cast(f_json_blob_get_value(document, &#x27;status.code&#x27;, null) as d_integer);
+
+    if (status_code in (1, 5, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21)) then
+      description = cast(f_json_blob_get_value(document, &#x27;status.name_ru&#x27;, &#x27;&#x27;) as d_str_255);
+
+    if (current_date &gt;= (document_end_date - 14)) then  -- Если срок годности по удостоверению личности истекает через 14 дней или раньше
+      description = f_format(&#x27;Срок годности по удостоверения личности истекает через %1 дней&#x27;, (document_end_date - current_date));
+
+    break;
+  end
+
+  suspend;  
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CHANGE_TRILLIONER_PASS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CHANGE_TRILLIONER_PASS: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CHANGE_TRILLIONER_PASS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_send_message.html"><div class="to">HP_SEND_MESSAGE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CHANGE_TRILLIONER_PASS
+AS
+declare variable c_id d_id;
+declare variable un_id d_id;
+declare variable hq_id d_integer;
+declare variable reg_id d_integer;
+declare variable ps_is_working d_smallint;
+declare variable jl_name d_str_100;
+declare variable new_pass d_str_code;
+declare variable mail_to d_str_code;
+declare variable un_name d_str_code;
+begin
+  -- Процедура смены пароля для Мираполис (сайт Триллионер уже не работает)
+  hq_id = f_hq_id();
+  for select un_id, un_from_c_id, un_name
+      from username, clients
+      where un_from_c_id = c_id
+      into un_id, c_id, un_name
+  do
+  begin
+    -- Либо пользователь работает либо уволен за последний месяц
+    for select ps_is_working, jl_name, ps_from_reg_id
+    from hr_pstatus, joblist
+    where ps_date_begin &lt;= current_date and
+          ps_date_end &gt;= current_date and
+          ps_from_c_id = :c_id and
+          ps_from_jl_id = jl_id and
+          (ps_is_working = 1 or
+          (ps_is_working = 0 and ps_date_begin &gt;= dateadd(month, -1, current_date)))
+    into ps_is_working, jl_name, reg_id
+    do
+    begin
+      new_pass = f_gen_password(8, 1, 1, 1, 2);
+      update username
+      set un_trillioner_pass = :new_pass
+      where un_id = :un_id;
+
+      if (ps_is_working = 1 and (reg_id = hq_id or jl_name in (&#x27;Администратор&#x27;, &#x27;Кассир-оператор&#x27;))) then
+      begin
+        -- Отправляем письмо про смену пароля
+        mail_to = coalesce(f_cont_info(0, c_id, &#x27;email&#x27;, &#x27;ok&#x27;), &#x27;&#x27;);
+        if (mail_to &lt;&gt; &#x27;&#x27;) then
+          execute procedure hp_send_message(&#x27;email&#x27;, c_id, mail_to, &#x27;Доступ в Академию М Булак&#x27;,
+          &#x27;Ваш логин и пароль для входа в Академию М Булак:&lt;br&gt;&#x27; ||
+          &#x27;Логин: &#x27; || un_name|| &#x27;&lt;br&gt;&#x27; ||
+          &#x27;Пароль: &#x27; || new_pass || &#x27;&lt;br&gt;&#x27; ||
+          &#x27;Адрес Академии М Булак: https://academy.molbulak.com/ &lt;br&gt;&#x27;,
+          &#x27;hp_change_trillioner_pass&#x27;, 7, un_id);
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_KG_0003_SQL — процедура — схема БД</title>
+<meta name="description" content="Проверка параметров клиента паспорт возрост итд">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_KG_0003_SQL</code></h1>
+<p class="desc">Проверка параметров клиента паспорт возрост итд</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_check_fms_passport.html"><div class="to">HP_CHECK_FMS_PASSPORT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_KG_0003_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable KF_DISB_DATE D_DATE;
+declare variable KF_CLIENT_PASS_NO varchar(30);
+declare variable C_PFT_RISK_KOEF smallint;
+declare variable C_PFT_RISK_MEMO varchar(1024);
+declare variable C_VERIFY_STATUS integer;
+declare variable C_BIRTH_DATE date;
+declare variable C_ID ID_TYPE;
+declare variable C_CITIZEN integer;
+declare variable C_PASS_DATE_EXPIRE date;
+declare variable K_KONTRACT_NO varchar(20);
+declare variable CREL_OTHER_C_ID ID_TYPE;
+declare variable C_INN varchar(20);
+declare variable C_DOC_TYPE integer;
+declare variable PR_CODE D_STR_100;
+declare variable KOL_CLI_KNCLIENT integer;
+declare variable KOL_CLI_KONTRACT integer;
+declare variable K_REFUND D_SMALLINT;
+declare variable OKS_DELINQ_DATE D_DATE;
+declare variable MA_ID D_ID;
+declare variable MARK D_BOOL;
+begin
+  kol_cli_knclient = 0;
+  mark = 0;
+  if (k_id = 109010239813500101) then --RFCKG-608 запрос от Чолпон
+    exit;
+  if (k_id = 109010265640200101) then
+    exit; --RFCKG-847
+  if (k_id = 109010294303800101) then
+    exit; --RFCKG-2905
+
+  for select c_name_fio, c_pass_no, k_disb_date, c_pft_risk_koef, c_pft_risk_memo, c_verify_status, c_birth_date, c_id,
+             c_citizen, c_pass_date_expire, c_inn, c_doc_type, k_kolich_client_approved, pr_code, kont.k_refund,
+             kont.k_from_ma_app_id
+      from knclient, clients, kontract kont, product
+      where kc_from_k_id = :k_id and
+            kc_amount_approved &gt; 0 and
+            kc_from_c_id = c_id and
+            kc_from_k_id = k_id and
+            k_from_pr_id = pr_id
+      into res_info_text, kf_client_pass_no, kf_disb_date, c_pft_risk_koef, c_pft_risk_memo, c_verify_status,
+           c_birth_date, c_id, c_citizen, c_pass_date_expire, c_inn, c_doc_type, kol_cli_kontract, pr_code, k_refund,
+           ma_id
+  do
+  begin
+    if (mark = 0) then
+    begin
+      mark = 1;
+      for select c.c_name_fio
+          from miniappclient mac
+          inner join clients c on c.c_id = mac.mac_from_c_id
+          where mac.mac_from_ma_id = :ma_id and
+                mac.mac_is_poruch = -1 and -- лицо дающее согласие
+                :kf_disb_date &gt; c_pass_date_expire
+          into :res_info_text
+      do
+      begin
+        res_error_is_critical = 2;
+        res_error_text = &#x27;Паспорт лица дающего согласия просрочен&#x27;;
+        suspend;
+      end
+    end
+    if (:c_doc_type = 1) then
+    begin
+      res_error_is_critical = 2;
+      res_error_text = &#x27;С 1-апреля 2017 года, паспорт образца 1994-года считается недействительным&#x27;;
+      suspend;
+    end
+
+    kol_cli_knclient = kol_cli_knclient + 1;
+    c_pft_risk_koef = coalesce(c_pft_risk_koef, -1);
+    c_pft_risk_memo = trim(coalesce(c_pft_risk_memo, &#x27;&#x27;));
+    c_verify_status = coalesce(c_verify_status, 0);
+    if (c_pft_risk_koef = -1) then
+    begin
+      res_error_text = &#x27;Не выбрана уровень риска ПФТ/ОД&#x27;;
+      res_error_is_critical = 2;
+      suspend;
+    end
+    else
+    if (c_pft_risk_memo = &#x27;&#x27; and
+        c_pft_risk_koef &gt; 0) then
+    begin
+      res_error_text = &#x27;Не заполнено обоснование уровня риска ПФТ/ОД&#x27;;
+      res_error_is_critical = 2;
+      suspend;
+    end
+    if (c_verify_status not in (-1, 2)) then
+      if (c_verify_status = -2) then
+      begin
+        res_error_text = &#x27;Верификация: данные не верны.&#x27;;
+        res_error_is_critical = 2;
+        suspend;
+      end
+      else
+      if (c_verify_status = 0) then
+      begin
+        res_error_text = &#x27;Верификация: данные не полны.&#x27;;
+        res_error_is_critical = 2;
+        suspend;
+      end
+      else
+      if (c_verify_status = 1) then
+      begin
+        res_error_text = &#x27;Верификация: Верификация не проведена.&#x27;;
+        res_error_is_critical = 2;
+        suspend;
+      end
+    --       Добавлено по паспорту от 26.03.2014
+    if (:c_birth_date &gt; dateadd(year, -18, :kf_disb_date)) then
+    begin
+      res_error_text = &#x27;Клиенту еще не исполнилось 18 лет.&#x27;;
+      res_error_is_critical = 2;
+      suspend;
+    end
+    else
+    if (c_citizen &lt;&gt; 8) then
+    begin
+      res_error_text = &#x27;Клиент не гражданин КР, выдача запрещается!&#x27;;
+      res_error_is_critical = 2;
+      suspend;
+    end
+    if (c_pass_date_expire &lt; kf_disb_date) then
+    begin
+      res_error_text = &#x27;Паспорт просрочен, выдача запрещается!&#x27;;
+      res_error_is_critical = 2;
+      suspend;
+    end
+    --      Пункт 7, проверка клиента на просрочку
+    k_kontract_no = null;
+    for select k_kontract_no, oks_delinq_date
+        from oksummary, knclient, kontract
+        where kc_from_c_id = :c_id and
+              kc_amount_approved &gt; 0 and
+              kc_from_k_id = oks_from_k_id and
+              current_date between oks_date_begin and oks_date_end and
+              current_date &gt; oks_delinq_date and
+              oks_from_k_id = k_id and
+              oks_close_state = 0
+        into k_kontract_no, oks_delinq_date
+    do
+    begin
+      if (k_kontract_no is not null and
+          not(oks_delinq_date between &#x27;01.12.20&#x27; and &#x27;31.01.21&#x27; and
+          pr_code containing &#x27;.par.&#x27; and
+          (pr_code containing &#x27;.ind.&#x27; or pr_code containing &#x27;.gr.&#x27; or pr_code containing &#x27;.birge.&#x27;) and
+          exists(select *
+                 from knclient_compens kcc
+                 inner join knclient kncl on kncl.kc_id = kcc.kcc_from_kc_id and
+                       kc_from_c_id = :c_id
+                 where kcc.kcc_date_end &gt; kcc.kcc_date_begin))) then
+
+
+        if (exists(select *
+                   from kontract kont
+                   inner join product pr on pr.pr_id = kont.k_from_pr_id
+                   where kont.k_id = :k_id and
+                         pr.pr_code containing &#x27;.Actiya_Ishenim_Refin.&#x27;)) then
+          exit;
+
+      begin
+        res_error_is_critical = iif(k_refund = 1, 0, 1);
+        res_error_text = &#x27;У клиента имеется активный просроченный кредит в контракте №&#x27; || k_kontract_no;
+        suspend;
+      end
+    end
+    --      Находит супругу клиента и проверяет на просрочку
+    --      у клиента вытаскивает супругу
+    crel_other_c_id = null;
+    select crel_other_c_id
+    from clientrelation
+    where crel_from_c_id = :c_id and
+          crel_from_rel_id in (&#x27;1&#x27;, &#x27;2&#x27;) and
+          crel_is_active = 1 rows 1
+    into crel_other_c_id;
+    if (crel_other_c_id is null) then
+      crel_other_c_id = 0;
+    k_kontract_no = null;
+    select k_kontract_no
+    from oksummary, knclient, kontract
+    where kc_from_c_id = :crel_other_c_id and
+          kc_amount_approved &gt; 0 and
+          kc_from_k_id = oks_from_k_id and
+          current_date between oks_date_begin and oks_date_end and
+          current_date &gt; oks_delinq_date and
+          oks_close_state = 0 and
+          oks_from_k_id = k_id rows 1
+    into k_kontract_no;
+    if (k_kontract_no is not null) then
+    begin
+      res_error_is_critical = iif(k_refund = 1, 0, 1);
+      res_error_text = &#x27;У супруги клиента имеется активный просроченный кредит в контракте №&#x27; || k_kontract_no;
+      suspend;
+    end
+    if (coalesce(c_inn, &#x27;&#x27;) = &#x27;&#x27;) then
+    begin
+      res_error_is_critical = 1;
+      res_error_text = &#x27;не указан ИНН&#x27;;
+      suspend;
+    end
+    if ((c_verify_status &lt;&gt; 2) and
+        (c_verify_status &lt;&gt; -1)) then
+    begin
+      if (exists(select *
+                 from region, kontract
+                 where k_last_reg_id = reg_unicode and
+                       k_id = :k_id and
+                       reg_need_client_verify = 1)) then
+      begin
+        res_error_is_critical = 2;
+        res_error_text = &#x27;Верификация не проведена&#x27;;
+        suspend;
+      end
+    end
+    if (:c_birth_date is null) then
+    begin
+      res_error_is_critical = 2;
+      res_error_text = &#x27;Дата рождения не заполнена&#x27;;
+      suspend;
+    end
+    if (coalesce(:kf_client_pass_no, &#x27;&#x27;) = &#x27;&#x27;) then
+    begin
+      res_error_is_critical = 2;
+      res_error_text = &#x27;Номер паспорта не заполнен&#x27;;
+      suspend;
+    end
+    else
+    begin
+      if (exists(select *
+                 from hp_check_fms_passport(:kf_client_pass_no)
+                 where check_result = 1)) then
+      begin
+        res_error_is_critical = 2;
+        res_error_text = &#x27;По базе УФМС паспорт недействителен!&#x27;;
+        suspend;
+      end
+      if ((kf_client_pass_no starting(&#x27;ID&#x27;)) and
+          (c_doc_type &lt;&gt; 296)) then
+      begin
+        res_error_is_critical = 2;
+        res_error_text = &#x27;Указан не корректный тип паспорта, должен быть Биометрический!&#x27;;
+        suspend;
+      end
+    end
+    if ((coalesce(:c_doc_type, 0) &lt; 1) and
+        res_error_text = &#x27;&#x27;) then
+    begin
+      res_error_is_critical = 2;
+      res_error_text = &#x27;Тип документа не указан&#x27;;
+      suspend;
+    end
+    if (exists(select 1
+               from addrclient
+               where adc_from_c_id = :c_id and
+                     adc_address_type = 1)) then
+    begin
+      if (exists(select 1
+                 from addrclient
+                 where adc_from_c_id = :c_id and
+                       adc_address_type = 1 and
+                       mod(adc_from_adl_id, 1000000000) = 0)) then
+      begin
+        res_error_is_critical = 2;
+        res_error_text = &#x27;Юридический адрес не заполнен&#x27;;
+        suspend;
+      end
+    end
+    else
+    begin
+      res_error_is_critical = 2;
+      res_error_text = &#x27;Юридический адрес не существует&#x27;;
+      suspend;
+    end
+    if (exists(select 1
+               from addrclient
+               where adc_from_c_id = :c_id and
+                     adc_address_type = 2)) then
+    begin
+      if (exists(select 1
+                 from addrclient
+                 where adc_from_c_id = :c_id and
+                       adc_address_type = 2 and
+                       mod(adc_from_adl_id, 1000000000) = 0)) then
+      begin
+        res_error_is_critical = 2;
+        res_error_text = &#x27;Фактический адрес не заполнен&#x27;;
+        suspend;
+      end
+    end
+    else
+    begin
+      res_error_is_critical = 2;
+      res_error_text = &#x27;Фактический адрес не существует&#x27;;
+      suspend;
+    end
+  end
+  if (kol_cli_knclient &lt;&gt; kol_cli_kontract) then
+  begin
+    res_error_is_critical = 2;
+    res_error_text = &#x27;Прошу вас переоформить контракт, общее кол-во клиентов не совпададает по кол-ву договору!&#x27;;
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

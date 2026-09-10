@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EDOC_AGREEMENTS_CHECK — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EDOC_AGREEMENTS_CHECK: 3 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EDOC_AGREEMENTS_CHECK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_find_person_send_edoc.html"><div class="to">HP_FIND_PERSON_SEND_EDOC</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EDOC_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SIGNER_C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EDOC_AGREEMENTS_CHECK(
+    EDOC_KIND D_STR_CODE,
+    OBJ_ID D_ID,
+    UN_ID D_ID)
+RETURNS (
+    RES_TEXT D_STR_255,
+    SIGNER_C_ID D_ID)
+AS
+declare variable cell_no d_str_100;
+begin
+  res_text = &#x27;&#x27;;
+  if (edoc_kind = &#x27;storage_agreement&#x27;) then
+  begin
+    signer_c_id = 1090100331989; ---Подписантом может быть только Шавкат и доступ только у него.
+    cell_no = f_cont_info(&#x27;clients&#x27;, :obj_id, &#x27;cell_main&#x27;, &#x27;ok&#x27;);
+    if (cell_no = &#x27;&#x27;) then
+    begin
+      res_text = &#x27;У сотрудника нет верифицированного номера&#x27;;
+      suspend;
+      exit;
+    end
+    if (f_edoc_status(&#x27;storage_agreement&#x27;, :obj_id, current_date) = &#x27;signed&#x27;) then
+    begin
+      res_text = &#x27;Договор хранения уже подписан&#x27;;
+      suspend;
+      exit;
+    end
+    if (not exists(select *
+                   from hr_pstatus ps
+                   inner join joblist jl on jl.jl_id = ps.ps_from_jl_id
+                   inner join jobkind jk on jk.jk_id = jl.jl_kind and
+                         jk.jk_system_code in (&#x27;JobSystem.Region_KM&#x27;, &#x27;JobSystem.Region_Director&#x27;)
+                   where ps.ps_is_working = 1 and
+                         ps.ps_from_c_id = :obj_id and
+                         current_date between ps.ps_date_begin and ps.ps_date_end)) then
+    begin
+      res_text = &#x27;Договор может быть отправлен только КМ и РМ&#x27;;
+      suspend;
+      exit;
+    end
+    /* if (not exists(select *
+                   from edoc_list edl
+                   inner join edoc_sign eds on eds.eds_from_edl_id = edl.edl_id and
+                         eds.eds_status = 1 and
+                         cast(eds.eds_status_datetime as date) &gt;= &#x27;11.01.2022&#x27;
+                   where edl.edl_object_kind = f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;) and
+                         edl.edl_object_id = :obj_id and
+                         edl.edl_from_edc_id = f_edoc_kind(&#x27;asp.agreement&#x27;, &#x27;id&#x27;) and
+                         current_date between edl.edl_blank_date and coalesce(edl.edl_date_end, current_date) and
+                         edl.edl_status = 1
+                   order by edl.edl_status desc, edl.edl_id desc
+                   rows 1)) then
+    begin
+      res_text = &#x27;Нет подписанного ЭЦП, от 11.01.2022.&#x27;;
+      suspend;
+      exit;
+    end  */
+    if (not exists(select *
+                   from clientdocs cds
+                   inner join passkind pk on cds.cds_from_pk_id = pk.pk_id and
+                         pk.pk_is_delete = 0
+                   inner join passdoctype pdt on pdt.pdt_id = pk.pk_from_pdt_id and
+                         pdt.pdt_is_main_doc = 1
+                   where cds.cds_from_c_id = :obj_id and
+                         current_date between cds.cds_doc_date_begin and cds.cds_doc_date_end and
+                         cds.cds_is_delete = 0)) then
+    begin
+      res_text = &#x27;Нет действующего паспорта.&#x27;;
+      suspend;
+      exit;
+    end
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

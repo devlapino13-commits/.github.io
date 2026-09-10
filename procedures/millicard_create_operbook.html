@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MILLICARD_CREATE_OPERBOOK — процедура — схема БД</title>
+<meta name="description" content="Процедура MILLICARD_CREATE_OPERBOOK: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>MILLICARD_CREATE_OPERBOOK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="find_acc_list.html"><div class="to">FIND_ACC_LIST</div></a><a class="ref-card" href="get_kv.html"><div class="to">GET_KV</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="millicard_credit_check.html"><div class="to">MILLICARD_CREDIT_CHECK</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ESM_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE MILLICARD_CREATE_OPERBOOK(
+    ESM_ID INTEGER)
+AS
+declare variable k_disb_date date;
+declare variable c_name_fio str_100;
+declare variable k_kontract_no str_100;
+declare variable kf_name str_100;
+declare variable id_no id_type;
+declare variable ol_id id_type;
+declare variable reg_id integer;
+declare variable amount curr_type;
+declare variable ob_memo varchar(1024);
+declare variable acc_dt varchar(20);
+declare variable acc_kt varchar(20);
+declare variable c_id id_type;
+declare variable esm_project str_100;
+declare variable acc_dt_str str_100;
+declare variable acc_kt_str str_100;
+begin
+  select k_disb_date, c_name_fio, k_kontract_no, kal_new_kf_name, kal.kal_new_reg_id, em.esm_amount, cl.c_id, em.esm_project
+  from extsysmain em
+  inner join kontract kont on kont.k_id = em.esm_from_k_id
+  inner join clients cl on cl.c_id = em.esm_object_id
+  inner join knaktlist kal on kal.kal_from_kf_id = kont.k_from_kf_id
+  where em.esm_id = :esm_id and
+        kont.k_disb_date between kal.kal_date and kal.kal_date_end and
+        kal.is_delete = 0
+  into :k_disb_date, :c_name_fio, :k_kontract_no, :kf_name, :reg_id, :amount, :c_id, :esm_project;
+
+  select kv
+  from get_kv(1010100, 5)
+  into :id_no;
+
+  ol_id = :id_no;
+
+  ob_memo = f_datetostr(:k_disb_date) || &#x27; tarixli &#x27; || k_kontract_no || &#x27; nomreli muqavileye esasen kredit buraxilishi. Kredit papkasi № &#x27; || kf_name || &#x27; / &#x27; || c_name_fio;
+
+  insert into operlist (ol_id, ol_from_reg_id, ol_oper_type, ol_date, ol_doc_kind, ol_memo, ol_status, is_delete,
+                        ol_user_id, ol_document_client)
+  values (:ol_id, 1010100, 2, :k_disb_date, 9, null, 0, 0, 1000000000000, :c_id);
+
+  select al_id
+  from find_acc_list(&#x27;25170&#x27;) t
+  where al_from_reg_id = 1010100 and
+        left(al_name, 4) = (select reg_code
+                            from region reg
+                            where reg.reg_unicode = :reg_id)
+  into :acc_dt;
+
+  acc_kt_str = &#x27;15010/12&#x27;;
+  if (esm_project = &#x27;millicard_biz_disb&#x27;) then
+    acc_kt_str = &#x27;15010/13&#x27;;
+
+  select al_id
+  from find_acc_list(:acc_kt_str) t
+  where al_from_reg_id = 1010100
+  into :acc_kt;
+
+  insert into operbook (ob_from_ol_id, ob_number, ob_currency, ob_curr_rate, ob_client_dt, ob_account_dt, ob_summa_val,
+                        ob_summa, ob_from_pc_id, ob_from_kp_id, ob_oper_mask, ob_account_kt, ob_client_kt, ob_detail,
+                        ob_from_sac_id)
+  values (:ol_id, 1, &#x27;944&#x27;, 1, null, :acc_dt, :amount, :amount, null, null, null, :acc_kt, null, :ob_memo, null);
+
+  insert into extsysanswer (esa_from_esm_id, esa_message)
+  values (:esm_id, &#x27;ol_id = &#x27; || :ol_id);
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

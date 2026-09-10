@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CARDOPER_CORRECTION_ADJ — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CARDOPER_CORRECTION_ADJ: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CARDOPER_CORRECTION_ADJ</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">COC_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CARDOPER_CORRECTION_ADJ(
+    COC_ID D_INTEGER)
+AS
+declare variable c_id d_id;
+declare variable card_id d_integer;
+declare variable cca_id d_integer;
+declare variable cca_code d_str_code;
+declare variable cs_request_json d_str_8100;
+declare variable comment_txt varchar(140);
+declare variable cst_packet_no varchar(8);
+declare variable cst_ticket_no varchar(7);
+declare variable k_id d_id;
+declare variable un_id d_id;
+declare variable coc_amount d_currency;
+declare variable coc_date d_date;
+declare variable office_id d_integer;
+declare variable cs_id d_integer;
+declare variable coc_type d_smallint;
+begin
+    /*
+         Процедура отвечает за формирование операции для МПЦ
+         &quot;Пополнение карт счета в случае непревиденного некорректного списания&quot;,
+         по факту погашения займа
+    */
+
+    select coc.coc_amount,
+           coc.coc_card_id,
+           coc.coc_date,
+           coc.coc_from_un_id,
+           coc.coc_type
+    from cardoper_correction coc
+    where coc.coc_id = :coc_id
+    into :coc_amount,
+         :card_id,
+         :coc_date,
+         :un_id,
+         :coc_type;
+
+    if (coc_type &lt;&gt; 2) then
+        exception e_message &#x27;Ошибка! Операция не &quot;пополнение&quot;&#x27;;
+    
+    comment_txt = &#x27;Пополнение на сумму = &#x27;||round(coc_amount, 2)||&#x27; сом&#x27;;
+
+    select packet_no,
+           ticket_no
+    from cardsynctrn_create
+    into :cst_packet_no,
+         :cst_ticket_no;
+
+    if (cst_packet_no is null) then
+        exception e_message &#x27;№ пакета не опредлен&#x27;;
+    
+    if (cst_ticket_no is null) then
+        exception e_message &#x27;№ тикета не опредлен&#x27;;
+
+    -- данные тяну из последней операции установки кредитного лимита, по факту выдачи
+    select cs.cs_from_cca_id,
+           cs.cs_office_id,
+           cs.cs_from_k_id,
+           cs.cs_from_c_id,
+           caa.cca_code
+    from cardsync cs
+    inner join cardclientacc caa on caa.cca_id = cs.cs_from_cca_id
+    where cs.cs_card_id = :card_id
+    and cs.cs_from_csc_id = f_get_cardsynccfg(&#x27;card_disb&#x27;, &#x27;id&#x27;)
+    and cs.cs_status = 2
+    and cs.cs_date &lt; :coc_date
+    order by cs.cs_id desc
+    rows 1
+    into :cca_id,
+         :office_id,
+         :k_id, 
+         :c_id,
+         :cca_code;
+
+        cs_request_json = f_format(&#x27;{
+        &quot;card_acct&quot;: &quot;%1&quot;,
+        &quot;card_acct_ccy&quot;: &quot;KGS&quot;,
+        &quot;tran_type&quot;: &quot;11C&quot;,
+        &quot;tran_ccy&quot;: &quot;KGS&quot;,
+        &quot;tran_amount&quot;: %2,
+        &quot;tran_pocket&quot;: &quot;%3&quot;,
+        &quot;tran_ticket&quot;: &quot;%4&quot;,
+        &quot;tran_comment&quot;: &quot;%5&quot;,
+        &quot;bank_c&quot;: &quot;21&quot;,
+        &quot;groupc&quot;: &quot;01&quot;,
+        &quot;tran_date_time&quot;: &quot;&#x27; || f_datetimetostr(current_timestamp) || &#x27;&quot;
+    }&#x27;,
+    :cca_code,
+    round(:coc_amount,2),
+    :cst_packet_no,
+    :cst_ticket_no,
+    :comment_txt
+    );
+
+    insert into cardsync(
+      cs_from_csc_id,
+      cs_card_id,
+      cs_from_cca_id,
+      cs_object_kind,
+      cs_object_id,
+      cs_amount,
+      cs_request_json,
+      cs_office_id,
+      cs_from_un_id,
+      cs_from_k_id,
+      cs_from_c_id
+    )
+    values(
+      f_get_cardsynccfg(&#x27;cardoper_correction_adjunction&#x27;, &#x27;id&#x27;),
+      :card_id,
+      :cca_id,
+      f_objkind(&#x27;cardoper_correction&#x27;, &#x27;id&#x27;),
+      :coc_id,
+      :coc_amount,
+      :cs_request_json,
+      :office_id,
+      :un_id,
+      :k_id,
+      :c_id
+    )
+    returning cs_id
+    into :cs_id;
+
+    update cardsynctrn cst
+    set cst.cst_from_cs_id = :cs_id
+    where cst.cst_packet_no = :cst_packet_no and
+          cst.cst_ticket_no = :cst_ticket_no;
+
+    update cardoper_correction coc
+    set coc.coc_from_cs_id = :cs_id
+    where coc.coc_id = :coc_id;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

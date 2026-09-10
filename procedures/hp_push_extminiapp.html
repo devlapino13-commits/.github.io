@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_PUSH_EXTMINIAPP — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_PUSH_EXTMINIAPP: 3 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_PUSH_EXTMINIAPP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fsrobot_insert_event.html"><div class="to">FSROBOT_INSERT_EVENT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REG_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LO_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_PUSH_EXTMINIAPP(
+    REG_ID INTEGER,
+    LO_ID ID_TYPE = null,
+    C_ID ID_TYPE = null)
+AS
+declare variable LO_ID2 ID_TYPE;
+declare variable SENT_TEXT STR_255;
+declare variable CLIENT_FIO STR_100;
+declare variable LO_FIO D_STR_100;
+begin
+  client_fio = null;
+  if (c_id is not null) then
+  begin
+    select &#x27;. Клиент:&#x27;||c_name_fio from clients
+    where c_id = :c_id
+    into client_fio;
+  end 
+  client_fio = coalesce(client_fio,&#x27;&#x27;);
+  -------- при подаче онлайн-заявки направляю пуш-уведомление КМ --------------&gt;
+  for select ps_from_c_id
+  from hr_pstatus, joblist, jobkind
+  where current_date between ps_date_begin and ps_date_end
+  and ps_is_working = 1
+  and ps_status = 1
+  and ps_from_reg_id = :reg_id
+  and ps_from_jl_id = jl_id
+  and jl_kind = jk_id
+  and jk_system_code = &#x27;JobSystem.Region_KM&#x27;
+  into lo_id2
+  do
+  begin
+    sent_text = lo_id2||&#x27;; Подана онлайн-заявка&#x27;||client_fio;
+    if (lo_id is not null) then
+    begin
+        select cl.c_name_fio
+        from clients cl
+        where cl.c_id = :lo_id
+        into :lo_fio;
+        sent_text = sent_text||&#x27;. За ВИПС: &#x27;||lo_fio;
+    end
+    execute procedure fsrobot_insert_event(&#x27;DoMailing&#x27;, &#x27;push_sent_app&#x27;, left(:sent_text, 255), 1000000000000);
+  end
+  -----------------------------------------------------------------------------
+  ------- при подаче онлайн-заявки направляю пуш-уведомление ВИПС -------------&gt;
+  if (lo_id is null) then -- если заявка не села на конкретного ВИПС-а, отправляем уведомление всем ВСИП-ам офиса
+  begin
+    if (f_get_db_id() &lt;&gt; 81001 or coalesce(rdb$get_context(&#x27;USER_TRANSACTION&#x27;, &#x27;extminiapp_no_push&#x27;), 0) = 0) then
+    begin
+      for select ps_from_c_id
+      from hr_pstatus, joblist, jobkind
+      where current_date between ps_date_begin and ps_date_end
+      and ps_is_working = 1
+      and ps_status = 1
+      and ps_from_reg_id = :reg_id
+      and ps_from_jl_id = jl_id
+      and jl_kind = jk_id
+      and jk_system_code = &#x27;JobSystem.LO_Standart&#x27;
+      into lo_id2
+      do
+      begin
+        sent_text = lo_id2||&#x27;; Подана онлайн-заявка, нужно обработать&#x27;||client_fio;
+        execute procedure fsrobot_insert_event(&#x27;DoMailing&#x27;, &#x27;push_sent_app&#x27;, :sent_text, 1000000000000);
+      end
+    end
+  end else -- если села на конкретного
+  begin
+    sent_text = lo_id||&#x27;; За Вами закреплена новая онлайн-заявка, нужно обработать&#x27;||client_fio;
+    execute procedure fsrobot_insert_event(&#x27;DoMailing&#x27;, &#x27;push_sent_app&#x27;, :sent_text, 1000000000000);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

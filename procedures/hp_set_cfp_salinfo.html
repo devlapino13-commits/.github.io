@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_SET_CFP_SALINFO — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_SET_CFP_SALINFO: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_SET_CFP_SALINFO</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_blobex_blob.html"><div class="to">HP_GET_BLOBEX_BLOB</div></a><a class="ref-card" href="save_cfp_kpd.html"><div class="to">SAVE_CFP_KPD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_SET_CFP_SALINFO
+AS
+declare variable bls_id d_id;
+declare variable c_id d_id;
+declare variable arr_length d_integer;
+declare variable json_blob d_blob_text;
+declare variable counter d_integer;
+declare variable current_index d_integer;
+declare variable result d_currency;
+declare variable current_value d_currency;
+declare variable ca_id d_integer;
+declare variable cq_id d_integer;
+declare variable mac_id d_id;
+declare variable res_text d_str_255;
+declare variable eil_id d_id;
+declare variable kpd_err d_str_255;
+declare variable perc d_currency;
+declare variable cp_full_name_ru d_str_255;
+declare variable cp_id d_integer;
+declare variable prev_value d_currency;
+begin
+  -- Процедура должна сохранить среднюю значению заработной платы за последний 6 месяцев в анкету анализ доходов / расходов. (RFCKG-3240)
+  prev_value = 0;
+  res_text = &#x27;&#x27;;
+  counter = 6;
+  result = 0;
+  select cq.cq_id
+  from cfp_questions cq
+  where cq.cq_code_name = &#x27;salary_certificate&#x27; and
+        cq.cq_is_delete = 0
+  into cq_id;
+
+  for select eil.eil_id, eil.eil_from_bls_id, eil.eil_from_c_id, ca.ca_id, ca.ca_object_id, ca.ca_from_cp_id
+      from extinfolist eil
+      inner join cfp_anketa ca on ca.ca_from_c_id = eil.eil_from_c_id and
+            ca.ca_date = current_date
+      inner join cfp_anketa_kpd cak on cak.cak_from_ca_id = ca.ca_id and
+            coalesce(cak.cak_from_eil_id, 0) = 0
+      where eil.eil_from_eic_id = 10 and
+            eil.eil_status = 2 and
+            eil.eil_date = current_date
+      into eil_id, bls_id, c_id, ca_id, mac_id, cp_id
+  do
+  begin
+
+    select blx_blob
+    from hp_get_blobex_blob(:bls_id)
+    into :json_blob;
+
+    -- Получаем длину массива
+    arr_length = f_json_blob_get_count(json_blob, &#x27;WorkPeriods.WorkPeriodWithSumDto&#x27;);
+
+    if (arr_length &lt;= 6) then
+      counter = arr_length;
+
+    --Считаем  Salary
+    while (counter &gt; 0) do
+    begin
+      current_index = arr_length - counter;
+      current_value = f_json_blob_get_value(json_blob, &#x27;WorkPeriods.WorkPeriodWithSumDto[&#x27; || current_index || &#x27;].Salary&#x27;, 0);
+      result = result + current_value;
+      counter = counter - 1;
+    end
+    select cp.cp_full_name_ru
+    from cfp_positions cp
+    where cp.cp_id = :cp_id
+    into cp_full_name_ru;
+
+    if (cp_full_name_ru containing &#x27;Правоохранительные органы&#x27;) then
+      perc = 0;
+    else
+      perc = 0.2;
+
+    result = result - (result * :perc);
+    if (arr_length &lt;= 6) then
+      result = result / arr_length;
+    else
+      result = result / 6;
+
+    if (coalesce(result, 0) = 0) then
+    begin
+      update cfp_anketa_kpd cak
+      set cak.cak_from_eil_id = :eil_id
+      where cak.cak_from_ca_id = :ca_id;
+
+      update extinfolist eil
+      set eil.eil_from_un_id = 1000000000000
+      where eil.eil_id = :eil_id;
+    end
+    else
+    begin
+      select caa.caa_value
+      from cfp_anketa_answers caa
+      where caa.caa_from_ca_id = :ca_id and
+            caa.caa_from_cq_id = :cq_id
+      into prev_value;
+      prev_value = coalesce(prev_value, 0);
+      -- Обновляем данные
+      update cfp_anketa_answers caa
+      set caa.caa_value = :result
+      where caa.caa_from_ca_id = :ca_id and
+            caa.caa_from_cq_id = :cq_id;
+
+      update cfp_anketa ca
+      set ca.ca_avr_income = :result
+      where ca.ca_id = :ca_id;
+
+      select kpd_err
+      from save_cfp_kpd(:mac_id)
+      into :kpd_err;
+
+      if (coalesce(:kpd_err, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+      begin
+        update cfp_anketa_answers caa
+        set caa.caa_value = :prev_value
+        where caa.caa_from_ca_id = :ca_id and
+              caa.caa_from_cq_id = :cq_id;
+
+        update cfp_anketa ca
+        set ca.ca_avr_income = :prev_value
+        where ca.ca_id = :ca_id;
+
+        update extinfolist eil
+        set eil.eil_from_un_id = 1000000000000
+        where eil.eil_id = :eil_id;
+      end
+
+      update cfp_anketa_kpd cak
+      set cak.cak_from_eil_id = :eil_id
+      where cak.cak_from_ca_id = :ca_id;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

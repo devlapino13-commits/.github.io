@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_KONTRACT_SET_STATUS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_KONTRACT_SET_STATUS: 4 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_KONTRACT_SET_STATUS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">4</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">5 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_set_fps_loan_banks.html"><div class="to">FM_SET_FPS_LOAN_BANKS</div></a><a class="ref-card" href="hp_actionlist_kontract_get.html"><div class="to">HP_ACTIONLIST_KONTRACT_GET</div></a><a class="ref-card" href="hp_annual_insurance_loan.html"><div class="to">HP_ANNUAL_INSURANCE_LOAN</div></a><a class="ref-card" href="hp_approve_loan.html"><div class="to">HP_APPROVE_LOAN</div></a><a class="ref-card" href="hp_cancel_loan_status.html"><div class="to">HP_CANCEL_LOAN_STATUS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">4 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_kontract_to_miniapp.html"><div class="to">FM_KONTRACT_TO_MINIAPP</div></a><a class="ref-card" href="fm_kontract_to_progress_status.html"><div class="to">FM_KONTRACT_TO_PROGRESS_STATUS</div></a><a class="ref-card" href="hp_actionlist_kontract_cancel.html"><div class="to">HP_ACTIONLIST_KONTRACT_CANCEL</div></a><a class="ref-card" href="hp_freeze_change_status.html"><div class="to">HP_FREEZE_CHANGE_STATUS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_STATUS</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">IS_FINSTART</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_NEED_ROLLBACK</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_KONTRACT_SET_STATUS(
+    K_ID D_ID,
+    K_STATUS D_INTEGER,
+    IS_FINSTART D_INTEGER,
+    UN_ID D_ID)
+RETURNS (
+    RES_TEXT D_STR_LONG,
+    RES_NEED_ROLLBACK D_SMALLINT)
+AS
+declare variable db_id d_id;
+declare variable mac_id d_integer;
+declare variable fpb_id d_integer;
+begin
+  db_id = f_get_db_id();
+  res_text = &#x27;&#x27;;
+  res_need_rollback = 0;
+
+  if (k_status = 0) then  -- RFCRU-4491
+  begin
+    if (exists(select *
+               from kontstate
+               where ks_from_k_id = :k_id and
+                     ks_state &gt; 0 and
+                     ks_date_end &gt;= &#x27;31.12.2999&#x27; and
+                     ks_ol_is_delete = 0)) then
+    begin
+      res_need_rollback = 1;
+      res_text = &#x27;Займ уже выдан, команда отменяется&#x27;;
+      suspend;
+      exit;
+    end
+  end
+
+  if (k_status = -2) then
+  begin
+    if (not exists(select *
+                   from kontstate
+                   where ks_from_k_id = :k_id and
+                         ks_state = 0 and
+                         ks_date_end &gt;= &#x27;31.12.2999&#x27; and
+                         ks_ol_is_delete = 0)) then
+    begin
+      res_need_rollback = 1;
+      res_text = &#x27;Договор ранее активирован, команда отменяется&#x27;;
+      suspend;
+      exit;
+    end
+
+    if (exists (select *
+    from kontract
+    where k_id = :k_id and k_status = -1)) then
+    begin
+      res_need_rollback = 1;
+      res_text = &#x27;По договору уже был отказ, команда отменяется&#x27;;
+      suspend;
+      exit;
+    end
+
+    if (exists(select 1      -- RFCRU-4491
+               from kontract
+               where k_id = :k_id and
+                     k_status = 1)) then
+    begin
+      res_need_rollback = 1;
+      res_text = &#x27;Договор утвержден, команда отменяется&#x27;;
+      suspend;
+      exit;
+    end
+
+    if (exists(select acl_status
+      from hp_actionlist_kontract_get(:k_id)
+      where acl_status = 1)) then
+    begin
+      res_need_rollback = 1;
+      res_text = &#x27;Договор принят на рассмотрение КК. ождитесь завершения процесса.&#x27;;
+      suspend;
+      exit;
+    end
+  end
+  if (k_status = 1) then
+  begin
+    select res_text, res_need_rollback
+    from hp_approve_loan(&#x27;kontract&#x27;, :k_id, :un_id, :is_finstart)
+    into :res_text, :res_need_rollback;
+  end
+  else
+  begin
+    update kontract
+    set k_status = :k_status,
+        k_user_id = :un_id
+    where k_id = :k_id and
+          k_status &lt;&gt; :k_status;
+  end
+
+  if (db_id = 81001 and k_status = -1) then
+  begin
+    -- договор нельзя отказ делать после утверждения не прошли 5 рабочих дней
+    select res_text
+    from hp_cancel_loan_status(:k_id, :un_id, 1)
+    into res_text;
+    if (res_text &lt;&gt; &#x27;&#x27;) then res_need_rollback = 1;
+  end
+
+  if (db_id = 41701 and k_status = -1) then  -- RFCKG-5090
+  begin
+    select res_text
+    from hp_annual_insurance_loan(:k_id, :un_id)
+    into res_text;
+    if (res_text &lt;&gt; &#x27;&#x27;) then res_need_rollback = 1;
+  end 
+
+  -- RFCRU-5012
+  if (db_id = 81001 and res_text = &#x27;&#x27;) then
+  begin
+    for select mac.mac_id, fcb.fcb_from_fpb_id
+    from kontract k
+    inner join knclient kc on kc.kc_from_k_id = k.k_id
+      and kc.kc_amount_approved &gt; 0
+    inner join miniappclient mac on mac.mac_from_ma_id = k.k_from_ma_app_id
+      and mac.mac_from_c_id = kc.kc_from_c_id
+    left join fps_loan_banks flb on flb.flb_from_kc_id = kc.kc_id
+    left join fps_client_banks fcb on flb.fbl_from_fcb_id = fcb.fcb_id
+    where k.k_id = :k_id
+      and k.k_disb_kind = 7
+      and k.k_from_ma_app_id = mac.mac_from_ma_id
+    into :mac_id, :fpb_id
+    do
+    begin
+      select res_is_error, res_text
+      from fm_set_fps_loan_banks(&#x27;miniappclient&#x27;, :mac_id, :fpb_id, :un_id)
+      into res_need_rollback, res_text;
+
+      if (res_need_rollback = 1) then
+        leave;
+
+      res_text = &#x27;&#x27;;
+    end
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

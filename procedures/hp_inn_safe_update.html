@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_INN_SAFE_UPDATE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_INN_SAFE_UPDATE: 3 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_INN_SAFE_UPDATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_extinfolist_inn_update.html"><div class="to">HP_EXTINFOLIST_INN_UPDATE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_INN</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CFG_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_INN_SAFE_UPDATE(
+    C_ID D_ID,
+    C_INN D_STR_20,
+    CFG_CODE D_STR_CODE = &#x27;&#x27;)
+AS
+declare variable MSG_BODY D_STR_8100;
+declare variable MSG_MAIL_TO D_STR_CODE;
+declare variable MSG_SUBJECT D_STR_CODE;
+begin
+  -- Процедура для обновления ИНН, с логированием на почту ошибок
+  -- Назначение: обновить ИНН в клиенте, при получении данных сервисом из ФНС
+  uxf$set_user(1000000000000); 
+
+  update clients
+  set c_inn = :c_inn
+  where c_id = :c_id
+    and c_inn is distinct from :c_inn;
+  when any do
+  begin
+    if (f_get_db_id() = 81001) then
+      insert into inn_for_update (ifu_from_c_id, ifu_inn) -- RFCRU-3596 Доработка механизма сохранения ИНН
+      values (:c_id, :c_inn);
+
+    msg_subject = &#x27;Ошибка при обновлении ИНН клиента&#x27;;
+    msg_mail_to = &#x27;ru.finstart@molbulak.ru&#x27;;
+
+    with recursive head
+    as (select 1 level_, call_s.mon$statement_id, call_s.mon$call_id,
+               call_s.mon$object_name, call_s.mon$object_type
+        from mon$call_stack call_s
+        where call_s.mon$caller_id is null
+        union all
+        select level_ + 1, call_s.mon$statement_id, call_s.mon$call_id,
+               call_s.mon$object_name, call_s.mon$object_type
+        from mon$call_stack call_s
+        join head on call_s.mon$caller_id = head.mon$call_id),
+    t1
+    as (select level_, mon$object_name
+        from head
+        join mon$statements stmt on stmt.mon$statement_id = head.mon$statement_id
+        where stmt.mon$attachment_id = current_connection
+        order by 1)
+    select list(mon$object_name, ascii_char(10))
+    from t1
+    into msg_body;
+
+    msg_body = f_format(&#x27;При обновлении клиента, c_id: %1, c_inn: %2 произошла ошибка, gdscode: %3&lt;br&gt; Стек вызовов:&lt;br&gt;&#x27;, c_id, c_inn, gdscode) || msg_body;
+
+    insert into fsrobot_msgbox (msg_type, msg_mail_to, msg_subject, msg_body,
+                                msg_lifetime_days, msg_from_un_id,
+                                msg_command_kind)
+    values (0, :msg_mail_to, :msg_subject, :msg_body, 30, 1000000000000,
+            &#x27;hp_safe_update_inn&#x27;);
+
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

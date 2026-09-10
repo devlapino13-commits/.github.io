@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FIND_APPLICATE_ID — процедура — схема БД</title>
+<meta name="description" content="Процедура FIND_APPLICATE_ID: 3 входных, 6 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FIND_APPLICATE_ID</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">KF_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">IS_PARALLEL</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DD</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_CIRCLE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_CIRCLE_INNER</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_REGION_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_IS_NEW</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_ID_PRIOR</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FIND_APPLICATE_ID(
+    KF_ID DECIMAL(18,0),
+    IS_PARALLEL SMALLINT,
+    DD DATE)
+RETURNS (
+    K_ID DECIMAL(18,0),
+    K_CIRCLE INTEGER,
+    K_CIRCLE_INNER INTEGER,
+    K_REGION_ID INTEGER,
+    K_IS_NEW INTEGER,
+    K_ID_PRIOR DECIMAL(18,0))
+AS
+declare variable kt_id decimal(18,0);
+declare variable kt_status integer;
+declare variable kt_cir integer;
+declare variable kt_cirin integer;
+declare variable kt_region integer;
+begin
+  /* Procedure Text */
+  k_id_prior = null;
+  k_id = null;
+  for select ks_state, k_id, k_circle, k_circle_internal, kal_new_reg_id
+      from kontract, kontstate, knaktlist
+      where k_from_kf_id = :kf_id and
+            kal_from_kf_id = :kf_id and
+            kal_date &lt;= :dd and
+            kal_date_end &gt;= :dd and
+            knaktlist.is_delete = 0 and
+            ks_from_k_id = k_id and
+            cast(ks_date_begin as date) &lt;= :dd and
+            ks_date_end &gt;= :dd and
+            ks_ol_is_delete = 0
+      order by ks_state, k_id desc
+      rows 1
+      into :kt_status, :kt_id, :kt_cir, :kt_cirin, :kt_region
+  do
+  begin
+    if (kt_id is not null) then
+    begin
+      if (is_parallel = 0) then
+      begin
+        if (kt_status &lt;= 0) then
+        begin
+          k_id = kt_id;
+          k_circle = kt_cir;
+          k_circle_inner = kt_cirin;
+          k_region_id = kt_region;
+          k_is_new = 0;
+          k_id_prior = 0;
+        end
+        else
+        begin
+          k_circle_inner = kt_cirin;
+          k_circle = kt_cir + 1;
+          k_region_id = kt_region;
+          k_id_prior = kt_id;
+          k_id = (:kf_id * 1000 + k_circle) * 100 + k_circle_inner;
+          k_is_new = 1;
+        end
+      end
+      else
+      begin
+        k_circle = kt_cir;
+        k_circle_inner = kt_cirin + 1;
+        k_region_id = kt_region;
+        k_id_prior = kt_id;
+        k_id = (:kf_id * 1000 + k_circle) * 100 + k_circle_inner;
+        k_is_new = 1;
+      end
+      suspend;
+    end
+  end
+  if (kt_id is null) then
+  begin
+    /*  Новая папка */
+    k_circle = 1;
+    k_circle_inner = 1;
+    k_region_id = null;
+    k_is_new = 1;
+    select distinct kal_new_reg_id
+    from knaktlist
+    where kal_from_kf_id = :kf_id and
+          kal_date &lt;= :dd and
+          kal_date_end &gt;= :dd and
+          is_delete = 0
+    into :k_region_id;
+    if (k_region_id is not null) then
+    begin
+      k_id_prior = 0;
+      k_id = (:kf_id * 1000 + 1) * 100 + 1;
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_AZ_0022_SQL — процедура — схема БД</title>
+<meta name="description" content="Проверка на наличие адресов">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_AZ_0022_SQL</code></h1>
+<p class="desc">Проверка на наличие адресов</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_AZ_0022_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare kc_amount curr_type;
+declare kf_disb_date d_date;
+declare kf_client_pass_no varchar(30);
+declare variable C_ID ID_TYPE;
+declare variable C_VERIFY_STATUS integer;
+declare variable C_CELL_NO_DATE date;
+declare variable C_BIRTH_DATE date;
+declare variable C_DOC_TYPE integer;
+declare variable C_FROM_IS_ID integer;
+declare variable KOL_CLI_KNCLIENT integer;
+declare variable KOL_CLI_KONTRACT integer;
+begin
+  KOL_CLI_KNCLIENT = 0;
+  for select KC_FROM_C_ID, KC_AMOUNT_APPROVED, K_DISB_DATE, C_VERIFY_STATUS, C_NAME_FIO, C_PASS_NO, C_BIRTH_DATE,
+             C_DOC_TYPE, C_FROM_IS_ID, K_KOLICH_CLIENT_APPROVED
+      from KNCLIENT, KONTRACT, CLIENTS
+      where KC_FROM_K_ID = :K_ID and
+            KC_AMOUNT_APPROVED &gt; 0 and
+            KC_FROM_K_ID = K_ID and
+            KC_FROM_C_ID = C_ID
+      into C_ID, KC_AMOUNT, KF_DISB_DATE, C_VERIFY_STATUS, res_info_text, KF_CLIENT_PASS_NO, C_BIRTH_DATE, C_DOC_TYPE,
+           C_FROM_IS_ID, KOL_CLI_KONTRACT
+  do
+  begin
+    KOL_CLI_KNCLIENT = KOL_CLI_KNCLIENT + 1;
+    if (:C_BIRTH_DATE is null) then
+    begin
+      res_error_is_critical = 1;
+      res_error_text = &#x27;Дата рождения не заполнена&#x27;;
+      suspend;
+    end
+    if (coalesce(:KF_CLIENT_PASS_NO, &#x27;&#x27;) = &#x27;&#x27;) then
+    begin
+      res_error_is_critical = 1;
+      res_error_text = &#x27;Номер паспорта не заполнен&#x27;;
+      suspend;
+    end
+    if ((coalesce(:C_DOC_TYPE, 0) &lt; 1) and
+        res_error_text = &#x27;&#x27;) then
+    begin
+      res_error_is_critical = 1;
+      res_error_text = &#x27;Тип документа не указан&#x27;;
+      suspend;
+    end
+    res_error_is_critical = null;
+    if (exists(select *
+               from ADDRCLIENT
+               where ADC_FROM_C_ID = :C_ID and
+                     ADC_ADDRESS_TYPE = 1)) then
+    begin
+      if (exists(select *
+                 from ADDRCLIENT
+                 where ADC_FROM_C_ID = :C_ID and
+                       ADC_ADDRESS_TYPE = 1 and
+                       mod(ADC_FROM_ADL_ID, 1000000000) = 0)) then
+      begin
+        res_error_is_critical = 1;
+        res_error_text = &#x27;1. &#x27;; --Юридический адрес не заполнен
+        --        suspend;
+      end
+    end
+    else
+    begin
+      res_error_is_critical = 1;
+      res_error_text = &#x27;2. &#x27;; --Юридический адрес не существует
+      --suspend;
+    end
+    if (exists(select *
+               from ADDRCLIENT
+               where ADC_FROM_C_ID = :C_ID and
+                     ADC_ADDRESS_TYPE = 2)) then
+    begin
+      if (exists(select *
+                 from ADDRCLIENT
+                 where ADC_FROM_C_ID = :C_ID and
+                       ADC_ADDRESS_TYPE = 2 and
+                       mod(ADC_FROM_ADL_ID, 1000000000) = 0)) then
+      begin
+        res_error_is_critical = 1;
+        res_error_text = &#x27;3. &#x27;; --Фактический адрес не заполнен
+        --        suspend;
+      end
+    end
+    else
+    begin
+      res_error_is_critical = 1;
+      res_error_text = &#x27;4. &#x27;; --Фактический адрес не существует
+      --suspend;
+    end
+    if (res_error_is_critical = 1) then
+    begin
+      /*
+          SYSDBA
+          |mrahmanov
+        Для выдачи кредита клиенту обязательно указание юр. и факт. адресов.
+        
+        Комментарий: “В личной инф. по клиенту обязательно заполнение юр. и факт. адресов.”
+        Сообщение:      “Müştərinin məlumatlarında qeydiyyat və faktiki ünvanların qeyd olunması zəruridir.”
+      */
+      res_error_text = res_error_text || &#x27;Müştərinin məlumatlarında qeydiyyat və faktiki ünvanların qeyd olunması zəruridir.&#x27;;
+      suspend;
+    end
+  end
+  if (KOL_CLI_KNCLIENT &lt;&gt; KOL_CLI_KONTRACT) then
+  begin
+    res_error_is_critical = 1;
+    res_error_text = &#x27;Прошу вас переоформить контракт, общее кол-во клиентов не совпададает по кол-ву договору!&#x27;;
+    suspend;
+  end
+  res_error_is_critical = null;
+  for select Z.Z_FROM_C_ID
+      from ZALOG Z
+      where Z.Z_FROM_K_ID = :K_ID and
+            Z.Z_TYPE = 0 --Поручитель
+      into C_ID
+  do
+  begin
+    res_info_text = &#x27;Поручитель: &#x27; ||(select C_NAME_FIO
+                                                from CLIENTS
+                                                where C_ID = :C_ID);
+    if (exists(select *
+               from ADDRCLIENT
+               where ADC_FROM_C_ID = :C_ID and
+                     ADC_ADDRESS_TYPE = 1)) then
+    begin
+      if (exists(select *
+                 from ADDRCLIENT
+                 where ADC_FROM_C_ID = :C_ID and
+                       ADC_ADDRESS_TYPE = 1 and
+                       mod(ADC_FROM_ADL_ID, 1000000000) = 0)) then
+      begin
+        res_error_is_critical = 1;
+        res_error_text = &#x27;5. &#x27;; --У поручителя юридический адрес не заполнен
+        --        suspend;
+      end
+    end
+    else
+    begin
+      res_error_is_critical = 1;
+      res_error_text = &#x27;6. &#x27;; --У поручителя юридический адрес не существует
+      --suspend;
+    end
+    if (exists(select *
+               from ADDRCLIENT
+               where ADC_FROM_C_ID = :C_ID and
+                     ADC_ADDRESS_TYPE = 2)) then
+    begin
+      if (exists(select *
+                 from ADDRCLIENT
+                 where ADC_FROM_C_ID = :C_ID and
+                       ADC_ADDRESS_TYPE = 2 and
+                       mod(ADC_FROM_ADL_ID, 1000000000) = 0)) then
+      begin
+        res_error_is_critical = 1;
+        res_error_text = &#x27;7. &#x27;; --У поручителя фактический адрес не заполнен
+        --        suspend;
+      end
+    end
+    else
+    begin
+      res_error_is_critical = 1;
+      res_error_text = &#x27;8. &#x27;; --У поручителя фактический адрес не существует
+      --suspend;
+    end
+    if (res_error_is_critical = 1) then
+    begin
+      /*
+          SYSDBA
+          |mrahmanov
+        Для выдачи кредита по поручителю обязательно указание юр. и факт. адресов.
+        Комментарий: “В личной инф. по поручителю(-ям) обязательно заполнение юр. и факт. адресов.”
+        Сообщение:   “Zaminin(-lərin) məlumatlarında qeydiyyat və faktiki ünvanların qeyd olunması zəruridir.”
+      */
+      res_error_text = res_error_text || &#x27;Zaminin(-lərin) məlumatlarında qeydiyyat və faktiki ünvanların qeyd olunması zəruridir.&#x27;;
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

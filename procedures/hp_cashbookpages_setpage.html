@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CASHBOOKPAGES_SETPAGE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CASHBOOKPAGES_SETPAGE: 7 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CASHBOOKPAGES_SETPAGE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">7</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">7 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CBP_FROM_REG_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CBP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CBP_FIRST_PAGE_NUM</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CBP_LAST_PAGE_NUM</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CBP_SALDO_BEGIN</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CBP_SALDO_END</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CBP_FROM_UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CASHBOOKPAGES_SETPAGE(
+    CBP_FROM_REG_ID INTEGER,
+    CBP_DATE DATE,
+    CBP_FIRST_PAGE_NUM INTEGER,
+    CBP_LAST_PAGE_NUM INTEGER,
+    CBP_SALDO_BEGIN DECIMAL(18,4),
+    CBP_SALDO_END DECIMAL(18,4),
+    CBP_FROM_UN_ID DECIMAL(18,0))
+AS
+declare variable prev_last_page_num integer;
+declare variable cbp_year integer;
+declare variable tmp_cbp_date date;
+declare variable prev_saldo_end decimal(18,4);
+begin
+  /* Сохранение нумерации после очередной печати кассовой книги
+     Подразумевается что если указанную дату отчет был приготовлен,
+     то в этой дате всегда есть запись с cbp_number=0
+  */
+
+-- Запоминаем предыдущий номер последней страницы отчета
+  prev_last_page_num = null;
+  prev_saldo_end = null;
+  select cbp_last_page_num, cbp_saldo_end
+  from cashbookpages
+  where cbp_date = :cbp_date and
+        cbp_from_reg_id = :cbp_from_reg_id and
+        cbp_number = 0
+  into prev_last_page_num, prev_saldo_end;
+
+  if (prev_last_page_num is not null) then
+  begin
+-- Запись с cbp_number = 0 есть, следовательно, отчет до этого печатали
+-- Записи в текущем дне сдвигаем вниз
+    update cashbookpages
+    set cbp_number = cbp_number + 1
+    where cbp_date = :cbp_date and
+          cbp_from_reg_id = :cbp_from_reg_id order by cbp_number desc;
+
+-- Затем проверяем изменился ли номер последней страницы отчета
+-- или изменилось сальдо
+    if (cbp_last_page_num &lt;&gt; prev_last_page_num or cbp_saldo_end &lt;&gt; prev_saldo_end) then
+    begin
+-- Нумерация в следующих датах &quot;сломалась&quot;. Каждой следующей
+-- напечатанной книге до конца года убираем признак актуальности
+      cbp_year = extract(year from cbp_date);
+
+-- Аннулируем нумерацию, со следующей даты и до конца года
+-- где есть cbp_number = 0 и нумерация актуальна
+      for select cbp_date
+          from cashbookpages
+          where extract(year from cbp_date) = :cbp_year and
+                cbp_date &gt; :cbp_date and
+                cbp_from_reg_id = :cbp_from_reg_id and
+                cbp_number = 0 and
+                cbp_is_actual = 1
+          into tmp_cbp_date
+      do
+      begin
+-- Сдвигаем записи в очередном дне
+        update cashbookpages
+        set cbp_number = cbp_number + 1
+        where cbp_date = :tmp_cbp_date and
+              cbp_from_reg_id = :cbp_from_reg_id order by cbp_number desc;
+-- Добавляем новую запись cbp_actual = 0 (делаем неактуальной)
+        insert into cashbookpages (cbp_date, cbp_from_reg_id, cbp_number, cbp_first_page_num, cbp_last_page_num,
+                                   cbp_saldo_begin, cbp_saldo_end, cbp_from_un_id, cbp_is_actual, cbp_changed_date)
+        values (:tmp_cbp_date, :cbp_from_reg_id, 0, 0, 0, 0, 0, :cbp_from_un_id, 0, :cbp_date);
+      end
+    end
+  end
+
+-- Вставляем новую актуальную запись, в текущем дне
+  insert into cashbookpages (cbp_date, cbp_from_reg_id, cbp_number, cbp_first_page_num, cbp_last_page_num,
+                             cbp_saldo_begin, cbp_saldo_end, cbp_from_un_id, cbp_is_actual)
+  values (:cbp_date, :cbp_from_reg_id, 0, :cbp_first_page_num, :cbp_last_page_num, :cbp_saldo_begin, :cbp_saldo_end,
+          :cbp_from_un_id, 1);
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

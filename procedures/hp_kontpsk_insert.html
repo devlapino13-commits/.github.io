@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_KONTPSK_INSERT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_KONTPSK_INSERT: 2 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_KONTPSK_INSERT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_effect_rate_common.html"><div class="to">HP_EFFECT_RATE_COMMON</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_reschedule_new_perc.html"><div class="to">HP_DO_RESCHEDULE_NEW_PERC</div></a><a class="ref-card" href="hp_edoc_ins_kontpsk.html"><div class="to">HP_EDOC_INS_KONTPSK</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">KPS_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KPS_PSK</div><div class="ptype">DECIMAL(18,7)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_KONTPSK_INSERT(
+    K_ID D_ID,
+    OL_ID D_ID)
+RETURNS (
+    KPS_ID D_ID,
+    KPS_PSK D_PERCENT)
+AS
+declare variable OL_DATE D_DATE;
+declare variable LAST_PSK D_PERCENT;
+begin
+  select effect_rate
+  from hp_effect_rate_common(:k_id, :ol_id, 1)
+  into :kps_psk;
+
+  select ol_date
+  from operlist
+  where ol_id = :ol_id
+  into ol_date;
+
+  select kps_psk
+  from kontpsk, operlist ol
+  where kps_from_k_id = :k_id and
+        kps_from_ol_id = ol.ol_id and
+        ol.is_delete = 0 and
+        ol.ol_date &lt;= :ol_date
+  order by ol.ol_date desc, ol.ol_id desc
+  rows 1
+  into last_psk;
+
+  if (row_count = 0) then
+  begin
+    select k_percent_effect_fifd
+    from kontract
+    where k_id = :k_id
+    into last_psk;
+  end
+
+  -- RFCRU-4448, проблема у контракта с пск
+  if ((k_id = 101010118183000201) and (f_get_db_id() = 81001)) then
+    last_psk = kps_psk;
+
+  if (last_psk is null or last_psk &lt;&gt; kps_psk) then
+  begin
+    insert into kontpsk (kps_from_k_id, kps_from_ol_id, kps_psk)
+    values (:k_id, :ol_id, :kps_psk)
+    returning kps_id
+    into :kps_id;
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

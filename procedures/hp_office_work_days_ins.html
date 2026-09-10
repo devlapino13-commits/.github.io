@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_OFFICE_WORK_DAYS_INS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_OFFICE_WORK_DAYS_INS: 4 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_OFFICE_WORK_DAYS_INS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OFFICE_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SOWD_DAYS</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_OFFICE_WORK_DAYS_INS(
+    OFFICE_ID D_INTEGER,
+    DATE_BEGIN D_DATE,
+    SOWD_DAYS D_INTEGER,
+    UN_ID D_ID)
+RETURNS (
+    RES_INFO_TEXT D_STR_255,
+    RES_ERROR_TEXT D_STR_255)
+AS
+declare variable current_days d_integer;
+declare variable str d_str_100;
+begin
+  -- создает новый режим работы офиса - кол-во рабочих дней в неделю (RFCKG-2502)
+
+  res_info_text = &#x27;&#x27;;
+  res_error_text = &#x27;&#x27;;
+
+  if (not exists(select *
+                 from region
+                 where reg_unicode = :office_id)) then
+    res_error_text = &#x27;Ошибка: офис не найден&#x27;;
+
+  if (not exists(select *
+                 from username
+                 where un_id = :un_id)) then
+    res_error_text = &#x27;Ошибка: пользователь не найден&#x27;;
+
+  select sowd_days
+  from sa_office_working_days
+  where sowd_from_reg_id = :office_id and
+        current_date between sowd_date_begin and sowd_date_end
+  into current_days;
+
+  if (sowd_days = current_days) then
+    res_error_text = &#x27;Ошибка: новый режим не отличается от текущего&#x27;;
+
+  if (coalesce(sowd_days, 0) not between 5 and 7) then
+    res_error_text = &#x27;Ошибка: кол-во рабочих дней должно быть в диапазоне 5-7&#x27;;
+
+  if (date_begin is null) then
+    res_error_text = &#x27;Ошибка: не указана дата начала действия&#x27;;
+
+  if (date_begin &lt; current_date) then
+    res_error_text = &#x27;Ошибка: дата начала действия не может быть прошедшей датой&#x27;;
+
+  if (res_error_text = &#x27;&#x27;) then
+  begin
+    -- удаляем режим на будущую дату (если есть)
+    select &#x27;Удален режим: дней &#x27; || sowd_days || &#x27;, действует с &#x27; || f_datetostr(sowd_date_begin)
+    from sa_office_working_days
+    where sowd_from_reg_id = :office_id and
+          sowd_date_begin &gt; current_date
+    into str;
+
+    delete from sa_office_working_days
+    where sowd_from_reg_id = :office_id and
+          sowd_date_begin &gt; current_date;
+
+    if (row_count = 0) then
+      str = &#x27;&#x27;;
+
+    -- добавляем новый режим
+    insert into sa_office_working_days (sowd_from_reg_id, sowd_days, sowd_date_begin, sowd_editor_un_id)
+    values (:office_id, :sowd_days, :date_begin, :un_id);
+
+    if (row_count = 1) then
+    begin
+      if (str &lt;&gt; &#x27;&#x27;) then
+        res_info_text = str || ascii_char(13) || ascii_char(10) || ascii_char(13) || ascii_char(10);
+      res_info_text = res_info_text || &#x27;Добавлен режим: дней &#x27; || sowd_days || &#x27;, действует с &#x27; || f_datetostr(date_begin);
+    end
+    else
+      res_error_text = &#x27;Ошибка: добавить новый режим не удалось&#x27;;
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

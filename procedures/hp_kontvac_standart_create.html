@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_KONTVAC_STANDART_CREATE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_KONTVAC_STANDART_CREATE: 7 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_KONTVAC_STANDART_CREATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">7</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_calc_perc_one_saldo.html"><div class="to">AAREP_CALC_PERC_ONE_SALDO</div></a><a class="ref-card" href="aarep_make_zad_list.html"><div class="to">AAREP_MAKE_ZAD_LIST</div></a><a class="ref-card" href="hp_calcperc_psk_limit.html"><div class="to">HP_CALCPERC_PSK_LIMIT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">7 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc">Id кредита</div></div><div class="prow"><div class="pname">OL_DATE</div><div class="ptype">DATE</div><div class="pdesc">Дата операции</div></div><div class="prow"><div class="pname">DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc">Дата начала кредитного каникула</div></div><div class="prow"><div class="pname">KV_PERIOD</div><div class="ptype">INTEGER</div><div class="pdesc">Срок кредитного каникула, в месяцах</div></div><div class="prow"><div class="pname">KV_PERC_PERIOD</div><div class="ptype">INTEGER</div><div class="pdesc">Срок для распределения %% в конце, 0 - автоопределение</div></div><div class="prow"><div class="pname">KV_PERCENT_365</div><div class="ptype">DECIMAL(18,7)</div><div class="pdesc">Годовая % ставка на период каникул</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LAST_SH_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_IS_ERROR</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_KONTVAC_STANDART_CREATE(
+    K_ID D_ID,
+    OL_DATE D_DATE,
+    DATE_BEGIN D_DATE,
+    KV_PERIOD D_INTEGER,
+    KV_PERC_PERIOD D_INTEGER = null,
+    KV_PERCENT_365 D_PERCENT = null,
+    UN_ID D_ID = null)
+RETURNS (
+    OL_ID D_ID,
+    LAST_SH_DATE D_DATE,
+    RES_IS_ERROR D_BOOL,
+    RES_TEXT D_STR_255)
+AS
+declare variable reg_id d_integer;
+declare variable ol_memo d_str_long;
+declare variable k_stop_perc d_date;
+declare variable perc_saldo d_currency; /* Накопленный %% на дату каникул */
+declare variable delinq_os d_currency;
+declare variable new_perc d_currency;
+declare variable oks_balance d_currency;
+declare variable perc_balance d_currency;
+declare variable date_end d_date; /* Дата окончания кредитного каникула */
+declare variable k_repay_day d_integer;
+declare variable new_date d_date; /* Дата начала старого графика после каникул */
+declare variable sh_date d_date;
+declare variable sh_id d_integer;
+declare variable sh_os d_currency;
+declare variable sh_perc d_currency;
+declare variable new_sh_date d_date;
+declare variable prv_sh_date d_date;
+declare variable ok_number d_integer;
+declare variable kd_percent d_percent;
+declare variable k_percent_for_days d_integer;
+declare variable add_period d_currency;
+declare variable new_line d_integer;
+declare variable orig_balance d_currency;
+declare variable total_os d_currency;
+declare variable total_perc d_currency;
+declare variable kv_new_amount d_currency;
+declare variable vac_days d_integer;
+declare variable zad_fine d_currency;
+declare variable ins_date_end d_integer;
+declare variable delinq_count d_integer;
+declare variable vac_max_part_limit d_currency;
+declare variable future_income d_currency;
+declare variable tmp_percent_365 d_percent;
+declare variable calced_all d_currency;
+declare variable max_income_amount d_currency;
+declare variable k_amount_approved d_currency;
+declare variable try_count d_integer;
+declare variable period_days d_integer;
+declare variable res_psk_limit d_currency;
+declare variable calced_fine d_currency;
+begin
+  res_is_error = 1;
+  res_text = &#x27;&#x27;;
+
+  -- Договор для теста: 0103-1343211-01
+  if (k_id is null) then
+    exception e_message &#x27;Договор не указан&#x27;;
+
+  ol_memo = &#x27;&#x27;;
+
+  if (un_id is null) then
+    un_id = uxf$user();
+
+  select k_amount_approved, k_kontract_no || &#x27; от &#x27; || f_datetostr(k_disb_date),
+         k_stop_perc, k_percent_for_days,
+         iif(k_repay_day &gt; 0, k_repay_day, extract(day from k_disb_date)),
+         datediff(day, k_disb_date, k_kont_last_date)
+  from kontract
+  where k_id = :k_id
+  into k_amount_approved, ol_memo, k_stop_perc, k_percent_for_days,
+       k_repay_day, period_days;
+
+  if (row_count = 0) then
+    exception e_default &#x27;Договор не найден&#x27;;
+
+  if (k_stop_perc is not null) then
+  begin
+    res_text = &#x27;Договор расторгнут, запрет на кредитные каникулы&#x27;;
+    suspend;
+    exit;
+  end
+
+  if (kv_perc_period is null) then
+    kv_perc_period = 0;
+
+  if (ol_date &lt; date_begin) then
+  begin
+    res_text = &#x27;Запрет на каникул будущим периодом&#x27;;
+    suspend;
+    exit;
+  end
+
+  if (exists(select * from operkred
+  where ok_from_k_id = :k_id and
+        ok_ol_is_active = 1 and
+        ok_ol_date &gt; :date_begin)) then
+  begin
+    res_text = &#x27;По договору имеются записи более поздней датой&#x27;;
+    suspend;
+    exit;
+  end
+
+  oks_balance = 0;
+
+  select oks_region_id, oks_balance
+  from oksummary
+  where oks_from_k_id = :k_id and
+        oks_date_begin &lt;= :date_begin and
+        oks_close_state = 0
+  order by oks_from_k_id desc, oks_date_begin desc
+  rows 1
+  into reg_id, oks_balance;
+
+  if (row_count = 0) then
+  begin
+    res_text = &#x27;Не найден активный договор&#x27;;
+    suspend;
+    exit;
+  end
+
+  perc_saldo = 0;
+  calced_all = 0;
+
+  select result_perc_end, result_calced_all
+  from aarep_calc_perc_one_saldo(:k_id, :date_begin, :date_begin)
+  into :perc_saldo, calced_all;
+
+  date_end = dateadd(month, kv_period, date_begin);
+  vac_days = datediff(day, date_begin, date_end);
+
+  if (kv_percent_365 is null) then
+  begin
+    select round(kd_percent_per_day * 365, 7)
+    from kontdata
+    where kd_from_k_id = :k_id and
+          kd_ol_date &lt;= :date_begin and
+          kd_date_end &gt;= :date_begin and
+          kd_ol_is_delete = 0
+    into kv_percent_365;
+  end
+
+  select res_psk_limit
+  from hp_calcperc_psk_limit(:date_begin)
+  into :res_psk_limit;
+
+  max_income_amount = round(k_amount_approved * res_psk_limit, 0);
+  kd_percent = kv_percent_365;
+
+  new_date = null;
+  prv_sh_date = null;
+  delinq_os = 0;
+  perc_balance = 0;
+  orig_balance = 0;
+
+  delete from temp_schedule
+  where 1 = 1;
+
+  insert into temp_schedule (sh_date, sh_id, sh_os, sh_perc, sh_kommis)
+  select sh_date, sh_id, zad_os, zad_perc, sh_calc_fine
+  from aarep_make_zad_list(:k_id, :date_begin, 0, 0)
+  where sh_date is not null and
+        (zad_os &lt;&gt; 0 or zad_perc &lt;&gt; 0 or sh_calc_fine &lt;&gt; 0)
+  order by sh_date;
+
+  kv_new_amount = 0; -- Сумма ежемесячного платежа (аннуитет)
+  for select sh_os + sh_perc
+  from temp_schedule
+  order by sh_date desc
+  rows 2
+  into kv_new_amount
+  do
+  begin
+  end
+
+  if (coalesce(kv_new_amount, 0) = 0) then
+    exception e_default &#x27;Сумма ежемесячного платежа не найдена&#x27;;
+
+  select sum(sh_perc), sum(sh_os), sum(sh_kommis), count(*)
+  from temp_schedule
+  where sh_date &lt; :date_begin and
+        (sh_os &lt;&gt; 0 or sh_perc &lt;&gt; 0)
+  into total_perc, delinq_os, calced_fine, delinq_count;
+
+  if (total_perc is null) then
+    total_perc = 0;
+
+  if (delinq_os is null) then
+    delinq_os = 0;
+
+  if (calced_fine is null) then
+    calced_fine = 0;
+
+  perc_balance = oks_balance - delinq_os;   -- База для начисления процентов
+  orig_balance = perc_balance;  -- Срочный баланс (без просрочек)
+
+  perc_saldo = perc_saldo - total_perc;
+  total_perc = 0;
+
+  ins_date_end = 1;
+  vac_max_part_limit = 0;
+
+  if (period_days &lt;= 366 and res_psk_limit &gt; 0) then
+  begin
+    try_count = -1;
+    while (1 = 1) do
+    begin
+      try_count = try_count + 1;
+  
+      if (try_count = 0) then
+        tmp_percent_365 = kv_percent_365;
+      else
+      if (try_count = 1) then
+        tmp_percent_365 = cast(trunc(kv_percent_365 * 10) as double precision) / 10.0;
+      else
+        tmp_percent_365 = tmp_percent_365 - 0.1;
+  
+      if (tmp_percent_365 &lt; 0) then
+        exception e_message &#x27;Кредитный каникул по ставке &#x27; || kv_percent_365 ||&#x27;% превыщает лимит. Подходящая ставка не найдена.&#x27;;
+  
+      perc_balance = oks_balance - delinq_os;   -- База для начисления процентов
+      orig_balance = perc_balance;  -- Срочный баланс (без просрочек)
+      prv_sh_date = null;
+      new_date = null;
+
+      new_perc = 0;
+      new_perc = cast(orig_balance as double precision) * tmp_percent_365;
+      new_perc = cast(new_perc as double precision) / 365.0000;
+      new_perc = cast(new_perc as double precision) * datediff(day, date_begin, date_end);
+      new_perc = round(cast(new_perc as double precision) / 100.0000);
+
+      future_income = new_perc + calced_fine;
+
+      for select sh_date, sh_id, sh_os, sh_perc, sh_kommis
+      from temp_schedule
+      where sh_date &gt;= :date_begin
+      order by sh_date
+      into sh_date, sh_id, sh_os, sh_perc, zad_fine
+      do
+      begin
+        if (new_date is null) then
+        begin
+          new_date = sh_date;
+          if (extract(day from new_date) &lt;&gt; k_repay_day) then
+            new_date = k_repay_day || f_datetostr(new_date, &#x27;.mm.yyyy&#x27;);
+    
+          new_date = dateadd(month, kv_period, new_date);
+    
+          if (new_date &lt; date_end) then
+            new_date = dateadd(month, 1, new_date);
+        end else
+          new_date = dateadd(month, 1, new_date);
+    
+        new_sh_date = new_date;
+        new_sh_date = f_date_work_day(new_sh_date);
+    
+        if (prv_sh_date is null) then
+          prv_sh_date = date_end;
+    
+        sh_perc = cast(perc_balance as double precision) * tmp_percent_365;
+        sh_perc = cast(sh_perc as double precision) / 365.0000;
+        sh_perc = cast(sh_perc as double precision) * datediff(day, prv_sh_date, new_sh_date);
+        sh_perc = round(cast(sh_perc as double precision) / 100.0000);
+    
+        future_income = future_income + sh_perc;
+    
+        if (sh_os &gt; 0 and new_sh_date &gt; date_end) then
+          sh_os = kv_new_amount - sh_perc;
+    
+        if (sh_os &lt; 0) then
+          sh_os = 0;
+    
+        if (sh_os &gt; perc_balance) then
+          sh_os = perc_balance;
+    
+        if (abs(perc_balance - sh_os) &lt;= 10) then
+          sh_os = perc_balance;
+    
+        perc_balance = perc_balance - sh_os;
+        prv_sh_date = new_sh_date;
+      end
+  
+      if (max_income_amount &gt;= (future_income + calced_all)) then
+      begin
+        if (try_count = 0) then
+          break;
+        else
+          exception e_message &#x27;Кредитные каникулы по ставке &#x27; || kv_percent_365 || &#x27;% превыщает лимит.&#x27; || ascii_char(13) ||
+                              &#x27;Лимит по доходам: &#x27; || round(max_income_amount) || ascii_char(13) ||
+                              &#x27;Прошлый доход: &#x27; || round(calced_all) || ascii_char(13) ||
+                              &#x27;Будущий доход: &#x27; || round(future_income) || ascii_char(13) ||
+                              &#x27;Рекомедуемая ставка: &#x27; || round(tmp_percent_365, 1) || &#x27;%&#x27;;
+      end
+    end
+  end
+
+  perc_balance = oks_balance - delinq_os;   -- База для начисления процентов
+  orig_balance = perc_balance;  -- Срочный баланс (без просрочек)
+  prv_sh_date = null;
+  new_date = null;
+
+  ol_memo = &#x27;Предоставление кредитных каникул по займу &#x27; || ol_memo;
+
+  insert into operlist (ol_from_reg_id, ol_oper_type, ol_date, ol_doc_kind, ol_memo, ol_user_id, ol_oper_subtype)
+  values (:reg_id, 1, :ol_date, 9, :ol_memo, :un_id, 14)
+  returning (ol_id)
+  into ol_id;
+
+  if (k_percent_for_days &lt; 360) then
+    kd_percent = round(cast(kd_percent as double precision) / 365 * k_percent_for_days, 7);
+
+  new_perc = 0;
+  new_perc = cast(orig_balance as double precision) * kv_percent_365;
+  new_perc = cast(new_perc as double precision) / 365.0000;
+  new_perc = cast(new_perc as double precision) * datediff(day, date_begin, date_end);
+  new_perc = round(cast(new_perc as double precision) / 100.0000);
+
+  -- по кредитам с кредитным каникулом больше не повышаем ставку
+  insert into kontdata (kd_from_k_id, kd_from_ol_id, kd_ol_date, kd_ol_is_delete, kd_percent,
+                        kd_percent_per_day, kd_percent_effect, kd_percent_effect_fifd, kd_memo,
+                        kd_fine_percent, kd_float_perc_level, kd_vac_status)
+  select kd_from_k_id, :ol_id, :date_begin, 0, :kd_percent, round(cast(:kv_percent_365 as double precision) / 365, 7),
+         kd_percent_effect, kd_percent_effect_fifd, &#x27;Начало кредитного каникула&#x27;, 0, 999, 1
+  from kontdata
+  where kd_from_k_id = :k_id and
+        kd_ol_date &lt;= :date_begin and
+        kd_ol_is_delete = 0
+  order by kd_ol_date desc
+  rows 1;
+
+  new_date = null;
+  prv_sh_date = null;
+
+  for select sh_date, sh_id, sh_os, sh_perc, sh_kommis
+  from temp_schedule
+  order by sh_date
+  into sh_date, sh_id, sh_os, sh_perc, zad_fine
+  do
+  begin
+    if (sh_date &gt;= date_begin) then
+    begin
+      -- Обнуление текущего и будущих платежей, просрочки остаются без изменений
+      if (sh_date &lt;= date_end) then
+        vac_max_part_limit = vac_max_part_limit + sh_os + sh_perc;
+
+      insert into operkred
+      (ok_from_ol_id, ok_number, ok_from_k_id, ok_sh_id, ok_sh_date, ok_type, ok_os, ok_perc, ok_fine,
+       ok_pay_type, ok_kommis, ok_sh_os, ok_sh_perc, ok_kommis_adv, ok_tax, ok_ol_date, ok_ol_reg_id, ok_ol_is_active)
+      values (:ol_id, -1, :k_id, :sh_id, :sh_date, 2, 0, 0, 0,
+              3, 0, -:sh_os, -:sh_perc, 0, 0, :ol_date, :reg_id, 1);
+    end else
+    begin
+      if (zad_fine &gt; 0) then
+      begin
+        -- Списание пеней
+        insert into operkred
+        (ok_from_ol_id, ok_number, ok_from_k_id, ok_sh_id, ok_sh_date, ok_type, ok_os, ok_perc, ok_fine,
+         ok_pay_type, ok_kommis, ok_sh_os, ok_sh_perc, ok_kommis_adv, ok_tax, ok_ol_date, ok_ol_reg_id, ok_ol_is_active)
+        values (:ol_id, -1, :k_id, :sh_id, :sh_date, 5, 0, 0, -:zad_fine,
+                3, 0, 0, 0, 0, 0, :ol_date, :reg_id, 1);
+      end
+
+      Continue;
+    end
+
+    if (new_date is null) then
+    begin
+      new_date = sh_date;
+      if (extract(day from new_date) &lt;&gt; k_repay_day) then
+        new_date = k_repay_day || f_datetostr(new_date, &#x27;.mm.yyyy&#x27;);
+
+      new_date = dateadd(month, kv_period, new_date);
+
+      if (new_date &lt; date_end) then
+        new_date = dateadd(month, 1, new_date);
+    end else
+      new_date = dateadd(month, 1, new_date);
+
+    new_sh_date = new_date;
+    new_sh_date = f_date_work_day(new_sh_date);
+
+    if (coalesce(prv_sh_date, date_end - 1) &lt; date_end and date_end &lt; new_sh_date) then
+    begin
+      insert into operkred
+      (ok_from_ol_id, ok_number, ok_from_k_id, ok_sh_id, ok_sh_date, ok_type, ok_os, ok_perc, ok_fine,
+       ok_pay_type, ok_kommis, ok_sh_os, ok_sh_perc, ok_kommis_adv, ok_tax, ok_ol_date, ok_ol_reg_id, ok_ol_is_active)
+      values (:ol_id, -1, :k_id, :sh_id + :kv_period - :delinq_count, :date_end, 2, 0, 0, 0,
+              3, 0, 0, 0, 0, 0, :ol_date, :reg_id, 1);
+    end
+
+    if (prv_sh_date is null) then
+      prv_sh_date = date_end;
+
+    sh_perc = cast(perc_balance as double precision) * kv_percent_365;
+    sh_perc = cast(sh_perc as double precision) / 365.0000;
+    sh_perc = cast(sh_perc as double precision) * datediff(day, prv_sh_date, new_sh_date);
+    sh_perc = round(cast(sh_perc as double precision) / 100.0000);
+    sh_perc = sh_perc + perc_saldo;
+    perc_saldo = 0;
+
+    if (sh_os &gt; 0 and new_sh_date &gt; date_end) then
+      sh_os = kv_new_amount - sh_perc;
+
+    if (sh_os &lt; 0) then
+      sh_os = 0;
+
+    if (sh_os &gt; perc_balance) then
+      sh_os = perc_balance;
+
+    if (abs(perc_balance - sh_os) &lt;= 10) then
+      sh_os = perc_balance;
+
+    perc_balance = perc_balance - sh_os;
+
+    if (sh_os &gt; 0 or sh_perc &gt; 0) then
+    begin
+      last_sh_date = new_date;
+
+      insert into operkred
+      (ok_from_ol_id, ok_number, ok_from_k_id, ok_sh_id, ok_sh_date, ok_type, ok_os, ok_perc, ok_fine,
+       ok_pay_type, ok_kommis, ok_sh_os, ok_sh_perc, ok_kommis_adv, ok_tax, ok_ol_date, ok_ol_reg_id, ok_ol_is_active)
+      values (:ol_id, -1, :k_id, :sh_id + :kv_period + :ins_date_end - :delinq_count, :new_sh_date, 2, 0, 0, 0,
+              3, 0, :sh_os, :sh_perc, 0, 0, :ol_date, :reg_id, 1)
+      returning (ok_number)
+      into ok_number;
+    end
+
+    prv_sh_date = new_sh_date;
+  end
+
+  if (last_sh_date is null) then
+    exception e_message &#x27;Нет платежей для предоставления каникул&#x27;;
+
+  insert into opervac (ov_from_ol_id, ov_from_k_id, ov_type, ov_os, ov_perc, ov_last_os_sh_id, ov_vac_days, ov_vac_begin_days, ov_max_part_limit)
+  values (:ol_id, :k_id, 2, 0, :new_perc, :sh_id + :ins_date_end - :delinq_count + :kv_period, :vac_days, datediff(day, :ol_date, :date_begin), :vac_max_part_limit);
+
+  insert into operrest (or_from_ol_id, or_from_k_id, or_kind, or_ol_date, or_ol_is_active, or_from_rd_id, or_from_reg_id, or_date_prot)
+  values (:ol_id, :k_id, 4, :ol_date, 1, 0, :reg_id, :ol_date);
+
+  if (perc_balance &gt; 0) then
+  begin
+    update operkred
+    set ok_sh_os = ok_sh_os + :perc_balance
+    where ok_from_ol_id = :ol_id and
+          ok_number = :ok_number;
+
+    perc_balance = 0;
+  end
+
+  delinq_os = 1; -- Основная сумма для последнего платежа
+
+  update operkred
+  set ok_sh_os = ok_sh_os - :delinq_os
+  where ok_from_ol_id = :ol_id and
+        ok_number = :ok_number;
+
+  if (kv_perc_period &gt; 0) then
+  begin
+    add_period = kv_perc_period;
+    kv_new_amount = round(cast(new_perc as double precision) / add_period, 0);
+  end
+  else
+  begin
+    add_period = round(new_perc / kv_new_amount, 2);
+  
+    if (add_period &lt;&gt; round(add_period)) then
+      add_period = trunc(add_period) + 1;
+  end
+
+  total_os = delinq_os;
+  total_perc = new_perc;
+
+  new_line = 0;
+  while (new_line &lt; add_period) do
+  begin
+    new_line = new_line + 1;
+
+    new_sh_date = dateadd(month, new_line, last_sh_date);
+    new_sh_date = f_date_work_day(new_sh_date);
+
+    sh_os = 0;
+    sh_perc = 0;
+
+    if (new_line &lt; add_period) then
+    begin
+      sh_perc = kv_new_amount;
+
+      if (sh_perc &gt; total_perc) then
+        sh_perc = total_perc;
+
+      total_perc = total_perc - sh_perc;
+    end else
+    begin
+      sh_os = total_os;
+      sh_perc = total_perc;
+    end
+
+    insert into operkred
+    (ok_from_ol_id, ok_number, ok_from_k_id, ok_sh_id, ok_sh_date, ok_type, ok_os, ok_perc, ok_fine,
+     ok_pay_type, ok_kommis, ok_sh_os, ok_sh_perc, ok_kommis_adv, ok_tax, ok_ol_date, ok_ol_reg_id, ok_ol_is_active)
+    values (:ol_id, -1, :k_id, :sh_id + :kv_period + :ins_date_end - :delinq_count + :new_line, :new_sh_date, 2, 0, 0, 0,
+            3, 0, :sh_os, :sh_perc, 0, 0, :ol_date, :reg_id, 1);
+
+  end
+
+  res_is_error = 0;
+  res_text = &#x27;Кредитный каникул успешно оформлен&#x27;;
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_UXFRAME_SQL_PARAM — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_UXFRAME_SQL_PARAM: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_UXFRAME_SQL_PARAM</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_uxframe_sql.html"><div class="to">HP_UXFRAME_SQL</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UX_CODE</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FR_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SQL_TEXT</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_UXFRAME_SQL_PARAM(
+    UX_CODE D_STR_100,
+    FR_CODE D_STR_CODE)
+RETURNS (
+    SQL_TEXT D_STR_LONG)
+AS
+declare variable ufd_source d_str_code;
+declare variable ufp_name d_str_code;
+declare variable field_type d_str_code;
+declare variable is_table d_bool;
+declare variable ufp_parent_code d_str_100;
+declare variable param_name d_str_100;
+declare variable ufp_editor d_str_code;
+declare variable ufp_is_param d_bool;
+begin
+  -- Процедура строит искуственный SQL запрос из входящий параметров процедуры
+  sql_text = &#x27;&#x27;;
+  for select ufd_source, ufp_origin_name, ufd_is_table, ufp_is_param, ufp_editor
+  from uxfrparam, uxfrdata
+  where ufp_ufr_code = :fr_code and
+        ufp_parent_code is null and
+        ufp_in_use = 1 and
+        (ufp_is_param = 1 or (ufp_is_param = 0 and ufp_pk_field &lt;&gt; 0)) and
+        ufp_ufr_code = ufd_ufr_code and
+        ufd_kind = 0
+  into :ufd_source, ufp_name, is_table, ufp_is_param, ufp_editor
+  do
+  begin
+    if (is_table = 0) then
+    begin
+      if (exists(select * from uxcodeframe
+      where ucf_ux_code = :ux_code and
+            ucf_master_ufr_code = :fr_code and
+            ucf_detail_field = :ufp_name)) then
+        Continue;
+    end
+
+    ufd_source = upper(ufd_source);
+    ufp_name = upper(ufp_name);
+
+    if (is_table = 0) then
+    begin
+      for select trim(rdb$field_source)
+      from rdb$procedure_parameters
+      where rdb$procedure_name = :ufd_source and
+            rdb$parameter_name = :ufp_name
+      into :field_type
+      do
+      begin
+        if (sql_text &lt;&gt; &#x27;&#x27;) then
+          sql_text = sql_text || &#x27;, &#x27;;
+    
+        sql_text = sql_text || f_format(&#x27;cast(null as %1) as %2&#x27;, field_type, trim(ufp_name));
+      end
+    end else
+    begin
+      for select trim(rdb$field_source)
+      from rdb$relation_fields
+      where rdb$relation_name = :ufd_source and
+            rdb$field_name = :ufp_name
+      into :field_type
+      do
+      begin
+        if (sql_text &lt;&gt; &#x27;&#x27;) then
+          sql_text = sql_text || &#x27;, &#x27;;
+    
+        sql_text = sql_text || f_format(&#x27;cast(null as %1) as %2&#x27;, field_type, trim(ufp_name));
+      end
+    end
+
+    if (ufp_is_param = 1 and ufp_editor in (&#x27;buttonedit&#x27;, &#x27;dialogedit&#x27;)) then
+    begin
+      if (sql_text &lt;&gt; &#x27;&#x27;) then
+        sql_text = sql_text || &#x27;, &#x27;;
+
+      sql_text = sql_text || f_format(&#x27;cast(null as %1) as %2&#x27;, &#x27;D_STR_LONG&#x27;, trim(ufp_name) || &#x27;$text&#x27;);
+    end
+  end
+
+  for select ufp_parent_code, ufp_origin_name
+  from uxfrparam, uxfrdata
+  where ufp_ufr_code = :fr_code and
+        ufp_parent_code is not null and
+        ufp_is_param = 1 and
+        ufp_ufr_code = ufd_ufr_code and
+        ufd_kind = 0
+  into :ufp_parent_code, ufp_name
+  do
+  begin
+    is_table = null;
+    select ufp_origin_name, ulp_source, iif(ulp_source = ulp_table_name, 1, 0)
+    from uxfrparam, uxfrlookup, uxlookup
+    where ufp_code = :ufp_parent_code and
+          ufl_ufp_code = ufp_code and
+          ufl_ulp_code = ulp_code
+    into param_name, ufd_source, is_table;
+
+    if (is_table is null) then
+      Continue;
+
+    param_name = param_name || &#x27;$&#x27; || ufp_name;
+
+    ufd_source = upper(ufd_source);
+    ufp_name = upper(ufp_name);
+
+    if (is_table = 0) then
+    begin
+      for select trim(rdb$field_source)
+      from rdb$procedure_parameters
+      where rdb$procedure_name = :ufd_source and
+            rdb$parameter_name = :ufp_name
+      into :field_type
+      do
+      begin
+        if (sql_text &lt;&gt; &#x27;&#x27;) then
+          sql_text = sql_text || &#x27;, &#x27;;
+    
+        sql_text = sql_text || f_format(&#x27;cast(null as %1) as %2&#x27;, field_type, trim(param_name));
+      end
+    end else
+    begin
+      for select trim(rdb$field_source)
+      from rdb$relation_fields
+      where rdb$relation_name = :ufd_source and
+            rdb$field_name = :ufp_name
+      into :field_type
+      do
+      begin
+        if (sql_text &lt;&gt; &#x27;&#x27;) then
+          sql_text = sql_text || &#x27;, &#x27;;
+    
+        sql_text = sql_text || f_format(&#x27;cast(null as %1) as %2&#x27;, field_type, trim(param_name));
+      end
+    end
+  end
+
+
+  if (sql_text &lt;&gt; &#x27;&#x27;) then
+  begin
+    sql_text = lower(sql_text);
+    sql_text = &#x27;select &#x27; || sql_text || &#x27; from rdb$database&#x27;;
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

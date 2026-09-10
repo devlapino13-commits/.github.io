@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_COMPET_KG_OLIMPIC_2016 — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_COMPET_KG_OLIMPIC_2016: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_COMPET_KG_OLIMPIC_2016</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_analitica_create_period.html"><div class="to">HP_ANALITICA_CREATE_PERIOD</div></a><a class="ref-card" href="hp_analitica_report.html"><div class="to">HP_ANALITICA_REPORT</div></a><a class="ref-card" href="hp_competition_recalc_order.html"><div class="to">HP_COMPETITION_RECALC_ORDER</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_competition_calc_result.html"><div class="to">HP_COMPETITION_CALC_RESULT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CPP_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_COMPET_KG_OLIMPIC_2016(
+    CPP_ID INTEGER,
+    UN_ID DECIMAL(18,0))
+RETURNS (
+    RES_TEXT VARCHAR(255))
+AS
+declare variable res_date_begin date;
+declare variable res_date_end date;
+declare variable stage integer;
+declare variable rd_id integer;
+declare variable res_period_id integer;
+declare variable res_team_id integer;
+declare variable res_lo_id decimal(18,0);
+declare variable ad_active_client integer;
+declare variable ad_active_balance decimal(18,4) = 0;
+declare variable ad_diff_client integer;
+declare variable ad_delinq_balance_30 decimal(18,4) = 0;
+declare variable ad_delinq_balance_diff_30 decimal(18,4) = 0;
+declare variable points_1 decimal(18,4) = 0;
+declare variable points_2 decimal(18,4) = 0;
+declare variable points_3 decimal(18,4) = 0;
+declare variable points_all decimal(18,4) = 0;
+declare variable res_team_id_prior integer;
+declare variable cpr_id integer;
+declare variable cpr_group_name varchar(255);
+declare variable cpd_comment d_str_4096;
+declare variable lo_panelty_count integer;
+declare variable avg_points decimal(18,4) = 0;
+declare variable total_points decimal(18,4) = 0;
+declare variable add_points decimal(18,4) = 0;
+declare variable max_points decimal(18,4) = 0;
+declare variable group_name varchar(255);
+declare variable cpp_orderno integer;
+declare variable ad_closed_client decimal(18,4) = 0;
+declare variable ad_disb_repeat_clients decimal(18,4) = 0;
+declare variable ad_retention_koef decimal(18,4) = 0;
+declare variable kind integer;
+declare variable cpr_final_points decimal(18,4) = 0;
+begin
+-- Расчет итогов олимпиады РФ 2016
+-- Stage:
+-- 0 - период (неделя)
+-- 1 - Промежуточные итоги
+-- 2 - Итоги
+-- 3 - Финальные результаты
+
+  res_text = &#x27;&#x27;;
+  select cpp_from_rd_id, cpp_stage, cpp_date_begin, cpp_date_end, cpp_orderno
+  from competperiod
+  where cpp_id = :cpp_id
+  into :rd_id, :stage, :res_date_begin, :res_date_end, cpp_orderno;
+
+-- rd_id для теста: 1381
+
+  if (rd_id is null) then
+  begin
+    res_text = &#x27;Период для расчета не указан&#x27;;
+    suspend;
+    exit;
+  end
+
+  if (stage = 0 and
+      res_date_end &gt; current_date) then
+  begin
+    res_text = &#x27;Период еще не наступил. Расчет отменяется.&#x27;;
+    suspend;
+    exit;
+  end
+
+  if (stage = 0) then -- Если уровень недели
+  begin
+-- Удаляем существующие расчеты за этот период
+    delete from competresult
+    where (cpr_from_cpp_id = :cpp_id);
+
+-- Формируем в памяти данные по РФ
+    execute procedure hp_analitica_create_period(1000000, :res_date_begin, :res_date_end, 1, null, null, 30, 0,
+        &#x27;standart&#x27;)
+        returning_values :res_period_id;
+
+    if (res_period_id is null) then
+    begin
+      res_text = &#x27;Не удалось расчитать данные за период&#x27;;
+      suspend;
+      exit;
+    end
+
+-- Группируем данные из памяти по ID команды и ID СВЗ
+    res_team_id_prior = -1;
+    for select res_field_1, res_field_2, sum(ad_active_client), sum(ad_active_balance), sum(ad_diff_client),
+               sum(ad_delinq_balance_end3),
+               sum(ad_delinq_balance_diff3 + iif(ad_begin_delinq_balance &gt; 0, ad_writeoff_os, 0.0)), -- Списанных за период тоже добавляем
+               sum(ad_closed_client), -- закрытые клиенты за период
+               sum(ad_disb_client - ad_disb_new_client) -- повторные выдачи (клиенты)
+        from hp_analitica_report(&#x27;kont_lo_teamname_id, lo_id&#x27;, &#x27;tree_group&#x27;, 31, 999999, 0, 999999, 8, 999999, 31, 999999, 181, 999999, 1065, 0, &#x27;standart&#x27;)
+        group by 1, 2
+        having sum(ad_active_balance) &gt; 0.0 -- Берем тех у кого имеется портфель на конец периода
+        into :res_team_id, :res_lo_id, :ad_active_client, -- Клиенты на конец периода
+             :ad_active_balance, -- Баланс на конец периода
+             :ad_diff_client, -- Прирост клиентов
+             :ad_delinq_balance_30, -- Баланс просрочек 7 дней
+             :ad_delinq_balance_diff_30, -- Изменение баланс 30 дней
+             :ad_closed_client, -- закрытые клиенты за период
+             :ad_disb_repeat_clients -- повторные выдачи (клиенты)
+
+    do
+    begin
+-- Исключаем если нет действующего
+      if (not(exists(select *
+                     from hr_pstatus
+                     where ps_from_c_id = :res_lo_id and
+                           ps_date_end &gt;= :res_date_end and
+                           ps_date_begin &lt;= :res_date_end and
+                           ps_status = 1 and
+                           ps_is_working = 1))) then
+        res_team_id = 0;
+
+      if (res_team_id &lt;&gt; 0 and
+          res_date_end &gt;= &#x27;03.10.2016&#x27;) then
+      begin
+-- Исключаем если в отпуске
+        if (exists(select *
+                   from hr_voctravel, hr_orders, sa_worktype
+                   where hrv_from_ho_id = ho_id and
+                         ho_order_type = sawt_id and
+                         hrv_from_c_id = :res_lo_id and
+                         sawt_base_type in (4, 5) -- отпуск, декретный отпуск
+                         and
+                         sawt_id &lt;&gt; 20 and
+                         sawt_hours_real &gt;= 0 and
+                         hrv_date_begin &lt;= :res_date_begin and
+                         hrv_date_end_fact &gt;= (:res_date_begin + 4) and
+                         hrv_status = 1)) then
+        begin
+          if (not(exists(select *
+                         from hr_voctravel, hr_orders
+                         where hrv_from_ho_id = ho_id and
+                               ho_order_type = 20 and
+                               hrv_from_c_id = :res_lo_id and
+                               hrv_date_begin &lt;= :res_date_end and
+                               hrv_date_end_fact &gt;= :res_date_begin and
+                               hrv_status = 1))) then
+            res_team_id = 0;
+        end
+      end
+
+      points_1 = 0.0;
+      points_2 = 0.0;
+      points_3 = 0.0;
+
+-- Коэффициент удержания клиентов
+      if (ad_closed_client &lt;&gt; 0.0) then
+        ad_retention_koef = round(ad_disb_repeat_clients * 100.0 / ad_closed_client, 2);
+      else
+        ad_retention_koef = 100.0;
+
+      cpd_comment = &#x27;&#x27;;
+      cpd_comment = cpd_comment || &#x27;Актив.кл: &lt;b&gt;&#x27; || round(ad_active_client) || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;;
+      cpd_comment = cpd_comment || &#x27;Прирост кл: &lt;b&gt;&#x27; || round(ad_diff_client) || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;;
+      cpd_comment = cpd_comment || &#x27;PAR30: &lt;b&gt;&#x27; || round(ad_delinq_balance_30 * 100.00 / ad_active_balance, 2) || &#x27;%&lt;/b&gt;&lt;br&gt;&#x27;;
+      cpd_comment = cpd_comment || &#x27;Изменение PAR30: &lt;b&gt;&#x27; || round(ad_delinq_balance_diff_30, 2) || &#x27; с.&lt;/b&gt;&lt;br&gt;&#x27;;
+      cpd_comment = cpd_comment || &#x27;Закрытые клиенты: &lt;b&gt;&#x27; || round(ad_closed_client, 0) || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;;
+      cpd_comment = cpd_comment || &#x27;Повторные выдачи (кл.): &lt;b&gt;&#x27; || round(ad_disb_repeat_clients, 0) || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;;
+      cpd_comment = cpd_comment || &#x27;Коэф.удержания кл.: &lt;b&gt;&#x27; || round(ad_retention_koef, 2) || &#x27;%&lt;/b&gt;&lt;br&gt;&#x27;;
+
+-- Вычисляем баллы по приросту
+-- п.1.1 - Прирост клиентов &gt;=1 то 10 баллов
+      if (ad_diff_client &gt;= 1) then
+        points_1 = 10.0;
+
+-- п.1.2 - иначе, количество кл &gt;=500 то 5 баллов
+      if (points_1 = 0.0 and
+          ad_active_client &gt;= 500) then
+        points_1 = 5.0;
+
+-- п.1.3 - иначе, прирост кл отрицательный и клиентов меньше 500, то -5 баллов
+      if (points_1 = 0.0 and
+          ad_active_client &lt; 500) then
+        points_1 = -5.0;
+
+-- Вычисляем баллы по снижению баланса просрочек 30 дн.
+-- п.2.1 - Если снижен более 5 тыс., то 20 баллов
+      if (ad_delinq_balance_diff_30 &lt;= -5000.0) then
+        points_2 = 20.0;
+
+-- п.2.2 - Если снижен более 2 тыс., то 10 баллов
+      if (points_2 = 0.0 and
+          ad_delinq_balance_diff_30 &lt;= -2000.0) then
+        points_2 = 10.0;
+
+-- п.2.3 - Если par30=0%, то 5 баллов
+      if (points_2 = 0.0 and
+          ad_delinq_balance_30 = 0) then
+        points_2 = 5.0;
+
+-- п.2.5 - Если баланс просрочек вырос не более 5 тыс., то -5 баллов
+      if (points_2 = 0.0 and
+          ad_delinq_balance_diff_30 &gt; 0 and
+          ad_delinq_balance_diff_30 &lt; 5000.0) then
+        points_2 = -5.0;
+
+-- п.2.6 - Если ниодин пункт не выполнен и баланс просрочек вырос на 5 и более тыс, то -10 бал
+      if (points_2 = 0.0 and
+          ad_delinq_balance_diff_30 &gt;= 5000.0) then
+        points_2 = -10.0;
+
+-- п.3 - Удержание клиентов
+      points_3 = case
+                   when ad_retention_koef &gt;= 85.0 then 10.0 -- п.3.1  если &gt;=85%
+                   when ad_retention_koef &gt;= 75.0 and ad_retention_koef &lt; 85.0 then 5.0 -- п.3.2  если &gt;=75%
+                   when ad_retention_koef &gt;= 65.0 and ad_retention_koef &lt; 75.0 then 2.0 -- п.3.3  если &gt;=65%
+                   when ad_retention_koef &gt;= 50.0 and ad_retention_koef &lt; 65.0 then -5.0 -- п.3.4  если &gt;=50%
+                   else -10.0 -- п.3.5  ИНАЧЕ (если &lt;50%)
+                 end;
+
+      points_all = points_1 + points_2 + points_3;
+
+      if (res_team_id &lt;&gt; res_team_id_prior) then -- Если команда отличается
+      begin
+-- Находим нужную строку команды за этот период
+        cpr_id = null;
+        select cpr_id
+        from competresult
+        where cpr_from_cpp_id = :cpp_id and
+              cpr_object_kind = -1 and
+              cpr_object_id = :res_team_id
+        into :cpr_id;
+
+        if (cpr_id is null) then -- если такой строки нет, создаем новую
+        begin
+          cpr_group_name = &#x27;&#x27;;
+
+-- Получаем название Группы где последний раз была команда
+          if (cpp_id &lt;&gt; 17) then -- Если это не первая неделя второго Этапа
+          begin
+            select cpr_group_name
+            from competresult, competperiod
+            where cpr_from_cpp_id = cpp_id and
+                  cpp_from_rd_id = :rd_id and
+                  cpr_object_kind = -1 and
+                  cpr_object_id = :res_team_id and
+                  cpr_group_name &lt;&gt; &#x27;&#x27; and
+                  cpp_orderno &lt; :cpp_orderno
+            order by cpp_orderno desc
+            rows 1
+            into :cpr_group_name;
+          end
+          else
+          begin
+-- Если это первая неделя второго этапа, название лиги берем из поля комментария предыдущего расчета
+            select coalesce(cpr_comment, &#x27;&#x27;)
+            from competresult, competperiod
+            where cpr_from_cpp_id = 16 and
+                  cpr_object_kind = -1 and
+                  cpr_object_id = :res_team_id rows 1
+            into :cpr_group_name;
+          end
+          if (cpr_group_name is null) then
+            cpr_group_name = &#x27;&#x27;;
+
+          insert into competresult (cpr_from_cpp_id, cpr_group_name, cpr_object_kind, cpr_object_id, cpr_result_kind,
+                                    cpr_from_un_id)
+          values (:cpp_id, :cpr_group_name, -1, :res_team_id, 0, :un_id)
+          returning cpr_id
+          into :cpr_id;
+        end
+      end
+
+-- Вставляем данные по сотруднику
+      insert into competdetails (cpd_from_cpr_id, cpd_object_kind, cpd_object_id, cpd_points_all, cpd_points_1,
+                                 cpd_points_2, cpd_points_3, cpd_comment)
+      values (:cpr_id, 0, :res_lo_id, :points_all, :points_1, :points_2, :points_3, :cpd_comment);
+    end
+
+-- Пересчитываем итоги по командам
+    for select cpr_id
+        from competresult
+        where cpr_from_cpp_id = :cpp_id
+        into :cpr_id
+    do
+    begin
+      avg_points = 0.0;
+      lo_panelty_count = 0.0;
+      select round(avg(cpd_points_all), 2), -- средний балл
+             sum(iif(cpd_points_1 -- кол-во свз со штрафами
+             + cpd_points_2 + cpd_points_3 + cpd_points_4 + cpd_points_5 + cpd_points_6 + cpd_points_7 + cpd_points_8 + cpd_points_9 &lt; 0, 1, 0))
+      from competdetails
+      where cpd_from_cpr_id = :cpr_id
+      into :avg_points, :lo_panelty_count;
+
+      if (avg_points is null) then
+        avg_points = 0;
+      if (lo_panelty_count is null) then
+        lo_panelty_count = 0;
+
+      total_points = avg_points; -- Средний балл комманды
+      add_points = 0.0;
+
+      if (lo_panelty_count = 0) -- Если никто не штрафован, плюс 2 балла
+      then
+        add_points = 2.0;
+
+      if (lo_panelty_count &gt;= 2) -- Если оштрафованы 2 и более СВЗ, минус 2 балла
+      then
+        add_points = -2.0;
+
+      update competresult
+      set cpr_calced_points = :total_points,
+          cpr_additional_points = :add_points
+      where (cpr_id = :cpr_id);
+    end
+
+-- Присвоение одного балла у кого самый больший балл в группе
+    add_points = 1;
+    for select cpr_group_name, max(cpr_final_points)
+        from competresult
+        where cpr_from_cpp_id = :cpp_id
+        group by cpr_group_name
+        into :group_name, max_points
+    do
+    begin
+      update competresult
+      set cpr_additional_points = cpr_additional_points + :add_points
+      where cpr_from_cpp_id = :cpp_id and
+            cpr_group_name = :group_name and
+            cpr_final_points = :max_points;
+    end
+
+    execute procedure hp_competition_recalc_order(:cpp_id);
+  end
+
+  if (stage = 1) then -- если промежуточные итоги тура
+  begin
+-- Удаляем существующие расчеты за этот период
+    delete from competresult
+    where (cpr_from_cpp_id = :cpp_id);
+
+    for select cpr_object_kind, cpr_object_id, sum(cpr_final_points)
+        from competresult, competperiod
+        where cpp_from_rd_id = :rd_id and
+              cpp_id = cpr_from_cpp_id and
+              cpp_stage = (:stage - 1) and
+              cpp_date_end between :res_date_begin and :res_date_end
+        group by cpr_object_kind, cpr_object_id
+        into :kind, :res_team_id, :cpr_final_points
+    do
+    begin
+      cpr_group_name = &#x27;&#x27;;
+
+-- Получаем название Группы где последний раз была команда
+      select cpr_group_name
+      from competresult, competperiod
+      where cpr_from_cpp_id = cpp_id and
+            cpp_from_rd_id = :rd_id and
+            cpr_object_kind = -1 and
+            cpr_object_id = :res_team_id and
+            cpr_group_name &lt;&gt; &#x27;&#x27; and
+            cpp_orderno &lt; :cpp_orderno
+      order by cpp_orderno desc
+      rows 1
+      into :cpr_group_name;
+      if (cpr_group_name is null) then
+        cpr_group_name = &#x27;&#x27;;
+
+      insert into competresult (cpr_from_cpp_id, cpr_group_name, cpr_object_kind, cpr_object_id, cpr_calced_points,
+                                cpr_result_kind, cpr_from_un_id)
+      values (:cpp_id, :cpr_group_name, :kind, :res_team_id, :cpr_final_points, 0, :un_id)
+      returning cpr_id
+      into :cpr_id;
+    end
+
+    execute procedure hp_competition_recalc_order(:cpp_id);
+  end
+
+  if (stage = 2) then -- если промежуточные итоги этапа
+  begin
+-- Удаляем существующие расчеты за этот период
+    delete from competresult
+    where (cpr_from_cpp_id = :cpp_id);
+
+    for select cpr_object_kind, cpr_object_id, avg(cpr_final_points)
+        from competresult, competperiod
+        where cpp_from_rd_id = :rd_id and
+              cpp_id = cpr_from_cpp_id and
+              cpp_stage = (:stage - 1) and
+              cpp_date_end between :res_date_begin and :res_date_end
+        group by cpr_object_kind, cpr_object_id
+        into :kind, :res_team_id, :cpr_final_points
+    do
+    begin
+      cpr_group_name = &#x27;&#x27;;
+
+-- Получаем название Группы где последний раз была команда
+      select cpr_group_name
+      from competresult, competperiod
+      where cpr_from_cpp_id = cpp_id and
+            cpp_from_rd_id = :rd_id and
+            cpr_object_kind = -1 and
+            cpr_object_id = :res_team_id and
+            cpr_group_name &lt;&gt; &#x27;&#x27; and
+            cpp_orderno &lt; :cpp_orderno
+      order by cpp_orderno desc
+      rows 1
+      into :cpr_group_name;
+      if (cpr_group_name is null) then
+        cpr_group_name = &#x27;&#x27;;
+
+      insert into competresult (cpr_from_cpp_id, cpr_group_name, cpr_object_kind, cpr_object_id, cpr_calced_points,
+                                cpr_result_kind, cpr_from_un_id)
+      values (:cpp_id, :cpr_group_name, :kind, :res_team_id, :cpr_final_points, 0, :un_id)
+      returning cpr_id
+      into :cpr_id;
+    end
+
+    execute procedure hp_competition_recalc_order(:cpp_id);
+  end
+
+  if (stage = 3) then -- если финальные итоги
+  begin
+    res_text = &#x27;Автоматизация итогов еще не готов&#x27;;
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

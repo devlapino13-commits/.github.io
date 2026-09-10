@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CHECK_FMS_PASSPORT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CHECK_FMS_PASSPORT: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CHECK_FMS_PASSPORT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">4</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">4 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="cm_kg_0003_sql.html"><div class="to">CM_KG_0003_SQL</div></a><a class="ref-card" href="cm_ru_0009_sql.html"><div class="to">CM_RU_0009_SQL</div></a><a class="ref-card" href="hp_actionlist_get_passdata.html"><div class="to">HP_ACTIONLIST_GET_PASSDATA</div></a><a class="ref-card" href="print_result_sofr.html"><div class="to">PRINT_RESULT_SOFR</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PASS_NO</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CHECK_RESULT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CHECK_FMS_PASSPORT(
+    PASS_NO VARCHAR(20))
+RETURNS (
+    CHECK_RESULT INTEGER)
+AS
+declare variable db_path varchar(255);
+declare variable found_no varchar(20);
+declare variable db_connect varchar(255);
+begin
+  check_result = 0; -- все нормально
+
+  if (f_get_db_id() = 81001 and pass_no is not null) then -- если база РФ
+  begin
+    -- находим путь к БД
+    db_path = rdb$get_context(&#x27;SYSTEM&#x27;,&#x27;DB_NAME&#x27;);
+    select dbc_connection_path
+    from dbconnects
+    where dbc_connection_path like &#x27;%:&#x27; || :db_path rows 1
+    into :db_connect;
+
+    if (db_connect is not null) then
+    begin
+      found_no = null;
+      -- через путь к БД насраиваем путь подключения к внешней базе
+      db_connect = replace(db_connect, &#x27;DB_MBFRU.IB&#x27;, &#x27;DB_FMS.IB&#x27;);
+
+      -- если номер паспорта находится на внешней БД, значит он недействителен
+      pass_no = replace(pass_no, &#x27; &#x27;, &#x27;&#x27;);
+      execute statement(&#x27;select pv_number from passvoid where pv_number = cast(:pass_no as varchar(20)) &#x27;) (pass_no := pass_no)
+          on external data source db_connect
+          as user &#x27;SYSDBA&#x27; password &#x27;F!ora80X&#x27;
+          into :found_no;
+
+      if (found_no is not null) then
+        check_result = 1; -- Паспорт недействителен
+    end
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

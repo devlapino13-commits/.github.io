@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DISB_TOKEN_CHECK — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DISB_TOKEN_CHECK: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DISB_TOKEN_CHECK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ERROR_TEXT</div><div class="ptype">VARCHAR(1000)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DISB_TOKEN_CHECK(
+    K_ID ID_TYPE)
+RETURNS (
+    ERROR_TEXT VARCHAR(1000))
+AS
+declare variable has_err smallint;
+declare variable c_id id_type;
+declare variable c_name_fio str_100;
+declare variable cli_qty integer;
+begin
+  has_err = 0;
+---------- Проверка наличия активных Токенов --------------------------------&gt;
+  error_text = &#x27;Отсутствуют токены у клиентов: &#x27;;
+  cli_qty = 0;
+
+  for select kncl.kc_from_c_id
+      from knclient kncl
+      where kncl.kc_from_k_id = :k_id and
+            kncl.kc_amount_approved &gt; 0
+      into :c_id
+  do
+  begin
+    cli_qty = cli_qty + 1;
+
+    if (not exists(select *
+                   from extsys_token et
+                   where et.et_from_c_id = :c_id and
+                         et.et_is_actual = 1)) then
+    begin
+      if (has_err = 0) then
+        has_err = 1;
+
+      select cl.c_name_fio
+      from clients cl
+      where cl.c_id = :c_id
+      into :c_name_fio;
+
+      error_text = error_text || &#x27; &#x27; || c_name_fio || &#x27;; &#x27;;
+    end
+  end
+
+  if (cli_qty &gt; 1) then
+  begin
+    has_err = 1;
+    error_text = &#x27;Выдача на кредитные карты доступна только для индивидуальных кредитов&#x27;;
+  end
+-----------------------------------------------------------------------------&lt;
+---------- Проверка наличия операции по выдаче ------------------------------&gt;
+  if (has_err = 0) then
+  begin
+    if (exists(select *
+               from extsys_card_disb ecd
+               where ecd.ecd_from_k_id = :k_id and
+                     ecd.ecd_status &gt;= 0)) then
+    begin
+      has_err = 1;
+      error_text = &#x27;Выдача отменена. Имеется активная операция по выдаче на карту&#x27;;
+    end
+  end
+-----------------------------------------------------------------------------&lt;
+  if (has_err = 0) then
+    error_text = &#x27;&#x27;;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

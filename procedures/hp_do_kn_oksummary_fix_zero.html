@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DO_KN_OKSUMMARY_FIX_ZERO — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DO_KN_OKSUMMARY_FIX_ZERO: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DO_KN_OKSUMMARY_FIX_ZERO</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DO_KN_OKSUMMARY_FIX_ZERO(
+    K_ID ID_TYPE)
+AS
+declare variable kc_id decimal(18,0);
+declare variable kc_amount curr_type;
+declare variable last_ol_id id_type;
+declare variable last_ol_number integer;
+declare variable last_date date;
+declare variable oks_date_begin date;
+declare variable gr_amount curr_type;
+declare variable cl_count integer;
+declare variable cl_balance curr_type;
+declare variable new_balance curr_type;
+declare variable koef double precision;
+declare variable saldo curr_type;
+declare variable line_no integer;
+declare variable gr_balance curr_type;
+declare variable try_count integer;
+declare variable is_changed integer;
+begin
+  try_count = 0;
+  is_changed = 1;
+
+--  if (exists(select oks_balance
+--  from oksummary
+--  where oks_date_end &gt;= &#x27;31.12.2999&#x27;
+--  and oks_from_k_id = :k_id
+--  and oks_balance &gt;0)) then Exit;
+--
+  while (is_changed = 1 and try_count &lt;= 10) do
+  begin
+    is_changed = 0;
+    try_count = try_count + 1;
+
+    oks_date_begin = null;
+
+    select oks_date_begin, sum(oks_balance)
+    from kn_oksummary
+    where oks_from_k_id = :k_id
+    group by oks_date_begin
+    having((sum(oks_balance) &gt; 0 and min(oks_balance) &lt;= 0) or (sum(oks_balance) = 0 and min(oks_balance) &lt; 0))
+    order by 1
+    rows 1
+    into oks_date_begin, gr_balance;
+
+    if (oks_date_begin is null) then
+      exit;
+
+    last_ol_id = null;
+    select ok_from_ol_id, ok_number, ok_ol_date
+    from operkred
+    where ok_from_k_id = :k_id and
+          ok_ol_date = :oks_date_begin and
+          ok_os &lt;&gt; 0 and
+          ok_ol_is_active = 1 and
+          ok_type in (4, 5, 6)
+    order by ok_ol_date desc, ok_from_ol_id desc
+    rows 1
+    into last_ol_id, last_ol_number, last_date;
+
+    if (last_ol_id is not null) then
+    begin
+      select sum(kc_amount_approved), count(*)
+      from knclient
+      where kc_from_k_id = :k_id and
+            kc_amount_approved &gt; 0
+      into gr_amount, cl_count;
+
+      if (coalesce(gr_amount, 0) = 0) then
+        exit;
+
+      saldo = gr_balance;
+      line_no = 0;
+      for select oks_from_kc_id, oks_balance, kc_amount_approved
+          from kn_oksummary, knclient
+          where oks_from_k_id = :k_id and
+                oks_date_begin = :last_date and
+                oks_from_kc_id = kc_id
+          into :kc_id, :cl_balance, :kc_amount
+      do
+      begin
+        line_no = line_no + 1;
+        if (line_no &lt; cl_count) then
+        begin
+          koef = kc_amount / gr_amount;
+          new_balance = round(gr_balance * koef, 2);
+          saldo = saldo - new_balance;
+        end
+        else
+          new_balance = saldo;
+
+        update kn_operkred
+        set ok_os = ok_os - (:cl_balance - :new_balance)
+        where ok_from_ol_id = :last_ol_id and
+              ok_number = :last_ol_number and
+              ok_from_kc_id = :kc_id;
+
+        is_changed = 1;
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

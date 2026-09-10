@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_PANTERA_DEVIDE_KONT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_PANTERA_DEVIDE_KONT: 3 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_PANTERA_DEVIDE_KONT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_devide_kontract_clients.html"><div class="to">HP_DEVIDE_KONTRACT_CLIENTS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_NEW_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_PANTERA_DEVIDE_KONT(
+    K_ID ID_TYPE,
+    C_ID ID_TYPE,
+    K_NEW_ID ID_TYPE)
+AS
+declare variable PANT_ID ID_TYPE;
+declare variable PANT_FROM_NUM_ID integer;
+declare variable PANT_OPER_CALLED STR_100;
+declare variable PANT_CREATE_DATE_TIME timestamp;
+declare variable PANT_LAST_CALL_DATE date;
+declare variable PANT_CL_CALL_QTY integer;
+declare variable PANT_CONT_CALL_QTY integer;
+declare variable PANT_DATE_BEGIN date;
+declare variable PANT_DATE_END date;
+declare variable PANT_PROJECT_TYPE smallint;
+declare variable NEW_PANT_ID ID_TYPE;
+declare variable RES_BUF_CL integer;
+declare variable RES_BUF_CON integer;
+begin
+
+--  процедура преждназначена для разделения результатов обзвона по кредиту в случае амнистии, про проекту &quot;Пантера&quot;
+--  Важно! Процедура должна запускаться после формирования sb_akt, для новго контракта, созданнного входе амнистии.
+
+  if (exists(select *
+             from pantera_kontracts pantk
+             where pantk.pant_from_k_id = :k_id)) then
+  begin
+    for select pant_id, pant_from_num_id, pant_oper_called, pant_create_date_time, pant_last_call_date,
+               pant_cl_call_qty, pant_cont_call_qty, pant_date_begin, pant_date_end, pant_project_type
+        from pantera_kontracts pantk
+        where pantk.pant_from_k_id = :k_id
+        into :pant_id, :pant_from_num_id, :pant_oper_called, :pant_create_date_time, :pant_last_call_date,
+             :pant_cl_call_qty, :pant_cont_call_qty, :pant_date_begin, :pant_date_end, :pant_project_type
+    do
+    begin
+      insert into pantera_kontracts (pant_from_k_id, pant_from_num_id, pant_oper_called, pant_create_date_time,
+                                     pant_last_call_date, pant_cl_call_qty, pant_cont_call_qty, pant_date_begin,
+                                     pant_date_end, pant_project_type)
+      values (:k_new_id, :pant_from_num_id, :pant_oper_called, :pant_create_date_time, :pant_last_call_date,
+              :pant_cl_call_qty, :pant_cont_call_qty, :pant_date_begin, :pant_date_end, :pant_project_type)
+      returning pant_id
+      into :new_pant_id;
+
+      res_buf_cl = 0;
+
+-- результаты обзона клиента --------------------------------------------
+      select count(pcl_res)
+      from pantera_clients pcl
+      where pcl.pcl_from_pan_id = :pant_id and
+            pcl.pcl_from_c_id = :c_id and
+            pcl_res &gt; 0
+      into :res_buf_cl;
+
+      if (res_buf_cl is null) then
+        res_buf_cl = 0;
+
+      update pantera_clients pcl
+      set pcl.pcl_from_pan_id = :new_pant_id
+      where pcl.pcl_from_pan_id = :pant_id and
+            pcl.pcl_from_c_id = :c_id;
+
+      update pantera_data_svod pds
+      set pds.pds_from_pan_id = :new_pant_id
+      where pds.pds_from_pan_id = :pant_id and
+            pds.pds_from_c_id = :c_id;
+
+-------------------------------------------------------------------------
+-- результаты обзвона контактных лиц клиента ----------------------------
+      res_buf_con = 0;
+
+      select count(pcon.pcon_res)
+      from pantera_contacts pcon
+      where pcon.pcon_from_pan_id = :pant_id and
+            pcon.pcon_from_c_id = :c_id and
+            pcon.pcon_res &gt; 0
+      into :res_buf_con;
+
+      if (res_buf_con is null) then
+        res_buf_con = 0;
+
+      update pantera_contacts pcon
+      set pcon.pcon_from_pan_id = :new_pant_id
+      where pcon.pcon_from_pan_id = :pant_id and
+            pcon.pcon_from_c_id = :c_id;
+
+      update pantera_data_svod pds
+      set pds.pds_from_pan_id = :new_pant_id
+      where pds.pds_from_pan_id = :pant_id and
+            pds.pds_from_c_id = :c_id and
+            coalesce(pds.pds_from_cc_id, 0) &lt;&gt; 0;
+-------------------------------------------------------------------------
+
+      update pantera_kontracts pkont
+      set pkont.pant_cl_call_qty = pkont.pant_cl_call_qty - :res_buf_cl,
+          pkont.pant_cont_call_qty = pkont.pant_cont_call_qty - :res_buf_con
+      where pkont.pant_id = :pant_id;
+
+      update pantera_kontracts pkont
+      set pkont.pant_cl_call_qty = :res_buf_cl,
+          pkont.pant_cont_call_qty = :res_buf_con
+      where pkont.pant_id = :new_pant_id;
+
+      /*
+            Внимание!  Я специально  не произвожу проверку и update поля PANT_LAST_CALL_DATE  (дата удавшегося  последнего звонка клиенту группы или контактному лицу)
+            т.к. не смотря на то, что клиент теперь вне группы, он все равно там был и мог влиять на участников группы по выплате займов
+            таким образом исходя из изнаально заложенной кнцепции, данное поле, после выхода участника из группы, я не трогаю!
+       */
+-------------------------------------------------------------------------
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

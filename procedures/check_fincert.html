@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHECK_FINCERT — процедура — схема БД</title>
+<meta name="description" content="Процедура CHECK_FINCERT: 3 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CHECK_FINCERT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">4 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_edoc_ins.html"><div class="to">HP_EDOC_INS</div></a><a class="ref-card" href="hp_fincert_get_result.html"><div class="to">HP_FINCERT_GET_RESULT</div></a><a class="ref-card" href="hp_fincert_reject.html"><div class="to">HP_FINCERT_REJECT</div></a><a class="ref-card" href="hp_send_quick_message.html"><div class="to">HP_SEND_QUICK_MESSAGE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_check_loan_konditions.html"><div class="to">HP_CHECK_LOAN_KONDITIONS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">TAG</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CHECK_FINCERT(
+    MA_ID D_ID,
+    K_ID D_ID,
+    TAG D_STR_CODE)
+RETURNS (
+    RES D_SMALLINT,
+    RES_TEXT D_STR_255)
+AS
+declare variable un_id d_id;
+declare variable c_id d_id;
+declare variable fcl_id d_id;
+declare variable res_type d_str_20;
+declare variable c_name_fio d_str_100;
+declare variable c_birth_date d_date;
+declare variable c_full_address d_str_255;
+declare variable c_from_reg_id d_integer;
+declare variable email_list d_str_255;
+declare variable c_pass_no d_str_code;
+declare variable asp_status d_str_code;
+declare variable res_code d_str_code;
+declare variable officer_un d_id;
+begin
+-- RFCRU-3955 автоматический отказ при совпадении со списками финцерт - номер паспорта, инн
+  res = 0;
+  res_text = &#x27;&#x27;;
+
+  if (k_id is not null) then
+  begin
+    select kc.kc_from_c_id, k_from_ma_app_id
+    from kontract k
+    inner join knclient kc on kc.kc_from_k_id = k.k_id
+    where k.k_id = :k_id
+    and kc.kc_amount_approved &gt; 0
+    into :c_id, ma_id;
+  end
+  else
+  begin
+    select mac.mac_from_c_id
+    from miniappclient mac
+    where mac.mac_from_ma_id = :ma_id
+    and mac.mac_amount &gt; 0
+    into :c_id;
+  end
+
+  select un.un_id
+  from miniapp ma
+  inner join knaktlist kal on kal.kal_from_kf_id = ma.ma_from_kf_id
+  inner join username un on kal.kal_new_kf_officer = un.un_from_c_id
+  where ma_id = :ma_id
+  and ma_date_end = &#x27;31.12.9999&#x27;
+  and kal.is_delete = 0
+  and current_date between kal_date and kal_date_end
+  into :officer_un;
+
+  insert into fincert_check_log (fcl_object_kind, fcl_object_id, fcl_datetime, fcl_tag)
+  values (11, :ma_id, current_timestamp, f_enum(&#x27;bp_check_kind&#x27;, :tag, &#x27;id&#x27;))
+  returning fcl_id
+  into fcl_id;
+
+  for select res_type, res_code
+  from hp_fincert_get_result(:c_id, null)
+  where res = 1
+  rows 1
+  into res_type, res_code
+  do
+  begin
+    res = 1;
+
+    update fincert_check_log
+    set fcl_fid = f_enum(&#x27;fincert_file&#x27;, :res_code, &#x27;id&#x27;)
+    where fcl_id = :fcl_id;
+
+    un_id = (select un_id
+              from username
+              where un_name = rdb$get_context(&#x27;USER_SESSION&#x27;, &#x27;FINSTART_USER_LOGIN&#x27;));
+    if (un_id is null) then
+        un_id = 1000000000000;
+
+    select c_name_fio,
+           c_pass_no,
+           c_birth_date,
+           adl_address_str,
+           c_birth_date,
+           c_from_reg_id
+    from clients c, addrclient, addrlist
+    where c.c_id = :c_id and
+      c_type = 0 and
+      adc_from_c_id = c_id and
+      adc_address_type = 1 and
+      adc_from_adl_id = adl_id
+    into  c_name_fio,
+          c_pass_no,
+          c_birth_date,
+          c_full_address,
+          c_birth_date,
+          c_from_reg_id;
+
+    execute procedure hp_fincert_reject(:ma_id, :k_id);
+
+    --смс клиенту с уведомлением об отказе - эл док
+    asp_status = f_edoc_status(&#x27;asp.agreement&#x27;, :c_id, current_date);
+    if (asp_status &lt;&gt; &#x27;signed&#x27;) then
+      asp_status = f_edoc_status(&#x27;asp.agreement_oep&#x27;, :c_id, current_date);
+
+    if (asp_status &lt;&gt; &#x27;signed&#x27;) then
+      res_text = &#x27;Нет подписанного договора АСП. &#x27;;
+    else
+    begin
+      select res_text
+      from hp_edoc_ins(&#x27;loan.fincert.reject&#x27;, f_objkind(&#x27;miniapp&#x27;, &#x27;id&#x27;), :ma_id, 1000000000000)
+      into res_text;
+    end
+
+    if (res_type = &#x27;Номер телефона&#x27;) then
+    begin
+      res_text = res_text || res_type || &#x27; клиента &#x27; || c_name_fio || &#x27; в списках ФинЦЕРТ. Кредитование с данным номером запрещено&#x27;;
+
+      --список отказников
+      if (not exists(
+        select 1
+        from moratory
+        where (m_from_c_id = :c_id or
+        (m_client_fio = :c_name_fio and
+        m_client_birth_date = :c_birth_date)) and
+        m_is_active = 1 and
+        m_is_black = 1 and
+        m_date_begin = current_date rows 1)) then
+      begin
+        insert into moratory (m_id, m_number, m_from_c_id, m_last_k_id, m_is_black, m_date_begin, m_date_end, m_month,
+                              m_is_active, m_comment_group, m_comment_officer, m_comment_manager, m_client_fio,
+                              m_client_pass_no, m_client_address, m_client_birth_date, m_our_clients, m_from_reg_id,
+                              m_no, m_datetime, m_datetime_edit, m_user_create, m_user_edit, m_db_code, m_original_id)
+        values (-255, 1, :c_id, null, 1, current_date, &#x27;31.12.9999&#x27;, 0, 1, null, &#x27;В заявке отказано в связи с совпадением со списком финЦЕРТ&#x27;,
+                null, :c_name_fio, :c_pass_no, :c_full_address, :c_birth_date, 1, :c_from_reg_id, null, current_timestamp,
+                current_timestamp, null, null, null, null);
+      end
+    end
+    else
+    begin
+      if (not exists(    --стоп-лист
+        select 1
+        from moratory
+        where (m_from_c_id = :c_id or
+        (m_client_fio = :c_name_fio and
+        m_client_birth_date = :c_birth_date)) and
+        m_is_active = 1 and
+        m_is_black = 2 rows 1)) then
+      begin
+        insert into moratory (m_id, m_number, m_from_c_id, m_last_k_id, m_is_black, m_date_begin, m_date_end, m_month,
+                              m_is_active, m_comment_group, m_comment_officer, m_comment_manager, m_client_fio,
+                              m_client_pass_no, m_client_address, m_client_birth_date, m_our_clients, m_from_reg_id,
+                              m_no, m_datetime, m_datetime_edit, m_user_create, m_user_edit, m_db_code, m_original_id)
+        values (-255, 1, :c_id, null, 2, current_date, &#x27;31.12.9999&#x27;, 0, 1, null, &#x27;В заявке отказано в связи с совпадением со списком финЦЕРТ&#x27;,
+                null, :c_name_fio, :c_pass_no, :c_full_address, :c_birth_date, 1, :c_from_reg_id, null, current_timestamp,
+                current_timestamp, null, null, null, null);
+      end
+
+      res_text = res_text || res_type || &#x27; клиента &#x27; || c_name_fio || &#x27; в списках ФинЦЕРТ. Кредитование запрещено&#x27;;
+    end
+
+    --пуш випсу
+    if (officer_un is not null) then
+          f_send_push(&#x27;username&#x27;, :officer_un, &#x27;Уведомление об отказе&#x27;, :res_text, &#x27;check_fincert_new&#x27;, 7, 1000000000000);
+
+    --письмо комплайенс  RFCRU-4215
+    email_list = &#x27; fincert_client_match@molbulak.com&#x27;;
+    execute procedure hp_send_quick_message(&#x27;email&#x27;, email_list, &#x27;Совпадение клиента со списком ФинЦерт&#x27;,
+      &#x27;Клиент &#x27; || :c_name_fio ||
+      &#x27;, дата рождения: &#x27; ||  f_datetostr(c_birth_date) ||
+      &#x27;, тип проверки: &#x27; || res_type ||
+      &#x27;, проверено: &#x27; ||  f_datetostr(current_date),
+       &#x27;&#x27;, null, :un_id);
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

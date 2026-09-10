@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_PHONECALL_INCOMING — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_PHONECALL_INCOMING: 2 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_PHONECALL_INCOMING</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SRC_PHONE_NO</div><div class="ptype">VARCHAR(50)</div><div class="pdesc">Номер телефона вызывающего абонента</div></div><div class="prow"><div class="pname">PRV_PHONE_NO</div><div class="ptype">VARCHAR(50)</div><div class="pdesc">Номер телефона провайдера</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PNC_ID</div><div class="ptype">BIGINT</div><div class="pdesc">ID звонка</div></div><div class="prow"><div class="pname">DST_PHONE_NO</div><div class="ptype">VARCHAR(50)</div><div class="pdesc">Номер телефона вызываемого абонента</div></div><div class="prow"><div class="pname">PNC_DIRECTION</div><div class="ptype">SMALLINT</div><div class="pdesc">Направление звонка (прямой, перезвон)</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_PHONECALL_INCOMING(
+    SRC_PHONE_NO D_STR_CODE,
+    PRV_PHONE_NO D_STR_CODE)
+RETURNS (
+    PNC_ID D_ID,
+    DST_PHONE_NO D_STR_CODE,
+    PNC_DIRECTION D_SMALLINT)
+AS
+declare variable pnc_src_phone_id d_integer;
+declare variable pnc_prv_phone_id d_integer;
+begin
+  -- Процедура вызывается из Asterisk, в случае входящего звонка
+  -- Если за последний час был созвон с номером src_phone_no, создаем запись
+  -- в phonecalls, и возвращаем номер, с которым был созвон
+  -- Используется также для исходящих звонков из МП
+  -- В этом случае должна вернуться ранее созданная запись, а не новая
+
+  -- pnc_id = -1 - Когда звонит сотрудник, но звонок не зарегистрирован (включаем инструкцию)
+  -- pnc_id = -2 - Когда не смогли определить, с кем соединять
+
+  pnc_src_phone_id = f_cont_id(src_phone_no, &#x27;null&#x27;);
+  pnc_prv_phone_id = f_cont_id(prv_phone_no, &#x27;null&#x27;);
+  dst_phone_no = &#x27;0&#x27;;
+  pnc_direction = 0;
+  if (pnc_src_phone_id is null or pnc_prv_phone_id is null) then
+  begin
+    pnc_id = -2;
+    suspend;
+    exit;
+  end
+
+  -- Тестирование
+  --  79032063710(Комилжон)
+  --  74952258089(Провайде)
+  --  79036824207(Виктор)
+  if (src_phone_no = &#x27;79032063710&#x27; and
+      prv_phone_no = &#x27;74952258057&#x27;) then
+  begin
+    pnc_id = -999;
+    dst_phone_no =  &#x27;79036824207&#x27;;
+    pnc_direction = 1;
+    suspend;
+    exit;
+  end
+
+  -- Ищем номер во входящих и исходящих звонках
+  for select pnc_id, pnc_src_phone_id, pnc_dst_phone_id, pnc_prv_phone_id,
+    pnc_src_c_id, pnc_dst_c_id, pnc_direction, pnc_object_kind, pnc_object_id,
+    pnc_is_delinq, pnc_call_status_id, pnc_call_result_id
+  from phonecalls
+  where datediff(minute, current_timestamp, pnc_start) &lt; 1440 -- 24 часа
+     and :pnc_src_phone_id in (pnc_src_phone_id, pnc_dst_phone_id)
+  order by pnc_start desc -- Приоритет у исходящих звонков
+  rows 1
+  as cursor cur
+  do
+  begin
+    pnc_direction = cur.pnc_direction;
+
+    -- Если найден исходящий звонок и провайдер совпал, и он в начальном статусе
+    -- значит нужно вернуть его, не вставляя новую запись
+    if (cur.pnc_prv_phone_id = pnc_prv_phone_id and
+        cur.pnc_call_status_id = 0 and
+        cur.pnc_call_result_id = 0 and
+        pnc_direction = 1 and
+        cur.pnc_src_phone_id = pnc_src_phone_id) then
+    begin
+      pnc_id = cur.pnc_id;
+      dst_phone_no = f_cont_code(cur.pnc_dst_phone_id);
+      suspend;
+      exit;
+    end
+
+    if (pnc_src_phone_id = cur.pnc_src_phone_id and f_is_employee(cur.pnc_src_c_id, current_date) = 1) then
+    begin
+      -- Повторный звонок от сотрудника, без инициализации в МП (FM_PHONECALL_INIT)
+      -- Т.е. просто повторно вызывает номер провайдера
+      pnc_id = -1; -- Такой звонок запрещен
+    end
+    else if (cur.pnc_src_phone_id = pnc_src_phone_id and
+             cur.pnc_prv_phone_id = pnc_prv_phone_id) then
+    begin
+      -- Повторный звонок от клиента
+      insert into phonecalls (
+        pnc_src_phone_id, pnc_dst_phone_id, pnc_src_c_id, pnc_dst_c_id,
+        pnc_direction, pnc_object_kind, pnc_object_id, pnc_is_delinq)
+      values (cur.pnc_src_phone_id, cur.pnc_dst_phone_id, cur.pnc_src_c_id,
+        cur.pnc_dst_c_id, cur.pnc_direction, cur.pnc_object_kind, cur.pnc_object_id,
+        cur.pnc_is_delinq)
+      returning pnc_id
+      into pnc_id;
+      dst_phone_no =  f_cont_code(cur.pnc_dst_phone_id);
+    end
+    else if (cur.pnc_prv_phone_id = pnc_prv_phone_id) then
+    begin
+      -- Обратный звонок от клиента
+      pnc_direction = -1 * cur.pnc_direction;
+      insert into phonecalls (
+        pnc_src_phone_id, pnc_dst_phone_id, pnc_src_c_id, pnc_dst_c_id,
+        pnc_direction, pnc_object_kind, pnc_object_id, pnc_is_delinq)
+      values (cur.pnc_dst_phone_id, cur.pnc_src_phone_id, cur.pnc_dst_c_id,
+        cur.pnc_src_c_id, :pnc_direction, cur.pnc_object_kind, cur.pnc_object_id,
+        cur.pnc_is_delinq)
+      returning pnc_id
+      into pnc_id;
+      dst_phone_no =  f_cont_code(cur.pnc_src_phone_id);
+    end
+  end
+
+  if (pnc_id is null) then
+  begin
+    -- Перекидываем на КЦ, т.к. не нашли исходящий звонок
+    -- Нужен признак OiVO
+    pnc_id = -2;
+    pnc_direction = 0;
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

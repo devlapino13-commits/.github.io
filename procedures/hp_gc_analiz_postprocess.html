@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_GC_ANALIZ_POSTPROCESS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_GC_ANALIZ_POSTPROCESS: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_GC_ANALIZ_POSTPROCESS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">IGA_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_GC_ANALIZ_POSTPROCESS(
+    IGA_ID D_INTEGER)
+AS
+declare variable ifa_id d_integer;
+declare variable c_id d_id;
+declare variable ag_id d_integer;
+declare variable commis_mb d_percent;
+declare variable commis_other d_percent;
+declare variable amount_mb d_currency;
+declare variable amount_other d_currency;
+declare variable amount d_currency;
+begin
+  ifa_id = (select iga_from_ifa_id from ipc_gc_analiz where iga_id = :iga_id);
+  for
+    with temp as (
+      select
+        igdp_from_c_id as c_id,
+        max(igdp_from_ag_id) as ag_id ,
+        sum(igdp_amount) as amount,
+        sum(iif(igdp_is_our_card = 1, igdp_tsp_commis_amount, 0)) as amount_mb,
+        sum(iif(igdp_is_our_card = 1, 0, igdp_tsp_commis_amount)) as amount_other
+      from ipc_gc_analiz_detail_pos
+      where igdp_from_iga_id = :iga_id
+        and igdp_type = 1
+        and igdp_is_error = 0
+      group by igdp_from_c_id
+      union all
+      select
+        igqp_from_c_id as c_id,
+        max(igqp_from_ag_id) as ag_id,
+        sum(igqp_amount) as amount,
+        0 as amount_mb,
+        sum(igqp_tsp_commis_amount) as amount_other
+      from ipc_gc_analiz_qr_payments
+      where igqp_from_iga_id = :iga_id
+        and igqp_is_error = 0
+      group by igqp_from_c_id
+    )
+    select
+      c_id,
+      max(ag_id),
+      coalesce(sum(amount), 0),
+      coalesce(sum(amount_mb), 0),
+      coalesce(sum(amount_other), 0)
+    from temp
+    where ag_id &gt; 0
+    group by c_id
+  into
+    :c_id,
+    :ag_id,
+    :amount,
+    :amount_mb,
+    :amount_other
+  do
+  begin
+    select
+      coalesce(ag_commis_cards_mb, 0),
+      coalesce(ag_commis_cards_other, 0)
+    from agreements
+    where ag_id = :ag_id
+    into
+      commis_mb,
+      commis_other;
+
+    insert into ipc_gc_commission (
+      igc_from_iga_id,
+      igc_from_c_id,
+      igc_from_ag_id,
+      igc_commis_cards_mb,
+      igc_commis_cards_other,
+      igc_amount_cards_mb,
+      igc_amount_cards_other,
+      igc_amount
+    )
+    values (
+      :iga_id,
+      :c_id,
+      :ag_id,
+      :commis_mb,
+      :commis_other,
+      round(:amount_mb, 2),
+      round(:amount_other, 2),
+      :amount
+    );
+  end
+
+  if (exists(select * from ipc_gc_analiz_detail_pos where igdp_from_iga_id = :iga_id and igdp_error_id &gt; 0) or
+      exists(select * from ipc_gc_analiz_detail_qr where igdq_from_iga_id = :iga_id and igdq_error_id &gt; 0) or
+      exists(select * from ipc_gc_analiz_qr_payments where igqp_from_iga_id = :iga_id and igqp_error_id &gt; 0))
+  then update ipc_file_analiz set ifa_is_detail_problem = 1 where ifa_id = :ifa_id;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

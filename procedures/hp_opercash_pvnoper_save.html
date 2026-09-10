@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_OPERCASH_PVNOPER_SAVE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_OPERCASH_PVNOPER_SAVE: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_OPERCASH_PVNOPER_SAVE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_opercash_pvn_sync.html"><div class="to">HP_OPERCASH_PVN_SYNC</div></a><a class="ref-card" href="hp_pvnopers_save.html"><div class="to">HP_PVNOPERS_SAVE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">IN_PO_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_OPERCASH_PVNOPER_SAVE(
+    IN_PO_ID D_INTEGER)
+AS
+declare variable po_date d_date;
+declare variable po_from_ol_id d_id;
+declare variable po_oper_type d_smallint;
+declare variable po_card_id d_integer;
+declare variable po_from_c_id d_id;
+declare variable po_amount d_currency;
+declare variable po_un_id d_id;
+declare variable po_office_id d_integer;
+declare variable po_status d_integer;
+declare variable po_acc_kt d_str_20;
+declare variable po_card_office_id d_integer;
+declare variable ob_from_ol_id d_id;
+declare variable ol_memo d_str_long;
+declare variable opc_oper_kind d_integer;
+declare variable opc_manager_id d_id;
+declare variable is_ipf d_bool;
+declare variable opc_card_no d_str_20;
+declare variable cash_id d_integer;
+declare variable acc_dt d_str_20;
+declare variable ol_doc_no d_integer;
+declare variable cso_is_active d_bool;
+declare variable cso_activate_date d_date;
+begin
+  for select po_date, po_from_ol_id, po_oper_type, po_card_id, po_from_c_id, po_amount,
+             po_un_id, po_office_id, po_status, po_acc_kt, po_card_office_id
+  from pvnopers
+  where po_id = :in_po_id
+  into :po_date, :po_from_ol_id, :po_oper_type, :po_card_id, :po_from_c_id, :po_amount,
+       :po_un_id, :po_office_id, :po_status, :po_acc_kt, :po_card_office_id
+  do
+  begin
+    if (po_oper_type &lt;&gt; 0) then
+      exit;
+
+    if (po_from_ol_id is null) then
+      exit;
+
+    if (po_status not in (3, 4)) then
+      exit;
+
+    if (po_amount = 0) then
+      exit;
+
+    select cso_is_active, cso_activate_date
+    from cashoffice
+    where cso_office_id = :po_office_id
+    into cso_is_active, cso_activate_date;
+
+    if (row_count = 0) then
+      exit;
+
+    if (cso_is_active = 0 or cso_activate_date is null) then
+      exit;
+
+    if (cso_activate_date &gt; po_date) then
+      exit;
+
+    select csp_id, iif(csp_cls_al_id = :po_acc_kt, 0, 1)
+    from cashplace
+    where csp_office_id = :po_office_id and
+          (csp_cls_al_id = :po_acc_kt or csp_ipf_al_id = :po_acc_kt)
+    into cash_id, is_ipf;
+
+    select coalesce(ol_parent_id, ol_id), ol_doc_no, ol_memo
+    from operlist
+    where ol_id = :po_from_ol_id
+    into ob_from_ol_id, ol_doc_no, ol_memo;
+
+    select ob_account_dt
+    from operbook
+    where ob_from_ol_id = :ob_from_ol_id and
+          ob_summa = :po_amount
+    into acc_dt;
+
+    opc_oper_kind = f_enum_id(&#x27;cashoperkind&#x27;, &#x27;minus.mcard&#x27;);
+
+    select opc_manager_id
+    from opercash
+    where opc_from_csp_id = :cash_id and
+          opc_manager_id is not null
+    order by opc_id desc
+    rows 1
+    into opc_manager_id;
+
+    if (po_card_id is not null) then
+    begin
+      select cal_pan_short
+      from cardlist
+      where cal_card_id = :po_card_id
+      into opc_card_no;
+
+      if (coalesce(opc_card_no, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+        opc_card_no = left(opc_card_no, 6) || &#x27;******&#x27; || right(opc_card_no, 4);
+    end
+
+    insert into opercash (opc_date, opc_doc_no, opc_office_id, opc_from_csp_id, opc_oper_kind, opc_sign,
+                          opc_amount, opc_manager_id, opc_from_c_id, opc_is_ipf, opc_corr_al_id,
+                          opc_corr_reg_id, opc_card_no, opc_memo, opc_status,
+                          opc_from_ol_id, opc_from_un_id)
+    values (:po_date, :ol_doc_no, :po_office_id, :cash_id, :opc_oper_kind, -1,
+            :po_amount, :opc_manager_id, :po_from_c_id, :is_ipf, :acc_dt,
+            :po_card_office_id, :opc_card_no, :ol_memo, 1,
+            :po_from_ol_id, :po_un_id);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

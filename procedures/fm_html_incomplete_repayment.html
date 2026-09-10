@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_HTML_INCOMPLETE_REPAYMENT — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_HTML_INCOMPLETE_REPAYMENT: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_HTML_INCOMPLETE_REPAYMENT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_html_main.html"><div class="to">FM_REPORT_HTML_MAIN</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_HTML_INCOMPLETE_REPAYMENT(
+    UN_ID D_ID)
+RETURNS (
+    RES_TEXT D_BLOB_TEXT)
+AS
+declare variable LO_ID ID_TYPE;
+declare variable KAL_NEW_KF_NAME D_STR_100;
+declare variable KONTRACT_NO D_STR_20;
+declare variable PR_NAME D_STR_64;
+declare variable OK_SH_DATE D_STR_20;
+declare variable INCOMPLETE_REPAYMENT decimal(18,2);
+declare variable STR D_STR_LONG;
+declare variable DB_ID D_INTEGER;
+declare variable NSP_MULTIPLIER D_CURRENCY;
+begin
+  db_id = f_get_db_id();
+
+  nsp_multiplier = 0;
+  if (db_id in (39801, 41701)) then
+    nsp_multiplier = 0.02;
+
+  select un.un_from_c_id
+  from username un
+  where un.un_id = :un_id
+  into :lo_id;
+
+  res_text = &#x27;&#x27;;
+  res_text = (select res_style
+              from fm_html_styles) || &#x27;&lt;body&gt;&#x27;;
+
+  res_text = BLOB_APPEND(res_text, &#x27;&lt;table width=&quot;100%&quot;&gt;
+         &lt;col width=&quot;15%&quot;&gt;
+         &lt;col width=&quot;15%&quot;&gt;
+         &lt;col width=&quot;40%&quot;&gt;
+         &lt;col width=&quot;30%&quot;&gt;
+         &lt;col width=&quot;15%&quot;&gt;
+         &lt;tr&gt;&#x27; || f_format(&#x27;&lt;th&gt;%1&lt;/th&gt;&lt;th&gt;%2&lt;/th&gt;&lt;th&gt;%3&lt;/th&gt;&lt;th&gt;%4&lt;/th&gt;&lt;th&gt;%5&lt;/th&gt;&#x27;,
+                  &#x27;№ кред. папки&#x27;,
+                  &#x27;№ договора&#x27;,
+                  &#x27;Продукт&#x27;,
+                  &#x27;Дата погашения по графику&#x27;,
+                  &#x27;Недоплата&#x27;) ||
+         &#x27;&lt;/tr&gt;&#x27;);
+
+  for select kal.kal_new_kf_name,
+             kn.k_kontract_no,
+             pr.pr_name,
+             ok.ok_sh_date,
+             round((sum(ok.ok_sh_os) + sum(ok.ok_sh_perc) + sum(ok.ok_sh_perc) * :nsp_multiplier) +
+             (sum(ok.ok_os) + sum(ok.ok_perc) + sum(ok.ok_tax)), 0)
+      from kontract kn
+      inner join kontstate ks on ks.ks_from_k_id = kn.k_id
+      inner join knaktlist kal on kal.kal_from_kf_id = kn.k_from_kf_id
+      inner join product pr on pr.pr_id = kn.k_from_pr_id
+      inner join operkred ok on ok.ok_from_k_id = kn.k_id
+      where ks.ks_ol_is_delete = 0 and
+            ks.ks_state = 1 and
+           (current_date between ks.ks_date_begin and ks.ks_date_end) and
+            kal.is_delete = 0 and
+            kal.kal_new_kf_officer = :lo_id and
+           (current_date between kal.kal_date and kal.kal_date_end) and
+            ok.ok_ol_is_active = 1 and
+            ok.ok_type &lt;= 4 and
+           (ok.ok_sh_date between current_date and current_date + 2)
+      group by kal.kal_new_kf_name, kn.k_kontract_no, pr.pr_name, ok.ok_sh_date
+      having (sum(ok.ok_sh_os) + sum(ok.ok_sh_perc) + sum(ok.ok_sh_perc) * :nsp_multiplier) +
+             (sum(ok.ok_os) + sum(ok.ok_perc) + sum(ok.ok_tax)) &gt;= 1 and
+             (sum(ok.ok_sh_os) + sum(ok.ok_sh_perc) + sum(ok.ok_sh_perc) * :nsp_multiplier) +
+             (sum(ok.ok_os) + sum(ok.ok_perc) + sum(ok.ok_tax)) &lt;= 500
+  into :kal_new_kf_name,
+       :kontract_no,
+       :pr_name,
+       :ok_sh_date,
+       :incomplete_repayment
+  do
+  begin
+    str = &#x27;&lt;tr&gt;&#x27; ||
+               &#x27;&lt;td align=&quot;left&quot;&gt;&#x27; || :kal_new_kf_name || &#x27;&lt;/td&gt;&#x27; ||
+               &#x27;&lt;td align=&quot;left&quot;&gt;&#x27; || :kontract_no || &#x27;&lt;/td&gt;&#x27; ||
+               &#x27;&lt;td align=&quot;left&quot;&gt;&#x27; || :pr_name || &#x27;&lt;/td&gt;&#x27; ||
+               &#x27;&lt;td align=&quot;left&quot;&gt;&#x27; || f_datetostr(:ok_sh_date) || &#x27;&lt;/td&gt;&#x27; ||
+               &#x27;&lt;td align=&quot;left&quot;&gt;&#x27; || :incomplete_repayment || &#x27;&lt;/td&gt;&#x27; ||
+          &#x27;&lt;/tr&gt;&#x27;;
+
+    res_text = BLOB_APPEND(res_text, str);
+  end
+
+  res_text = BLOB_APPEND(res_text, &#x27;&lt;/table&gt;&lt;/body&gt;&#x27;);
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

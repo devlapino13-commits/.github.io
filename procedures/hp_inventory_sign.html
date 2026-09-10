@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_INVENTORY_SIGN — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_INVENTORY_SIGN: 3 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_INVENTORY_SIGN</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">IM_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SIGN_STATUS</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_INVENTORY_SIGN(
+    IM_ID D_ID,
+    C_ID D_ID,
+    UN_ID D_ID)
+RETURNS (
+    RES_TEXT D_STR_255,
+    SIGN_STATUS D_SMALLINT)
+AS
+declare variable imem_id d_id;
+declare variable c_id_tmp d_id;
+declare variable im_status d_smallint;
+begin
+  select un.un_from_c_id
+  from username un
+  where un.un_id = :un_id
+  into c_id_tmp;
+
+  if (c_id_tmp &lt;&gt; c_id) then
+  begin
+    res_text = &#x27;Вы не можете подписать акт за другого участника&#x27;;
+    sign_status = 0;
+    suspend;
+    exit;
+  end 
+
+  select im.im_status
+  from invmain im
+  where im.im_id = :im_id
+  into im_status;
+
+  if (coalesce(im_status, -777) &lt;&gt; 2) then
+  begin
+    res_text = &#x27;Подпись возможна только при статусе &quot;Проверен&quot;.&#x27;;
+    suspend;
+    exit;
+  end 
+
+  select coalesce(imem.imem_sign_status, 0), imem.imem_id
+  from invmember imem
+  where imem.imem_from_im_id = :im_id and
+        imem.imem_from_c_id = :c_id
+  into sign_status, imem_id;
+
+  --Если запрос выше не дал результат значит
+  if (coalesce(imem_id, -1) = -1) then
+  begin
+    res_text = &#x27;Вы не являетесь участником комиссии в данном акте. Подписание отменяется.&#x27;;
+    suspend;
+    exit;
+  end 
+
+  if (sign_status = 0) then
+  begin
+    update invmember imem
+    set imem.imem_sign_status = 1,
+        imem.imem_sign_type = 0 --подпись через FinStart
+    where imem.imem_id = :imem_id;
+
+    res_text = &#x27;Акт успешно подписан.&#x27;;
+    sign_status = 1;
+  end
+  else
+  if (sign_status = 1) then
+    res_text = &#x27;Акт уже подписан вами.&#x27;;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

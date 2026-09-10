@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CHECK_NUMBER_ACTUALITY — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CHECK_NUMBER_ACTUALITY: 2 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CHECK_NUMBER_ACTUALITY</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_cmd.html"><div class="to">FM_REPORT_CMD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CODE</div><div class="ptype">VARCHAR(10)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SHOW_RES</div><div class="ptype">VARCHAR(10)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CHECK_NUMBER_ACTUALITY(
+    C_ID D_ID,
+    CODE D_STR_10)
+RETURNS (
+    RES_TEXT D_STR_8100,
+    SHOW_RES D_STR_10)
+AS
+declare variable CNC_CODE D_INTEGER;
+declare variable INPUT_CODE D_INTEGER;
+declare variable CNC_ID D_ID;
+declare variable CNC_CREATE_DATETIME D_DATETIME;
+declare variable DIFF_TIME D_FLOAT;
+declare variable COST_DIFF_MINUTE D_FLOAT;
+begin
+  -- RFCRU-3522 процедура проверяет код
+  res_text = &#x27;&#x27;;
+  show_res = &#x27;dialog&#x27;;
+  cost_diff_minute = 60; -- константа для проверки разницы во времени (5 = 5 минут)
+
+  if(code not similar to &#x27;[[:DIGIT:]]+&#x27;) then
+    res_text = &#x27;Код должен быть целым положительным числом&#x27;;
+
+  if(res_text = &#x27;&#x27;) then
+  begin
+    input_code = cast(code as d_integer);
+
+    select cnc.cnc_code, cnc.cnc_id, cnc.cnc_create_datetime
+    from check_number_code cnc
+    where cnc.cnc_from_c_id = :c_id
+      and cnc.cnc_is_active = 1
+    order by cnc.cnc_create_datetime
+    into cnc_code, cnc_id, cnc_create_datetime;
+
+    cnc_id = coalesce(cnc_id, 0);
+
+    if(cnc_id = 0) then
+      res_text = &#x27;Ошибка: Код не был отправлен&#x27;;
+
+    diff_time = (current_timestamp - cnc_create_datetime) * 24 * 60; -- разница во времени в минутах
+
+    if(cost_diff_minute &lt; diff_time) then
+      res_text = &#x27;Код устарел попробуйте отправит еще раз&#x27;;
+    else if (cnc_code = input_code) then
+    begin
+      res_text = &#x27;&#x27;;
+
+      update check_number_code cnc   -- код верный
+         set cnc.cnc_is_sucsess = 1
+      where cnc.cnc_id = :cnc_id;
+    end
+    else if(cnc_code &lt;&gt; input_code) then
+      res_text = &#x27;Код неверный&#x27;;
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

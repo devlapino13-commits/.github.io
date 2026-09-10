@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CASHOPER_CLIENT_KONTRACTS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CASHOPER_CLIENT_KONTRACTS: 3 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CASHOPER_CLIENT_KONTRACTS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KONT_STATE</div><div class="ptype">SMALLINT</div><div class="pdesc">Знак операции: -1 Все займы, 0 = в процессе, 1 активные, 2 закрытые</div></div><div class="prow"><div class="pname">ADD_INFO</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_KONTRACT_NAME</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CASHOPER_CLIENT_KONTRACTS(
+    C_ID D_ID,
+    KONT_STATE D_SMALLINT,
+    ADD_INFO D_STR_CODE)
+RETURNS (
+    RES_K_ID D_ID,
+    RES_KONTRACT_NAME D_STR_255)
+AS
+declare variable ks_state d_smallint;
+declare variable need_suspend d_bool;
+declare variable tmp_amount d_currency;
+declare variable kf_id d_id;
+declare variable kf_name d_str_code;
+begin
+  add_info = coalesce(add_info, &#x27;&#x27;);
+  if (kont_state is null) then
+    kont_state = -1;
+
+  for select kc_from_k_id, k_from_kf_id, k_kontract_no || &#x27; от &#x27; || f_datetostr(k_disb_date)
+  from knclient, kontract
+  where kc_from_c_id = :c_id and
+        kc_amount_approved &gt; 0 and
+        kc_from_k_id = k_id and
+        k_status = 1
+  into res_k_id, kf_id, res_kontract_name
+  do
+  begin
+    select ks_state
+    from kontstate
+    where ks_from_k_id = :res_k_id and
+          ks_ol_is_delete = 0 and
+          ks_date_end &gt;= &#x27;31.12.2999&#x27;
+    into ks_state;
+
+    kf_name = &#x27;&#x27;;
+    select kal_new_kf_name
+    from knaktlist
+    where kal_from_kf_id = :kf_id and
+          kal_date_end &gt;=  &#x27;31.12.2999&#x27; and
+          is_delete = 0
+    into kf_name;
+
+    if (kf_name &lt;&gt; &#x27;&#x27;) then
+      res_kontract_name = res_kontract_name || &#x27;  (&#x27; || kf_name || &#x27;)&#x27;;
+
+    need_suspend = 0;
+    if (kont_state = -1 or ks_state = kont_state) then
+      need_suspend = 1;
+
+    if (add_info = &#x27;minus.loan.overpay&#x27;) then
+    begin
+      tmp_amount = 0;
+      select sum(ok_os)
+      from operkred
+      where ok_from_k_id = :res_k_id and
+            ok_ol_is_active = 1 and
+            ok_type = 9
+      into tmp_amount;
+
+      if (tmp_amount is null) then
+        tmp_amount = 0;
+
+      if (tmp_amount = 0) then
+        need_suspend = 0;
+    end
+
+    if (need_suspend = 1) then
+      suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

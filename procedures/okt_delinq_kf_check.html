@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OKT_DELINQ_KF_CHECK — процедура — схема БД</title>
+<meta name="description" content="Процедура OKT_DELINQ_KF_CHECK: 3 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>OKT_DELINQ_KF_CHECK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">KF_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KONTRACT_NO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PROJEC_TYPE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MESSAGE_TEXT</div><div class="ptype">VARCHAR(1000)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE OKT_DELINQ_KF_CHECK(
+    KF_NAME STR_100,
+    KONTRACT_NO STR_100,
+    PROJEC_TYPE SMALLINT)
+RETURNS (
+    MESSAGE_TEXT VARCHAR(1000))
+AS
+declare variable rep_date date;
+declare variable qty integer;
+declare variable k_id id_type;
+declare variable kf_id id_type;
+declare variable is_ok smallint;
+declare variable k_kontract_no str_20;
+declare variable delinq_days integer;
+declare variable pant_oper_called str_100;
+declare variable op str_100;
+declare variable rd_code str_100;
+declare variable rd_id integer;
+begin
+  rep_date = current_date;
+  message_text = &#x27;&#x27;;
+  qty = 0;
+
+  kf_name = trim(coalesce(kf_name, &#x27;&#x27;));
+  kontract_no = trim(coalesce(kontract_no, &#x27;&#x27;));
+  projec_type = coalesce(projec_type, -1);
+
+  rd_code = &#x27;&#x27;;
+
+  if (projec_type = 4) then
+    rd_code = &#x27;OKTELL.Projects.Sirena&#x27;;
+  else
+  if (projec_type = 5) then
+    rd_code = &#x27;OKTELL.Projects.Sirena1&#x27;;
+  else
+  if (projec_type = 6) then
+    rd_code = &#x27;OKTELL.Projects.Sirena2&#x27;;
+
+  if (rd_code &lt;&gt; &#x27;&#x27;) then
+  begin
+    select rd.rd_id, rd.rd_name
+    from refdata rd
+    where rd.rd_code = :rd_code
+    into :rd_id, :op;
+  end
+
+  if (kontract_no &lt;&gt; &#x27;&#x27;) then
+  begin
+    select kont.k_id
+    from kontract kont
+    where kont.k_kontract_no = :kontract_no
+    into :k_id;
+  end
+  else
+  if (kf_name &lt;&gt; &#x27;&#x27;) then
+  begin
+    select kal.kal_from_kf_id
+    from knaktlist kal
+    where kal.kal_new_kf_name = :kf_name and
+          :rep_date between kal.kal_date and kal.kal_date_end and
+          kal.is_delete = 0
+    into :kf_id;
+  end
+
+  is_ok = 0;
+
+  if (k_id is null) then
+    k_id = 0;
+  if (kf_id is null) then
+    kf_id = 0;
+
+  if (((k_id &gt; 0) or (kf_id &gt; 0)) and
+      (projec_type &gt; -1)) then
+    is_ok = 1;
+
+  if (is_ok = 1) then
+  begin
+    for select ks.ks_from_k_id, kont.k_kontract_no
+        from kontstate ks
+        inner join kontract kont on kont.k_id = ks.ks_from_k_id
+        where ks.ks_state = 1 and
+              :rep_date between ks.ks_date_begin and ks.ks_date_end and
+              ks.ks_ol_is_delete = 0 and
+              ks.ks_from_k_id = :k_id
+        union
+        select ks.ks_from_k_id, kont.k_kontract_no
+        from kontstate ks
+        inner join kontract kont on kont.k_id = ks.ks_from_k_id
+        where ks.ks_state = 1 and
+              :rep_date between ks.ks_date_begin and ks.ks_date_end and
+              ks.ks_ol_is_delete = 0 and
+              kont.k_from_kf_id = :kf_id
+        into :k_id, :kontract_no
+    do
+    begin
+      qty = qty + 1;
+      k_kontract_no = null;
+
+      select k_kontract_no, kont.k_from_kf_id as kf_id, cast(:rep_date as date) - oks_delinq_date as delinq_days
+      from oksummary oks
+      inner join kontract kont on kont.k_id = oks.oks_from_k_id
+      where :rep_date between oks_date_begin and oks_date_end and
+            oks_delinq_date &lt; :rep_date and
+            oks_close_state = 0 and
+            kont.k_id = :k_id
+      into :k_kontract_no, :kf_id, delinq_days;
+
+      if (k_kontract_no is null) then
+        k_kontract_no = &#x27;&#x27;;
+      if (k_kontract_no &lt;&gt; &#x27;&#x27;) then
+      begin
+        message_text = message_text || &#x27; Контракт &#x27; || k_kontract_no;
+
+        if (exists(select *
+                   from knaktlist kal
+                   where kal.kal_from_kf_id = :kf_id and
+                         kal.is_delete = 0 and
+                         kal.kal_new_kf_officer = 1000000000004 --  КЦ Сирена
+                         and
+                         :rep_date between kal.kal_date and kal.kal_date_end)) then
+        begin
+          message_text = message_text || &#x27;, числится за &quot;КЦ Сирена&quot;, &#x27;;
+        end
+
+        message_text = message_text || &#x27;, число дней просрочки = &#x27; || cast(delinq_days as varchar(10));
+
+        pant_oper_called = null;
+
+        select pantk.pant_oper_called
+        from pantera_kontracts pantk
+        where pantk.pant_from_k_id = :k_id and
+              :rep_date between pantk.pant_date_begin and pantk.pant_date_end and
+              pantk.pant_rd_project_type = :rd_id
+        into :pant_oper_called;
+
+        if (pant_oper_called is not null) then
+        begin
+          message_text = message_text || &#x27;, числится за &#x27; || pant_oper_called;
+        end
+        else
+        begin
+          message_text = message_text || &#x27;, за операторами &#x27; || op || &#x27; не числится&#x27;;
+        end
+      end
+      else
+      begin
+        message_text = message_text || &#x27;Контракт &#x27; || :kontract_no || &#x27; не имеет текущей просрочки&#x27;;
+      end
+    end
+    if (message_text &lt;&gt; &#x27;&#x27;) then
+    begin
+      suspend;
+    end
+
+    if (qty = 0) then
+    begin
+      message_text = &#x27;Активный контракт не найден.&#x27;;
+      suspend;
+    end
+  end
+  else
+  begin
+    message_text = &#x27;Данные для посика указаны не корректно.&#x27;;
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

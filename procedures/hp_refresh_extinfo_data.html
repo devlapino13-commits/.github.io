@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_REFRESH_EXTINFO_DATA — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_REFRESH_EXTINFO_DATA: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_REFRESH_EXTINFO_DATA</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_extinfolist_income_update.html"><div class="to">HP_EXTINFOLIST_INCOME_UPDATE</div></a><a class="ref-card" href="hp_refresh_pkb_data.html"><div class="to">HP_REFRESH_PKB_DATA</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_REFRESH_EXTINFO_DATA
+AS
+declare variable EIL_ID D_ID;
+declare variable CONFIG D_STR_CODE;
+declare variable BLS_ID D_ID;
+declare variable EIL_STATUS D_SMALLINT;
+begin
+  for select eil.eil_id,
+             eic.eic_code,
+             eil.eil_from_bls_id,
+             eil.eil_status
+  from extinfolist eil
+  inner join extinfocfg eic on eic.eic_id = eil.eil_from_eic_id
+  where eic.eic_code in (&#x27;salary_check&#x27;, &#x27;pension_check&#x27;, &#x27;pkb_cib_report&#x27;, &#x27;gbdfl_get_cli_data&#x27;, &#x27;checkme_info&#x27;) and
+        eil.eil_status not in (0, -1) and                                   -- Берем обработанные запросы
+        datediff(minute, eil.eil_status_datetime, current_timestamp) &lt;= 5 and  -- за последние 5 минут
+        coalesce(eil.eil_kk_result, 0) = 0
+  into eil_id,
+       config,
+       bls_id,
+       eil_status
+   do
+   begin
+     if (:config in (&#x27;salary_check&#x27;, &#x27;pension_check&#x27;)) then
+     begin
+       if (exists(select *
+                  from income_check_querys icq
+                  where icq.icq_status = 0
+                  and icq.icq_from_eil_id = :eil_id)) then
+         execute procedure hp_extinfolist_income_update(:eil_id); -- Обновление состояния справки о ЗП, пенсия
+     end
+
+     if (:config = &#x27;pkb_cib_report&#x27; and
+         eil_status = 2) then
+     begin
+       if (not exists(select *
+                      from kib_job_info kji
+                      where kji.kji_from_eil_id = :eil_id)) then
+         execute procedure hp_refresh_pkb_data(:eil_id);
+     end
+
+     update extinfolist eil
+     set eil.eil_kk_result = 1
+     where eil.eil_id = :eil_id;
+   end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

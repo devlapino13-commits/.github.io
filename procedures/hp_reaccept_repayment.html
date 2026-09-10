@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_REACCEPT_REPAYMENT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_REACCEPT_REPAYMENT: 4 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_REACCEPT_REPAYMENT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">4 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fsrobot_opercompens.html"><div class="to">FSROBOT_OPERCOMPENS</div></a><a class="ref-card" href="hp_do_repayment.html"><div class="to">HP_DO_REPAYMENT</div></a><a class="ref-card" href="hp_extsysoper_fix.html"><div class="to">HP_EXTSYSOPER_FIX</div></a><a class="ref-card" href="hp_split_str.html"><div class="to">HP_SPLIT_STR</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">TO_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MEMO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LST_OL_ID</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LST_NEW_OL_ID</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_REACCEPT_REPAYMENT(
+    K_ID D_ID,
+    TO_DATE D_DATE = &#x27;01.12.2020&#x27;,
+    UN_ID D_ID = 1000000000000,
+    MEMO D_STR_100 = &#x27;&#x27;)
+RETURNS (
+    RES_TXT D_STR_255,
+    LST_OL_ID D_STR_8100,
+    LST_NEW_OL_ID D_STR_8100)
+AS
+declare variable delim_sym d_str_sym;
+declare variable new_ol_id d_id;
+declare variable new_ol_parent_id d_id;
+declare variable err_txt d_str_255;
+declare variable acc_bal varchar(5);
+declare variable c_id d_id;
+declare variable ol_id d_id;
+declare variable ol_tmp_id d_id;
+declare variable ol_date d_date;
+declare variable ol_datetime d_datetime;
+declare variable ol_parent_id d_id;
+declare variable ol_doc_no d_integer;
+declare variable ol_doc_no_str d_str_20;
+declare variable repay_fact_office_id d_id;
+declare variable repay_user_id d_id;
+declare variable repay_document_client d_id;
+declare variable repay_doc_client_name_reason d_str_255;
+declare variable repay_manager_c_id d_id;
+declare variable repay_from_rd_id d_integer;
+declare variable repay_amount d_currency;
+declare variable repay_to_os d_integer;
+declare variable repay_to_perc d_integer;
+declare variable repay_to_fine d_integer;
+declare variable repay_to_kommis d_integer;
+declare variable repay_dt_account_kind d_integer;
+declare variable repay_dt_account_no d_str_20;
+declare variable is_full_repay d_integer;
+declare variable is_ipf d_integer;
+declare variable k_fact_closed_ol_id d_id;
+declare variable min_date d_date;
+declare variable max_date d_date;
+declare variable tmp_date d_date;
+declare variable period_beg d_integer;
+declare variable period_end d_integer;
+begin
+  res_txt = &#x27;&#x27;;
+  delim_sym = &#x27;|&#x27;;
+  lst_ol_id = &#x27;&#x27;;
+  lst_new_ol_id = &#x27;&#x27;;
+
+  if (to_date &lt; &#x27;01.12.2020&#x27;)
+    then to_date = &#x27;01.12.2020&#x27;;
+  min_date = to_date;
+  max_date = current_date;--&#x27;01.01.1900&#x27;;
+
+  if (not exists(
+    select *
+    from knclient_compens
+    where kcc_from_k_id = :k_id))
+  then res_txt = &#x27;Данный контракт не участвует в акции.&#x27;;
+
+    if (exists(
+        select *
+        from earlypaid_november epn
+        inner join operlist ol on ol.ol_id = epn.en_ol_id
+        where ol.is_delete = 0
+        and epn.en_k_id =:k_id
+        and ol.ol_date &gt;= :to_date))
+  then res_txt = &#x27;Была перекидка ранее выплаченных % на декабрь-февраль&#x27;;
+
+  /*
+  if (res_txt = &#x27;&#x27; and exists(
+    select *
+    from kontstate
+    where ks_from_k_id = :k_id
+    and  ks_date_begin &gt; :to_date
+    and ks_state = 1
+    and ks_ol_is_delete = 0))
+  then res_txt = &#x27;На &#x27;  || f_datetostr(:to_date) || &#x27; контракт еще не был выдан.&#x27;;
+  */
+
+  if (res_txt = &#x27;&#x27; and exists(
+    select *
+    from operkred
+      where ok_from_k_id = :k_id
+        and ok_ol_date &gt;= :to_date
+        and ok_type = 2
+        and ok_ol_is_active = 1))
+  then res_txt = &#x27;Перепроводка погашений отменена(была реструктуризация).&#x27;;
+
+  if (res_txt = &#x27;&#x27; and exists(
+    select *
+    from operkred
+      where ok_from_k_id = :k_id
+        and ok_ol_date &gt;= :to_date
+        and ok_type = 5
+        and ok_ol_is_active = 1))
+  then res_txt = &#x27;Перепроводка погашений отменена(было списание).&#x27;;
+
+  if (res_txt = &#x27;&#x27; and exists(
+    select *
+    from operkred ok
+      where ok_from_k_id = :k_id
+        and ok_ol_date &gt;= :to_date
+        and ok_type = 9
+        and ok.ok_os &gt; 0
+        and ok_ol_is_active = 1))
+  then res_txt = &#x27;Перепроводка погашений отменена(был возврат переплаты).&#x27;;
+
+  
+  if (res_txt = &#x27;&#x27; and exists(
+    select *
+    from knclient kncl
+    inner join operlist ol on ol.ol_id = kncl.kc_closed_ol_id
+        and ol.is_delete = 0
+    where kncl.kc_from_k_id = :k_id
+        and kncl.kc_amount_approved &gt; 0
+        and ol.ol_date &gt;= :to_date))
+  then res_txt = &#x27;Перепроводка погашений отменена(было закрытие доли участника).&#x27;;
+
+
+  if (res_txt = &#x27;&#x27; and exists(
+    select *
+    from operkroff okf
+      where okf.oko_from_k_id = :k_id
+        and okf.oko_ol_date &gt;= :to_date
+        and okf.oko_ol_is_active = 1))
+  then res_txt = &#x27;Было движение по внесистемному учету&#x27;;
+
+  if (res_txt = &#x27;&#x27; and exists(
+    select *
+    from operextra oke
+      where oke.ox_object_kind = 9
+        and oke.ox_object_id = :k_id
+        and oke.ox_ol_date &gt;= :to_date
+        and oke.ox_ol_is_active = 1))
+  then res_txt = &#x27;Было движение по operextra&#x27;;
+
+  /* igusev отключил по запросы Кыял А. 25.01.2021
+  if (res_txt = &#x27;&#x27; and exists (
+    select * from earlypaid_november
+    inner join operlist ol on ol.ol_id = en_ol_id
+    where en_k_id = :k_id
+    and ol.is_delete = 0))
+  then res_txt = &#x27;Было погашение по ОС за счет выплаченных % в ноябре&#x27;;
+  */
+
+  if (res_txt = &#x27;&#x27;) then
+  begin
+    period_beg = 100 * extract(year from to_date) + extract(month from to_date);
+    period_end = 100 * extract(year from current_date) + extract(month from current_date);
+    if (exists(
+      select *
+      from kontcalcperc
+      where kcp_period between :period_beg and :period_end))
+    then res_txt = &#x27;Необхобимо удалить начисленные проценты&#x27;;
+  end
+
+  if (res_txt = &#x27;&#x27;) then
+  begin
+    select
+      iif(pr_code containing &#x27;.ipf.&#x27;, 1 ,0),
+      ol.ol_id
+    from kontract
+      left join operlist ol
+        on ol.ol_id = k_fact_closed_ol_id
+          and ol.is_delete = 0
+      inner join product
+        on pr_id = k_from_pr_id
+    where k_id = :k_id
+    into
+      :is_ipf,
+      :k_fact_closed_ol_id;
+
+    -- операции для аннулирования
+    for
+      select
+        ok_from_ol_id,
+        ok_ol_date
+      from operkred
+      where ok_from_k_id = :k_id
+        and ok_ol_date &gt;= :to_date
+        and ok_type in (4, 9)
+        and ok_ol_is_active = 1
+      group by ok_ol_date, ok_from_ol_id
+      order by ok_ol_date desc, ok_from_ol_id desc
+    into
+        :ol_id,
+        :ol_date
+    do
+    begin
+      -- выполняется аннулирование
+      update operlist set
+        is_delete = 1
+      where ol_id = (select iif(ol_parent_id &gt; 0, ol_parent_id, ol_id)
+        from operlist where ol_id = :ol_id);
+
+      -- в список на перепроводку попадают только операции не от робота
+      if (not exists(
+        select *
+        from compens_robot_log
+        where crl_from_ol_id = :ol_id)) then
+      begin
+        --if (ol_date &gt; max_date) then max_date = ol_date;
+        lst_ol_id = ol_id || delim_sym || lst_ol_id;
+      end
+    end
+
+    if (is_ipf = 1 and to_date = &#x27;01.12.2020&#x27;)
+    then execute procedure fsrobot_opercompens(:to_date, :k_id);
+
+    tmp_date = min_date;
+    --if (lst_ol_id &lt;&gt; &#x27;&#x27;) then
+    while (tmp_date between min_date and max_date) do
+    begin
+      -- если платеж по графику
+      if (is_ipf = 0 and exists(
+        select *
+        from (
+          select
+            ok_sh_date,
+            sum(ok_os + ok_sh_os) sh_os,
+            sum(ok_perc + ok_sh_perc) sh_perc
+          from operkred
+          where ok_from_k_id = :k_id
+            and ok_type &lt; 7
+            and ok_ol_is_active = 1
+            and ok_from_c_id = 0
+            and ok_ol_date &lt;= :tmp_date
+          group by ok_sh_id, ok_sh_date)
+        where ok_sh_date = :tmp_date
+          and (sh_os &lt;&gt; 0 or sh_perc &lt;&gt; 0)))
+      then execute procedure fsrobot_opercompens(:tmp_date, :k_id);
+
+      for
+        select
+          res_str
+        from hp_split_str(:lst_ol_id, :delim_sym)
+      into
+        :ol_id
+      do
+      begin
+        select
+          ol_date,
+          ol_parent_id
+        from operlist
+        where ol_id = :ol_id
+          and ol_date = :tmp_date
+        into
+          :ol_date,
+          :ol_parent_id;
+        if (row_count = 0) then continue;
+        ol_tmp_id = coalesce(ol_parent_id, ol_id);
+
+        -- сбор данных для вх.параметров hp_do_repayment ... etc.
+        repay_to_os = 1;
+        repay_to_perc = 1;
+        repay_to_fine = 1;
+        repay_to_kommis = 1;
+        select
+          ol_datetime,
+          ol_doc_no,
+          ol_doc_no_str,
+          ol_from_reg_id,
+          ol_user_id,
+          ol_document_client,
+          ol_doc_client_name,
+          ol_manager_c_id,
+          ol_from_rd_id
+        from operlist
+        where ol_id = :ol_tmp_id
+        into
+          :ol_datetime,
+          :ol_doc_no,
+          :ol_doc_no_str,
+          :repay_fact_office_id,
+          :repay_user_id,
+          :repay_document_client,
+          :repay_doc_client_name_reason,
+          :repay_manager_c_id,
+          :repay_from_rd_id;
+
+        -- проверка на &quot;полное закрытие долга&quot;
+        is_full_repay = 0;
+        /*
+        if (k_fact_closed_ol_id = ol_id)
+        then is_full_repay = 1; else is_full_repay = 0;
+        */
+
+        -- проверка на &quot;закрытие долга одним участником&quot;
+        if (exists(
+          select *
+          from knclient
+          where kc_from_k_id = :k_id
+            and kc_from_c_id = :repay_document_client
+            and kc_closed_ol_id = :ol_id))
+        then c_id = repay_document_client; else c_id = 0;
+
+        -- сумма погашения &amp; счёт
+        select
+          sum(ob_summa),
+          max(ob_account_dt)
+        from operbook
+        where ob_from_ol_id = :ol_tmp_id
+          and substring(ob_account_dt from 8 for 5) not in (&#x27;11531&#x27;, &#x27;80611&#x27;)
+        into
+          :repay_amount,
+          :repay_dt_account_no;
+
+        -- вид оплаты
+        acc_bal = substring(repay_dt_account_no from 8 for 5);
+        repay_dt_account_kind =
+        case
+          when acc_bal in (&#x27;10001&#x27;, &#x27;10023&#x27;) then 1
+          when acc_bal in (&#x27;10101&#x27;, &#x27;10150&#x27;) then 2
+        else 3 end;
+
+        -- погашение
+        select
+          loan_ol_id,
+          ol_id,
+          error_text
+        from hp_do_repayment (
+          :k_id,
+          :c_id,
+          :ol_date,
+          :repay_amount,
+          :repay_to_os,
+          :repay_to_perc,
+          :repay_to_fine,
+          :repay_to_kommis,
+          1,
+          :is_full_repay,
+          0,
+          :repay_fact_office_id,
+          :repay_dt_account_kind,
+          :repay_dt_account_no,
+          0,
+          :repay_user_id,
+          :repay_document_client,
+          :repay_doc_client_name_reason,
+          :repay_manager_c_id,
+          :repay_from_rd_id)
+        into
+          :new_ol_id,
+          :new_ol_parent_id,
+          :err_txt;
+        lst_new_ol_id = lst_new_ol_id || new_ol_id || delim_sym;
+
+        for
+          select ol_id from operlist
+          where ol_id in (:new_ol_id, :new_ol_parent_id)
+          union
+          select ol_id from operlist
+          where ol_parent_id in (:new_ol_id, :new_ol_parent_id)
+        into
+          :ol_tmp_id
+        do
+        begin
+          update operlist set
+             ol_datetime = :ol_datetime,
+             ol_doc_no = :ol_doc_no,
+             ol_doc_no_str = :ol_doc_no_str
+          where ol_id = :ol_tmp_id;
+        end
+      end
+
+      tmp_date = tmp_date + 1;
+    end
+  end
+
+  insert into reaccept_repayment_log (rrl_from_k_id, rrl_res_txt, rrl_lst_ol_id, rrl_lst_new_ol_id, rrl_un_id, rrl_memo)
+  values (:k_id, :res_txt, :lst_ol_id, :lst_new_ol_id, :un_id, :memo);
+
+  execute procedure hp_extsysoper_fix(&#x27;kontract&#x27;, :k_id, :to_date);
+
+  -- должно быть в самом низу. Удаляю сформировавшиеся смс
+  delete from fsrobot_eventlist fse
+  where fel_command_kind in (&#x27;Loan_LO_Repay_OK&#x27;, &#x27;Loan_Repay_OK&#x27;, &#x27;Loan_Repay_X&#x27;, &#x27;Push_Loan_LO_Repay&#x27;);
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

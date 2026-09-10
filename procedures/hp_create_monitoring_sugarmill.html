@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CREATE_MONITORING_SUGARMILL — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CREATE_MONITORING_SUGARMILL: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CREATE_MONITORING_SUGARMILL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CREATE_MONITORING_SUGARMILL
+AS
+declare variable kf_id d_id;
+declare variable reg_id d_integer;
+declare variable lo_id d_id;
+declare variable k_id d_id;
+declare variable k_disb_date d_date;
+declare variable rep_date d_date;
+declare variable rd_anketa d_integer;
+declare variable datex d_date;
+declare variable obj_kind1 d_integer;
+declare variable obj_kind2 d_integer;
+declare variable un_id d_id;
+begin
+  -- процедура должна запускаться каждый вечер и создавать задачи на заполнение анкеты по @мониторингу целевого использования кредита&quot;
+  -- Процедура должна запускаться после 21:30
+  rd_anketa = f_get_rd_id(&#x27;Anketa.TargetUseLoan&#x27;);
+  if (rd_anketa is null) then
+    exit;
+
+  rep_date = current_date;
+  datex = &#x27;03.03.2022&#x27;;
+  obj_kind1 = f_objkind(&#x27;Clients&#x27;, &#x27;id&#x27;);
+  obj_kind2 = f_objkind(&#x27;KnClient&#x27;, &#x27;id&#x27;);
+  un_id = 1000000000001;
+
+  for select k_id, k_disb_date, k_from_kf_id
+      from kontstate
+      inner join kontract on k_id = ks_from_k_id
+      inner join product on pr_id = k_from_pr_id
+      where ks_date_begin = :rep_date and
+            ks_ol_is_delete = 0 and
+            ks_state = 1 and
+            pr_code containing &#x27;.sugarmill.&#x27;
+      into :k_id, :k_disb_date, :kf_id
+  do
+  begin
+    select kal_new_reg_id, kal_new_kf_officer
+    from knaktlist
+    where kal_from_kf_id = :kf_id and
+          :rep_date between kal_date and kal_date_end and
+          is_delete = 0
+    into :reg_id, :lo_id;
+
+    -- Создаем задачу завтрашним днем
+    insert into actionlist (acl_date, acl_from_reg_id, acl_object_kind, acl_object_id, acl_from_rd_id, acl_status,
+                            acl_respons_c_id, acl_from_un_id)
+    select :rep_date + 1, :reg_id, iif(:k_disb_date &gt;= :datex, :obj_kind2, :obj_kind1),
+           iif(:k_disb_date &gt;= :datex, kc_id, kc_from_c_id), :rd_anketa, 0, :lo_id, :un_id
+    from knclient
+    where kc_from_k_id = :k_id and
+          kc_amount_approved &gt; 0;
+
+    rep_date = current_date;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

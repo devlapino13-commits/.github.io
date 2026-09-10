@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_SUD_COL_CHECK_DEFINE_COLLECT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_SUD_COL_CHECK_DEFINE_COLLECT: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_SUD_COL_CHECK_DEFINE_COLLECT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_blobex_blob.html"><div class="to">HP_GET_BLOBEX_BLOB</div></a><a class="ref-card" href="hp_sud_get_request_status.html"><div class="to">HP_SUD_GET_REQUEST_STATUS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_SUD_COL_CHECK_DEFINE_COLLECT
+AS
+declare variable slc_id d_id;
+declare variable bls_id d_id;
+declare variable json_str d_str_8100;
+declare variable target d_str_code;
+declare variable sag_kind d_integer;
+declare variable sag_code d_str_code;
+declare variable sag_name d_str_255;
+declare variable sag_address d_str_255;
+declare variable sag_email d_str_255;
+declare variable sag_phone d_str_255;
+declare variable sag_id d_id;
+begin
+  -- процедура ищет ответы на запросы определения подсудности (ФССП)
+
+  -- найдем заявки ожидающие подсудности
+  for select distinct smc_from_slc_id
+  from sud_maincollect
+  where smc_status = 0
+    and smc_auto_collect is null
+  into slc_id
+  do
+  begin
+    bls_id = null;
+
+    select bls_id
+    from hp_sud_get_request_status(:slc_id, 3)
+    where eil_status = 2
+    into bls_id;
+
+    if (bls_id is null) then
+      continue;
+
+    json_str = f_json_blob_get_value(&#x27;{&quot;items&quot;:&#x27;||(select blx_blob from hp_get_blobex_blob(:bls_id))||&#x27;}&#x27;, &#x27;items[0]&#x27;, &#x27;&#x27;);
+
+    target = f_json_str_get_value(json_str, &#x27;TARGET&#x27;, &#x27;&#x27;);
+
+    if (target &lt;&gt; &#x27;BAILIFF&#x27;) then
+      exception e_default f_format(&#x27;wrong target &quot;%1&quot;. slc_id = %2&#x27;, target, slc_id);
+
+    sag_kind = f_enum(&#x27;sud_agent_kind&#x27;, &#x27;collector&#x27;, &#x27;id&#x27;);
+    sag_code = f_json_str_get_value(json_str, &#x27;BAILIFF_CODE&#x27;, &#x27;&#x27;);
+    sag_name = f_json_str_get_value(json_str, &#x27;BAILIFF_NAME&#x27;, &#x27;&#x27;);
+    sag_address = f_json_str_get_value(json_str, &#x27;BAILIFF_POSTCODE&#x27;, &#x27;-&#x27;) || &#x27;, &#x27; ||
+                  f_json_str_get_value(json_str, &#x27;BAILIFF_REGION_NAME&#x27;, &#x27;&#x27;) || &#x27; &#x27; || f_json_str_get_value(json_str, &#x27;BAILIFF_REGION_TYPE&#x27;, &#x27;-&#x27;) || &#x27;, &#x27; ||
+                  f_json_str_get_value(json_str, &#x27;BAILIFF_DISTRICT_NAME&#x27;, &#x27;&#x27;) || &#x27; &#x27; || f_json_str_get_value(json_str, &#x27;BAILIFF_DISTRICT_TYPE&#x27;, &#x27;-&#x27;) || &#x27;, &#x27; ||
+                  f_json_str_get_value(json_str, &#x27;BAILIFF_CITY_TYPE&#x27;, &#x27;-&#x27;) || &#x27;. &#x27; || f_json_str_get_value(json_str, &#x27;BAILIFF_CITY_NAME&#x27;, &#x27;-&#x27;) || &#x27;, &#x27; ||
+                  f_json_str_get_value(json_str, &#x27;BAILIFF_LOCALITY_TYPE&#x27;, &#x27;-&#x27;) || &#x27;. &#x27; || f_json_str_get_value(json_str, &#x27;BAILIFF_LOCALITY_NAME&#x27;, &#x27;-&#x27;) || &#x27;, &#x27; ||
+                  f_json_str_get_value(json_str, &#x27;BAILIFF_STREET_TYPE&#x27;, &#x27;-&#x27;) || &#x27;. &#x27; || f_json_str_get_value(json_str, &#x27;BAILIFF_STREET_NAME&#x27;, &#x27;-&#x27;) || &#x27;, &#x27; ||
+                  f_json_str_get_value(json_str, &#x27;BAILIFF_HOUSE&#x27;, &#x27;&#x27;) || &#x27; &#x27; || f_json_str_get_value(json_str, &#x27;BAILIFF_BLOCK&#x27;, &#x27;&#x27;);
+
+    sag_address = replace(sag_address,&#x27;-. &#x27;, &#x27;&#x27;);
+    sag_address = replace(sag_address,&#x27;-, &#x27;, &#x27;&#x27;);
+
+    sag_email = f_json_str_get_value(json_str, &#x27;BAILIFF_EMAIL&#x27;, &#x27;&#x27;);
+    sag_phone = f_json_str_get_value(json_str, &#x27;BAILIFF_PHONE&#x27;, &#x27;&#x27;);
+
+    update or insert into sud_agents (sag_kind, sag_code, sag_name, sag_address, sag_email, sag_phone)
+    values (:sag_kind, :sag_code, :sag_name, :sag_address, :sag_email, :sag_phone)
+    matching (sag_kind, sag_code)
+    returning sag_id
+    into sag_id;
+
+    update sud_maincollect
+    set smc_auto_collect = :sag_id
+    where smc_from_slc_id = :slc_id
+      and smc_auto_collect is null;
+
+  end 
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

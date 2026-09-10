@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_GET_PERCENT_ONE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_GET_PERCENT_ONE: 5 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_GET_PERCENT_ONE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_percent_all.html"><div class="to">HP_GET_PERCENT_ALL</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_LEVEL</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_DISB_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_PERCENT_PER_DAY</div><div class="ptype">DECIMAL(18,7)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_FROM_PR_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">NEW_KD_PERCENT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_GET_PERCENT_ONE(
+    K_ID D_ID,
+    K_LEVEL D_SMALLINT,
+    K_DISB_DATE D_DATE = null,
+    K_PERCENT_PER_DAY D_PERCENT = null,
+    K_FROM_PR_ID D_INTEGER = null)
+RETURNS (
+    NEW_KD_PERCENT DECIMAL(18,4))
+AS
+declare variable NEW_LEVEL D_SMALLINT;
+declare variable K_PERCENT_ON_DISB D_PERCENT;
+declare variable DB_ID D_INTEGER;
+begin
+  db_id = f_get_db_id();
+
+  if (k_disb_date is null or k_percent_per_day is null or k_from_pr_id is null) then
+  begin
+    select k_disb_date,
+           round(cast(k_percent_per_day as double precision) * iif(:db_id = 81001, 30.0, pr_percent_for_days), 2) -- для РФ это РФ, вычисляется месячная % ставка, если КГ тогда годовая
+    from kontract, product pr
+    where k_id = :k_id and
+          k_from_pr_id = pr_id and
+          pr_percent_kind = 1 -- плавающая процентная ставка
+    into k_disb_date,
+         k_percent_on_disb;
+  end else
+  begin
+    select round(cast(:k_percent_per_day as double precision) * iif(:db_id = 81001, 30.0, pr_percent_for_days), 2) from product
+    where pr_id = :k_from_pr_id
+    and  pr_percent_kind = 1
+    into k_percent_on_disb;
+  end 
+
+  if (k_percent_on_disb is null) then exit; -- не имеется плавающей ставки
+
+  new_level = k_level;
+
+  if (db_id = 81001) then
+  begin
+    if (k_disb_date &lt; &#x27;01.11.2020&#x27;) then
+    begin
+      if (new_level = 1) then
+        new_kd_percent = 8.2;
+      if (new_level = 2) then
+        new_kd_percent = 9.0;
+    end
+    else
+    if (k_disb_date &lt; &#x27;08.09.2021&#x27;) then
+    begin
+      if (new_level = 1) then
+        new_kd_percent = k_percent_on_disb + 1.0;
+      if (new_level = 2) then
+        new_kd_percent = k_percent_on_disb + 2.0;
+      if (new_level = 3) then
+        new_kd_percent = k_percent_on_disb + 2.5;
+    end
+    else
+    if (new_level = 1) then
+      new_kd_percent = k_percent_on_disb;
+
+    if (k_id in (101010081081400101, -- СРОЧНО! ВАЖНО! Не выдавать Займы сотрудникам свыше 100 рублей! письмо от Зары от Пт 21.01.2022 18:39
+             101010081152300101, 101010081446600101, 101010081922200101, 101010082131400101, 101010083321700101, 101010083676500101, 101010083873900101, 101010084172300101, 101010084863500101)) then
+      new_kd_percent = 4;
+
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PRINT_RESCHEDULE_KZ_EXT — процедура — схема БД</title>
+<meta name="description" content="Процедура PRINT_RESCHEDULE_KZ_EXT: 2 входных, 8 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>PRINT_RESCHEDULE_KZ_EXT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">8</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_blobex_blob.html"><div class="to">HP_GET_BLOBEX_BLOB</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ADD_PARAMS</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">8 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SH_DATE_BEFORE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DELINQ_START_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">WRITEOFF_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MONTH_ADD</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">WRITEOFF_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">EDL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_PERIOD</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_EFFECT_RATE</div><div class="ptype">DECIMAL(18,7)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE PRINT_RESCHEDULE_KZ_EXT(
+    K_ID D_ID,
+    ADD_PARAMS D_STR_LONG = null)
+RETURNS (
+    SH_DATE_BEFORE D_DATE,
+    DELINQ_START_DATE D_DATE,
+    WRITEOFF_AMOUNT CURR_TYPE,
+    MONTH_ADD D_INTEGER,
+    WRITEOFF_DATE D_DATE,
+    EDL_ID D_ID,
+    K_PERIOD D_INTEGER,
+    K_EFFECT_RATE D_PERCENT)
+AS
+declare variable BLS_ID D_ID;
+declare variable JSON_TEXT D_BLOB_TEXT;
+begin
+  edl_id = iif(add_params starting &#x27;{&#x27;, f_json_str_get_value(add_params, &#x27;edl_id&#x27;, null), add_params);
+
+  select edl.edl_blank_date
+  from edoc_list edl
+  where edl.edl_id = :edl_id
+  into writeoff_date;
+
+  for select eil.eil_from_bls_id
+      from extinfolist eil
+      inner join extinfocfg eic on eic.eic_id = eil.eil_from_eic_id and
+            eic.eic_code = &#x27;restruct_schedule&#x27;
+      where eil.eil_status = 2 and
+            eil.eil_object_kind = f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;) and
+            eil.eil_object_id = :k_id and
+            eil.eil_is_json = 1 and
+            eil.eil_from_bls_id &gt; 0
+      order by eil.eil_id desc rows 1
+      into bls_id
+  do
+  begin
+
+    select blx_blob
+    from hp_get_blobex_blob(:bls_id)
+    into json_text;
+
+    sh_date_before = f_json_str_get_value(:json_text, &#x27;schedule[0].sh_date&#x27;, &#x27;&#x27;);
+    delinq_start_date = f_json_str_get_value(:json_text, &#x27;delinq_start_date&#x27;, &#x27;&#x27;);
+    writeoff_amount = f_json_str_get_value(:json_text, &#x27;fine&#x27;, &#x27;&#x27;);
+    month_add = f_json_str_get_value(:json_text, &#x27;month_add&#x27;, &#x27;&#x27;);
+    k_period = f_json_str_get_value(:json_text, &#x27;k_period&#x27;, &#x27;&#x27;);
+    k_effect_rate = f_json_str_get_value(:json_text, &#x27;k_effect_rate&#x27;, 0);
+    delinq_start_date = delinq_start_date + 1;
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

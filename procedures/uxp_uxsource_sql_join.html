@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$UXSOURCE_SQL_JOIN — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$UXSOURCE_SQL_JOIN: 3 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$UXSOURCE_SQL_JOIN</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">INDEX_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MAIN_PREFIX</div><div class="ptype">VARCHAR(10)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FK_PREFIX</div><div class="ptype">VARCHAR(10)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">JOIN_TEXT</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$UXSOURCE_SQL_JOIN(
+    INDEX_NAME D_STR_100,
+    MAIN_PREFIX D_STR_10,
+    FK_PREFIX D_STR_10)
+RETURNS (
+    JOIN_TEXT D_STR_LONG,
+    ERROR_TEXT D_STR_255)
+AS
+declare variable field_source d_str_code;
+declare variable fields d_str_100;
+declare variable fk_index d_str_100;
+declare variable fk_source d_str_code;
+declare variable fk_fields d_str_100;
+declare variable fields_count d_integer;
+declare variable fk_fields_count d_integer;
+declare variable fields_item d_str_code;
+declare variable fk_fields_item d_str_code;
+declare variable pos d_integer;
+begin
+  join_text = &#x27;&#x27;;
+  error_text = &#x27;&#x27;;
+
+  if (trim(coalesce(index_name, &#x27;&#x27;)) = &#x27;&#x27;) then
+  begin
+    error_text = &#x27;empty index_name&#x27;;
+    suspend;
+    exit;
+  end
+
+  select uix_source, uix_fields, uix_fk_index, uix_count
+  from ux$index
+  where uix_index = :index_name
+  into :field_source, :fields, :fk_index, fields_count;
+
+  if (row_count = 0) then
+  begin
+    error_text =  f_format(&#x27;Index not found: %1&#x27;, index_name);
+    suspend;
+    exit;
+  end
+
+  if (fk_index = &#x27;&#x27;) then
+  begin
+    error_text = f_format(&#x27;&quot;%1&quot; is not FK index&#x27;, index_name);
+    suspend;
+    exit;
+  end
+
+  select uix_source, uix_fields, uix_count
+  from ux$index
+  where uix_index = :fk_index
+  into :fk_source, :fk_fields, fk_fields_count;
+
+
+  if (fields_count &lt;&gt; fk_fields_count) then
+  begin
+    error_text = f_format(&#x27;Different field count. FK fields: %1, PK fields: %2&#x27;, fields, fk_fields);
+    suspend;
+    exit;
+  end
+
+  if (coalesce(main_prefix, &#x27;&#x27;) = &#x27;&#x27;) then
+  begin
+    pos = position(&#x27;_&#x27;, fields);
+    if (pos &gt; 0) then
+      main_prefix = left(fields, pos - 1);
+    else
+      main_prefix = left(field_source, 3);
+  end
+
+  if (coalesce(fk_prefix, &#x27;&#x27;) = &#x27;&#x27;) then
+  begin
+    pos = position(&#x27;_&#x27;, fk_fields);
+    if (pos &gt; 0) then
+      fk_prefix = left(fk_fields, pos - 1);
+    else
+      fk_prefix = left(fk_source, 3);
+  end
+
+  while (fields &lt;&gt; &#x27;&#x27;) do
+  begin
+    pos = position(&#x27;;&#x27;, fields);
+    if (pos &gt; 0) then
+    begin
+      fields_item = left(fields, pos - 1);
+      fields = substring(fields from pos + 1);
+    end else
+    begin
+      fields_item = fields;
+      fields = &#x27;&#x27;;
+    end
+
+    pos = position(&#x27;;&#x27;, fk_fields);
+    if (pos &gt; 0) then
+    begin
+      fk_fields_item = left(fk_fields, pos - 1);
+      fk_fields = substring(fk_fields from pos + 1);
+    end else
+    begin
+      fk_fields_item = fk_fields;
+      fk_fields = &#x27;&#x27;;
+    end
+
+    if (join_text &lt;&gt; &#x27;&#x27;) then
+      join_text = join_text || &#x27; and&#x27;;
+
+    join_text = join_text || main_prefix || &#x27;.&#x27; || fields_item || &#x27; = &#x27; || fk_prefix || &#x27;.&#x27; || fk_fields_item;
+  end
+
+  join_text = &#x27; inner join &#x27; || fk_source || &#x27; &#x27; || fk_prefix || &#x27; on (&#x27; || join_text || &#x27;)&#x27;;
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

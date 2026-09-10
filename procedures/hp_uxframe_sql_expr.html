@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_UXFRAME_SQL_EXPR — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_UXFRAME_SQL_EXPR: 2 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_UXFRAME_SQL_EXPR</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UX_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FIELD_NAME</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SQL_TEXT</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_FIELD_LIST</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_UXFRAME_SQL_EXPR(
+    UX_CODE D_STR_CODE,
+    FIELD_NAME D_STR_CODE)
+RETURNS (
+    SQL_TEXT D_STR_8100,
+    RES_FIELD_LIST D_STR_8100)
+AS
+declare variable field_list d_str_8100;
+declare variable ufd_source d_str_code;
+declare variable ufd_is_table d_bool;
+declare variable ufr_show_kind d_smallint;
+declare variable ux_kind d_str_code;
+declare variable fr_code d_str_code;
+begin
+  -- Приготовление Select sql для фрейма
+  sql_text = &#x27;&#x27;;
+  field_list = &#x27;&#x27;;
+  res_field_list = &#x27;&#x27;;
+
+  if (field_name is null) then
+    field_name = &#x27;&#x27;;
+
+  if (ufr_show_kind = 0) then
+  begin
+    suspend;
+    exit;
+  end
+
+  select uxf$kind(ux_kind, &#x27;code&#x27;)
+  from uxcode
+  where ux_code = :ux_code
+  into ux_kind;
+
+  if (ux_kind &lt;&gt; &#x27;uxframe&#x27;) then
+  begin
+    select ucf_ufr_code
+    from uxcodeframe
+    where ucf_ux_code = :ux_code and
+          ucf_is_mainframe = 1
+    into fr_code;
+  end else
+    fr_code = :ux_code;
+
+  select ufd_source, ufd_is_table, ufr_show_kind
+  from uxfrdata, uxframe
+  where ufr_code = :fr_code and
+        ufd_ufr_code = ufr_code and
+        ufd_kind = 0
+  into ufd_source, ufd_is_table, ufr_show_kind;
+
+  if (ufr_show_kind &lt;&gt; 0) then
+  begin
+    select list(ufp_origin_name, &#x27;, &#x27;)
+    from uxfrparam
+    where ufp_ufr_code = :fr_code and
+          ufp_is_param = 0 and
+          ufp_is_delete = 0 and
+          ufp_in_use = 1 and
+          (:field_name = &#x27;&#x27; or ufp_origin_name = :field_name)
+    into res_field_list;
+  end
+
+  if (res_field_list &lt;&gt; &#x27;&#x27;) then
+  begin
+    sql_text = &#x27;select &#x27; || res_field_list || &#x27; from &#x27; || ufd_source;
+
+    if (ufd_is_table = 0) then
+    begin
+      select list(&#x27;null&#x27;)
+      from uxfrparam
+      where ufp_ufr_code = :fr_code and
+            ufp_is_param = 1
+      into field_list;
+      if (field_list &lt;&gt; &#x27;&#x27;) then
+        sql_text = sql_text || &#x27;(&#x27; || field_list || &#x27;)&#x27;;
+    end
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

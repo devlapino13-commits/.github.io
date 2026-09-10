@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_BKI_CORR_ADD_LOAN — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_BKI_CORR_ADD_LOAN: 7 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_BKI_CORR_ADD_LOAN</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">7</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_bki_get_packet_name.html"><div class="to">HP_BKI_GET_PACKET_NAME</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_bki_corr_copy_event.html"><div class="to">HP_BKI_CORR_COPY_EVENT</div></a><a class="ref-card" href="hp_bki_corr_event_3_1.html"><div class="to">HP_BKI_CORR_EVENT_3_1</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">7 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">EVENT_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">EVENT_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">BKK_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEW_PACKET_FORCED</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">NEW_BEV_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_BKI_CORR_ADD_LOAN(
+    K_ID D_ID,
+    C_ID D_ID,
+    EVENT_ID D_INTEGER,
+    EVENT_DATE D_DATE,
+    BKK_ID D_ID,
+    NEW_PACKET_FORCED D_BOOL = 0,
+    MA_ID D_INTEGER = null)
+RETURNS (
+    NEW_BEV_ID D_ID)
+AS
+declare variable counter d_integer;
+declare variable packet_name d_str_code;
+declare variable packet_id d_id;
+declare variable bkt_id d_id;
+declare variable packet_date d_date;
+declare variable bkl_id d_id;
+declare variable bkc_id d_id;
+declare variable uid_str d_str_code;
+declare variable rec_no d_integer;
+declare variable object_kind d_integer;
+declare variable object_id d_id;
+declare variable packet_format d_smallint;
+begin
+  if (ma_id is not null) then
+  begin
+    object_kind = 11;
+    object_id = ma_id;
+  end else
+  begin
+    object_kind = 9;
+    object_id = k_id;
+  end
+
+  select bkt_id, bkt_format
+  from bki_packet_type
+  where bkt_action = f_enum(&#x27;bki_packet_action&#x27;, &#x27;correction&#x27;, &#x27;id&#x27;)
+    and bkt_from_bkk_id = :bkk_id
+    and bkt_format = 0
+  into bkt_id, packet_format;
+
+  if (coalesce(new_packet_forced, 0) = 0) then
+    select bkp_id
+    from bki_packet
+    where bkp_from_bkt_id = :bkt_id
+      and bkp_status = -5
+    into packet_id;
+
+  if (packet_id is null) then
+  begin
+    packet_date = current_date;
+
+    select coalesce(max(bkp_number), 0)
+    from bki_packet, bki_packet_type
+    where bkt_id = bkp_from_bkt_id
+      and bkp_date = :packet_date
+      and bkt_from_bkk_id = :bkk_id
+      and bkt_format = 0
+    into counter;
+
+    select packet_name, new_counter
+    from hp_bki_get_packet_name(:packet_date, (select bkk_code from bki_kind where bkk_id = :bkk_id), :counter, :packet_format)
+    into packet_name, counter;
+  
+    insert into bki_packet (bkp_code, bkp_from_bkk_id, bkp_date, bkp_number, bkp_from_bkt_id, bkp_status)
+    values (:packet_name, :bkk_id, :packet_date, :counter, :bkt_id, -5)
+    returning bkp_id
+    into :packet_id;
+  end
+
+  update or insert into bki_loans (bkl_from_bkp_id, bkl_object_kind, bkl_object_id)
+  values (:packet_id, :object_kind, :object_id)
+  matching (bkl_from_bkp_id, bkl_object_kind, bkl_object_id)
+  returning bkl_id
+  into :bkl_id;
+
+  if (object_kind = 9) then
+  begin
+    select f_uuid_cbr(f_uuid(&#x27;knclient&#x27;, kc_id))
+    from knclient
+      where kc_from_k_id = :object_id
+        and kc_from_c_id = :c_id
+    into uid_str;
+  end
+  else
+  begin
+    if (exists(
+        select 1
+        from uuidlist udl
+          where udl_object_kind = :object_kind
+            and udl_object_id = :object_id))
+    then
+      begin
+        select f_uuid_cbr(f_uuid(&#x27;miniappclient&#x27;, mac_id))
+        from miniappclient mac
+        where mac.mac_from_ma_id = :object_id
+          and mac.mac_amount &gt; 0
+          and mac.mac_from_c_id = :c_id
+        into uid_str;
+      end
+      else  -- значит уже uid перенесен на knclient, соответственно k_id должен быть найден
+        select f_uuid_cbr(f_uuid(&#x27;knclient&#x27;, kc_id))
+        from knclient kc, kontract k
+          where k_id = kc_from_k_id
+            and k_from_ma_app_id = :object_id
+            and kc_from_c_id = :c_id
+        into uid_str;
+  end
+
+  select coalesce(max(bev_rec_no), 0) + 1
+  from bki_packet, bki_loans, bki_clients, bki_events
+  where bkp_id = :packet_id
+    and bkl_from_bkp_id = bkp_id
+    and bkc_from_bkl_id = bkl_id
+    and bev_from_bkc_id = bkc_id
+  into rec_no;
+
+  insert into bki_clients (bkc_from_bkl_id, bkc_from_c_id, bkc_uid_bkd_id)
+  values (:bkl_id, :c_id, f_bki_data_id(:uid_str))
+  returning bkc_id
+  into bkc_id;
+
+  insert into bki_events (bev_from_bkc_id, bev_rec_no, bev_event_id, bev_event_date, bev_tag)
+  values (:bkc_id, :rec_no, :event_id, :event_date, 5)
+  returning bev_id
+  into :new_bev_id;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

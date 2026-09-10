@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_KZ_0035_SQL — процедура — схема БД</title>
+<meta name="description" content="Процедура CM_KZ_0035_SQL: 3 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_KZ_0035_SQL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_blobex_blob.html"><div class="to">HP_GET_BLOBEX_BLOB</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_KZ_0035_SQL(
+    MA_ID D_ID,
+    CHECK_KIND D_STR_255,
+    UN_ID D_ID)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable C_ID D_ID;
+declare variable MA_AMOUNT CURR_TYPE;
+declare variable MA_DATE D_DATE;
+declare variable PKB_HISTORY_COUNT D_INTEGER;
+declare variable CV_VALUE STR_100;
+declare variable BLS_ID D_ID;
+declare variable JSON_TEXT D_BLOB_TEXT;
+declare variable EXISTING_CNT D_INTEGER;
+declare variable TERMINATED_CNT D_INTEGER;
+declare variable DOC_TIME_CHIP timestamp;
+declare variable DOC_TIME_FOTO timestamp;
+declare variable IS_REQUIRED D_SMALLINT;
+begin
+  res_info_text = &#x27;Биометрия&#x27;;
+  res_error_text = &#x27;&#x27;;
+  res_error_is_critical = 0;
+  is_required = 0;
+
+  select mac.mac_amount, mac.mac_from_c_id, ma.ma_date_oper
+  from miniapp ma
+  inner join miniappclient mac on mac.mac_from_ma_id = ma.ma_id
+  where ma.ma_id = :ma_id and
+        mac.mac_amount &gt; 0 and
+        ma.ma_is_active = 1 and
+        ma.ma_date_end &gt;= &#x27;31.12.9999&#x27;
+  rows 1
+  into :ma_amount, :c_id, :ma_date;
+
+  select cast(cv.cv_value as decimal(18,2))
+  from const_var cv
+  where cv.cv_code = &#x27;kz_freeze_start_amount&#x27;
+  into :cv_value;
+
+  if (coalesce(:ma_amount, 0) &gt; coalesce(:cv_value, 0)) then
+  begin
+    if (exists(select 1 from kontstate ks 
+               inner join knclient kc on ks.ks_from_k_id = kc.kc_from_k_id
+               where ks.ks_ol_is_delete = 0 and
+                     ks.ks_state = 1 and
+                     kc.kc_amount_approved &gt; 0 and
+                     kc.kc_from_c_id = :c_id and
+                     ks.ks_date_begin &lt; :ma_date)) then
+      exit;
+
+    pkb_history_count = -1;
+    select (prp.prp_active_contract_count + prp.prp_te_cr_history_count)
+    from pkb_report_parsed prp
+    where prp.prp_from_ma_id = :ma_id
+    order by prp.prp_from_eil_id desc
+    rows 1
+    into :pkb_history_count;
+
+    if (:pkb_history_count = -1) then
+    begin
+      select eil.eil_from_bls_id
+      from extinfolist eil
+      where eil.eil_object_kind = 11 and
+            eil.eil_object_id = :ma_id and
+            eil.eil_status = 2 and
+            eil.eil_from_eic_id = 1
+      order by eil.eil_status_datetime desc
+      rows 1
+      into :bls_id;
+
+      if (:bls_id is not null) then
+      begin
+        select cast(blx_blob as d_blob_text)
+        from hp_get_blobex_blob(:bls_id)
+        into :json_text;
+        if (:json_text is not null) then
+        begin
+          existing_cnt = f_json_blob_get_count(:json_text, &#x27;report.root.existingcontracts.contract&#x27;);
+          terminated_cnt = f_json_blob_get_count(:json_text, &#x27;report.root.terminatedcontracts.contract&#x27;);
+          pkb_history_count = iif(existing_cnt &lt; 0, 0, existing_cnt) + iif(terminated_cnt &lt; 0, 0, terminated_cnt);
+        end
+      end
+    end
+    
+    if (:pkb_history_count = 0) then
+    is_required = 1;
+
+    if (is_required = 0)
+    then exit;
+
+    doc_time_chip = null;
+    select first 1 cd.cds_create_datetime
+    from clientdocs cd
+    inner join passkind pk on pk.pk_id = cd.cds_from_pk_id
+    inner join passdoctype pdt on pdt.pdt_id = pk.pk_from_pdt_id
+    where cd.cds_from_c_id = :c_id and
+          pdt.pdt_code = &#x27;info_with_chip&#x27; and
+          cd.cds_is_delete = 0
+    order by cd.cds_create_datetime desc
+    into :doc_time_chip;
+    
+    if (doc_time_chip is null) then
+    begin
+      res_error_text = &#x27;Отсутствует документ &quot;Согласие на биометрию&quot;. Сформируйте и загрузите его.&#x27;;
+      res_error_is_critical = 2;
+      suspend;
+    end
+    
+    doc_time_foto = null;
+    select first 1 cd.cds_create_datetime
+    from clientdocs cd
+    inner join passkind pk on pk.pk_id = cd.cds_from_pk_id
+    inner join passdoctype pdt on pdt.pdt_id = pk.pk_from_pdt_id
+    where cd.cds_from_c_id = :c_id and
+          pdt.pdt_code = &#x27;foto_on_date_disb&#x27; and
+          cd.cds_is_delete = 0
+    order by cd.cds_create_datetime desc
+    into :doc_time_foto;
+    
+    if (doc_time_foto is null) then
+    begin
+      res_error_text = &#x27;Загрузите фото клиента на дату выдачи.&#x27;;
+      res_error_is_critical = 2;
+      suspend; exit;
+    end
+    
+    if (cast(doc_time_chip as date) &lt;&gt; current_date) then
+    begin
+      res_error_text = &#x27;Документ &quot;Согласие на биометрию&quot; устарел. Загрузите новое фото согласия за сегодня.&#x27;;
+      res_error_is_critical = 2;
+      suspend; exit;
+    end
+    
+    if (cast(doc_time_foto as date) &lt;&gt; current_date) then
+    begin
+      res_error_text = &#x27;Фото клиента на выдачу устарело. Сделайте новое фото за сегодня.&#x27;;
+      res_error_is_critical = 2;
+      suspend; exit;
+    end
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

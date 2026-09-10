@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DO_KONTMAT_SELL — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DO_KONTMAT_SELL: 3 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DO_KONTMAT_SELL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_kontmatown_sell.html"><div class="to">HP_DO_KONTMATOWN_SELL</div></a><a class="ref-card" href="hp_get_bill_saldo_info.html"><div class="to">HP_GET_BILL_SALDO_INFO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_disbursement.html"><div class="to">HP_DO_DISBURSEMENT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACCOUNT_DT</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DO_KONTMAT_SELL(
+    K_ID D_ID,
+    OL_ID D_ID,
+    ACCOUNT_DT D_STR_20)
+RETURNS (
+    RES_ID D_INTEGER,
+    RES_TEXT D_BLOB_TEXT)
+AS
+declare variable workplace_id d_id;
+declare variable account_kt d_str_20;
+declare variable matotvet_id d_id;
+declare variable kml_count d_currency = 0;
+declare variable kml_total d_currency = 0;
+declare variable db_id d_integer;
+declare variable kml_bill_id d_id;
+declare variable kml_bill_line_no d_integer;
+declare variable reg_id d_integer;
+declare variable wp_id d_id;
+declare variable saldo_kol d_currency = 0;
+declare variable ml_name d_str_255;
+declare variable ml_model d_str_255;
+declare variable ol_id1 d_id;
+begin
+  -- Процедура строит проводки и списание ТМЦ для реализации по ИПФ
+  res_id = 1;
+  res_text = &#x27;&#x27;;
+
+  db_id = f_get_db_id();
+  if (db_id not in (39801, 41701)) then
+    exit;
+
+  if (exists(
+    select *
+    from kontract kont
+      inner join product pr
+        on pr.pr_id = kont.k_from_pr_id
+          and pr.pr_code containing &#x27;.IDJARA.&#x27;
+    where kont.k_id = :k_id)) then
+  begin
+    suspend;
+    exit;
+  end
+
+  select
+    ol_from_reg_id
+  from operlist
+  where ol_id = :ol_id
+  into
+    :reg_id;
+
+  select
+    wp_id
+  from workplace
+  where wp_from_reg_id = :reg_id
+    and wp_name like &#x27;Собственность&#x27;
+  into
+    :wp_id;
+
+  for
+    select
+      kml_count,
+      kml_bill_id,
+      kml_bill_line_no,
+      ml_name,
+      ml_model
+    from kontmat
+      inner join matlist
+        on ml_id = kml_from_ml_id
+    where kml_object_kind = 9
+      and kml_object_id = :k_id
+      and not exists(select * from kontmat_own where kmo_kml_id = kml_id)
+  into
+    :kml_count,
+    :kml_bill_id,
+    :kml_bill_line_no,
+    :ml_name,
+    :ml_model
+  do
+  begin
+    saldo_kol = coalesce((
+      select
+        sum(saldo_kol)
+      from hp_get_bill_saldo_info(:kml_bill_id, :kml_bill_line_no, :wp_id)), 0);
+
+    if (saldo_kol &lt; kml_count) then
+    begin
+      res_id = -1;
+      res_text = &#x27;Недостаточное количество товара: &#x27; || ml_name || &#x27; (&#x27; || ml_model || &#x27;)&#x27;;
+      suspend;
+      exit;
+    end
+  end
+
+  for
+    select
+      kml_count,
+      kml_total,
+      kml_bill_id,
+      kml_bill_line_no,
+      ml_name,
+      ml_model
+    from kontmat
+      inner join matlist
+        on ml_id = kml_from_ml_id
+    where kml_object_kind = 9
+      and kml_object_id = :k_id
+      and not exists(select * from kontmat_own where kmo_kml_id = kml_id)
+  into
+    :kml_count,
+    :kml_total,
+    :kml_bill_id,
+    :kml_bill_line_no,
+    :ml_name,
+    :ml_model
+  do
+  begin
+    for
+      select
+        workplace_id,
+        matotvet_id,
+        account
+      from hp_get_bill_saldo_info(:kml_bill_id, :kml_bill_line_no, :wp_id)
+      rows 1
+    into
+      :workplace_id,
+      :matotvet_id,
+      :account_kt
+    do
+    begin
+      insert into opermat (
+        om_from_ol_id,
+        om_oper_type,
+        om_bill_id,
+        om_bill_line_no,
+        om_workplace_id,
+        om_matotvet_id,
+        om_summa_plus,
+        om_summa_minus,
+        om_kolich_plus,
+        om_kolich_minus,
+        om_nds_percent,
+        om_account,
+        om_is_written_off,
+        om_account_info)
+      values (
+        :ol_id,
+        5,
+        :kml_bill_id,
+        :kml_bill_line_no,
+        :workplace_id,
+        :matotvet_id,
+        0,
+        :kml_total,
+        0,
+        :kml_count,
+        0,
+        :account_dt,
+        1,
+        :account_kt);
+    end
+
+    ol_id1 = (
+      select ob_from_ol_id
+      from operbill
+      where ob_bill_id = :kml_bill_id
+        and ob_bill_line_no = :kml_bill_line_no);
+    update operlist set
+      ol_parent_id = :ol_id
+    where ol_id = :ol_id1
+      and ol_parent_id is null;
+  end
+
+  if (exists(select * from kontmat_own where kmo_k_id = :k_id)) then
+    execute procedure hp_do_kontmatown_sell(:k_id, :ol_id);
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

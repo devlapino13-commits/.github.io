@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EDOC_SIGN_CHECK_MINIAPP — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EDOC_SIGN_CHECK_MINIAPP: 1 входных, 6 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EDOC_SIGN_CHECK_MINIAPP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="cm_ru_0156_sql.html"><div class="to">CM_RU_0156_SQL</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">KF_CLIENT_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KF_CLIENT_PASS_NO</div><div class="ptype">VARCHAR(30)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KF_DISB_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KC_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KF_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KF_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EDOC_SIGN_CHECK_MINIAPP(
+    MA_ID INTEGER)
+RETURNS (
+    KF_CLIENT_FIO VARCHAR(100),
+    KF_CLIENT_PASS_NO VARCHAR(30),
+    KF_DISB_DATE DATE,
+    KC_AMOUNT DECIMAL(18,4),
+    KF_ERROR_TEXT VARCHAR(255),
+    KF_ERROR_IS_CRITICAL INTEGER)
+AS
+declare variable C_ID ID_TYPE;
+declare variable CHECK_DATE D_DATE;
+declare variable DB_ID D_INTEGER;
+begin
+  -- если ИПФ и по ИФП eDoc отключен, тогда дальше не проверяем
+  if (f_tmp_const(&#x27;edoc_ipf_inactive&#x27;) = 1) then
+  begin
+      if (exists(select *
+                  from miniapp maa
+                  inner join product pr on pr.pr_id = maa.ma_from_pr_id
+                  where maa.ma_id = :ma_id
+                  and current_date between ma_date_app and ma_date_end
+                  and ma_is_active = 1
+                  and pr.pr_code like &#x27;%.ipf.%&#x27;)) then
+      begin
+        exit;
+      end
+  end
+
+  -- Заявка
+  select ma_date_app
+  from miniapp
+  where ma_id = :ma_id
+  order by ma_id desc, ma_number desc
+  rows 1
+  into check_date;
+
+  db_id = f_get_db_id();
+  if (db_id not in (39801, 41701)) then
+  begin
+    kf_error_text = f_edoc_check(&#x27;loan.application&#x27;, ma_id, check_date);
+
+    if (kf_error_text &lt;&gt; &#x27;&#x27;) then
+    begin
+      kf_error_is_critical = 2;
+      suspend;
+    end
+  end
+
+  -- Договор АСП
+  for select c_id, c_name_fio, c_pass_no, mac_amount, ma_date_oper
+      from miniapp, miniappclient, clients
+      where ma_id = :ma_id and
+            current_date between ma_date_app and ma_date_end and
+            ma_is_active = 1 and
+            ma_id = mac_from_ma_id and
+            mac_amount &gt; 0 and
+            mac_from_c_id = c_id
+      into c_id, kf_client_fio, kf_client_pass_no, kc_amount, kf_disb_date
+  do
+  begin
+    if (kf_disb_date &gt;= &#x27;10.01.2020&#x27;) then
+    begin
+      kf_error_text = f_edoc_check(&#x27;asp.agreement&#x27;, c_id, kf_disb_date);
+      if (kf_error_text &lt;&gt; &#x27;&#x27;) then
+      begin
+        kf_error_is_critical = 2;
+        suspend;
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

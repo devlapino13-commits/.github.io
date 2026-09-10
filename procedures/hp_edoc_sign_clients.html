@@ -1,0 +1,775 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EDOC_SIGN_CLIENTS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EDOC_SIGN_CLIENTS: 4 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EDOC_SIGN_CLIENTS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">5</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_miniapp_soglasiye_list.html"><div class="to">HP_MINIAPP_SOGLASIYE_LIST</div></a><a class="ref-card" href="hp_signmember_list.html"><div class="to">HP_SIGNMEMBER_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">5 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_edoc_asp_insert.html"><div class="to">HP_EDOC_ASP_INSERT</div></a><a class="ref-card" href="hp_edoc_blank_ins.html"><div class="to">HP_EDOC_BLANK_INS</div></a><a class="ref-card" href="hp_edoc_get_status.html"><div class="to">HP_EDOC_GET_STATUS</div></a><a class="ref-card" href="hp_edoc_insert.html"><div class="to">HP_EDOC_INSERT</div></a><a class="ref-card" href="hp_edoc_status.html"><div class="to">HP_EDOC_STATUS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EDOC_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc">Тип электронного документа</div></div><div class="prow"><div class="pname">OBJ_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc">Тип объекта</div></div><div class="prow"><div class="pname">OBJ_ID</div><div class="ptype">BIGINT</div><div class="pdesc">ID объекта</div></div><div class="prow"><div class="pname">ADD_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc">Дополнительный код для вычисления клиентов</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EDOC_SIGN_CLIENTS(
+    EDOC_KIND D_STR_CODE,
+    OBJ_KIND VARCHAR(50),
+    OBJ_ID D_ID,
+    ADD_CODE D_STR_CODE = null)
+RETURNS (
+    C_ID D_ID)
+AS
+declare variable DB_ID D_INTEGER;
+declare variable NEED_SUSPEND D_SMALLINT;
+declare variable MCL_ID D_ID; /* Для товаров в рассрочку */
+declare variable CS_ID D_ID; /* Для товаров в рассрочку */
+declare variable TMP_C_ID D_ID;
+declare variable OTHER_C_ID D_ID;
+declare variable ACR_CASHIER_ID D_ID;
+declare variable ACR_PERSON_ID D_ID;
+declare variable ACR_DIRECTOR_ID D_ID;
+declare variable ACR_CASHIER_DATESIGN D_DATETIME;
+declare variable ACR_PERSON_DATESIGN D_DATETIME;
+declare variable ACR_DIRECTOR_DATESIGN D_DATETIME;
+begin
+  --  если obj_id null, возвращаем одну строку с c_id = null, чтобы бланки готовились на уровне объекта
+  if (obj_id is null) then
+  begin
+    c_id = null;
+    suspend;
+    exit;
+  end
+
+  db_id = f_get_db_id();
+
+  add_code = trim(coalesce(add_code, &#x27;&#x27;));
+
+  edoc_kind = f_edoc_kind(edoc_kind, &#x27;code&#x27;);
+  obj_kind = f_objkind(obj_kind, &#x27;name&#x27;);
+
+
+  if (edoc_kind in (&#x27;loan.agreement_autosign&#x27;, &#x27;loan.application_autosign&#x27;)) then
+    add_code = &#x27;auto_sign&#x27;;
+
+  if (edoc_kind = &#x27;loan.spouses_consent&#x27;) then
+    add_code = &#x27;separate_consent&#x27;;
+
+  if (obj_kind = &#x27;clients&#x27;) then
+  begin
+    c_id = obj_id;
+    suspend;
+    exit;
+  end
+
+  if (obj_kind = &#x27;agreements&#x27;) then
+  begin
+    select ag_object_id
+    from agreements
+    where ag_id = :obj_id and
+          ag_object_kind = 0
+    into c_id;
+
+    suspend;
+    exit;
+  end
+
+  if (obj_kind = &#x27;kontract_istinaa_prepay&#x27;) then
+  begin
+    for select distinct kip.kip_from_c_id
+        from kontract_istinaa_prepay kip
+        inner join clients cl on cl.c_id = kip.kip_from_c_id
+        where kip.kip_id = :obj_id and
+              kip.kip_is_active = 1
+        into c_id
+    do
+    begin
+      suspend;
+    end
+    exit;
+  end
+
+  if (obj_kind = &#x27;RECONCILIATION_INFO&#x27;) then
+  begin
+    for select distinct ri.ri_from_c_id
+        from reconciliation_info ri
+        where ri.ri_id = :obj_id
+        into c_id
+    do
+    begin
+      suspend;
+    end
+    exit;
+  end
+
+  if (obj_kind = &#x27;kontrefund_disb&#x27;) then
+  begin
+    for select kc_from_c_id
+        from kontrefund_disb, knclient
+        where krd_from_k_id = kc_from_k_id and
+              kc_amount_approved &gt; 0 and
+              krd_id = :obj_id
+        into c_id
+    do
+      suspend;
+
+    exit;
+  end
+
+  if (obj_kind = &#x27;kontract&#x27;) then
+  begin
+    if (edoc_kind in (&#x27;loan.delinq.notif&#x27;,&#x27;restruct.loan.delinq.notif&#x27;, &#x27;loan.agreement&#x27;, &#x27;loan.pdn&#x27;, &#x27;loan.pdn.recalc&#x27;, &#x27;loan.cancel&#x27;, &#x27;loan.refinance&#x27;, &#x27;insurance.application&#x27;, &#x27;insurance.kyrgyz&#x27;, &#x27;insurance.kyrgyz.ipf&#x27;, &#x27;loan_disb_consent&#x27;, &#x27;ipf.chdp.agreement&#x27;, &#x27;restruct_application&#x27;, &#x27;add_loan_consent&#x27;, &#x27;restruct_approve&#x27;, &#x27;loan.application_new_conditions&#x27;, &#x27;loan.creditor_rep&#x27;, &#x27;autorestruct_notify&#x27;, &#x27;risk.agreement&#x27;, &#x27;loan.kid&#x27;)) then -- RFCKZ-805
+    begin
+      for select kc_from_c_id
+          from knclient
+          where kc_from_k_id = :obj_id and
+                kc_amount_approved &gt; 0
+          into c_id
+      do
+      begin
+        need_suspend = 1;
+        if (add_code = &#x27;anketa_ft&#x27;) then
+        begin
+          if (f_ft_valid(c_id, current_date) = 1) then -- если анкета валидный, не печатаем для этого клиента
+            need_suspend = 0;
+        end
+        if (need_suspend = 1) then
+          suspend;
+      end
+    end
+
+    if (edoc_kind = &#x27;loan.poruch.agreement&#x27;) then
+    begin
+      for select kc_from_c_id
+          from knclient
+          where kc_from_k_id = :obj_id and
+                kc_amount_approved &gt; 0
+          into c_id
+      do
+      begin
+
+        suspend;
+      end
+      for select z.z_from_c_id
+          from zalog z
+          where z.z_from_k_id = :obj_id
+          into c_id
+      do
+      begin
+        suspend;
+      end
+    end
+
+    if (edoc_kind = &#x27;loan.collateral&#x27;) then
+    begin
+      for select z_from_c_id
+          from zalog
+          where z_from_k_id = :obj_id and
+                z_from_c_id is not null and
+                z_type = 1
+          into c_id
+      do
+        suspend;
+    end
+
+    if (edoc_kind in (&#x27;pdata.agreement.zalog&#x27;, &#x27;bki.agreement.zalog&#x27;)) then
+    begin
+      for select z.z_from_c_id
+          from zalog z
+          where z.z_from_k_id = :obj_id
+          into c_id
+      do
+        suspend;
+    end
+
+    if (edoc_kind = &#x27;loan.agreement_autosign&#x27;) then
+    begin
+      --По товарам в рассрочку только индивидуальные кредиты
+      --Поэтому запрос не в цикле
+      select kc.kc_from_c_id
+      from knclient kc
+      where kc.kc_from_k_id = :obj_id and
+            kc.kc_amount_approved &gt; 0
+      into c_id;
+
+      suspend;
+    end
+
+    if (edoc_kind = &#x27;information_request2&#x27;) then
+    for
+      select
+        kc_from_c_id
+      from knclient
+      where kc_from_k_id = :obj_id
+        and kc_amount_approved &gt; 0
+    into :c_id
+    do
+      suspend;
+
+    exit;
+  end
+
+  if (obj_kind = &#x27;miniapp&#x27;) then
+  begin
+    if (add_code = &#x27;&#x27;) then
+    begin
+      for select mac_from_c_id
+          from miniappclient
+          where mac_from_ma_id = :obj_id and
+                (mac_amount &gt; 0 or
+                (:db_id in (39801, 41701, 94401) and mac_is_poruch = 1)) -- для КЗ, КР и АЗ добавляем и поручителей и лиц дающих согласие
+          into c_id
+      do
+        suspend;
+    end
+    else
+    begin
+      if (add_code = &#x27;loan.application.soglasiye&#x27;) then
+      begin
+        for select c_id
+            from hp_miniapp_soglasiye_list(:obj_id)
+            into :c_id
+        do
+          suspend;
+      end
+
+      if (add_code = &#x27;auto_sign&#x27;) then
+      begin
+        for select mac.mac_from_c_id
+            from miniappclient mac
+            where mac.mac_from_ma_id = :obj_id and
+                  mac.mac_amount &gt; 0
+            into c_id
+        do
+          suspend;
+      end
+
+      --Для товаров в рассрочку/сахарного завода уйдёт отдельная смска по согласию
+      if (add_code = &#x27;separate_consent&#x27;) then
+      begin
+        for select mac.mac_from_c_id
+            from miniappclient mac
+            where mac.mac_from_ma_id = :obj_id and
+                  mac.mac_is_poruch = -1
+            into c_id
+        do
+          suspend;
+      end
+
+      if (add_code = &#x27;loan.application_npdl&#x27;) then
+      begin
+        for select mac.mac_from_c_id
+            from miniappclient mac
+            where mac.mac_from_ma_id = :obj_id and
+                  mac.mac_amount &gt; 0
+            into c_id
+        do
+          suspend;
+      end
+
+      if (add_code = &#x27;necessary_conditions&#x27;) then
+      begin
+        for select mac.mac_from_c_id
+        from miniappclient mac
+        where mac.mac_from_ma_id = :obj_id
+          and mac.mac_amount &gt; 0
+        into c_id
+        do
+          suspend;
+      end
+    end
+
+    exit;
+  end
+
+  if (obj_kind = &#x27;com_list&#x27;) then
+  begin
+    if (edoc_kind in (&#x27;loan.reschedule&#x27;, &#x27;loan.reschedule.pdn&#x27;, &#x27;loan.termination&#x27;)) then
+    begin
+      for select kc_from_c_id
+          from knclient, com_list
+          where cml_id = :obj_id and
+                cml_object_kind = f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;) and
+                kc_from_k_id = cml_object_id and
+                kc_amount_approved &gt; 0
+          into c_id
+      do
+        suspend;
+    end
+    exit;
+  end
+
+  if (obj_kind = &#x27;kontpsk&#x27;) then
+  begin
+    for select kc_from_c_id
+        from knclient, kontpsk
+        where kps_id = :obj_id and
+              kc_from_k_id = kps_from_k_id and
+              kc_amount_approved &gt; 0
+        into c_id
+    do
+      suspend;
+    exit;
+  end
+
+  if (obj_kind = &#x27;ft_anketa_list&#x27;) then
+  begin
+    select fal_from_c_id
+    from ft_anketa_list
+    where fal_id = :obj_id
+    into c_id;
+    suspend;
+    exit;
+  end
+
+  if (obj_kind = &#x27;cardaktclient&#x27;) then
+  begin
+    select cac_from_c_id
+    from cardaktclient
+    where cac_id = :obj_id
+    into c_id;
+    suspend;
+    exit;
+  end
+
+  if (obj_kind = &#x27;knclient&#x27;) then
+  begin
+    select kc.kc_from_c_id
+    from knclient kc
+    where kc.kc_id = :obj_id
+    into c_id;
+    suspend;
+    exit;
+  end
+
+  if (obj_kind = &#x27;expressapp&#x27;) then
+  begin
+    select exa_from_c_id
+    from expressapp
+    where exa_id = :obj_id
+    into c_id;
+    suspend;
+    exit;
+  end
+  if (obj_kind = &#x27;kontmatag&#x27;) then
+  begin
+    --JIRA 1672
+    /*
+      Клиент получает уведомление с данными по каждому контрагенту.
+      Поэтому object_kind = &#x27;kontmatag&#x27;
+    */
+    if (db_id in (39801, 41701) and
+        edoc_kind in (&#x27;idjara_goods.client_notif&#x27;, &#x27;act_from_company.agreement&#x27;)) then
+    begin
+      for select distinct kc.kc_from_c_id
+          from kontmatag kma
+          inner join knclient kc on kc.kc_from_k_id = kma.kma_from_k_id
+          where kma.kma_id = :obj_id
+          into c_id
+      do
+        suspend;
+      exit;
+    end
+
+    for select c.c_id
+        from clients c
+        inner join agreements ag on ag.ag_object_id = c.c_id
+        inner join kontmatag kma on kma.kma_from_ag_id = ag.ag_id
+        where ag.ag_object_kind = f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;) and
+              kma.kma_id = :obj_id
+        into c_id
+    do
+    begin
+      suspend;
+      exit;
+    end
+  end
+  if (obj_kind = &#x27;finerefund&#x27;) then
+  begin
+    select fr.fr_from_c_id
+    from finerefund fr
+    where fr.fr_id = :obj_id
+    into c_id;
+    suspend;
+    exit;
+  end
+  if (obj_kind = &#x27;app_return_consult&#x27;) then
+  begin
+    select arc.arc_from_c_id
+    from app_return_consult arc
+    where arc.arc_id = :obj_id
+    into c_id;
+    suspend;
+    exit;
+  end
+  if (obj_kind = &#x27;cardblockopers&#x27;) then
+  begin
+    select cbo.cbo_from_c_id
+    from cardblockopers cbo
+    where cbo.cbo_id = :obj_id
+    into c_id;
+    suspend;
+    exit;
+  end
+  if (obj_kind = &#x27;overpayment&#x27;) then
+  begin
+    select ovp_from_c_id
+    from overpayment
+    where ovp_id = :obj_id
+    into c_id;
+    suspend;
+    exit;
+  end
+  if (obj_kind = &#x27;cardpinchange&#x27;) then
+  begin
+    select cph.cph_from_c_id
+    from cardpinchange cph
+    where cph.cph_id = :obj_id
+    into c_id;
+    suspend;
+    exit;
+  end
+  if (obj_kind = &#x27;freelancer_akt&#x27;) then
+  begin
+    select sd.sd_from_c_id
+    from servicesh_edoc sshe
+    inner join servicedog sd on sd.sd_id = sshe.sshe_from_sd_id
+    where sshe.sshe_id = :obj_id
+    into c_id;
+    suspend;
+    exit;
+  end
+  if (obj_kind in (&#x27;freelancer_kontract&#x27;, &#x27;probationer_kontract&#x27;, &#x27;kochegar_kontract&#x27;, &#x27;add_for_freelancers&#x27;, &#x27;termination_freelancer&#x27;)) then
+  begin
+    select sd.sd_from_c_id
+    from servicedog sd
+    where sd.sd_id = :obj_id
+    into c_id;
+    suspend;
+    exit;
+  end
+
+  if (obj_kind = &#x27;mc_purchase&#x27;) then
+  begin
+    select mp.mp_from_mcl_id, mp.mp_from_cs_id
+    from mc_purchase mp
+    where mp.mp_id = :obj_id
+    into mcl_id, cs_id;
+
+    select mcl.mcl_from_c_id
+    from mc_login mcl
+    where mcl.mcl_id = :mcl_id and
+          mcl.mcl_is_delete = 0
+    order by mcl.mcl_datetime desc
+    rows 1
+    into c_id;
+    suspend;
+
+    select cs.cs_from_c_id
+    from clientshops cs
+    where cs.cs_id = :cs_id and
+          cs.cs_is_delete = 0
+    into c_id;
+    suspend;
+    exit;
+  end
+
+  if (obj_kind = &#x27;hr_orders&#x27;) then
+  begin
+    for select ps_from_c_id
+        from hr_pstatus
+        where ps_from_ho_id = :obj_id
+        union
+        select hrv_from_c_id
+        from hr_voctravel
+        where hrv_from_ho_id = :obj_id
+        into c_id
+    do
+      suspend;
+
+    exit;
+  end
+
+  if (obj_kind = &#x27;servicedog&#x27;) then
+  begin
+    for select sd_from_c_id
+        from servicedog
+        where sd_id = :obj_id
+        into c_id
+    do
+      suspend;
+
+    exit;
+  end
+
+  if (obj_kind = &#x27;opercash&#x27;) then
+  begin
+    for select iif(opc_sign = 0, csp_cashier_id, opc_from_c_id), iif(opc_sign = 0, opc_manager_id, null), opc_other_client_id
+        from opercash, cashplace
+        where opc_id = :obj_id and
+              opc_from_csp_id = csp_id
+        into :c_id, tmp_c_id, other_c_id
+    do
+    begin
+      if (other_c_id is not null) then
+        c_id = other_c_id; -- RFCKG-3927
+
+      suspend;
+
+      if (tmp_c_id is not null) then
+      begin
+        c_id = tmp_c_id;
+        suspend;
+      end
+    end
+
+    exit;
+  end
+
+  if (obj_kind = &#x27;transfertmc&#x27;) then
+  begin
+    for select iif(:obj_id &lt; 0, trt_mols_id, trt_molr_id)
+        from transfertmc
+        where trt_id = abs(:obj_id) and
+              trt_status &lt; 2
+        into :c_id
+    do
+      suspend;
+    exit;
+  end
+
+  if (obj_kind = &#x27;fuelgenreg&#x27;) then
+  begin
+    for select iif(:obj_id &lt; 0, fg_driver_id, fg_manager_id)
+        from fuelgenreg
+        where fg_id = abs(:obj_id) and
+              fg_status = 0
+        into :c_id
+    do
+      suspend;
+    exit;
+  end
+
+  if (obj_kind = &#x27;accesscashroom&#x27;) then
+  begin
+    for
+      select
+        acr_cashier_id,
+        acr_person_id,
+        acr_director_id,
+        acr_cashier_datesign,
+        acr_person_datesign,
+        acr_director_datesign
+      from accesscashroom
+      where acr_id = :obj_id
+        and acr_status in (1, 2)
+    into
+      :acr_cashier_id,
+      :acr_person_id,
+      :acr_director_id,
+      :acr_cashier_datesign,
+      :acr_person_datesign,
+      :acr_director_datesign
+    do
+    begin
+      if (acr_cashier_datesign is null) then
+      begin
+        c_id = acr_cashier_id;
+        suspend;
+      end
+      if (acr_person_datesign is null) then
+      begin
+        c_id = acr_person_id;
+        suspend;
+      end
+      if (acr_director_datesign is null) then
+      begin
+        c_id = acr_director_id;
+        suspend;
+      end
+    end
+    exit;
+  end
+
+  if (obj_kind = &#x27;cashcheckmain&#x27;) then
+  begin
+    for
+      select
+        ccm_auditor as c_id
+      from cashcheckmain
+      where ccm_id = :obj_id
+        and ccm_auditor &gt; 0
+          and ccm_auditor_datesign is null
+      union
+      select
+        ccm_cashier_curr as c_id
+      from cashcheckmain
+      where ccm_id = :obj_id
+        and ccm_cashier_curr &gt; 0
+          and ccm_cashier_curr_datesign is null
+      union
+      select
+        ccm_cashier_new as c_id
+      from cashcheckmain
+      where ccm_id = :obj_id
+        and ccm_cashier_new &gt; 0
+          and ccm_cashier_new_datesign is null
+      union
+      select
+        ccp_from_c_id as c_id
+      from cashcheckpart
+      where ccp_from_ccm_id = :obj_id
+        and ccp_datesign is null
+    into
+      :c_id
+    do
+    begin
+      suspend;
+    end
+    exit;
+  end
+
+  if (obj_kind = &#x27;signdoc&#x27;) then
+  begin
+    for
+      select
+        c_id
+      from hp_signmember_list(:obj_id)
+    into
+      :c_id
+    do
+    begin
+      suspend;
+    end
+    exit;
+  end
+
+  if (obj_kind = &#x27;info_loan_client&#x27;) then
+  begin
+    select ilc_from_c_id
+    from info_loan_client
+    where ilc_id = :obj_id
+    into c_id;
+
+    suspend;
+    exit;
+  end
+
+  if (obj_kind = &#x27;invmember&#x27;) then
+  begin
+    select imem.imem_from_c_id
+    from invmember imem
+    where imem.imem_id = :obj_id
+    into :c_id;
+    suspend;
+    exit;
+  end
+
+  if (obj_kind = &#x27;cashbookmain&#x27;) then
+  begin
+    select cbm_manager_id
+    from cashbookmain
+    where cbm_id = :obj_id
+    into :c_id;
+    suspend;
+    exit;
+  end
+
+  if (obj_kind = &#x27;sud_mainreq&#x27;) then
+  begin
+    for select kc_from_c_id
+    from sud_loanclient, knclient
+    where slc_from_smr_id = :obj_id
+      and kc_id = slc_from_kc_id
+    into :c_id
+    do
+      suspend;
+    exit;
+  end
+
+  if (obj_kind = &#x27;overpay_main&#x27;) then
+  begin
+    select opm_from_c_id
+    from overpay_main
+    where opm_id = :obj_id
+    into :c_id;
+      suspend;
+    exit;
+  end
+
+  if (obj_kind = &#x27;smevpass_msg&#x27;) then
+  begin
+    for select sbc_from_c_id
+    from smevpass_msg, smevpass_blockclients
+    where spm_id = :obj_id
+      and sbc_id = spm_from_sbc_id
+    into :c_id
+    do
+      suspend;
+    exit;
+  end
+
+  exception e_default &#x27;Client not found for object: &#x27; || obj_kind;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

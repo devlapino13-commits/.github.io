@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_KONT_CATEGORY — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_KONT_CATEGORY: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_KONT_CATEGORY</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_kont_delinq_status.html"><div class="to">AAREP_KONT_DELINQ_STATUS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">KONT_CATEGORY</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_KONT_CATEGORY(
+    REP_K_ID ID_TYPE,
+    REP_DATE_END DATE)
+RETURNS (
+    KONT_CATEGORY VARCHAR(20))
+AS
+declare variable aa_curr_kc_id id_type;
+declare variable aa_disb_kc_id id_type;
+declare variable dd_disb_date date;
+declare variable aa_loan_kind_new varchar(20);
+declare variable aa_category_id smallint;
+declare variable rep_delinq_days integer;
+declare variable aa_k_id id_type;
+declare variable kal_date date;
+declare variable categ_id smallint;
+declare variable def_curr varchar(3);
+declare variable ol_date date;
+declare variable ok_type smallint;
+declare variable ok_sh_date date;
+declare variable ok_os curr_type;
+declare variable ok_perc curr_type;
+begin
+  kont_category = null;
+  aa_k_id = :rep_k_id;
+  categ_id = 0;
+  rep_delinq_days = null;
+  select cm_default_currency
+  from company
+  into def_curr;
+  for select ks_kc_id, kal_new_kf_officer, k_disb_date, kal_date
+      from kontstate, kontract, knaktlist
+      where ks_ol_is_delete = 0 and
+            ks_state = 1 and
+            ks_from_k_id = k_id and
+            ks_from_k_id = :rep_k_id and
+            k_from_kf_id = kal_from_kf_id and
+            knaktlist.is_delete = 0 and
+            :rep_date_end between kal_date and kal_date_end
+      into aa_curr_kc_id, aa_disb_kc_id, dd_disb_date, kal_date
+  do
+  begin
+    if (aa_curr_kc_id = aa_disb_kc_id) then
+    begin
+      if (dd_disb_date &gt;= &#x27;01.06.2012&#x27;) then
+      begin
+        aa_loan_kind_new = &#x27;Категория 1&#x27;;
+        aa_category_id = 1;
+      end
+      else
+      begin
+        rep_delinq_days = 0;
+        select rep_delinq_days
+        from aarep_kont_delinq_status(:aa_k_id, &#x27;01.12.2012&#x27;)
+        into :rep_delinq_days;
+        if (rep_delinq_days is null) then
+          rep_delinq_days = 0;
+        if (rep_delinq_days &lt;= 0) then
+        begin
+          aa_loan_kind_new = &#x27;Категория 1&#x27;;
+          aa_category_id = 1;
+        end
+        else
+        if (rep_delinq_days &lt;= 180) then
+        begin
+          aa_loan_kind_new = &#x27;Категория 2&#x27;;
+          aa_category_id = 2;
+        end
+        else
+        begin
+          aa_loan_kind_new = &#x27;Категория 3&#x27;;
+          aa_category_id = 3;
+        end
+      end
+    end
+    else
+    begin
+      if (kal_date &lt; &#x27;01.12.2012&#x27;) then
+        kal_date = &#x27;01.12.2012&#x27;;
+      rep_delinq_days = 0;
+      select rep_delinq_days
+      from aarep_kont_delinq_status(:aa_k_id, :kal_date)
+      into :rep_delinq_days;
+      if (rep_delinq_days is null) then
+        rep_delinq_days = 0;
+      if (rep_delinq_days &lt;= 0) then
+      begin
+        aa_loan_kind_new = &#x27;Категория 1&#x27;;
+        aa_category_id = 1;
+      end
+      else
+      if (rep_delinq_days &lt;= 180) then
+      begin
+        aa_loan_kind_new = &#x27;Категория 2&#x27;;
+        aa_category_id = 2;
+      end
+      else
+      begin
+        aa_loan_kind_new = &#x27;Категория 3&#x27;;
+        aa_category_id = 3;
+      end
+    end
+    kont_category = aa_loan_kind_new;
+    if (kont_category is null) then
+      kont_category = &#x27;Не определен&#x27;;
+
+    for select ok_ol_date, ok_type, ok_sh_date, ok_os, ok_perc
+        from operkred
+        where ok_ol_is_active = 1 and
+              ok_from_k_id = :aa_k_id and
+              ok_type &lt;&gt; 7 and
+              ok_from_c_id = 0
+        order by ok_from_k_id, ok_sh_date, ok_ol_date
+        into :ol_date, :ok_type, :ok_sh_date, :ok_os, :ok_perc
+    do
+    begin
+      if ((rep_date_end &gt;= &#x27;12.04.2013&#x27;) and
+          (ol_date - ok_sh_date &gt; 180) and
+          (ol_date &gt;= &#x27;01.12.2012&#x27;) and
+          (def_curr = &#x27;810&#x27;) and
+          (ok_type = 4) and
+          ((ok_os + ok_perc) &lt; 0)) then
+        categ_id = 3;
+    end
+
+    if (rep_delinq_days is null and
+        categ_id &lt;&gt; 3) then
+    begin
+      rep_delinq_days = 0;
+      select rep_delinq_days
+      from aarep_kont_delinq_status(:aa_k_id, :rep_date_end)
+      into :rep_delinq_days;
+    end
+
+    if (((rep_delinq_days &gt; 180) and
+        (rep_date_end &gt; &#x27;01.12.2012&#x27;) and
+        (def_curr = &#x27;810&#x27;)) or (categ_id = 3)) then
+    begin
+      aa_loan_kind_new = &#x27;Категория 3&#x27;;
+      aa_category_id = 3;
+    end
+
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

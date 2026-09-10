@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_UPDATE_BLOBSTORE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_UPDATE_BLOBSTORE: 8 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_UPDATE_BLOBSTORE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">8</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">3</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_set_blob_client_photo.html"><div class="to">FM_SET_BLOB_CLIENT_PHOTO</div></a><a class="ref-card" href="hp_fuelgenreg_saveblob.html"><div class="to">HP_FUELGENREG_SAVEBLOB</div></a><a class="ref-card" href="hp_signdoc_saveblob.html"><div class="to">HP_SIGNDOC_SAVEBLOB</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">8 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">BLS_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">BLS_FILENAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">BLS_CAPTION</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">BLS_BLOB</div><div class="ptype">BLOB SUB_TYPE BINARY SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">BLS_FROM_UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">BLS_KIND</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">BLS_SOURCE_SYSTEM</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">BLS_FROM_MCL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_UPDATE_BLOBSTORE(
+    BLS_ID D_ID,
+    BLS_FILENAME D_STR_100,
+    BLS_CAPTION D_STR_100,
+    BLS_BLOB D_BLOB_BINARY,
+    BLS_FROM_UN_ID ID_TYPE,
+    BLS_KIND D_INTEGER,
+    BLS_SOURCE_SYSTEM D_INTEGER,
+    BLS_FROM_MCL_ID D_ID = 0)
+AS
+declare variable bls_blob_size d_float;
+declare variable db_path d_str_255;
+declare variable v_bls_id d_id;
+begin
+
+  bls_blob_size = round(octet_length(bls_blob) / 1024.000, 3);
+
+  bls_from_mcl_id = coalesce(bls_from_mcl_id, 0);
+
+  update blobstore
+  set bls_filename = :bls_filename,
+      bls_caption = :bls_caption,
+      bls_blob = null,
+      bls_blob_size = :bls_blob_size,
+      bls_from_un_id = :bls_from_un_id,
+      bls_from_mcl_id = :bls_from_mcl_id,
+      bls_kind = :bls_kind,
+      bls_source_system = :bls_source_system
+  where (bls_id = :bls_id)
+  returning bls_id
+  into :v_bls_id;
+  bls_id = abs(bls_id);
+
+  if (v_bls_id is null) then
+    exception e_default (&#x27;Record with &quot;bls_id &#x27;||coalesce(&#x27;= &#x27;||bls_id,&#x27;is &lt;NULL&gt;&#x27;)||&#x27;&quot; not found&#x27;);
+
+  -- Обновление в EXT BLOBSTORE
+  select db_path
+  from hp_db_is_actual
+  into db_path;
+  if (db_path is not null) then
+  begin
+    execute statement(&#x27;update blobextore set bls_blob = :bls_blob where bls_id = :bls_id&#x27;)
+                      (bls_id := :bls_id, bls_blob := :bls_blob)
+        on external data source db_path
+        as user &#x27;UBLOBSTORE&#x27; password &#x27;qJdCv55GcYpnwqBf&#x27;;
+
+    if (:bls_blob is not null) then --если Blob не пустой, то поменять знак в bls_id
+      update blobstore
+      set bls_id = :bls_id
+      where (bls_id = -:bls_id);
+
+    when any do
+    begin
+      exception e_default &#x27;Blobstore database error: update&#x27;;
+    end
+  end
+  else
+    update blobstore
+    set bls_id = :bls_id,
+        bls_blob = :bls_blob
+    where bls_id = :bls_id;
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

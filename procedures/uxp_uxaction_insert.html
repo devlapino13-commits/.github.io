@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$UXACTION_INSERT — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$UXACTION_INSERT: 3 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$UXACTION_INSERT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UX_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UXA_CODE</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ADD_TO_MENU</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UA_UUID_STR</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$UXACTION_INSERT(
+    UX_UUID D_UUID,
+    UXA_CODE D_STR_100,
+    ADD_TO_MENU D_BOOL = 0)
+RETURNS (
+    UA_UUID_STR D_STR_CODE)
+AS
+declare variable ua_text d_str_255;
+declare variable ua_uuid d_uuid;
+declare variable uxa_uuid d_uuid;
+declare variable ufm_uuid d_uuid;
+declare variable field_name d_str_code;
+declare variable ua_is_group d_bool;
+declare variable owner_uxa_uuid d_uuid;
+declare variable uxa_kind d_smallint;
+declare variable uf_is_param d_bool;
+begin
+  if (coalesce(ux_uuid, &#x27;&#x27;) = &#x27;&#x27;) then
+    exception e_message &#x27;Empty ux_uuid&#x27;;
+
+  ua_is_group = 0;
+  if (uxa_code = &#x27;ActionGroup&#x27;) then
+  begin
+    uxa_code = &#x27;&#x27;;
+    ua_is_group = 1;
+  end else
+  begin
+    select ua_name
+    from ux$action
+    where ua_owner = :ux_uuid and
+          ua_uxa_fcode = :uxa_code and
+          ua_usr_id_field = &#x27;&#x27;
+    into ua_text;
+  
+    if (row_count &gt; 0) then
+      exception e_message f_format(&#x27;Данный объект ранее добавлен, действие: %1&#x27;, ua_text);
+  end
+
+  insert into ux$action (ua_owner, ua_uxa_fcode, ua_is_group)
+  values (:ux_uuid, :uxa_code, :ua_is_group)
+  returning ua_uuid, ua_uxa_uuid
+  into :ua_uuid, uxa_uuid;
+
+  ua_uuid_str = uuid_to_char(ua_uuid);
+
+  if (ua_is_group = 0) then
+  begin
+    select uxa_uuid, uxa_kind
+    from ux$alias
+    where uxa_fcode = :uxa_code
+    into uxa_uuid, uxa_kind;
+  
+    ufm_uuid = uxf$ver(uxa_uuid, &#x27;draft&#x27;);
+  
+    for select distinct uf_field_name, uf_is_param
+    from ux$frame, ux$frparam, ux$field
+    where ufr_owner = :ufm_uuid and
+          ufr_uuid = ufp_ufr_uuid and
+          ufp_uf_uuid = uf_uuid and
+          (uf_is_param = 1 or uf_pk_field &lt;&gt; 0)
+    into field_name, uf_is_param
+    do
+    begin
+      for select uap_ua_uuid, uap_param_name, uap_owner_ufp_uuid, uap_owner_ext_field, uap_default, uap_use_default,
+                 uap_locked
+      from ux$actionparam, ux$action, ux$uniq
+      where ua_owner = :ux_uuid and
+            uap_param_name = :field_name and
+            uap_is_output = 0 and
+            uap_ua_uuid = ua_uuid and
+            ua_uuid = uu_id
+      order by uu_datetime desc
+      rows 1
+      as cursor cur
+      do
+      begin
+        if (not exists(select * from ux$actionparam
+                       where uap_ua_uuid = :ua_uuid and
+                             uap_param_name = :field_name)) then
+        begin
+          if (uxa_kind = 2 and uf_is_param = 0) then
+          begin
+            insert into ux$actionparam (uap_ua_uuid, uap_param_name, uap_owner_ext_field)
+            values (:ua_uuid, :field_name, cur.uap_owner_ext_field);
+          end else
+          begin
+            insert into ux$actionparam (uap_ua_uuid, uap_param_name, uap_owner_ufp_uuid, uap_owner_ext_field,
+                                        uap_default, uap_use_default, uap_locked)
+            values (:ua_uuid, :field_name, cur.uap_owner_ufp_uuid, cur.uap_owner_ext_field,
+                    cur.uap_default, cur.uap_use_default,  cur.uap_locked);
+          end
+        end
+      end
+    end
+
+    if (coalesce(add_to_menu, 0) = 1) then
+    begin
+      for select uxa_uuid
+      from ux$form, ux$alias
+      where ufm_uuid = :ux_uuid and
+            ufm_ux_uuid = uxa_owner
+      into owner_uxa_uuid
+      do
+      begin
+        update or insert into ux$aliasaction (uaa_uxa_uuid, uaa_ua_uuid)
+        values (:owner_uxa_uuid, :ua_uuid)
+        matching (uaa_uxa_uuid, uaa_ua_uuid);
+      end
+    end
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

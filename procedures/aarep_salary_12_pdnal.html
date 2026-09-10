@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_SALARY_12_PDNAL — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_SALARY_12_PDNAL: 2 входных, 7 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_SALARY_12_PDNAL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">7</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">7 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_NAME_FIO</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_INN</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_SALARY</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_PDNAL</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_SALARY_BRANCH</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_PDNAL_BRANCH</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DD_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_SALARY_12_PDNAL(
+    REP_DATE_BEGIN D_DATE,
+    REP_DATE_END D_DATE)
+RETURNS (
+    C_NAME_FIO D_STR_255,
+    C_INN D_STR_CODE,
+    RES_SALARY D_CURRENCY,
+    RES_PDNAL D_CURRENCY,
+    RES_SALARY_BRANCH D_CURRENCY,
+    RES_PDNAL_BRANCH D_CURRENCY,
+    DD_END D_DATE)
+AS
+declare variable c_id d_id;
+declare variable tmp_amount d_currency;
+declare variable dd_begin d_date;
+declare variable sac_id d_integer;
+declare variable is_hq d_integer;
+begin
+  rep_date_begin = rep_date_begin - extract(day from rep_date_begin) + 1;
+  rep_date_end = dateadd(month, 1, rep_date_end - extract(day from rep_date_end) + 1) - 1;
+
+  for select distinct osm_from_c_id, c_name_fio, c_inn
+      from opersalmain, clients
+      where osm_from_c_id = c_id and
+            osm_ol_is_active = 1 and
+            osm_ol_date between :rep_date_begin and :rep_date_end
+      order by c_id
+      into c_id, c_name_fio, c_inn
+  do
+  begin
+    dd_begin = rep_date_begin - extract(day from rep_date_begin) + 1;
+    while (dd_begin &lt;= rep_date_end) do
+    begin
+      dd_end = dateadd(month, 1, dd_begin) - 1;
+
+      res_salary = 0;
+      res_pdnal = 0;
+      res_salary_branch = 0;
+      res_pdnal_branch = 0;
+  
+      is_hq = 0;
+      if (exists(
+      select *
+      from opersalary, operlist
+      where os_from_ol_id = ol_id and
+            operlist.is_delete = 0 and
+            ol_date between :dd_begin and :dd_end and
+            os_from_c_id = :c_id and
+            os_from_sac_id in (5, 9) and
+            os_value &lt;&gt; 0 and
+            os_from_reg_id = 1090100)) then is_hq = 1;
+
+      for select osd_from_sac_id, sum(osd_value)
+          from opersalmain, opersaldetail
+          where osm_id = osd_from_osm_id and
+                osm_ol_is_active = 1 and
+                osm_ol_date between :dd_begin and :dd_end and
+                osm_from_c_id = :c_id and
+                osd_from_sac_id in (5, 9)
+          group by osd_from_sac_id
+          into sac_id, tmp_amount
+      do
+      begin
+        if (tmp_amount is null) then
+          tmp_amount = 0;
+        if (is_hq = 1) then
+        begin
+          if (sac_id = 5) then
+            res_pdnal = res_pdnal + tmp_amount;
+          if (sac_id = 9) then
+            res_salary = res_salary + tmp_amount;
+        end else
+        begin
+          if (sac_id = 5) then
+            res_pdnal_branch = res_pdnal_branch + tmp_amount;
+          if (sac_id = 9) then
+            res_salary_branch = res_salary_branch + tmp_amount;
+        end
+      end
+      dd_begin = dateadd(month, 1, dd_begin);
+      if (res_pdnal &lt;&gt; 0 or res_salary &lt;&gt; 0 or
+          res_salary_branch &lt;&gt; 0 or res_pdnal_branch &lt;&gt; 0) then
+        suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_CALC_KPI_KG_TMP — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_CALC_KPI_KG_TMP: 2 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_CALC_KPI_KG_TMP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_calc_kpi_kg_tmp2.html"><div class="to">AAREP_CALC_KPI_KG_TMP2</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_REGION_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_KOLICH</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_KC_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_REGION_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_BALANCE</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_CALC_KPI_KG_TMP(
+    REP_REGION_ID INTEGER,
+    REP_DATE_END DATE)
+RETURNS (
+    K_KOLICH INTEGER,
+    K_KC_ID DECIMAL(18,0),
+    K_REGION_ID INTEGER,
+    K_BALANCE DECIMAL(18,4))
+AS
+declare variable curr_curr varchar(3);
+declare variable k_curr varchar(3);
+declare variable k_curr_rate decimal(18,4);
+declare variable kb decimal(18,4);
+declare variable ok_type integer;
+declare variable k_id decimal(18,0);
+declare variable new_rate decimal(18,4);
+declare variable pr_set_rate_in_kont integer;
+begin
+  select cm_default_currency
+  from company
+  into :curr_curr;
+
+  for select k_id, k_index_curr_code, k_index_curr_rate, k_kolich_client_approved, kal_new_kf_officer, kal_new_reg_id,
+             pr_set_rate_in_kont
+      from kontract, knaktlist, kontstate, region_list(:rep_region_id, 1, -1, 1), product
+      where k_id = ks_from_k_id and
+            ks_ol_is_delete = 0 and
+            cast(ks_date_begin as date) &lt;= :rep_date_end and
+            ks_date_end &gt;= :rep_date_end and
+            ks_state = 1 and
+            k_from_kf_id = kal_from_kf_id and
+            knaktlist.is_delete = 0 and
+            kal_date &lt;= :rep_date_end and
+            kal_date_end &gt;= :rep_date_end and
+            (kal_new_reg_id = id_list) and
+            k_from_pr_id = pr_id
+      into :k_id, :k_curr, :k_curr_rate, :k_kolich, :k_kc_id, :k_region_id, :pr_set_rate_in_kont
+  do
+  begin
+    k_balance = 0;
+    select oks_balance
+    from oksummary
+    where oks_from_k_id = :k_id and
+          oks_date_begin &lt;= :rep_date_end and
+          oks_date_end &gt;= :rep_date_end and
+          oks_close_state = 0
+    into :k_balance;
+    if ((k_balance is null) or (k_balance &lt;= 0)) then
+      k_balance = 0;
+
+    new_rate = 1;
+    if (curr_curr &lt;&gt; k_curr) then
+    begin
+      select cr_rate
+      from opercurr
+      where cr_from_cu_id = :k_curr and
+            cr_date &lt;= :rep_date_end and
+            cr_date_end &gt;= :rep_date_end
+      into :new_rate;
+      if (new_rate is null) then
+        new_rate = 1;
+      if (new_rate &lt; k_curr_rate) then
+      begin
+        if (pr_set_rate_in_kont = 1) then
+          new_rate = :k_curr_rate;
+      end
+      k_balance = k_balance * :new_rate;
+    end
+    if (k_balance &gt; 0) then
+      suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

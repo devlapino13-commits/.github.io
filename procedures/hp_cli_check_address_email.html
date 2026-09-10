@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CLI_CHECK_ADDRESS_EMAIL — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CLI_CHECK_ADDRESS_EMAIL: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CLI_CHECK_ADDRESS_EMAIL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fsvisit_action_create.html"><div class="to">FSVISIT_ACTION_CREATE</div></a><a class="ref-card" href="hp_send_quick_message.html"><div class="to">HP_SEND_QUICK_MESSAGE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ADL_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CLI_CHECK_ADDRESS_EMAIL(
+    C_ID ID_TYPE,
+    ADL_ID ID_TYPE)
+AS
+declare variable address_str str_255;
+declare variable ma_id integer;
+declare variable msg_str d_blob_text;
+declare variable c_name_fio str_100;
+declare variable c_birth_date date;
+declare variable kf_id id_type;
+declare variable kf_name str_100;
+declare variable adl_comment str_255;
+declare variable adc_memo str_255;
+begin
+-- если это не новый клиент, тогда выход.
+  if (exists(select *
+             from kontstate ks
+             inner join knclient kncl on ks.ks_from_k_id = kncl.kc_from_k_id
+             where ks.ks_ol_is_delete = 0 and
+                   ks.ks_state = 1 and
+                   kncl.kc_amount_approved &gt; 0 and
+                   kncl.kc_from_c_id = :c_id)) then
+    exit;
+
+-- igusev Письмо от Бахтияра от 08.02.2019 &quot;О приостановлении запросов на верификацию на ногах&quot;
+  if (extract(weekday from current_date) in (0, 6)) then -- 0 - воскоресенье, 6 - суббота
+    exit;
+
+  adl_id = null;
+
+  if (adl_id is null) then
+  begin
+    select adcl.adc_from_adl_id, adcl.adc_memo
+    from addrclient adcl
+    where adcl.adc_from_c_id = :c_id and
+          adcl.adc_address_type = 5 -- фактический адрес на родине
+    into :adl_id, :adc_memo;
+  end
+
+  if (adl_id is null) then
+    exit;
+
+  address_str = &#x27;&#x27;;
+
+  select adl.adl_address_str, adl.adl_comment
+  from addrlist adl
+  where adl_id = :adl_id and
+        left(adl_from_pl_id, 3) = &#x27;417&#x27; and
+        right(adl.adl_id, 9) &lt;&gt; &#x27;000000000&#x27;
+  into :address_str, :adl_comment;
+
+  address_str = coalesce(address_str, &#x27;&#x27;);
+
+  if (address_str = &#x27;&#x27;) then
+    exit;
+
+-- только для офисов: курский (москва) &amp; киевский (москва)
+-- беру активные заявки клиента
+  for select ma_id, ma.ma_from_kf_id
+      from miniappclient
+      inner join miniapp ma on ma_id = mac_from_ma_id and
+            ma_date_end = &#x27;31.12.9999&#x27; and
+            ma.ma_is_active = 1
+      inner join knaktlist kal on kal_from_kf_id = ma_from_kf_id and
+            kal.is_delete = 0
+      where mac_from_c_id = :c_id and
+            mac_amount &gt; 0 and
+            kal_new_reg_id in (1010800, 1012400)
+      into :ma_id, :kf_id
+  do
+  begin
+-- если по заявке договор не аннулирован и не утвержден
+    if (not(exists(select kont.k_id
+                   from kontract kont
+                   where kont.k_from_ma_app_id = :ma_id and
+                         kont.k_status in (1, -2)))) then
+    begin
+      if (not exists(select *
+                     from contacts_for_check cfc
+                     where --cfc.cfc_from_adl_id = :adl_id
+                           cfc.cfc_address_str = :address_str and
+                           cfc_from_c_id = :c_id
+
+          )) then
+      begin
+        --execute procedure fsvisit_action_create(&#x27;Clients&#x27;, :c_id, &#x27;mc_address_verify&#x27;);  #mc_address_verify
+
+        /*
+        select cl.c_name_fio, cl.c_birth_date
+        from clients cl
+        where cl.c_id = :c_id
+        into :c_name_fio, :c_birth_date;
+
+        select kal.kal_new_kf_name
+        from knaktlist kal
+        where kal.kal_from_kf_id = :kf_id and
+              current_date between kal.kal_date and kal.kal_date_end and
+              kal.is_delete = 0
+        into :kf_name;
+
+        adl_comment = coalesce(adl_comment, &#x27;&#x27;);
+        adc_memo = coalesce(adc_memo, &#x27;&#x27;);
+
+        -----
+        --MSG_STR BLOB  D_BLOB_TEXT
+        msg_str = &#x27;Уважаемый менеджер, Вам следует провести Верификацию места проживания &#x27; || &#x27;[&#x27; || c_name_fio || &#x27;], &#x27; || iif(c_birth_date is null, &#x27; (год рождения не указан), &#x27;, coalesce(extract(year from c_birth_date), 0) || &#x27; года рождения, &#x27;) || &#x27;проживающего по адресу: &#x27; || :address_str || &#x27;. &#x27; || iif((:adl_comment &lt;&gt; &#x27;&#x27; or adc_memo &lt;&gt; &#x27;&#x27;), &#x27;Ориентир: &#x27; || :adl_comment || iif(:adl_comment &lt;&gt; &#x27;&#x27; and adc_memo &lt;&gt; &#x27;&#x27;, &#x27;, &#x27;, &#x27;&#x27;) || :adc_memo || &#x27;. &#x27; || &#x27;&#x27;, &#x27;&#x27;) -- added by Aleksei on 22-02-2019
+        || &#x27;Данные Верификации прошу направить по почте: underwriting@molbulak.com&#x27;;
+
+        execute procedure hp_send_quick_message(&#x27;email&#x27;, &#x27;kg.mnm@mbf.kg&#x27;,
+            &#x27;&quot;Верификация на ногах&quot;; группа: &#x27; || kf_name, :msg_str, null, null, 1000000000000);
+
+        insert into contacts_for_check (cfk_from_ma_id, cfc_from_c_id, cfc_from_adl_id, cfc_address_str)
+        values (:ma_id, :c_id, :adl_id, :address_str);
+        exit;
+        */
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

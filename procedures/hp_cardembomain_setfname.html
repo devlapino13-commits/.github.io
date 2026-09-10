@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CARDEMBOMAIN_SETFNAME — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CARDEMBOMAIN_SETFNAME: 3 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CARDEMBOMAIN_SETFNAME</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CEM_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FNAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ERR_CODE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ERR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CARDEMBOMAIN_SETFNAME(
+    CEM_ID D_INTEGER,
+    FNAME D_STR_100,
+    UN_ID D_ID)
+RETURNS (
+    OL_ID D_ID,
+    ERR_CODE D_INTEGER,
+    ERR_TEXT D_STR_255)
+AS
+declare variable curr_code d_str_lang;
+declare variable ol_id1 d_id;
+declare variable is_own d_bool;
+declare variable is_pincover d_bool;
+declare variable reg_id d_integer;
+declare variable reg_name d_str_code;
+declare variable c_id d_id;
+declare variable c_name_fio d_str_100;
+declare variable card_count d_integer;
+declare variable acc_dt d_str_20;
+declare variable acc_kt d_str_20;
+declare variable ol_memo d_str_255;
+begin
+  curr_code = &#x27;417&#x27;;
+
+  select
+    cem_app_count,
+    cem_from_ol_id,
+    cem_is_pincover,
+    ckd_is_own
+  from cardembomain
+    inner join cardkind
+      on ckd_id = cem_from_ckd_id
+  where cem_id = :cem_id
+    and cem_from_ces_id = 2
+    and cem_filename is null
+  into
+    card_count,
+    :ol_id,
+    :is_pincover,
+    :is_own;
+
+  if (row_count = 0) then
+  begin
+    err_code = 1;
+    err_text = &#x27;Ошибка присвоения имени файла в заявке №&#x27; || cem_id;
+    suspend;
+    exit;
+  end
+
+  if (ol_id is null or exists(
+      select *
+      from operlist
+      where ol_id = :ol_id
+        and is_delete = 1)) then
+  begin
+    -- Бух.проводка
+    select
+      reg_unicode,
+      reg_name,
+      c_id,
+      c_name_fio
+    from cardplace
+      inner join clients
+        on c_id = cpl_from_c_id
+      inner join region
+        on reg_unicode = cpl_from_reg_id
+    where cpl_id = 0
+    into
+      :reg_id,
+      :reg_name,
+      :c_id,
+      :c_name_fio;
+
+    if (is_own = 0) then
+    begin
+      acc_dt = (select al_id from acc_list where al_from_reg_id = :reg_id and al_currency = :curr_code and al_account = &#x27;96101/12&#x27;);
+      acc_kt = (select al_id from acc_list where al_from_reg_id = :reg_id and al_currency = :curr_code and al_account = &#x27;96102/12&#x27;);
+      if (acc_dt is null or acc_kt is null) then
+      begin
+        err_code = 2;
+        err_text = &#x27;В &#x27; || reg_name || &#x27; не открыты счета:&#x27; ||
+          iif(acc_dt is null, &#x27; 96101/12&#x27;, &#x27;&#x27;) || iif(acc_kt is null, &#x27; 96102/12&#x27;, &#x27;&#x27;);
+        suspend;
+        exception e_message err_text;
+      end
+      ol_memo = &#x27;Подача заявки на выпуск карт в &quot;&#x27; || c_name_fio || &#x27;&quot;; заявка № &#x27; || cem_id || &#x27;, количествo &#x27; || card_count || &#x27;шт.&#x27;;
+
+      insert into operlist (
+        ol_from_reg_id,
+        ol_oper_type,
+        ol_oper_subtype,
+        ol_date,
+        ol_doc_no,
+        ol_doc_kind,
+        ol_memo,
+        ol_user_id,
+        ol_document_client
+       )
+      values (
+        :reg_id,
+        2,
+        2,
+        current_date,
+        :cem_id,
+        0,
+        :ol_memo,
+        :un_id,
+        :c_id
+      )
+      returning ol_id
+      into :ol_id;
+
+      insert into operbook (
+        ob_from_ol_id,
+        ob_currency,
+        ob_curr_rate,
+        ob_account_dt,
+        ob_account_kt,
+        ob_summa,
+        ob_summa_val
+      )
+      values (
+        :ol_id,
+        :curr_code,
+        1,
+        :acc_dt,
+        :acc_kt,
+        :card_count,
+        :card_count
+      );
+    end
+
+    if (is_pincover = 1) then
+    begin
+      acc_dt = (select al_id from acc_list where al_from_reg_id = :reg_id and al_currency = :curr_code and al_account = &#x27;96101/13&#x27;);
+      acc_kt = (select al_id from acc_list where al_from_reg_id = :reg_id and al_currency = :curr_code and al_account = &#x27;96102/13&#x27;);
+      if (acc_dt is null or acc_kt is null) then
+      begin
+        err_code = 2;
+        err_text = &#x27;В &#x27; || reg_name || &#x27; не открыты счета:&#x27; ||
+          iif(acc_dt is null, &#x27; 96101/13&#x27;, &#x27;&#x27;) || iif(acc_kt is null, &#x27; 96102/13&#x27;, &#x27;&#x27;);
+        suspend;
+        exception e_message err_text;
+      end
+      ol_memo = &#x27;Пин-конверты карт в &quot;&#x27; || c_name_fio || &#x27;&quot;; заявка № &#x27; || cem_id || &#x27;, количествo &#x27; || card_count || &#x27;шт.&#x27;;
+
+      insert into operlist (
+        ol_parent_id,
+        ol_from_reg_id,
+        ol_oper_type,
+        ol_oper_subtype,
+        ol_date,
+        ol_doc_no,
+        ol_doc_kind,
+        ol_memo,
+        ol_user_id,
+        ol_document_client
+       )
+      values (
+        :ol_id,
+        :reg_id,
+        2,
+        2,
+        current_date,
+        :cem_id,
+        0,
+        :ol_memo,
+        :un_id,
+        :c_id
+      )
+      returning ol_id
+      into :ol_id1;
+
+      insert into operbook (
+        ob_from_ol_id,
+        ob_currency,
+        ob_curr_rate,
+        ob_account_dt,
+        ob_account_kt,
+        ob_summa,
+        ob_summa_val
+      )
+      values (
+        :ol_id1,
+        :curr_code,
+        1,
+        :acc_dt,
+        :acc_kt,
+        :card_count,
+        :card_count
+      );
+      ol_id = coalesce(ol_id, ol_id1);
+    end
+
+    update cardembomain set
+      cem_filename = :fname,
+      cem_from_un_id = :un_id
+    where cem_id = :cem_id;
+
+    err_code = 0;
+    err_text = &#x27;Имя файла успешно присвоено в заявке №&#x27; || cem_id;
+  end else
+  begin
+    err_code = 1;
+    err_text = &#x27;Ошибка создания операции по подаче заявки на выпуск карт в МПЦ; заявка № &#x27; || cem_id;
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

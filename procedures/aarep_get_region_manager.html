@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_GET_REGION_MANAGER — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_GET_REGION_MANAGER: 2 входных, 6 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_GET_REGION_MANAGER</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_REGION_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID_MANAGER</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PS_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REG_ID_THE_DATE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REG_ID_FROM_BONUS</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AFTER_15</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DATE_ACTIVE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_GET_REGION_MANAGER(
+    REP_REGION_ID INTEGER,
+    REP_DATE_END DATE)
+RETURNS (
+    C_ID_MANAGER ID_TYPE,
+    PS_DATE_BEGIN DATE,
+    REG_ID_THE_DATE INTEGER,
+    REG_ID_FROM_BONUS INTEGER,
+    AFTER_15 SMALLINT,
+    DATE_ACTIVE DATE)
+AS
+declare variable date_c date;
+begin
+--  дата на 15е число
+  date_c = cast(&#x27;15.&#x27; || extract(month from :rep_date_end) || &#x27;.&#x27; || extract(year from :rep_date_end) as date);
+  for select ps1.ps_from_c_id, ps_date_begin, ps_from_reg_id, iif(ps_date_begin &lt;= :date_c, ps_from_reg_id, -- если дата началы КМ &lt;= 15 числа, то офис КМ на конец будет брать
+             iif((select ps_from_reg_id -- если на 15 число не было КМом то офис КМа будет брать на конец
+                  from hr_pstatus, joblist, jobkind
+                  where :date_c between ps_date_begin and ps_date_end and
+                        ps_from_jl_id = jl_id and
+                        jl_kind = jk_id and
+                        ps_is_working = 1 and
+                        jk_system_code = &#x27;JobSystem.Region_KM&#x27; and
+                        ps_status &lt;&gt; -1 and
+                        ps_from_c_id = ps1.ps_from_c_id) is null, ps_from_reg_id,
+             (select ps_from_reg_id -- если на 15 число был КМом то офис КМа берет на 15е число
+              from hr_pstatus, joblist, jobkind
+              where :date_c between ps_date_begin and ps_date_end and
+                    ps_from_jl_id = jl_id and
+                    jl_kind = jk_id and
+                    ps_is_working = 1 and
+                    jk_system_code = &#x27;JobSystem.Region_KM&#x27; and
+                    ps_status &lt;&gt; -1 and
+                    ps_from_c_id = ps1.ps_from_c_id))), -------------------------
+             iif(ps_date_begin &lt;= :date_c, 0, iif((select ps_from_reg_id
+                                                   from hr_pstatus, joblist, jobkind
+                                                   where :date_c between ps_date_begin and ps_date_end and
+                                                         ps_from_jl_id = jl_id and
+                                                         jl_kind = jk_id and
+                                                         ps_is_working = 1 and
+                                                         jk_system_code = &#x27;JobSystem.Region_KM&#x27; and
+                                                         ps_status &lt;&gt; -1 and
+                                                         ps_from_c_id = ps1.ps_from_c_id) is null, 0, 1))
+      from hr_pstatus ps1, joblist, jobkind
+      where :rep_date_end between ps_date_begin and ps_date_end
+--    and ps_from_reg_id=:reg_id
+            and
+            ps_from_jl_id = jl_id and
+            jl_kind = jk_id and
+            ps_is_working = 1 -- только активных сотрудников
+            and
+            jk_system_code = &#x27;JobSystem.Region_KM&#x27; -- выборка по кредитным менеджерам
+            and
+            ps_status &lt;&gt; -1 and
+            (iif(ps_date_begin &lt;= :date_c, ps_from_reg_id, -- если дата началы КМ &lt;= 15 числа, то офис КМ на конец будет брать
+            iif((select ps_from_reg_id -- если на 15 число не было КМом то офис КМа будет брать на конец
+                 from hr_pstatus, joblist, jobkind
+                 where :date_c between ps_date_begin and ps_date_end and
+                       ps_from_jl_id = jl_id and
+                       jl_kind = jk_id and
+                       ps_is_working = 1 and
+                       jk_system_code = &#x27;JobSystem.Region_KM&#x27; and
+                       ps_status &lt;&gt; -1 and
+                       ps_from_c_id = ps1.ps_from_c_id) is null, ps_from_reg_id, (select ps_from_reg_id -- если на 15 число был КМом то офис КМа берет на 15е число
+                                                                                  from hr_pstatus, joblist, jobkind
+                                                                                  where :date_c between ps_date_begin and ps_date_end and
+                                                                                        ps_from_jl_id = jl_id and
+                                                                                        jl_kind = jk_id and
+                                                                                        ps_is_working = 1 and
+                                                                                        jk_system_code = &#x27;JobSystem.Region_KM&#x27; and
+                                                                                        ps_status &lt;&gt; -1 and
+                                                                                        ps_from_c_id = ps1.ps_from_c_id)))) = :rep_region_id
+      into c_id_manager, -- id КМ
+           ps_date_begin, -- дата началы работы или дата перевода
+           reg_id_the_date, -- ID региона на текущую дату
+           reg_id_from_bonus, -- ID региона для расчета бонуса КМ
+           after_15 -- если after_15 = 1 то переведет  после 15 число
+  do
+  begin
+    if (after_15 = 1) then
+      date_active = date_c;
+    else
+      date_active = :rep_date_end;
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

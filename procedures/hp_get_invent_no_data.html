@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_GET_INVENT_NO_DATA — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_GET_INVENT_NO_DATA: 1 входных, 6 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_GET_INVENT_NO_DATA</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_contdata_get_cell_valid.html"><div class="to">HP_CONTDATA_GET_CELL_VALID</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">INV_NO</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_ML_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_PERSONAL_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_OFFICE</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_BRANCH</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_JOBSTATUS</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_PHONE</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_GET_INVENT_NO_DATA(
+    INV_NO VARCHAR(50))
+RETURNS (
+    REP_ML_NAME VARCHAR(100),
+    REP_PERSONAL_FIO VARCHAR(100),
+    REP_OFFICE VARCHAR(100),
+    REP_BRANCH VARCHAR(100),
+    REP_JOBSTATUS VARCHAR(100),
+    REP_PHONE VARCHAR(255))
+AS
+declare variable ob_bill_id decimal(18,0);
+declare variable ob_bill_line_no integer;
+declare variable om_matotvet_id decimal(18,0);
+declare variable kolich integer;
+declare variable c_phone varchar(20);
+begin
+  ob_bill_id = null;
+  select ob_bill_id, ob_bill_line_no, ml_name
+  from operbill, matlist
+  where ob_invent_str = :inv_no and
+        ob_is_delete = 0 and
+        ob_date_begin &lt;= current_date and
+        ob_date_end &gt;= current_date and
+        ob_from_ml_id = ml_id rows 1
+  into :ob_bill_id, :ob_bill_line_no, :rep_ml_name;
+  if (ob_bill_id is not null) then
+  begin
+    om_matotvet_id = null;
+    rep_personal_fio = &#x27;Владелец не определен&#x27;;
+
+    select om_matotvet_id, sum(om_kolich_plus - om_kolich_minus)
+    from operlist, opermat
+    where om_from_ol_id = ol_id and
+          operlist.is_delete = 0 and
+          om_bill_id = :ob_bill_id and
+          om_bill_line_no = :ob_bill_line_no
+    group by om_matotvet_id
+    having sum(om_kolich_plus - om_kolich_minus) &gt; 0
+    order by om_matotvet_id
+    rows 1
+    into :om_matotvet_id, :kolich;
+    if (om_matotvet_id is not null) then
+    begin
+      select c_name_fio,
+             (select cont_value
+              from hp_contdata_get_cell_valid(0, :om_matotvet_id))
+      from clients
+      where c_id = :om_matotvet_id
+      into :rep_personal_fio, :c_phone;
+      if ((c_phone is not null) and
+          (c_phone &lt;&gt; &#x27;&#x27;)) then
+      begin
+        rep_phone = :c_phone;
+      end
+      else
+      begin
+        select cal_cell_no
+        from cellaktlist
+        where cal_from_c_id = :om_matotvet_id and
+              cal_date_begin &lt;= current_date and
+              cal_date_end &gt;= current_date and
+              cal_is_contact = 1 rows 1
+        into :c_phone;
+        if (c_phone is not null) then
+        begin
+          rep_phone = :c_phone;
+        end
+        else
+          rep_phone = &#x27;Тел.№ не определен&#x27;;
+      end
+      select r1.reg_name, r2.reg_name, jl_name
+      from region r1, region r2, hr_pstatus, joblist
+      where ps_from_c_id = :om_matotvet_id and
+            ps_date_begin &lt;= current_date and
+            ps_date_end &gt;= current_date and
+            ps_from_reg_id = r1.reg_unicode and
+            r1.parent = r2.reg_unicode and
+            ps_from_jl_id = jl_id rows 1
+      into :rep_office, :rep_branch, :rep_jobstatus;
+    end
+  end
+  else
+    rep_ml_name = &#x27;Не определен&#x27;;
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

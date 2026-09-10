@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EDOC_INFOLIST_CREATE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EDOC_INFOLIST_CREATE: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EDOC_INFOLIST_CREATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_edoc_insert.html"><div class="to">HP_EDOC_INSERT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_edoc_after_sign_action.html"><div class="to">HP_EDOC_AFTER_SIGN_ACTION</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EDOC_INFOLIST_CREATE(
+    MA_ID D_ID,
+    UN_ID D_ID)
+AS
+declare variable k_id d_id;
+declare variable edc_inf_id d_integer;
+declare variable last_status d_smallint;
+declare variable res_text d_str_255;
+begin
+  -- RFCKG-5208: создание инфо-листа при подписании заявки на займ ИПФ / STANDART. Вызывается из HP_EDOC_AFTER_SIGN_ACTION
+
+  k_id = null;
+
+  select first 1 k.k_id
+  from kontract k
+  inner join product p on p.pr_id = k.k_from_pr_id
+  where k.k_from_ma_app_id = :ma_id and
+        (p.pr_code containing &#x27;.ipf.&#x27; or p.pr_code containing &#x27;.STANDART.&#x27; or p.pr_code containing &#x27;.IPF.&#x27;)
+  into :k_id;
+
+  if (coalesce(k_id, 0) &lt;&gt; 0 and
+      exists(
+        select 1
+        from knclient kc
+        where kc.kc_from_k_id = :k_id
+          and kc.kc_amount_approved &gt; 0
+          and kc.kc_loan_target = f_get_rd_id(&#x27;Loan_Target.Consumer&#x27;))
+  ) then
+  begin
+    edc_inf_id = null;
+    select edc.edc_id
+    from edoc_cfg edc
+    where edc.edc_code = &#x27;loan.application_new_conditions&#x27;
+    into :edc_inf_id;
+
+    last_status = null;
+    select first 1 edl.edl_status
+    from edoc_list edl
+    where edl.edl_object_kind = f_objkind(&#x27;kontract&#x27;,&#x27;id&#x27;)
+      and edl.edl_object_id = :k_id
+      and edl.edl_from_edc_id = :edc_inf_id
+    order by edl.edl_id desc
+    into :last_status;
+
+    -- если нет активного (0) → создаём
+    if (last_status is null or last_status &lt;&gt; 0) then
+    begin
+      select res_text
+      from hp_edoc_insert(&#x27;loan.application_new_conditions&#x27;, f_objkind(&#x27;kontract&#x27;,&#x27;id&#x27;), :k_id, :un_id)
+      into :res_text;
+
+      if (res_text is not null and res_text &lt;&gt; &#x27;&#x27;) then
+        exception e_message(res_text);
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

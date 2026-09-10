@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_BIO_SET_RESULT — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_BIO_SET_RESULT: 4 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_BIO_SET_RESULT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UN_NAME</div><div class="ptype">VARCHAR(30)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RESULT</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MATCH_PERCENTAGE</div><div class="ptype">DECIMAL(18,7)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ATTEMPTS_NUMBER</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ERR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_BIO_SET_RESULT(
+    UN_NAME VARCHAR(30),
+    RESULT D_SMALLINT,
+    MATCH_PERCENTAGE D_PERCENT,
+    ATTEMPTS_NUMBER D_INTEGER)
+RETURNS (
+    ERR_TEXT D_STR_255)
+AS
+declare variable UN_ID D_ID;
+declare variable C_ID D_ID;
+declare variable C_NAME_FIO D_STR_255;
+declare variable JOB_KIND D_STR_CODE;
+declare variable JOB_NAME D_STR_CODE;
+declare variable MSG_SUBJECT D_STR_CODE;
+declare variable MSG_BODY D_STR_255;
+begin
+    -- RFCKG-3932
+    err_text = &#x27;&#x27;;
+    if (f_get_db_id() not in (41701, 39801)) then
+    begin
+        suspend;
+        exit;
+    end
+
+    select first 1
+        un.un_id,
+        un.un_from_c_id,
+        un.un_fio
+    from username un
+    where un.un_name = :un_name
+    into
+        un_id,
+        c_id,
+        c_name_fio;
+
+    if (attempts_number &gt;= 5) then
+    begin
+        err_text = &#x27;Количество попыток превышено, повторите попытку через 15 минут&#x27;;
+
+        msg_subject = &#x27;Неудачная попытка смены пароля&#x27;;
+        msg_body = :c_name_fio || &#x27;, &#x27; || :job_name || &#x27;, &#x27; || cast(current_timestamp as timestamp) || &#x27;, не смог(ла) завершить процесс смены пароля телефона в мобильном приложении сотрудника.&#x27;;
+
+        insert into fsrobot_msgbox (msg_type, msg_mail_to, msg_subject, msg_body, msg_lifetime_days, msg_from_un_id, msg_object_kind, msg_object_id)
+        values (0, &#x27;d.mihailechko@mbulak.kg; h.raimjanov@mbulak.kg&#x27;, :msg_subject, :msg_body, 1, 1000000000000, 0, 0); -- на время проверки
+--        values (0, &#x27;control_kg.mirm@mbulak.kg&#x27;, :msg_subject, :msg_body, 7, 1000000000000, 0, 0);
+    end
+
+    insert into bio_results (br_from_un_id, br_result, br_match_percentage, br_attempts_number)
+    values (:un_id, :result, :match_percentage, :attempts_number);
+    suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

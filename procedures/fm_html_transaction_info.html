@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_HTML_TRANSACTION_INFO — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_HTML_TRANSACTION_INFO: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_HTML_TRANSACTION_INFO</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_html_main.html"><div class="to">FM_REPORT_HTML_MAIN</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OL_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_HTML_TRANSACTION_INFO(
+    OL_ID DECIMAL(18,0),
+    UN_ID DECIMAL(18,0))
+RETURNS (
+    RES_TEXT BLOB SUB_TYPE TEXT SEGMENT SIZE 80)
+AS
+declare variable str varchar(1024);
+declare variable ol_date date;
+declare variable ol_doc_no integer;
+declare variable ol_memo varchar(1024);
+declare variable ol_document_client decimal(18,0);
+declare variable ol_doc_client_name varchar(255);
+declare variable ol_parent_id decimal(18,0);
+begin
+  res_text = &#x27;&#x27;;
+  for select ol_date, ol_doc_no, ol_memo, ol_document_client, ol_doc_client_name, ol_parent_id
+      from operlist
+      where ol_id = :ol_id
+      into :ol_date, ol_doc_no, ol_memo, ol_document_client, ol_doc_client_name, ol_parent_id
+  do
+  begin
+    with tab
+    as (select iif(ok_type in (4, 9), &#x27;Погаш:&#x27;, iif(ok_type = 5, &#x27;Списан:&#x27;, &#x27;Выдача:&#x27;)) as ol_kind,
+               round(sum(-ok_os - ok_perc - ok_fine - ok_kommis - ok_kommis_adv - ok_tax), 2) as ol_amount
+        from operkred
+        where ok_from_ol_id = :ol_id and
+              ok_type in (4, 5, 8, 9)
+        group by 1
+        --having sum(-ok_os - ok_perc - ok_fine - ok_kommis - ok_kommis_adv - ok_tax) &lt;&gt; 0  -- закомментировал igusev 01.04.2021 т.к. операции типа: &quot;Корректировка доп.%% Корректировка доп.%% ....&quot; стали давать кучу ошибок ol_id = 1090100031042943
+        )
+    select list(ol_kind || &#x27; &lt;b&gt;&#x27; || ol_amount, &#x27;,&lt;/b&gt;&lt;br&gt;&#x27;)
+    from tab
+    into :res_text;
+    res_text = BLOB_APPEND(&#x27;&lt;b&gt;Детали операции&lt;/b&gt;&lt;br&gt;&lt;br&gt;&#x27;, res_text, &#x27;&lt;/b&gt;&lt;br&gt;&#x27;);
+
+    res_text = BLOB_APPEND(res_text, &#x27;Дата: &lt;b&gt;&#x27; || right(&#x27;0&#x27; || extract(day from ol_date), 2) || &#x27;.&#x27; || right(&#x27;0&#x27; || extract(month from ol_date), 2) || &#x27;.&#x27; || right(&#x27;0&#x27; || extract(year from ol_date), 4) || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;);
+
+    res_text = BLOB_APPEND(res_text, &#x27;Док.№: &lt;b&gt;&#x27; || coalesce(ol_doc_no, &#x27;-&#x27;) || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;);
+
+    if (ol_parent_id is not null) then
+    begin
+      str = &#x27;&#x27;;
+      select reg_code || &#x27; &#x27; || reg_name
+      from region, operlist
+      where ol_id = :ol_parent_id and
+            ol_from_reg_id = reg_unicode
+      into str;
+      res_text = BLOB_APPEND(res_text, &#x27;Место платежа: &lt;b&gt;&#x27; || str || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;);
+    end
+
+    str = &#x27;&#x27;;
+    if (ol_document_client is not null) then
+    begin
+      select f_uri_open(c_name_fio, &#x27;client&#x27;, &#x27;Clients&#x27;, c_id, c_name_fio, &#x27;&#x27;, :un_id)
+      from clients
+      where c_id = :ol_document_client
+      into str;
+    end
+
+    if (coalesce(ol_doc_client_name, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+      str = str || &#x27; через &#x27; || ol_doc_client_name;
+
+    res_text = BLOB_APPEND(res_text, &#x27;Клиент: &lt;b&gt;&#x27; || str || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;);
+
+    res_text = BLOB_APPEND(res_text, &#x27;&lt;br&gt;Детали: &lt;b&gt;&#x27; || coalesce(ol_memo, &#x27;-&#x27;) || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;);
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

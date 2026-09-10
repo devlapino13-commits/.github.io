@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_ZALOGAUTO_SEND — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_ZALOGAUTO_SEND: 2 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_ZALOGAUTO_SEND</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_actionlist_zalogauto_add.html"><div class="to">HP_ACTIONLIST_ZALOGAUTO_ADD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_zalogauto_send.html"><div class="to">FM_ZALOGAUTO_SEND</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ZA_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_IS_ERROR</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_ZALOGAUTO_SEND(
+    ZA_ID D_INTEGER,
+    UN_ID D_ID)
+RETURNS (
+    RES_IS_ERROR D_SMALLINT,
+    RES_TEXT D_STR_255)
+AS
+declare variable lang d_str_lang;
+declare variable za_from_ma_id d_integer;
+declare variable za_from_k_id d_id;
+declare variable za_from_c_id d_id;
+declare variable za_orig_sts_id d_id;
+declare variable za_orig_pts_id d_id;
+declare variable zal_id d_integer;
+declare variable zal_cost d_currency;
+declare variable blob_count d_integer;
+declare variable min_blob_count d_integer;
+declare variable zap_id d_integer;
+declare variable zap_status d_smallint;
+declare variable zap_status_str d_str_code;
+declare variable zal_webpage d_str_long;
+declare variable zal_status d_smallint;
+declare variable z_id d_integer;
+begin
+  -- Отправка автозалога на рассмотрение
+  res_is_error = 0;
+  res_text = &#x27;&#x27;;
+  min_blob_count = 6; -- Минимально необходимое количество фото залога
+
+  lang = f_get_lang_code(un_id, null);
+
+  select za_from_ma_id, za_from_k_id, za_from_c_id, za_orig_sts_id,
+    za_orig_pts_id, zal_id, zal_cost, zal_webpage, za_from_z_id
+  from zalogauto, zalogautolist
+  where za_id = :za_id and
+        za_from_zal_id = zal_id
+  into za_from_ma_id, za_from_k_id, za_from_c_id, za_orig_sts_id, za_orig_pts_id,
+    zal_id, zal_cost, zal_webpage, z_id;
+
+  if (za_from_k_id is null and za_from_ma_id is null) then
+    res_text = f_lang(lang, &#x27;Обратитесь в техподдержку, заявка и контракт не указаны&#x27;);
+
+  if (za_from_c_id is null) then
+    res_text = f_lang(lang, &#x27;Не указан поручитель&#x27;);
+
+  if (za_orig_sts_id is null) then
+    res_text = f_lang(lang, &#x27;Не указан документ СТС (до оформления)&#x27;);
+
+  if (za_orig_pts_id is null) then
+    res_text = f_lang(lang, &#x27;Не указан документ ПТС (до оформления)&#x27;);
+
+  if (coalesce(zal_cost, 0) = 0) then
+    res_text = f_lang(lang, &#x27;Не указанa стоимость автозалога&#x27;);
+
+  if (z_id is not null) then
+    res_text = f_lang(lang, &#x27;Залог уже оформлен&#x27;);
+
+  blob_count = 0;
+  select count(*)
+  from zalogautoblob, blobstore
+  where
+    zab_from_zal_id = :zal_id and
+    zab_from_bls_id = bls_id and
+    bls_source_system = 1 -- Закрепленные в МП
+  into blob_count;
+
+  if (blob_count &lt; min_blob_count) then
+    res_text = f_format(
+      f_lang(lang, &#x27;Недостаточно фотографий залога: %1 (требуется минимум: %2)&#x27;),
+      blob_count, min_blob_count);
+
+  zap_id = null;
+  select zap_id, zap_status
+  from zalogautoprof
+  where zap_from_za_id = :za_id
+  into zap_id, zap_status;
+
+  if (zap_id is null) then
+    res_text = f_lang(lang, &#x27;Не найдено профсуждение&#x27;);
+  else
+  begin
+    if (zap_status not in (-3, -1)) then
+    begin
+      zap_status_str =
+        case zap_status
+          when -3 then &#x27;Новый (не отправлен)&#x27;
+          when -2 then &#x27;Отказ&#x27;
+          when -1 then &#x27;Доработка&#x27;
+          when  0 then &#x27;В очереди&#x27;
+          when  1 then &#x27;На рассмотрении&#x27;
+          when  2 then &#x27;Одобрен&#x27;
+          else &#x27;Ошибка (отсутствует)&#x27;
+        end;
+      res_text = f_format(
+        f_lang(lang, &#x27;Нельзя отправить на проверку. Неверный статус: %1&#x27;),
+        zap_status_str);
+    end
+  end
+
+  if (res_text = &#x27;&#x27;) then
+  begin
+    if (coalesce(zal_webpage, &#x27;&#x27;) = &#x27;&#x27;) then
+      zal_status = 2;
+    else
+      zal_status = 1;
+
+    update zalogautolist
+    set zal_status = :zal_status
+    where zal_id = :zal_id;
+
+    select res_is_error, res_text
+    from hp_actionlist_zalogauto_add(:zap_id, :un_id)
+    into :res_is_error, :res_text;
+  end
+
+  if (res_text &lt;&gt; &#x27;&#x27;) then
+    res_is_error = 1;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

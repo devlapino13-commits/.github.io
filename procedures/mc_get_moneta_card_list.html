@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MC_GET_MONETA_CARD_LIST — процедура — схема БД</title>
+<meta name="description" content="Процедура MC_GET_MONETA_CARD_LIST: 1 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>MC_GET_MONETA_CARD_LIST</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_extsys_parcer.html"><div class="to">HP_EXTSYS_PARCER</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MCL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OPER_ID</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CARD_NUMBER</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE MC_GET_MONETA_CARD_LIST(
+    MCL_ID D_ID)
+RETURNS (
+    OPER_ID D_STR_CODE,
+    CARD_NUMBER D_STR_CODE)
+AS
+declare variable c_id d_id;
+declare variable card_prv d_str_code;
+declare variable esm_id d_id;
+begin
+  oper_id = &#x27;&#x27;;
+
+  select mcl_from_c_id
+  from mc_login
+  where mcl_id = :mcl_id
+  into :c_id;
+
+  if (c_id is not null) then
+  begin
+    card_prv = &#x27;&#x27;;
+    for with tab
+        as (select esm_id,
+                   (select field_value
+                    from hp_extsys_parcer(esm_full_source, &#x27;cardnumber&#x27;)) as card_number
+            from extsysmain
+            where esm_project = &#x27;moneta&#x27; and
+                  esm_action = &#x27;pay&#x27; and
+                  esm_status in (0, 1) and
+                  esm_object_kind = 0 and
+                  esm_object_id = :c_id and
+                  esm_date &gt;= dateadd(year, -2, current_date))
+        select card_number, max(esm_id)
+        from tab
+        group by 1
+        order by 2 desc
+        rows 5
+        into card_number, esm_id
+    do
+    begin
+      oper_id = &#x27;&#x27;;
+      select (select field_value
+              from hp_extsys_parcer(esm_full_source, &#x27;mnt_operation_id&#x27;))
+      from extsysmain
+      where esm_id = :esm_id
+      into oper_id;
+      if (oper_id is null) then
+        oper_id = &#x27;&#x27;;
+
+      if (oper_id &lt;&gt; &#x27;&#x27; and
+          card_number &lt;&gt; &#x27;&#x27;) then
+        suspend;
+    end
+  end
+
+  oper_id = &#x27;&#x27;;
+  card_number = &#x27;Использовать новую карту&#x27;;
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

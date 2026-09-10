@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CELL_MAIN_STATUS_ON — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CELL_MAIN_STATUS_ON: 2 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CELL_MAIN_STATUS_ON</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OK_CELL_MAIN</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CELL_MAIN_STATUS_ON(
+    C_ID D_ID,
+    OK_CELL_MAIN D_STR_100)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255)
+AS
+declare variable phone d_str_100;
+declare variable clt_id d_integer;
+declare variable cda_status d_smallint;
+declare variable cda_id d_id;
+begin
+  -- процедура устанавливает contdata.cda_status = 1 у заданного номера телефона клиента (RFCKG-2578)
+
+  res_info_text = &#x27;&#x27;;
+  res_error_text = &#x27;&#x27;;
+
+  select f_cont_info(&#x27;clients&#x27;, :c_id, &#x27;cell_main&#x27;, &#x27;ok&#x27;)
+  from rdb$database
+  into phone;
+
+  if (coalesce(phone, &#x27;&#x27;) = &#x27;&#x27;) then
+    res_error_text = &#x27;Ошибка: основной верифицированный номер телефона клиента не найден&#x27;;
+  else if (ok_cell_main &lt;&gt; phone) then
+    res_error_text = &#x27;Ошибка: заданный номер телефона не совпадает с имеющимся в БД&#x27;;
+  else
+  begin
+    select clt_id
+    from contlist
+    where clt_code = :ok_cell_main
+    into clt_id;
+
+    select cda_id,
+           cda_status
+    from contdata
+    where cda_from_c_id = :c_id and
+          cda_from_clt_id = :clt_id and
+          cda_is_delete = 0 and
+          cda_is_main = 1
+    order by cda_date desc
+    rows 1
+    into cda_id,
+         cda_status;
+
+    if (cda_status = 1) then
+      res_error_text = &#x27;Ошибка: статус номера уже &quot;Подтвержден&quot;, повторно подтверждать нет необходимости&#x27;;
+  end
+
+  if (res_error_text = &#x27;&#x27;) then
+  begin
+    update contdata
+    set cda_status = 1
+    where cda_id = :cda_id;
+
+    if (row_count = 1) then
+      res_info_text = &#x27;Статус номера телефона успешно подтвержден&#x27;;
+    else
+      res_error_text = &#x27;Ошибка: подтвердить номер телефона не удалось&#x27;;
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

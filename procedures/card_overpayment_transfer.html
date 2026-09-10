@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CARD_OVERPAYMENT_TRANSFER — процедура — схема БД</title>
+<meta name="description" content="Процедура CARD_OVERPAYMENT_TRANSFER: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CARD_OVERPAYMENT_TRANSFER</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_repayment.html"><div class="to">HP_DO_REPAYMENT</div></a><a class="ref-card" href="hp_send_quick_message.html"><div class="to">HP_SEND_QUICK_MESSAGE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_cardsync_action_exec_one.html"><div class="to">HP_CARDSYNC_ACTION_EXEC_ONE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CS_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CARD_OVERPAYMENT_TRANSFER(
+    CS_ID D_INTEGER)
+AS
+declare variable card_id d_integer;
+declare variable cca_id d_integer;
+declare variable amount d_currency;
+declare variable reg_id d_integer;
+declare variable un_id d_id;
+declare variable k_id d_id;
+declare variable k_no d_str_20;
+declare variable disb_date d_date;
+declare variable c_id d_id;
+declare variable c_name d_str_100;
+declare variable acc_dt d_str_20;
+declare variable acc_kt d_str_20;
+declare variable ol_id d_id;
+declare variable phone d_str_20;
+declare variable out_balance boolean;
+declare variable ol_memo d_str_long;
+declare variable ob_detail d_str_long;
+begin
+  select
+    cs_card_id,
+    cs_from_cca_id,
+    cs_amount,
+    cs_from_un_id,
+    cs_from_k_id,
+    cs_from_c_id,
+    c_name_fio,
+    k_kontract_no,
+    k_disb_date,
+    k_last_reg_id
+  from cardsync
+    inner join kontract
+      on k_id = cs_from_k_id
+    inner join clients
+      on c_id = cs_from_c_id
+  where cs_id = :cs_id
+    and cs_from_csc_id = f_get_cardsynccfg_id(&#x27;write-off_on_closing&#x27;)
+    and cs_status = 2
+  into
+    :card_id,
+    :cca_id,
+    :amount,
+    :un_id,
+    :k_id,
+    :c_id,
+    :c_name,
+    :k_no,
+    :disb_date,
+    :reg_id;
+
+  if (row_count = 1) then
+  begin
+    acc_dt = (
+      select al_id from acc_list
+      where al_from_reg_id = :reg_id
+        and al_currency = &#x27;417&#x27;
+        and al_account = &#x27;20001/1&#x27;);
+
+    ol_id = (
+      select
+        ol_id
+      from hp_do_repayment (
+        :k_id,
+        0,              -- c_id
+        current_date,   -- rep_date
+        :amount,        -- repay_amount
+        1,              -- repay_to_os
+        1,              -- repay_to_perc
+        1,              -- repay_to_fine
+        1,              -- repay_to_kommis
+        1,              -- need_save
+        0,              -- is_full_repay
+        0,              -- is_writeoff
+        :reg_id,        -- repay_fact_office_id
+        3,              -- repay_dt_account_kind
+        :acc_dt,        -- repay_dt_account_no
+        1,              -- repay_curr_rate
+        :un_id,         -- repay_user_id
+        :c_id,          -- repay_document_client
+        null,           -- repay_doc_client_name_reason
+        0,              -- repay_manager_c_id
+        0));             -- repay_from_rd_id
+    if (ol_id &gt; 0) then
+    begin
+      out_balance = (exists(select * from operkroff where oko_from_ol_id = :ol_id));
+      acc_kt = (
+        select al_id from acc_list
+        where al_from_reg_id = :reg_id
+          and al_currency = &#x27;417&#x27;
+          and al_account = iif(:out_balance, &#x27;61099/3&#x27;, &#x27;21199/1101&#x27;));
+      ol_memo = f_format(&#x27;Кредитный дог.№%1 от %2 %3 %4&#x27;,
+        :k_no,
+        f_datetostr(:disb_date),
+        coalesce(f_format(&#x27;номер ID %1 (сч.%2)&#x27;, :card_id, :cca_id), &#x27;&#x27;),
+        :c_name);
+      ob_detail = &#x27;Обязательство по Возврату остатка с карты МБулак&#x27;;
+
+      update operlist set
+        ol_memo = :ol_memo
+      where ol_id = :ol_id;
+
+      update operbook set
+        ob_account_kt = :acc_kt,
+        ob_detail = :ob_detail
+      where ob_from_ol_id = :ol_id;
+
+      if (out_balance) then
+      begin
+        insert into operbook (
+          ob_from_ol_id,
+          ob_account_dt,
+          ob_account_kt,
+          ob_currency,
+          ob_curr_rate,
+          ob_summa_val,
+          ob_summa,
+          ob_detail)
+        select first 1
+          ob_from_ol_id,
+          :acc_kt,
+          (select
+            al_id
+           from acc_list
+           where al_from_reg_id = ob_ol_reg_id
+             and al_currency = ob_currency
+             and al_account = &#x27;80421/1&#x27;),
+          ob_currency,
+          ob_curr_rate,
+          ob_summa_val,
+          ob_summa,
+          ob_detail
+        from operbook
+        where ob_from_ol_id = :ol_id;
+
+        insert into operbook (
+          ob_from_ol_id,
+          ob_account_dt,
+          ob_account_kt,
+          ob_currency,
+          ob_curr_rate,
+          ob_summa_val,
+          ob_summa,
+          ob_detail)
+        select first 1
+          ob_from_ol_id,
+          (select
+            al_id
+           from acc_list
+           where al_from_reg_id = ob_ol_reg_id
+             and al_currency = ob_currency
+             and al_account = &#x27;95002/1&#x27;),
+          (select
+            al_id
+           from acc_list
+           where al_from_reg_id = ob_ol_reg_id
+             and al_currency = ob_currency
+             and al_account = &#x27;95001/2&#x27;),
+          ob_currency,
+          ob_curr_rate,
+          ob_summa_val,
+          ob_summa,
+          ob_detail
+        from operbook
+        where ob_from_ol_id = :ol_id;
+      end
+
+      phone = coalesce(f_cont_info(&#x27;clients&#x27;, :c_id, &#x27;cell_main&#x27;, &#x27;ok&#x27;), &#x27;&#x27;);
+      if (phone &lt;&gt; &#x27;&#x27;) then
+      execute procedure hp_send_quick_message(
+        &#x27;sms&#x27;,
+        :phone,
+        &#x27;&#x27;,
+        f_format(&#x27;U Vas pereplata po kreditu v summe %1 som. Poluchite dannuyu summu v ofisah MBulak&#x27;, cast(amount as decimal(18,2))),
+        &#x27;&#x27;,
+        null,
+        1000000000000);
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

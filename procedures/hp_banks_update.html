@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_BANKS_UPDATE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_BANKS_UPDATE: 3 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_BANKS_UPDATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">STATUS</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">JSON_BLOB</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ERROR_TEXT</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_BANKS_UPDATE(
+    STATUS D_SMALLINT,
+    JSON_BLOB D_BLOB_TEXT,
+    ERROR_TEXT D_STR_LONG)
+AS
+declare variable bul_error_id d_id;
+declare variable jso d_integer;
+declare variable jsa d_integer;
+declare variable base_path d_str_255;
+declare variable arr_length d_integer;
+declare variable acc_arr_length d_integer;
+declare variable i d_integer;
+declare variable j d_integer;
+declare variable bic d_str_10;
+declare variable adress_str d_str_255;
+declare variable account d_str_255;
+declare variable account_date_in d_date;
+declare variable v_account_date_in d_date;
+declare variable name d_str_255;
+declare variable regulation_account_type d_str_20;
+declare variable account_status d_str_20;
+begin
+  -- RFCRU-5254 Интеграция с ЦБ, справочник БИК. 
+  if (f_get_db_id() &lt;&gt; 81001) then
+    exit;
+
+  base_path = &#x27;data&#x27;;
+
+  if (status = 1) then
+  begin
+     -- Делаем удаление всех записей в таблице banks
+     update banks b
+        set b.is_delete = 1;
+
+    -- если status = 1, то обрабатываем json (подробно в ТЗ)  json_blob - обязательно
+     i = 0;
+     jso = json.parse(json_blob);
+     if (jso is not null) then
+       jsa = json.obj_get_arr(jso, base_path);
+
+     if (jsa is not null) then
+       arr_length = json.count_get(jsa);
+     else
+       arr_length = -1;
+
+     while (i &lt; arr_length) do
+     begin
+       j = 0;
+       -- BIC – БИК
+       bic = json.obj_get_val(jso, f_format(&#x27;%1[%2].BIC&#x27;, base_path, i), &#x27;&#x27;);
+
+       -- name – Наименование
+       name = json.obj_get_val(jso, f_format(&#x27;%1[%2].ParticipantInfo.NameP&#x27;, base_path, i), &#x27;&#x27;);
+
+       -- address – Адрес
+       adress_str = f_format(&#x27;%1, %2, %3&#x27;,
+                             json.obj_get_val(jso, f_format(&#x27;%1[%2].ParticipantInfo.Ind&#x27;, base_path, i), &#x27;&#x27;),
+                             json.obj_get_val(jso, f_format(&#x27;%1[%2].ParticipantInfo.Nnp&#x27;, base_path, i), &#x27;&#x27;),
+                             json.obj_get_val(jso, f_format(&#x27;%1[%2].ParticipantInfo.Adr&#x27;, base_path, i), &#x27;&#x27;));
+
+       -- acc – Кор.счет (если нет – поле не передавать)--------------------------Начало
+       jsa = json.obj_get_arr(jso, f_format(&#x27;%1[%2].Accounts&#x27;, base_path, i));
+       if (jsa is not null) then
+         acc_arr_length = json.count_get(jsa);
+       else
+         acc_arr_length = -1;
+
+       account = null;
+       account_date_in = null;
+       v_account_date_in = null;
+
+       while (j &lt; acc_arr_length) do
+       begin
+         regulation_account_type = null;
+         account_status = null;
+
+         v_account_date_in = cast(json.obj_get_val(jso, f_format(&#x27;%1[%2].Accounts[%3].DateIn&#x27;, base_path, i, j), null) as d_date);
+
+         regulation_account_type = json.obj_get_val(jso, f_format(&#x27;%1[%2].Accounts[%3].RegulationAccountType&#x27;, base_path, i, j), &#x27;&#x27;);
+         account_status = json.obj_get_val(jso, f_format(&#x27;%1[%2].Accounts[%3].AccountStatus&#x27;, base_path, i, j), &#x27;&#x27;);
+
+         if (regulation_account_type = &#x27;CRSA&#x27; and           -- берем аккаунты где RegulationAccountType=&quot;CRSA&quot; (тип корреспондентский счет)
+             account_status = &#x27;ACAC&#x27; and                     -- и AccountStatus=&quot;ACAC&quot; (действующий)
+             (account_date_in is null or                    -- Если несколько, то смотрим по дате, при прочих равных берем первый.
+              account_date_in &lt; v_account_date_in)) then
+         begin
+           account = json.obj_get_val(jso, f_format(&#x27;%1[%2].Accounts[%3].Account&#x27;, base_path, i, j), &#x27;&#x27;);
+           account_date_in = v_account_date_in;
+         end
+
+         j = j + 1;
+       end
+       -- acc – Кор.счет (если нет – поле не передавать)--------------------------_Конец
+
+       update or insert into banks (b_id, b_name, b_address, is_delete, b_corr_acc, b_date_change)
+       values (:bic, :name, :adress_str, 0, :account, current_date)
+       matching (b_id);
+       i = i + 1;
+     end
+  end 
+  else if (status = -1) then
+    bul_error_id = f_memo_id(error_text);
+  else
+    exception e_default &#x27;Unknown status = &#x27; || coalesce(status, &#x27;&lt;NULL&gt;&#x27;);
+
+
+  -- обязательно записываем факт обновления в  banks_update_log
+  insert into banks_update_log (bul_status, bul_datetime, bul_error_id)
+  values (:status, cast(current_timestamp as d_datetime), :bul_error_id);
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EQUIFAX_CREATE_POCKET_LIST_TMP — процедура — схема БД</title>
+<meta name="description" content="Процедура EQUIFAX_CREATE_POCKET_LIST_TMP: 2 входных, 6 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>EQUIFAX_CREATE_POCKET_LIST_TMP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="equifax_create_pocket_list.html"><div class="to">EQUIFAX_CREATE_POCKET_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">STEP</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OL_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OK_REPAY_BY_PREV_DATE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OKF_REPAY_BY_PREV_DATE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RESTRUCT_BY_PREV_DATE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PERC_CHANGED_BY_PREV_DATE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE EQUIFAX_CREATE_POCKET_LIST_TMP(
+    REP_DATE D_DATE,
+    STEP D_SMALLINT)
+RETURNS (
+    K_ID D_ID,
+    OL_DATE D_DATE,
+    OK_REPAY_BY_PREV_DATE D_INTEGER,
+    OKF_REPAY_BY_PREV_DATE D_INTEGER,
+    RESTRUCT_BY_PREV_DATE D_INTEGER,
+    PERC_CHANGED_BY_PREV_DATE D_INTEGER)
+AS
+declare variable REP_DATE_BEGIN D_DATE;
+declare variable CIB_ID D_INTEGER;
+declare variable K_ID_OLD D_ID;
+declare variable ACTIVE_DATE D_DATE;
+begin
+    if (step = 0) then
+    begin
+        active_date  = &#x27;01.07.2014&#x27;; -- дата запуска проекта;
+
+        k_id_old = 0;
+        cib_id = f_get_rd_id(&#x27;cib.equifax&#x27;);
+        rep_date_begin = rep_date - 90;
+    
+        for select k_id,
+                   ol_date,
+                   sum(ok_repay_by_prev_date),
+                   sum(okf_repay_by_prev_date),
+                   sum(restruct_by_prev_date),
+                   sum(perc_changed_by_prev_date)
+        from
+        (
+            -- все погашения на стандатном учете, где платеж был посажен задней датой
+            select distinct ok.ok_from_k_id as k_id,
+                            ok.ok_ol_date as ol_date,
+                            1 as ok_repay_by_prev_date,
+                            0 as okf_repay_by_prev_date,
+                            0 as restruct_by_prev_date,
+                            0 as perc_changed_by_prev_date
+            from operkred ok
+            inner join operlist ol on ol.ol_id = ok.ok_from_ol_id
+            where ok.ok_ol_date between :rep_date_begin and :rep_date
+            and ok.ok_type = 4
+            and ok.ok_ol_is_active = 1
+            and ok.ok_os + ok.ok_perc + ok.ok_fine &lt;&gt; 0
+            and cast(ol.ol_datetime as date) &gt; ok.ok_ol_date -- платеж посажен задним числом
+            union all
+            -- все погашения на внесистемном учете, где платеж был посажен задней датой
+            select distinct okf.oko_from_k_id,
+                            okf.oko_ol_date,
+                            0,
+                            1,
+                            0,
+                            0
+            from operkroff  okf
+            inner join operlist ol on ol.ol_id = okf.oko_from_ol_id
+            where okf.oko_type = 4
+            and okf.oko_ol_is_active = 1
+            and okf.oko_ol_date between :rep_date_begin and :rep_date
+            and okf.oko_os + okf.oko_perc &lt;&gt; 0
+            and cast(ol.ol_datetime as date) &gt; okf.oko_ol_date -- платеж посажен задним числом
+            union all
+            -- все реструктуризации
+            select distinct ok.ok_from_k_id,
+                            ok.ok_ol_date,
+                            0,
+                            0,
+                            1,
+                            0
+            from operkred ok
+            where ok.ok_type = 2
+            and ok.ok_ol_is_active = 1
+            and ok.ok_ol_date between :rep_date_begin and :rep_date
+            and ((ok.ok_os &lt;&gt; 0) or
+                 (ok.ok_sh_os &lt;&gt; 0) or
+                 (ok.ok_perc &lt;&gt; 0) or
+                 (ok.ok_sh_perc &lt;&gt; 0) or
+                 (ok.ok_fine &lt;&gt; 0))
+            union all
+            select distinct kd.kd_from_k_id,
+                            kd.kd_ol_date,
+                            0,
+                            0,
+                            0,
+                            1
+            from kontdata kd
+            inner join operlist ol on ol.ol_id = kd.kd_from_ol_id
+            where kd.kd_ol_date between :rep_date_begin and :rep_date
+            and kd.kd_float_perc_level in (1, 2)
+            and kd.kd_ol_is_delete = 0
+            and ol.ol_oper_type = 1  -- на счет ol_oper_type = 1 и ol_oper_subtype = 12 подсказал Санжар
+            and ol.ol_oper_subtype = 12
+            and cast(ol.ol_datetime as date) &gt; ol.ol_date -- платеж посажен задним числом
+        ) A
+        group by ol_date, k_id
+        order by ol_date, k_id
+        into :k_id,
+             :ol_date,
+             :ok_repay_by_prev_date,
+             :okf_repay_by_prev_date,
+             :restruct_by_prev_date,
+             :perc_changed_by_prev_date
+        do
+        begin
+            if (k_id &lt;&gt; k_id_old) then
+            begin
+                k_id_old = k_id;
+
+                if (exists (select *
+                            from kontract kont
+                            where kont.k_id = :k_id
+                            and kont.k_disb_date &gt;= :active_date
+                            )) then
+                begin
+                    -- если кредит не попадал в пакет на эту дату
+                    if (not exists(
+                                select *
+                                from cib_knclient_in_pocket ckp
+                                inner join knclient kncl on kncl.kc_id = ckp.ckp_from_kc_id
+                                inner join cib_pocket cp on cp.cp_id = ckp.ckp_from_cp_id
+                                where kncl.kc_from_k_id = :k_id
+                                and kncl.kc_amount_approved &gt; 0
+                                and cp.cp_pocket_type containing &#x27;.d.&#x27;
+                                and cp.cp_pocket_type containing &#x27;.kont.&#x27;
+                                and cp.cp_cib_id = :cib_id -- нас интересует только Эквифакс
+                                and cp.cp_pocket_status &gt;= 0 -- негативный статус не учитываю
+                                and :ol_date between cp.cp_date_begin and cp.cp_date_end
+            
+                    )) then
+                        suspend;
+                end
+           end
+        end
+    end
+    if (step = 1) then
+    begin
+        for select ol_date, sum(ok_repay_by_prev_date), sum(okf_repay_by_prev_date), sum(restruct_by_prev_date), sum(perc_changed_by_prev_date)
+        from equifax_create_pocket_list_tmp(:rep_date, 0)
+        group by ol_date
+        order by ol_date
+        into :ol_date, :ok_repay_by_prev_date, :okf_repay_by_prev_date, :restruct_by_prev_date, :perc_changed_by_prev_date
+        do
+        begin
+            suspend;
+        end
+    end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

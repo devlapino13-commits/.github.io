@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_ZALOGAUTO_GET — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_ZALOGAUTO_GET: 4 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_ZALOGAUTO_GET</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ZA_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ZA_OBJECT_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ZA_OBJECT_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_JSON</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_ZALOGAUTO_GET(
+    ZA_ID D_INTEGER,
+    ZA_OBJECT_KIND D_STR_CODE NOT NULL,
+    ZA_OBJECT_ID D_ID,
+    UN_ID D_ID)
+RETURNS (
+    RES_JSON VARCHAR(8100))
+AS
+declare variable tmp_json d_str_long;
+declare variable cds_id d_id;
+declare variable cds_name d_str_255;
+declare variable c_id d_id;
+declare variable pk_id d_integer;
+declare variable pk_name d_str_code;
+declare variable arr_name d_str_code;
+declare variable field_name d_str_code;
+declare variable sts_id d_id;
+declare variable pts_id d_id;
+begin
+  res_json = &#x27;&#x27;;
+  za_object_kind = f_objkind(za_object_kind, &#x27;name&#x27;);
+
+  if (za_object_kind not in(&#x27;kontract&#x27;, &#x27;miniapp&#x27;)) then
+    exception e_default f_format(&#x27;Incorrect object kind %1&#x27;, za_object_kind);
+
+  if (za_object_kind = &#x27;miniapp&#x27;) then
+  begin
+    select mac_from_c_id
+    from miniappclient
+    where mac_from_ma_id = :za_object_id and
+          mac_amount &gt; 0
+    rows 1
+    into c_id;
+  end
+  if (za_object_kind = &#x27;kontract&#x27;) then
+  begin
+    select kc_from_c_id
+    from knclient
+    where kc_from_k_id = :za_object_id and
+          kc_amount_approved &gt; 0
+    rows 1
+    into c_id;
+  end
+
+  if (za_id is not null) then
+  begin
+    -- Для существующих подтягиваем данные для редактирования
+    select
+      f_json_make_pair(&#x27;za_from_c_id&#x27;, za_from_c_id, &#x27;str&#x27;) || &#x27;,&#x27; ||
+      f_json_make_pair(&#x27;za_from_c_name&#x27;, c_name_fio, &#x27;str&#x27;) || &#x27;,&#x27; ||
+      f_json_make_pair(&#x27;za_orig_sts_id&#x27;, za_orig_sts_id, &#x27;str&#x27;) || &#x27;,&#x27; ||
+      f_json_make_pair(&#x27;za_orig_pts_id&#x27;, za_orig_pts_id, &#x27;str&#x27;) || &#x27;,&#x27; ||
+      f_json_make_pair(&#x27;zal_webpage&#x27;, zal_webpage, &#x27;str&#x27;) || &#x27;,&#x27; ||
+      f_json_make_pair(&#x27;zal_cost&#x27;, round(zal_cost), &#x27;str&#x27;),
+      za_orig_sts_id, za_orig_pts_id
+    from zalogauto
+      left join zalogautolist on za_from_zal_id = zal_id
+      left join clients on za_from_c_id = c_id
+    where
+      za_id = :za_id
+    into res_json, sts_id, pts_id;
+  end
+
+  -- Готовим списки для выбора документов СТС, ПТС
+  for select 310, &#x27;СТС&#x27;, &#x27;sts_list&#x27;, &#x27;za_orig_sts_id&#x27; from rdb$database
+      union
+      select 315, &#x27;ПТС&#x27;, &#x27;pts_list&#x27;, &#x27;za_orig_pts_id&#x27; from rdb$database
+  into pk_id, pk_name, arr_name, field_name do
+  begin
+    tmp_json = &#x27;&#x27;;
+
+    for select
+      cds_id,
+      f_format(&#x27;%1 №%2 от %3&#x27;, :pk_name, cds_doc_no, f_datetostr(cds_doc_date_begin))
+    from clientdocs
+    where
+      cds_from_c_id = :c_id and
+      cds_is_delete = 0 and
+      cds_from_pk_id = :pk_id
+    union
+    select
+      cds_id,
+      f_format(&#x27;%1 №%2 от %3&#x27;, :pk_name, cds_doc_no, f_datetostr(cds_doc_date_begin))
+    from clientdocs
+    where cds_id in (:STS_ID, :PTS_ID) and
+          cds_from_pk_id = :pk_id
+    order by 1 desc
+    rows 1
+    into cds_id, cds_name do
+    begin
+      tmp_json = tmp_json || iif(tmp_json = &#x27;&#x27;, &#x27;&#x27;, &#x27;,&#x27;) || &#x27;{&#x27; ||
+        f_json_make_pair(&#x27;id&#x27;, cds_id, &#x27;str&#x27;) || &#x27;,&#x27; ||
+        f_json_make_pair(&#x27;name&#x27;, cds_name, &#x27;str&#x27;) || &#x27;}&#x27;;
+    end
+
+    res_json = res_json || iif(res_json &lt;&gt; &#x27;&#x27;, &#x27;,&#x27;, &#x27;&#x27;) ||
+      f_json_make_pair(:arr_name, &#x27;[&#x27; || tmp_json || &#x27;]&#x27;, &#x27;array&#x27;);
+
+    if (za_id is null) then -- Значения по-умолчанию для новых
+      res_json = res_json || &#x27;,&#x27; || f_json_make_pair(:field_name, cds_id, &#x27;str&#x27;);
+  end
+  res_json = &#x27;{&#x27; || res_json || &#x27;}&#x27;;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

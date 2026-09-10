@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_SELF_PROHIBITION_DO_QUERY — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_SELF_PROHIBITION_DO_QUERY: 4 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_SELF_PROHIBITION_DO_QUERY</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_cmd.html"><div class="to">FM_REPORT_CMD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJECT_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJECT_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_SELF_PROHIBITION_DO_QUERY(
+    C_ID D_ID NOT NULL,
+    OBJECT_KIND D_STR_CODE NOT NULL,
+    OBJECT_ID D_ID NOT NULL,
+    UN_ID D_ID NOT NULL)
+AS
+declare variable EIC_STOP_CR_KIB D_ID;
+declare variable EIC_STOP_CR_CRIF D_ID;
+declare variable EIL_ISHENIM D_ID;
+declare variable EIL_SSOUND D_ID;
+declare variable OBJECT_KIND_ID D_INTEGER;
+declare variable SPM_ID D_ID;
+begin
+    -- Процедура инициирует запрос на проверку наличия &quot;самозапрета&quot; в КИБы: Ишеним, Сэйф энд Сааунд
+
+    eic_stop_cr_kib = (select ec.eic_id from extinfocfg ec where ec.eic_code = &#x27;stop_cr_kib&#x27;); -- Ишеним
+    eic_stop_cr_crif = (select ec.eic_id from extinfocfg ec where ec.eic_code = &#x27;stop_cr_crif&#x27;); -- Сэйф энд Саунд
+    object_kind_id = f_objkind(:object_kind, &#x27;id&#x27;);
+
+    -- Инициирует запрос в Ишеним
+    insert into extinfolist (eil_from_c_id, eil_from_eic_id, eil_date, eil_object_kind, eil_object_id, eil_is_json, eil_from_eip_id, eil_from_un_id)
+    values (:c_id, :eic_stop_cr_kib, current_date, :object_kind_id, :object_id, 1, null, :un_id)
+    returning eil_id
+    into :eil_ishenim;
+
+    -- Инициирует запрос в Сэйф энд Саунд
+    insert into extinfolist (eil_from_c_id, eil_from_eic_id, eil_date, eil_object_kind, eil_object_id, eil_is_json, eil_from_eip_id, eil_from_un_id)
+    values (:c_id, :eic_stop_cr_crif, current_date, :object_kind_id, :object_id, 1, null, :un_id)
+    returning eil_id
+    into :eil_ssound;
+
+    -- Проверяем, инициировался ли запрос на проверку (по данному клиенту, в разрезе данного объекта) ранее
+    select spm_id
+    from self_prohibition_main
+    where spm_object_kind = :object_kind_id and
+          spm_object_id = :object_id and
+          spm_from_c_id = :c_id
+    into :spm_id;
+
+    -- Если нет, создаем базовую запись
+    if (spm_id is null) then
+    begin
+        insert into self_prohibition_main (spm_object_kind, spm_object_id, spm_from_c_id, spm_eil_ishenim,
+                                           spm_eil_ssound, spm_total_result, spm_query_qty, spm_last_query_datetime)
+        values (:object_kind_id, :object_id, :c_id, :eil_ishenim, :eil_ssound, 0, 1, current_timestamp)
+        returning spm_id
+        into :spm_id;
+    end
+    else  -- Если да, делаем апдейт базовой записи
+    begin
+        update SELF_PROHIBITION_MAIN
+        set spm_eil_ishenim = :eil_ishenim,
+            spm_eil_ssound = :eil_ssound,
+            spm_total_result = 0, -- обнуляем результат
+            spm_query_qty = spm_query_qty + 1, -- увеличиваем счетчик попыток
+            spm_last_query_datetime = current_timestamp
+        where (spm_id = :spm_id);
+    end
+
+    -- всегда создаем запись с деталями. По идее в рамках одного SELF_PROHIBITION_MAIN может быть больше 1 записи с деталями толлько если
+    insert into self_prohibition_detail (spd_from_spm_id, spd_eil_ishenim, spd_eil_ssound, spd_ishenim_result,
+                                         spd_ssound_result, spd_total_result)
+    values (:spm_id, :eil_ishenim, :eil_ssound, 0, 0, 0);
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

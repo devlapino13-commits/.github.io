@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_BKI_CREATE_PACKETS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_BKI_CREATE_PACKETS: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_BKI_CREATE_PACKETS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_bki_add_to_buffer.html"><div class="to">HP_BKI_ADD_TO_BUFFER</div></a><a class="ref-card" href="hp_bki_create_corr_packets.html"><div class="to">HP_BKI_CREATE_CORR_PACKETS</div></a><a class="ref-card" href="hp_bki_get_packet_name.html"><div class="to">HP_BKI_GET_PACKET_NAME</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">BKI_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">BKT_FORMAT</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_BKI_CREATE_PACKETS(
+    BKI_CODE D_STR_CODE NOT NULL,
+    BKT_FORMAT D_SMALLINT = null)
+AS
+declare variable packet_id d_id;
+declare variable packet_name d_str_255;
+declare variable max_event_date d_date;
+declare variable project_date d_date;
+declare variable bkk_id d_id;
+declare variable k_id d_id;
+declare variable c_id d_id;
+declare variable bkt_id d_integer;
+declare variable bkl_id d_integer;
+declare variable bkc_id d_integer;
+declare variable counter d_integer;
+declare variable bkb_object_kind d_integer;
+declare variable bkb_object_id d_id;
+declare variable bkb_tag d_smallint;
+declare variable object_kind_kontract d_integer;
+declare variable object_kind_miniapp d_integer;
+declare variable object_kind_clients d_integer;
+declare variable bkb_date d_date;
+declare variable k_disb_date d_date;
+declare variable buf_cnt d_integer;
+declare variable limit d_integer;
+declare variable packet_cnt d_integer;
+declare variable bkb_id d_id;
+declare variable bev_id d_id;
+declare variable scl_id d_id;
+declare variable k_base_k_id d_id;
+declare variable time_start d_datetime;
+declare variable i d_integer;
+begin
+  time_start = current_timestamp;
+  limit = 1500; -- количество на отправку в одном пакете
+  packet_cnt = 0;
+
+  if (bkt_format is null) then  -- enum  bki_packet_format
+    bkt_format = 0;
+
+  select bkk.bkk_id, bkk.date_begin
+  from bki_kind bkk
+  where bkk.bkk_code     = :bki_code
+    and bkk.bkk_inactive = 0
+  rows 1
+  into bkk_id, project_date;
+
+  if (bkk_id is null) then
+    exception e_default &#x27;bki_code: &#x27;||bki_code||&#x27; not found.&#x27;;
+
+  -- для НБКИ если количество контрактов для отправки в НБКИ меньше определенного количества, то добавим вчерашнюю выдачу.
+  if (bki_code = &#x27;ru.nbki&#x27; and bkt_format = 0) then
+  begin
+    if ((select count(nkl_from_k_id) &lt; 3    -- количество одновременно передаваемых в НБКИ договоров
+        from nbki_kontract_list
+        where current_date between nkl_date_begin and nkl_date_end))
+    then
+    begin
+      k_id = 0;
+
+      select k_id, k_disb_date
+      from kontstate, kontract, operlist
+      where k_id = ks_from_k_id
+        and ol_id = k_fact_disb_ol_id
+        and ks_ol_is_delete = 0
+        and ks_state = 1
+        and ks_date_begin between current_date - 8 and current_date - 1
+        and not exists(select nkl_from_k_id
+                      from nbki_kontract_list
+                      where current_date between nkl_date_begin and nkl_date_end
+                        and nkl_from_k_id = k_id)
+      order by ks_date_begin desc, ol_datetime desc
+      rows 1
+      into k_id, k_disb_date;
+      
+      if (k_id &lt;&gt; 0) then
+      begin
+        select min(ma_date_app)
+        from miniapp, kontract
+        where k_from_ma_app_id = ma_id
+          and k_id = :k_id
+        into k_disb_date;
+
+        execute procedure hp_bki_add_to_buffer(&#x27;.hp_bki_get_packet.nbki.&#x27;, &#x27;kontract&#x27;, k_id, k_disb_date);
+
+        insert into nbki_kontract_list (nkl_from_k_id, nkl_date_begin, nkl_date_end)
+        values (:k_id, :k_disb_date, &#x27;31.12.9999&#x27;);
+      end
+    end
+  end
+
+  ----------------------------------------------------------------------
+  object_kind_kontract = f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;);
+  object_kind_miniapp  = f_objkind(&#x27;miniapp&#x27;,  &#x27;id&#x27;);
+  object_kind_clients  = f_objkind(&#x27;clients&#x27;,  &#x27;id&#x27;);
+  max_event_date = iif(bkt_format = 2, current_date + 1, current_date - iif(extract(hour from cast(current_time as time)) &lt; 17, 1, 0));
+
+  if (bkt_format = 0) then
+  begin
+    -- с клиента перевести на заявку
+    for select bkb_object_id, bkb_date, bkb_id
+    from bki_buffer
+    where bkb_object_kind = :object_kind_clients
+      and bkb_date &lt; :max_event_date
+      and bkb_from_bkk_id = :bkk_id
+      and bkb_type = 0
+    into c_id, bkb_date, bkb_id
+    do
+    begin
+      if (bki_code = &#x27;ru.equifax&#x27; and bkt_format = 0) then
+        execute procedure hp_bki_add_to_buffer(&#x27;.hp_bki_get_packet.nbki.&#x27;, &#x27;clients&#x27;, c_id, bkb_date);
+  
+      -- если в буфере есть событие на дату по этому клиенту, то удалим строку
+      if (exists(
+        with t_objects(object_kind, object_id) as(
+            select :object_kind_kontract, kc_from_k_id
+            from knclient
+            where kc_from_c_id = :c_id
+          union
+            select :object_kind_miniapp, mac_from_c_id
+            from miniappclient
+            where mac_from_c_id = :c_id
+        )
+        select bkb_date
+        from t_objects, bki_buffer
+        where bkb_object_kind = object_kind
+          and bkb_object_id = object_id
+          and bkb_date = :bkb_date
+          and bkb_type = 0))
+      then
+      begin
+        delete from bki_buffer where bkb_id = :bkb_id;
+        continue;
+      end 
+  
+      -- найдем последнее событие по клиенту
+      bkb_object_kind = null;
+  
+      select bkl_object_kind, bkl_object_id
+      from bki_packet_type, bki_packet, bki_loans, bki_clients, bki_events
+      where bkp_from_bkt_id = bkt_id
+        and bkl_from_bkp_id = bkp_id
+        and bkc_from_bkl_id = bkl_id
+        and bev_from_bkc_id = bkc_id
+        and bkt_format = 0
+        and bkp_from_bkk_id = :bkk_id
+        and bev_status &gt;= 0
+        and bkp_status &gt;= 0
+        and coalesce(bev_delete_bev_id, 0) = 0
+        and bkc_from_c_id = :c_id
+        and bev_event_date &lt; :max_event_date
+      order by bev_event_date desc
+      rows 1
+      into bkb_object_kind, bkb_object_id;
+  
+      if (bkb_object_kind is null) then  -- если ничего не отправляли ранее, то и событие по клиенту не надо создавать.
+        delete from bki_buffer where bkb_id = :bkb_id;
+      else
+        update bki_buffer
+        set bkb_object_kind = :bkb_object_kind,
+            bkb_object_id = :bkb_object_id
+        where bkb_id = :bkb_id;
+    end
+  
+    -- если контракт есть в списке заблокированных (удаляли ранее по разным причинам), то удалим
+    for select distinct bkb_object_kind, bkb_object_id
+    from bki_stoplist_loans, bki_buffer
+    where bkb_object_kind = 9
+      and bkb_object_id = bsl_from_k_id
+    into bkb_object_kind, bkb_object_id
+    do
+      delete from bki_buffer
+      where bkb_object_kind = :bkb_object_kind
+        and bkb_object_id = :bkb_object_id;
+  
+    --- удалим из буфера события по проданным контрактам после продажи
+    for select distinct bkb_id
+    from sud_cession_packet, sud_cession_loans, bki_buffer
+    where scl_from_scp_id = scp_id
+      and bkb_object_kind = 9
+      and bkb_object_id = scl_from_k_id
+      and scp_status &gt; 0
+      and bkb_date &gt; scp_date
+    into bkb_id
+    do
+      delete from bki_buffer where bkb_id = :bkb_id;
+  
+    -- обработка буфера
+    -- очистим буфер от договоров заключенных раньше, чем запустили передачу в БКИ
+    for select bkb_id
+    from bki_buffer, kontract
+    where bkb_object_kind = :object_kind_miniapp
+      and k_from_ma_app_id = bkb_object_id
+      and k_disb_date &lt; :project_date
+    union
+    select bkb_id
+    from bki_buffer, kontract
+    where bkb_object_kind = :object_kind_kontract
+      and k_id = bkb_object_id
+      and k_disb_date &lt; :project_date
+    into bkb_id
+    do
+      delete from bki_buffer
+      where bkb_id = :bkb_id;
+  end
+
+  -- удалить дубли записей где одна и та же заявка записана и по ma_id и по k_id
+  for select bkb.bkb_id
+  from bki_buffer bkb, kontract, bki_buffer bkb1
+  where bkb.bkb_object_kind = :object_kind_miniapp
+    and k_from_ma_app_id = bkb.bkb_object_id
+    and bkb1.bkb_object_kind = :object_kind_kontract
+    and bkb1.bkb_object_id = k_id
+    and bkb1.bkb_date = bkb.bkb_date
+    and bkb1.bkb_from_bkk_id = bkb.bkb_from_bkk_id
+    and bkb.bkb_type = :bkt_format
+    and bkb1.bkb_type = :bkt_format
+  into bkb_id
+  do
+    delete from bki_buffer
+    where bkb_id = :bkb_id;
+
+  if (bkt_format = 0) then
+    execute procedure hp_bki_create_corr_packets(:bkk_id);
+
+  -- создание пакетов
+  while (true)
+  do
+  begin
+    select count(*)
+    from bki_buffer bkb
+    where bkb.bkb_from_bkk_id = :bkk_id
+      and bkb.bkb_date &lt; :max_event_date
+      and bkb_type = :bkt_format
+    into buf_cnt;
+
+    if (buf_cnt &lt; iif(bkt_format = 2 or bki_code = &#x27;ru.nbki&#x27;, 1, 10)) then
+      leave;
+  
+    if (buf_cnt &lt; limit + 100) then
+      limit = limit + 100;
+  
+    -- создадим пакет
+    select bkt.bkt_id
+    from bki_packet_type bkt
+    where bkt.bkt_from_bkk_id = :bkk_id
+      and bkt.bkt_action      = f_enum(&#x27;bki_packet_action&#x27;, &#x27;default&#x27;, &#x27;id&#x27;)
+      and bkt.bkt_format      = :bkt_format
+    into bkt_id;
+  
+    select coalesce(max(bkp_number), 0)
+    from bki_packet, bki_packet_type
+    where bkp_from_bkt_id = bkt_id
+      and bkt_from_bkk_id = :bkk_id
+      and bkp_date = current_date
+      and bkt_format = :bkt_format
+    into counter;
+
+    if (counter &gt;= iif(bkt_format = 2, 120, 40)) then
+    begin
+      update const_var
+      set cv_value = &#x27;0&#x27;
+      where cv_code in(&#x27;bki_bki_30days_robot_on&#x27;, &#x27;bki_bki_prepare_packets_on&#x27;);
+
+      insert into fsrobot_msgbox (msg_type, msg_mail_to, msg_subject, msg_body, msg_lifetime_days, msg_from_un_id, msg_command_kind)
+      values (0, &#x27;s.kravtsov@mbfplanet.com, a.itskovich@molbulak.com, k.pankova@molbulak.com, n.sainazarova@mbulak.kg&#x27;, &#x27;БКИ. Ошибки при cоздании пакетов&#x27;, &#x27;Большое количество пакетов, приготовление пакетов и робот 152 отключены&#x27;, 1, 1000000000001, &#x27;&#x27;);
+
+      exit;
+    end 
+  
+    --имя пакета
+    execute procedure hp_bki_get_packet_name(current_date, bki_code, counter, bkt_format)
+    returning_values packet_name, counter;
+  
+    insert into bki_packet (bkp_code, bkp_from_bkk_id, bkp_date, bkp_number, bkp_from_bkt_id, bkp_status)
+                    values (:packet_name, :bkk_id, current_date, :counter, :bkt_id, 0)
+    returning bkp_id
+    into packet_id;
+
+    packet_cnt = packet_cnt + 1;
+  
+    -- выберем записи для данного БКИ
+    for select bkb_object_kind, bkb_object_id, min(bkb_date)
+    from bki_buffer
+    where bkb_from_bkk_id = :bkk_id
+      and bkb_date &lt; :max_event_date
+      and bkb_type = :bkt_format
+    group by 1,2
+    order by 3
+    rows :limit
+    into bkb_object_kind, bkb_object_id, bkb_date
+    do
+    begin
+      insert into bki_loans (bkl_from_bkp_id, bkl_object_kind, bkl_object_id)
+      values (:packet_id, :bkb_object_kind, :bkb_object_id)
+      returning bkl_id
+      into bkl_id;
+
+      c_id = null;
+      k_base_k_id = null;
+
+      if (bkb_object_kind = 9) then
+      begin
+        select kc_from_c_id
+        from knclient
+        where kc_from_k_id = :bkb_object_id
+          and kc_amount_approved &gt; 0
+        rows 1
+        into c_id;
+
+        if (c_id is null) then
+          select mac_from_c_id
+          from miniappclient, kontract
+          where k_id = :bkb_object_id
+            and k_from_ma_app_id = mac_from_ma_id
+            and mac_amount &gt; 0
+          into c_id;
+
+        select kd_k_orig
+        from kontdevides, kontract
+        where k_id = kd_k_new and
+              k_id = :bkb_object_id
+        into k_base_k_id;
+      end
+      else
+        select mac_from_c_id
+        from miniappclient mac
+        where mac_from_ma_id = :bkb_object_id
+          and mac_amount &gt; 0
+        into c_id;
+
+      if (c_id is not null) then
+      begin
+        insert into bki_clients (bkc_from_bkl_id, bkc_from_c_id)
+        values (:bkl_id, :c_id)
+        returning bkc_id
+        into bkc_id;
+  
+        for select bkb_date, min(bkb_tag)
+        from bki_buffer
+        where bkb_from_bkk_id = :bkk_id
+          and bkb_date &lt; :max_event_date
+          and bkb_object_kind = :bkb_object_kind
+          and bkb_object_id = :bkb_object_id
+          and bkb_type = :bkt_format
+        group by 1
+        into bkb_date, bkb_tag
+        do
+        begin
+          -- для НБКИ если договор закрыт, то выставим конец отправки
+          if (bki_code = &#x27;ru.nbki&#x27;
+              and bkt_format = 0
+              and not exists (select * from oksummary oks
+                        where current_date between oks.oks_date_begin and oks.oks_date_end
+                          and (oks_curr_sh_os + oks_curr_sh_perc + oks_delinq_os + oks_delinq_perc + oks_out_os + oks_out_perc + oks_out_other) &gt; 0
+                          and oks_from_k_id = :bkb_object_id))
+          then
+            update nbki_kontract_list
+            set nkl_date_end = current_date
+            where (nkl_from_k_id = :bkb_object_id);
+      
+          -- если договор в списке для отправки в НБКИ то добавим в буфер
+          if (bki_code = &#x27;ru.equifax&#x27;
+            and bkt_format = 0
+            and bkb_object_kind = 9
+            and exists(select nkl_from_k_id
+                      from nbki_kontract_list
+                      where :bkb_date between nkl_date_begin and nkl_date_end
+                        and nkl_from_k_id = :bkb_object_id))
+          then
+            execute procedure hp_bki_add_to_buffer(&#x27;.hp_bki_get_packet.nbki.&#x27;, &#x27;kontract&#x27;, bkb_object_id, bkb_date);
+  
+          if (bkt_format = 0 and k_base_k_id is not null) then
+            insert into bki_buffer (bkb_from_bkk_id, bkb_object_kind, bkb_object_id, bkb_date, bkb_tag)
+            values (:bkk_id, 9, :k_base_k_id, :bkb_date, :bkb_tag);
+
+          insert into bki_events (bev_from_bkc_id, bev_event_date, bev_tag)
+          values (:bkc_id, :bkb_date, :bkb_tag)
+          returning bev_id
+          into bev_id;
+
+          if (bkb_object_kind = 9) then
+          begin
+            for select scl_id
+            from sud_cession_packet, sud_cession_loans
+            where scl_from_scp_id = scp_id
+              and scl_from_k_id = :bkb_object_id
+              and scp_date = :bkb_date
+              and coalesce(scl_from_bev_id, 0) = 0
+            into scl_id
+            do
+              update sud_cession_loans
+              set scl_from_bev_id = :bev_id
+              where scl_id = :scl_id;
+          end
+        end
+      end
+
+      delete from bki_buffer
+      where bkb_from_bkk_id = :bkk_id
+        and bkb_date &lt; :max_event_date
+        and bkb_object_kind = :bkb_object_kind
+        and bkb_object_id = :bkb_object_id
+        and bkb_type = :bkt_format;
+    end
+  end
+
+  i = (select coalesce(max(tol_object_kind), 0) from temp_objlist where tol_kind = &#x27;skv_proc_time_100726&#x27; and tol_object_id = :packet_id);
+
+  if (packet_id is not null) then
+    insert into temp_objlist (tol_kind, tol_object_kind, tol_object_id, tol_add_info_1, tol_add_info_2, tol_add_info_3)
+    values (&#x27;skv_proc_time_100726&#x27;, :i + 1, :packet_id, &#x27;HP_BKI_CREATE_PACKETS&#x27;, datediff(second, :time_start, cast(&#x27;now&#x27; as timestamp)), f_datetimetostr(:time_start));
+
+
+  if (bkt_format = 0) then
+    insert into fsrobot_msgbox (msg_type, msg_mail_to, msg_subject, msg_body, msg_lifetime_days, msg_from_un_id, msg_command_kind)
+    values (0, &#x27;s.kravtsov@mbfplanet.com&#x27;, &#x27;БКИ. Создание пакетов&#x27;, f_format(&#x27;Создано пакетов: %1 за %2 для %3&#x27;, :packet_cnt, f_datetostr(current_date), :bki_code), 1, 1000000000001, &#x27;&#x27;);
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

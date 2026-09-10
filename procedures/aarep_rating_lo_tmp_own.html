@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_RATING_LO_TMP_OWN — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_RATING_LO_TMP_OWN: 3 входных, 7 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_RATING_LO_TMP_OWN</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">7</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_rating_deliq_temp.html"><div class="to">AAREP_RATING_DELIQ_TEMP</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_rating_lo.html"><div class="to">AAREP_RATING_LO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_REGION_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">7 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">AA_CURR_REGION_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AA_KC_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AA_TOTAL_BALANCE</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AA_TOTAL_CLIENT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AA_DELINQ_BALANCE</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AA_DELINQ_CLIENT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AA_DISB_CL_KOLICH</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_RATING_LO_TMP_OWN(
+    REP_REGION_ID INTEGER,
+    REP_DATE_BEGIN DATE,
+    REP_DATE_END DATE)
+RETURNS (
+    AA_CURR_REGION_ID INTEGER,
+    AA_KC_ID DECIMAL(18,0),
+    AA_TOTAL_BALANCE DECIMAL(18,4),
+    AA_TOTAL_CLIENT INTEGER,
+    AA_DELINQ_BALANCE DECIMAL(18,4),
+    AA_DELINQ_CLIENT INTEGER,
+    AA_DISB_CL_KOLICH INTEGER)
+AS
+declare variable aa_curr_kc_id decimal(18,0);
+declare variable aa_disb_kc_id decimal(18,0);
+declare variable aa_is_own integer;
+declare variable aa_delinq_begin_date date;
+declare variable dd_disb_date date;
+declare variable curr_currency varchar(3);
+declare variable kc_id_prior decimal(18,0);
+declare variable dd date;
+begin
+  /* подсчет баланса кредита, просроченных и выдач для расчета рейтинга
+  в расчете берет не офис действия, а офис где работает сотрудник
+  Sanjari, 05.07.2012 */
+  kc_id_prior = 0;
+  aa_disb_cl_kolich = 0;
+  select cm_default_currency
+  from company
+  into :curr_currency;
+
+  for select dk_disb_lo_id, dk_balance_end, dk_client_kol, dk_delinq_balance, dk_delinq_cl_kolich, dk_disb_date,
+             dk_date
+      from aarep_rating_deliq_temp(:rep_region_id, :rep_date_end)
+      into :aa_disb_kc_id, :aa_total_balance, :aa_total_client, :aa_delinq_balance, :aa_delinq_client, :dd_disb_date,
+           :aa_delinq_begin_date
+  do
+  begin
+    aa_curr_kc_id = aa_disb_kc_id;
+    aa_kc_id = aa_curr_kc_id;
+    if (aa_curr_kc_id &lt;&gt; aa_disb_kc_id) then
+      aa_is_own = 0;
+    else
+      aa_is_own = 1;
+
+    if (aa_kc_id &lt;&gt; kc_id_prior) then
+    begin
+      select kal_new_reg_id, kal_date
+      from knaktlist
+      where is_delete = 0 and
+            kal_new_kf_officer = :aa_kc_id
+      order by kal_date desc
+      rows 1
+      into :aa_curr_region_id, :dd;
+      kc_id_prior = aa_kc_id;
+    end
+    if (curr_currency = &#x27;810&#x27;) then
+    begin
+      if (dd_disb_date &lt; &#x27;01.04.2012&#x27;) then
+      begin
+        aa_delinq_balance = 0;
+        aa_delinq_client = 0;
+      end
+      if (aa_is_own = 0) then
+      begin
+        aa_delinq_balance = 0;
+        aa_delinq_client = 0;
+      end
+    end
+    if (curr_currency = &#x27;417&#x27;) then
+    begin
+      if (aa_is_own = 0) then
+      begin
+        aa_delinq_balance = 0;
+        aa_delinq_client = 0;
+      end
+      if ((rep_date_end - aa_delinq_begin_date) &lt;= 7) then
+      begin
+        aa_delinq_balance = 0;
+        aa_delinq_client = 0;
+      end
+    end
+    suspend;
+  end
+
+  aa_delinq_balance = 0;
+  aa_delinq_client = 0;
+  aa_total_balance = 0;
+  aa_total_client = 0;
+
+  kc_id_prior = 0;
+  for select ks_kc_id, k_kolich_client_approved
+      from kontract, kontstate, region_list(:rep_region_id, 1, -1, 1)
+      where k_id = ks_from_k_id and
+            ks_ol_is_delete = 0 and
+            cast(ks_date_begin as date) between :rep_date_begin and :rep_date_end and
+            ks_state = 1 and
+            ks_region_id = id_list
+      into :aa_kc_id, :aa_disb_cl_kolich
+  do
+  begin
+    if (aa_kc_id &lt;&gt; kc_id_prior) then
+    begin
+      select kal_new_reg_id, kal_date
+      from knaktlist
+      where is_delete = 0 and
+            kal_new_kf_officer = :aa_kc_id
+      order by kal_date desc
+      rows 1
+      into :aa_curr_region_id, :dd;
+      kc_id_prior = aa_kc_id;
+    end
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

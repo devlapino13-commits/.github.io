@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CHANGE_OFFICE_CODE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CHANGE_OFFICE_CODE: 6 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CHANGE_OFFICE_CODE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REGION_ORIG_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REGION_ORIG_SHORT_CODE</div><div class="ptype">VARCHAR(10)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REGION_NEW_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REGION_NEW_CODE</div><div class="ptype">VARCHAR(10)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REGION_NEW_SHORT_CODE</div><div class="ptype">VARCHAR(10)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REGION_NEW_BRANCH</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CHANGE_OFFICE_CODE(
+    REGION_ORIG_ID INTEGER,
+    REGION_ORIG_SHORT_CODE VARCHAR(10),
+    REGION_NEW_ID INTEGER,
+    REGION_NEW_CODE VARCHAR(10),
+    REGION_NEW_SHORT_CODE VARCHAR(10),
+    REGION_NEW_BRANCH INTEGER)
+AS
+declare variable region_orig_code varchar(10);
+declare variable region_acc_format varchar(20);
+declare variable short_code_len integer;
+declare variable parent_id integer;
+begin
+  region_orig_code = null;
+  select cm_account_format
+  from company
+  into :region_acc_format;
+  short_code_len = char_length(:region_orig_short_code);
+
+  select parent
+  from region
+  where reg_unicode = :region_new_branch
+  into :parent_id;
+
+  select reg_code
+  from region
+  where reg_unicode = :region_orig_id
+  into :region_orig_code;
+  if (region_orig_code is not null) then
+  begin
+    update region
+    set reg_unicode = :region_new_id,
+        reg_code = :region_new_code,
+        reg_head_office = :region_new_branch,
+        parent = :parent_id
+    where reg_unicode = :region_orig_id;
+    if (region_acc_format = &#x27;OOOOCCCBBBBBNNNNNN&#x27;) then
+    begin
+      update acc_list
+      set al_id = :region_new_code || right(al_id, 14)
+      where al_id like :region_orig_code || &#x27;%&#x27;;
+
+      /*
+     update standacc
+     set sa_account=:REGION_NEW_CODE||Right(sa_account,14)
+     where sa_account like :REGION_ORIG_CODE||&#x27;%&#x27;;
+     */
+
+      update bankregion
+      set br_name = :region_new_code || right(br_name, 14)
+      where br_name like :region_orig_code || &#x27;%&#x27;;
+    end
+    update krexpert
+    set ke_code = :region_new_short_code || substring(ke_code from :short_code_len + 1 for 10)
+    where ke_code like :region_orig_short_code || &#x27;%&#x27;;
+    update knaktlist
+    set kal_new_officer_code = :region_new_short_code || substring(kal_new_officer_code from :short_code_len + 1 for 10),
+        kal_new_kf_name = :region_new_short_code || substring(kal_new_kf_name from :short_code_len + 1 for 10)
+    where kal_new_officer_code like :region_orig_short_code || &#x27;%&#x27;;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

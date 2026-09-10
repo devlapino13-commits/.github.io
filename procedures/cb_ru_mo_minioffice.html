@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CB_RU_MO_MINIOFFICE — процедура — схема БД</title>
+<meta name="description" content="Процедура CB_RU_MO_MINIOFFICE: 1 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CB_RU_MO_MINIOFFICE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_lo_stage_full.html"><div class="to">HP_GET_LO_STAGE_FULL</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MANAGER_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REG_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LO_STAGE_MONTH_FULL</div><div class="ptype">DECIMAL(15,1)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KOL_DISB_CL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CB_RU_MO_MINIOFFICE(
+    REP_DATE_END DATE)
+RETURNS (
+    MANAGER_NAME STR_100,
+    REG_NAME STR_100,
+    LO_STAGE_MONTH_FULL DECIMAL(15,1),
+    KOL_DISB_CL INTEGER)
+AS
+declare variable reg_id integer;
+declare variable manager_id id_type;
+declare variable rep_date_begin date;
+declare variable jk_system_code str_100;
+begin
+  rep_date_begin = rep_date_end - extract(day from rep_date_end) + 1;
+  for select reg_unicode
+      from region
+      where reg_logic_label = &#x27;.mini_office.&#x27;
+      into reg_id
+  do
+  begin
+    manager_id = null;
+    select ps_from_c_id, jk_system_code
+    from hr_pstatus, joblist, jobkind
+    where :rep_date_end between ps_date_begin and ps_date_end and
+          ps_status = 1 and
+          ps_is_working = 1 and
+          ps_from_reg_id = :reg_id and
+          ps_from_jl_id = jl_id and
+          jl_kind = jk_id
+--    and jk_system_code = &#x27;JobSystem.Region_KM&#x27;
+    rows 1
+    into manager_id, jk_system_code;
+
+    manager_name = null;
+    select c_name_fio
+    from clients
+    where c_id = :manager_id
+    into manager_name;
+
+    select reg_code || &#x27; &#x27; || reg_name
+    from region
+    where reg_unicode = :reg_id
+    into reg_name;
+
+    lo_stage_month_full = null;
+    select lo_stage_month_full
+    from hp_get_lo_stage_full(:manager_id, :rep_date_end, :jk_system_code, 0)
+    into lo_stage_month_full;
+
+--  Расчет кол-во выдач
+    kol_disb_cl = 0;
+    select count(distinct kc_from_c_id)
+    from kontstate, knclient
+    where ks_ol_is_delete = 0 and
+          ks_state = 1 and
+          ks_region_id = :reg_id and
+          ks_date_begin between :rep_date_begin and :rep_date_end and
+          ks_from_k_id = kc_from_k_id and
+          kc_amount_approved &gt; 0
+    into kol_disb_cl;
+
+    if (kol_disb_cl &gt; 0 or exists(select *
+                                  from oksummary
+                                  where oks_region_id = :reg_id and
+                                        :rep_date_end between oks_date_begin and oks_date_end and
+                                        oks_balance &gt; 0 and
+                                        oks_close_state = 0)) then
+      suspend;
+
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

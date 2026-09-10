@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EPAY_OPERATIONS_FILL — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EPAY_OPERATIONS_FILL: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EPAY_OPERATIONS_FILL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="find_acc_list.html"><div class="to">FIND_ACC_LIST</div></a><a class="ref-card" href="get_kv.html"><div class="to">GET_KV</div></a><a class="ref-card" href="hp_addpaymentqr_accentry.html"><div class="to">HP_ADDPAYMENTQR_ACCENTRY</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EPAY_OPERATIONS_FILL
+AS
+declare variable k_id d_id;
+declare variable c_id d_id;
+declare variable amount d_currency;
+declare variable amount_comm d_currency;
+declare variable un_id d_id;
+declare variable ol_id d_id;
+declare variable ol_id_child d_id;
+declare variable reg_id d_integer;
+declare variable rep_date d_date;
+declare variable fio d_str_100;
+declare variable kontract_no d_str_100;
+declare variable acc_dt d_str_20;
+declare variable acc_kt d_str_20;
+declare variable dt d_str_20;
+declare variable kt d_str_20;
+declare variable kt1 d_str_20;
+declare variable ol_memo d_str_long;
+declare variable ob_detail d_str_long;
+declare variable ob_detail1 d_str_long;
+declare variable bish_office d_integer;
+declare variable bish_go d_integer;
+declare variable esm_id d_id;
+declare variable project d_str_20;
+declare variable pr_ipf boolean;
+declare variable pr_goods boolean;
+declare variable pr_sugar boolean;
+declare variable prj_elsom boolean;
+declare variable prj_mbank boolean;
+declare variable prj_qr boolean;
+declare variable db_id d_integer;
+declare variable err_text d_str_255;
+begin
+  db_id = f_get_db_id();
+  bish_office = 1060100;
+  bish_go = 1090100;
+
+  -- формирую проводки
+  for
+    select
+      esm_project,
+      esm_id,
+      esm_from_k_id,
+      esm_date
+    from extsysmain
+    where esm_project in (&#x27;elsom&#x27;, &#x27;mbank&#x27;, &#x27;qr&#x27;)
+      and esm_status = 0
+      and esm_action = &#x27;pay&#x27;
+    into
+      :project,
+      :esm_id,
+      :k_id,
+      :rep_date
+  do
+  begin
+    prj_elsom = (project = &#x27;elsom&#x27;);
+    prj_mbank = (project = &#x27;mbank&#x27;);
+    prj_qr = (project = &#x27;qr&#x27;);
+
+    -- Доп.оплата по QR (контракта нет)
+    if (db_id in (39801, 41701) and prj_qr and k_id is null) then
+    begin
+      err_text = (select err_text from hp_addpaymentqr_accentry(:esm_id));
+      update extsysmain set
+        esm_status = 1,
+        esm_result_id = 1
+      where esm_id = :esm_id;
+      continue;
+    end
+
+    select
+      k_id,
+      k_last_reg_id,
+      k_kontract_no,
+      pr_code containing &#x27;.ipf.&#x27;,
+      pr_code containing &#x27;.installment_goods.&#x27;,
+      pr_code containing &#x27;.sugarmill.&#x27;,
+      c_id,
+      c_name_fio,
+      kpt_amount,
+      k_amount_approved - kpt_amount,
+      kpt_from_un_id
+    from kontpaytasks
+      inner join kontract
+        on k_id = kpr_from_k_id
+      inner join product
+        on pr_id = k_from_pr_id
+      inner join clients
+        on c_id = kpt_seller_id
+    where kpt_from_esm_id = :esm_id
+    into
+      :k_id,
+      :reg_id,
+      :kontract_no,
+      :pr_ipf,
+      :pr_goods,
+      :pr_sugar,
+      :c_id,
+      :fio,
+      :amount,
+      :amount_comm,
+      :un_id;
+
+    if (pr_ipf) then
+    begin
+      dt = &#x27;21199/99&#x27;;
+      kt = iif(prj_elsom, &#x27;10101/100&#x27;, &#x27;10003/1104&#x27;);
+    end else
+    if (pr_goods or pr_sugar) then
+    begin
+      dt = &#x27;21199/199&#x27;;
+      kt = iif(prj_elsom, &#x27;10150/100&#x27;, &#x27;10003/1105&#x27;);
+      kt1 = &#x27;11531/99&#x27;;
+    end
+    if (prj_qr) then
+    begin
+      if (exists(
+        select * from kontmat
+        where kml_object_id = :k_id
+          and kml_commis &gt; 0))
+      then
+        dt = &#x27;21199/299&#x27;;
+      else
+        dt = &#x27;21199/99&#x27;;
+      kt = iif(pr_goods, &#x27;10024/6&#x27;, &#x27;10024/117&#x27;);
+    end
+
+    ol_memo = trim(f_format(&#x27;%1Оплата поставщику (%2) за товар по договору %3&#x27;,
+      iif(prj_mbank, &#x27;МБанк &#x27;, &#x27;&#x27;),
+      fio,
+      kontract_no));
+    ob_detail = trim(f_format(&#x27;%1 оплата за товар поставщику&#x27;,
+      trim(iif(prj_qr, &#x27;QR&#x27;, iif(prj_elsom, &#x27;Элсом&#x27;, &#x27;МБанк&#x27;)))));
+
+    --
+    ol_id = (select kv from get_kv(:reg_id, 5));
+    acc_dt = (select al_id from find_acc_list(:dt) where al_from_reg_id = :reg_id);
+    acc_kt = (select ln_account from loronostro where ln_region_loro = :reg_id and ln_region_nostro = :bish_office);
+    insert into operlist (
+      ol_id, ol_from_reg_id, ol_oper_type, ol_date, ol_doc_kind,
+      ol_memo, ol_status, is_delete, ol_user_id, ol_document_client)
+    values (
+      :ol_id, :reg_id, 2, :rep_date, 9,
+      :ol_memo, 0, 0, :un_id, :c_id);
+    insert into operbook (
+      ob_from_ol_id, ob_number, ob_currency, ob_curr_rate, ob_client_dt, ob_account_dt,
+      ob_summa_val, ob_summa, ob_from_pc_id, ob_from_kp_id, ob_oper_mask, ob_account_kt,
+      ob_client_kt, ob_detail, ob_from_sac_id, ob_ol_date, ob_ol_is_active, ob_ol_reg_id)
+    values (
+      :ol_id, 1, &#x27;417&#x27;, 1, :c_id, :acc_dt,
+      :amount, :amount, null, null, null, :acc_kt,
+      null, :ob_detail, null, :rep_date, 1, :reg_id);
+
+    --
+    ol_id_child = (select kv from get_kv(:bish_office, 5));
+    acc_dt = (select ln_account from loronostro where ln_region_loro = :bish_office and ln_region_nostro = :reg_id);
+    acc_kt = (select ln_account from loronostro where ln_region_loro = :bish_office and ln_region_nostro = :bish_go);
+    insert into operlist (
+      ol_id, ol_parent_id, ol_from_reg_id, ol_oper_type, ol_date, ol_doc_kind,
+      ol_memo, ol_status, is_delete, ol_user_id, ol_document_client)
+    values (
+      :ol_id_child, :ol_id, :bish_office, 2, :rep_date, 9,
+      :ol_memo, 0, 0, :un_id, :c_id);
+    insert into operbook (
+      ob_from_ol_id, ob_number, ob_currency, ob_curr_rate, ob_client_dt, ob_account_dt,
+      ob_summa_val, ob_summa, ob_from_pc_id, ob_from_kp_id, ob_oper_mask, ob_account_kt,
+      ob_client_kt, ob_detail, ob_from_sac_id, ob_ol_date, ob_ol_is_active, ob_ol_reg_id)
+    values (
+      :ol_id_child, 1, &#x27;417&#x27;, 1, null, :acc_dt,
+      :amount, :amount, null, null, null, :acc_kt,
+      null, :ob_detail, null, :rep_date, 1, :bish_office);
+
+    --
+    ol_id_child = (select kv from get_kv(:bish_go, 5));
+    acc_dt = (select ln_account from loronostro where ln_region_loro = :bish_go and ln_region_nostro = :bish_office);
+    acc_kt = (select al_id from find_acc_list(:kt) where al_from_reg_id = :bish_go);
+    insert into operlist (
+      ol_id, ol_parent_id, ol_from_reg_id, ol_oper_type, ol_date, ol_doc_kind,
+      ol_memo, ol_status, is_delete, ol_user_id, ol_document_client)
+    values (
+      :ol_id_child, :ol_id, :bish_go, 2, :rep_date, 9,
+      :ol_memo, 0, 0, :un_id, :c_id);
+    insert into operbook (
+      ob_from_ol_id, ob_number, ob_currency, ob_curr_rate, ob_client_dt, ob_account_dt,
+      ob_summa_val, ob_summa, ob_from_pc_id, ob_from_kp_id, ob_oper_mask, ob_account_kt,
+      ob_client_kt, ob_detail, ob_from_sac_id, ob_ol_date, ob_ol_is_active, ob_ol_reg_id)
+    values (
+      :ol_id_child, 1, &#x27;417&#x27;, 1, null, :acc_dt,
+      :amount, :amount, null, null, null, :acc_kt,
+      null, :ob_detail, null, :rep_date, 1, :bish_go);
+
+     -- комиссия по товарам в рассрочку
+    if ((pr_goods or pr_sugar) and amount_comm &gt; 0) then
+    begin
+      ol_id_child = (select kv from get_kv(:reg_id, 5));
+      acc_dt = (select al_id from find_acc_list(:dt) where al_from_reg_id = :reg_id);
+      acc_kt = (select al_id from find_acc_list(:kt1) where al_from_reg_id = :reg_id);
+      ol_memo = trim(f_format(&#x27;Комиссия от контрагента (%1) по &quot;товарам в рассрочку&quot;, договор %2&#x27;,
+        fio,
+        kontract_no));
+      insert into operlist (
+        ol_id, ol_parent_id, ol_from_reg_id, ol_oper_type, ol_date, ol_doc_kind,
+        ol_memo, ol_status, is_delete, ol_user_id, ol_document_client)
+      values (
+        :ol_id_child, :ol_id, :reg_id, 2, :rep_date, 9,
+        :ol_memo, 0, 0, :un_id, :c_id);
+      insert into operbook (
+        ob_from_ol_id, ob_number, ob_currency, ob_curr_rate, ob_client_dt, ob_account_dt,
+        ob_summa_val, ob_summa, ob_from_pc_id, ob_from_kp_id, ob_oper_mask, ob_account_kt,
+        ob_client_kt, ob_from_sac_id, ob_ol_date, ob_ol_is_active, ob_ol_reg_id)
+      values (
+        :ol_id_child, 1, &#x27;417&#x27;, 1, :c_id, :acc_dt,
+        :amount_comm, :amount_comm, null, null, null, :acc_kt,
+        null, null, :rep_date, 1, :reg_id);
+    end
+
+    update extsysmain set
+      esm_status = 1,
+      esm_result_id = 1
+    where esm_id = :esm_id;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

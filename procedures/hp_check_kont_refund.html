@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CHECK_KONT_REFUND — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CHECK_KONT_REFUND: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CHECK_KONT_REFUND</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_repayment.html"><div class="to">HP_DO_REPAYMENT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CHECK_KONT_REFUND(
+    K_ID ID_TYPE,
+    REP_DATE D_DATE)
+RETURNS (
+    RES_TEXT STR_255)
+AS
+declare variable disb_date d_date;
+declare variable pr_code str_100;
+declare variable k_id_tmp id_type;
+declare variable disb_date_tmp d_date;
+declare variable pr_code_tmp str_100;
+declare variable k_kontract_no str_20;
+declare variable c_id id_type;
+declare variable pr_id d_integer;
+declare variable pr_id_tmp d_integer;
+begin
+  res_text = &#x27;&#x27;;
+
+  for select k_fact_disb_date, pr_code, kc_from_c_id, pr_id
+      from kontract
+      inner join product on pr_id = k_from_pr_id
+      inner join knclient on kc_from_k_id = k_id
+      where k_id = :k_id and
+            kc_amount_approved &gt; 0
+      into disb_date, pr_code, c_id, pr_id
+  do
+  begin
+    k_kontract_no = null;
+
+    select k_kontract_no, k_fact_disb_date
+    from kontract, product, kontstate, knclient
+    where k_from_pr_id = pr_id and
+          ks_from_k_id = k_id and
+          ks_ol_is_delete = 0 and
+          ks_state = 1 and
+          :rep_date between ks_date_begin and ks_date_end and
+          pr_id = :pr_id and
+          kc_from_k_id = k_id and
+          kc_from_c_id = :c_id and
+          kc_amount_approved &gt; 0 and
+          k_fact_disb_date &lt; :disb_date
+    order by k_fact_disb_date rows 1
+    into :k_kontract_no, :disb_date_tmp;
+
+    if (k_kontract_no is not null) then
+    begin
+      res_text = &#x27;Заем по договору &#x27; || k_kontract_no || &#x27; от &#x27; || f_datetostr(disb_date_tmp) || &#x27; был рефинансирован, сперва требуется погасить данный заем. &#x27;;
+      suspend;
+    end
+
+    k_kontract_no = null;
+    k_id_tmp = null;
+
+    select knc.kc_from_c_id, pr_code, min(k_id), pr_id
+    from kontstate ks
+    inner join kontract k on k.k_id = ks.ks_from_k_id
+    inner join knclient knc on k.k_id = knc.kc_from_k_id
+    inner join product pr on pr.pr_id = k.k_from_pr_id
+    where k_from_pr_id = pr_id and
+          ks_from_k_id = k_id and
+          ks_ol_is_delete = 0 and
+          ks_state = 1 and
+          :rep_date between ks_date_begin and ks_date_end and
+          pr_id &lt;&gt; :pr_id and
+          kc_from_k_id = k_id and
+          kc_from_c_id = :c_id and
+          kc_amount_approved &gt; 0
+    group by 1, 2, 4
+    having count(kc_from_c_id) &gt; 1 
+    order by 1,2,3 rows 1
+    into c_id, pr_code_tmp, k_id_tmp, pr_id_tmp;
+
+    if (k_id_tmp is not null) then
+    begin
+      select k_kontract_no, k_fact_disb_date
+      from kontract
+      where k_id = :k_id_tmp
+      into :k_kontract_no, :disb_date_tmp;
+      res_text = &#x27;Заем по договору &#x27; || k_kontract_no || &#x27; от &#x27; || f_datetostr(disb_date_tmp) || &#x27; был рефинансирован, сперва требуется погасить данный заем. &#x27;;
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0007_SQL — процедура — схема БД</title>
+<meta name="description" content="Проверка льготы на доп проценты по купонам">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0007_SQL</code></h1>
+<p class="desc">Проверка льготы на доп проценты по купонам</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_get_continfo.html"><div class="to">AAREP_GET_CONTINFO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0007_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare kc_amount curr_type;
+declare kf_disb_date d_date;
+declare kf_client_pass_no varchar(30);
+declare variable c_id id_type;
+declare variable kc_circle integer;
+declare variable last_close_date date;
+declare variable sum_lgota curr_type;
+declare variable c_plastcard_no varchar(20);
+declare variable c_cell_no varchar(20);
+declare variable sds_create_date date;
+declare variable kc_kommis_lgota curr_type;
+declare variable is_lgota smallint;
+begin
+  is_lgota = 0;
+  for
+  select kc_from_c_id,
+         kc_circle,
+         k_disb_date,
+--         c_plastcard_no,
+         c_name_fio,
+         c_pass_no,
+         kc_kommis_lgota
+  from knclient, kontract, clients
+  where kc_from_k_id = :k_id
+  and kc_amount_approved &gt; 0
+  and kc_kommis_lgota &gt; 0
+  and kc_from_k_id = k_id
+  and kc_from_c_id = c_id
+  into c_id,
+       kc_circle,
+       kf_disb_date,
+--       c_plastcard_no,
+       res_info_text,
+       kf_client_pass_no,
+       kc_kommis_lgota
+  do
+  begin
+    c_plastcard_no = null;
+    select c_plastcard_no
+    from AAREP_GET_CONTINFO(&#x27;clients&#x27;, :c_id)
+    into c_plastcard_no;
+    if (kc_circle &gt; 1) then
+    begin
+--    вычисляется последний цикл клиента
+      last_close_date = null;
+      select ks_date_end
+      from kontstate, knclient
+      where ks_ol_is_delete = 0
+      and ks_state = 1
+      and ks_from_k_id = kc_from_k_id
+      and kc_from_c_id = :c_id
+      and kc_amount_approved &gt; 0
+      and ks_date_begin &lt; current_date
+      order by ks_date_begin desc
+      rows 1
+      into last_close_date;
+      if (last_close_date is null) then last_close_date = &#x27;01.01.1900&#x27;;
+      if (last_close_date &gt; dateadd(month,-6,:kf_disb_date)) then
+      begin
+        res_error_text = &#x27;Клиент повторный, не подлежит к льготе!&#x27;;
+        res_error_is_critical = 1;
+        suspend;
+      end
+    end
+    sum_lgota = null;
+    select 200 from smsdialogsend
+    where (sds_text starting &#x27;Ваш купон активирован&#x27;
+           or sds_text starting &#x27;Поздравляем! Вы получили скидку в 200 руб. в Мол Булак!&#x27;)
+    and sds_action = &#x27;Kupon_register&#x27;
+    and sds_cell_no = :c_plastcard_no -- c_cell_no - сотовый номер клиента
+    and cast(sds_create_datetime as date) &lt;= :kf_disb_date
+    rows 1
+    into sum_lgota;
+    if (sum_lgota is null) then sum_lgota = 0;
+    if (sum_lgota = 0.0000) then
+    begin
+        for
+        select SDS_CELL_NO, sds_create_datetime
+        from smsdialogsend
+        where (sds_text starting &#x27;Ваш купон активирован&#x27;
+               or sds_text starting &#x27;Поздравляем! Вы получили скидку в 200 руб. в Мол Булак!&#x27;)
+        and sds_action=&#x27;Kupon_register&#x27;
+        and sds_from_c_id = :c_id
+        and cast(sds_create_datetime as date) &lt;= :kf_disb_date
+        rows 1
+        into c_cell_no, sds_create_date
+        do
+        begin
+          -- проверка выданных кредитов по этим номерам
+          -- за каждый номер +300
+--                Пока нет учета, и если кредит даже закрыт то за данный кредит будет считаться льготой, даже данную льготу получил в денежнем эквиваленте агент
+          if (exists(select * from clients, knclient, kontstate
+                     where c_plastcard_no = :c_cell_no
+                     and c_id = kc_from_c_id
+                     and kc_amount_approved &gt; 0
+                     and kc_from_k_id = ks_from_k_id
+                     and ks_ol_is_delete = 0
+                     and ks_state = 1
+                     and ks_date_begin &gt;= :sds_create_date -- кредит должен быть выдан после получения купона
+                     )) then
+          begin
+            sum_lgota = sum_lgota + 300;
+          end
+        end
+    end
+    if (KC_KOMMIS_LGOTA &gt; 200) then
+    begin
+      res_error_is_critical=1;
+      res_error_text=&#x27;Скидка по под. проценту не должно превышать 200р.&#x27;;
+      suspend;
+    end
+    if (is_lgota = 0) then is_lgota = 1; -- это озночает что комиссия проставлено хотябы у одного клиента
+    if (sum_lgota &gt; 0) then is_lgota = 2; -- это озночает, что хотябы у одного клиента имеется купон
+  end
+  if (is_lgota = 1) then
+  begin
+    res_error_is_critical=1;
+    res_error_text=&#x27;Клиенты не подлежат к льготе!&#x27;;
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

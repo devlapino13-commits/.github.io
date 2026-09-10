@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_MOR_SYNCHRON — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_MOR_SYNCHRON: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_MOR_SYNCHRON</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_MOR_SYNCHRON
+AS
+declare variable SQL_TEXT varchar(2048);
+declare variable SQL_TEXT1 varchar(2048);
+declare variable MSS_ID integer;
+declare variable MSS_DB_CONNECT varchar(255);
+declare variable MSS_USER_CONNECT varchar(50);
+declare variable MSS_PASS varchar(50);
+declare variable MSS_USER_SAVE decimal(18,0);
+declare variable MSS_OFFICE_SAVE integer;
+declare variable CM_DEFAULT_CURRENCY varchar(3);
+declare variable LMS_NUMBER integer;
+declare variable M_CLIENT_FIO2 varchar(100);
+declare variable M_CLIENT_BIRTH_DATE2 date;
+declare variable TIME_BEGIN timestamp;
+declare variable M_ID decimal(18,0);
+declare variable M_NUMBER integer;
+declare variable M_NEW_ID decimal(18,0);
+declare variable M_ID1 decimal(18,0);
+declare variable M_NUMBER1 integer;
+declare variable M_IS_BLACK integer;
+declare variable M_DATE_BEGIN date;
+declare variable M_DATE_END date;
+declare variable M_MONTH integer;
+declare variable M_IS_ACTIVE smallint;
+declare variable M_COMMENT_GROUP varchar(2048);
+declare variable M_COMMENT_OFFICER varchar(2048);
+declare variable M_COMMENT_MANAGER varchar(2048);
+declare variable M_CLIENT_FIO varchar(100);
+declare variable M_CLIENT_PASS_NO varchar(30);
+declare variable M_CLIENT_ADDRESS varchar(255);
+declare variable M_CLIENT_BIRTH_DATE date;
+declare variable M_OUR_CLIENTS integer;
+declare variable M_FROM_REG_ID integer;
+declare variable M_NO integer;
+declare variable M_DATETIME timestamp;
+declare variable M_DATETIME_EDIT timestamp;
+declare variable M_USER_CREATE decimal(18,0);
+declare variable M_USER_EDIT decimal(18,0);
+declare variable M_DB_CODE varchar(3);
+declare variable M_ORIGINAL_ID decimal(18,0);
+declare variable K integer;
+declare variable DB_ID integer;
+begin
+  db_id = f_get_db_id();
+
+  for select mss_id, mss_db_connect, mss_user_connect, mss_pass, mss_user_save, mss_office_save
+      from morsynsettings
+      where (:db_id = 81001 and mss_db_id in (94401, 41701))
+      or (:db_id in (39801, 41701) and mss_db_id in (81001))
+      into :mss_id, :mss_db_connect, :mss_user_connect, :mss_pass, :mss_user_save, :mss_office_save
+  do
+  begin
+-- Генерирует номер записи для логирования
+    select coalesce(max(lms_number), 0) + 1
+    from logmorsyn
+    where lms_from_mss_id = :mss_id and
+          lms_date = current_date
+    into :lms_number;
+
+--  До синхранизации создает новую запись в таблице логов
+--    time_begin = current_timestamp;
+    time_begin = cast(&#x27;now&#x27; as timestamp);
+    insert into logmorsyn (lms_from_mss_id, lms_date, lms_number, lms_rec_count, lms_datetime_begin, lms_syn)
+    values (:mss_id, current_date, :lms_number, 0, :time_begin, 0);
+
+-- счетчик для определения кол-во копируемой записей
+    k = 0;
+
+--  Из другой БД вытаскивает валюту для кода ДБ
+    execute statement &#x27;select cm_default_currency from company&#x27;
+        on external :mss_db_connect
+        as user :mss_user_connect password :mss_pass
+        into :cm_default_currency;
+
+--  Из другой БД вытягивает ID для сравнения с текущей
+    sql_text = &#x27;select m_id, m_number, m_client_fio, m_client_birth_date &#x27; || &#x27;from moratory &#x27; || &#x27;where m_is_black &gt; 0 &#x27; || &#x27;and m_is_active = 1 &#x27; || &#x27;and m_original_id is null&#x27;;
+    for execute statement :sql_text
+            on external :mss_db_connect
+            as user :mss_user_connect password :mss_pass
+            into :m_id, :m_number, m_client_fio2, m_client_birth_date2
+    do
+    begin
+      m_new_id = null;
+      select m_id
+      from moratory
+      where (m_original_id = :m_id and
+            m_number = :m_number) -- Проверка, что раньше не было синхронизировано
+            or
+            (m_client_fio = :m_client_fio2 and
+            m_client_birth_date = :m_client_birth_date2) -- Проверка по ФИО и по дате рождения
+            rows 1
+      into :m_new_id;
+-- Если такой записи нету в текущей БД то выполняет следующее
+      if (:m_new_id is null) then
+      begin
+        sql_text1 = &#x27;select
+             -255 as m_id1, m_number, m_is_black, m_date_begin, m_date_end, m_month,
+             m_is_active,(
+               select &#x27;&#x27;Импортирован из офиса:&#x27;&#x27;||r1.reg_code||&#x27;&#x27; &#x27;&#x27;||r1.reg_name||
+               &#x27;&#x27;, филиал:&#x27;&#x27;||r2.reg_code||&#x27;&#x27; &#x27;&#x27;||r2.reg_name||&#x27;&#x27;, округ:&#x27;&#x27;||
+               r3.reg_code||&#x27;&#x27; &#x27;&#x27;||r3.reg_name
+               from region r1, region r2, region r3
+               where r1.parent = r2.reg_unicode
+                 and r2.parent = r3.reg_unicode
+                 and r1.reg_unicode = m_from_reg_id
+               ) as m_comment_group,
+             m_comment_officer, m_comment_manager, m_client_fio, m_client_pass_no,
+             m_client_address, m_client_birth_date, m_our_clients,&#x27; || :mss_office_save || &#x27; as m_from_reg_id, m_no, m_datetime, m_datetime_edit,&#x27; || :mss_user_save || &#x27; as m_user_create,&#x27; || :mss_user_save || &#x27; as m_user_edit,&#x27; || :cm_default_currency || &#x27; as m_db_code,
+             m_id as m_original_id
+          from moratory
+          where m_id = &#x27; || :m_id || &#x27; and m_number =&#x27; || :m_number;
+        for execute statement :sql_text1
+                on external :mss_db_connect
+                as user :mss_user_connect password :mss_pass
+                into m_id1, m_number1, m_is_black, m_date_begin, m_date_end, m_month, m_is_active, m_comment_group,
+                m_comment_officer, m_comment_manager, m_client_fio, m_client_pass_no, m_client_address,
+                m_client_birth_date, m_our_clients, m_from_reg_id, m_no, m_datetime, m_datetime_edit, m_user_create,
+                m_user_edit, m_db_code, m_original_id
+        do
+        begin
+          if (m_from_reg_id is null) then m_from_reg_id = mss_office_save;
+          insert into moratory (m_id, m_number, m_is_black, m_date_begin, m_date_end, m_month, m_is_active,
+                                m_comment_group, m_comment_officer, m_comment_manager, m_client_fio, m_client_pass_no,
+                                m_client_address, m_client_birth_date, m_our_clients, m_from_reg_id, m_no, m_datetime,
+                                m_datetime_edit, m_user_create, m_user_edit, m_db_code, m_original_id)
+          values (:m_id1, :m_number1, :m_is_black, :m_date_begin, :m_date_end, :m_month, :m_is_active, :m_comment_group,
+                  :m_comment_officer, :m_comment_manager, :m_client_fio, :m_client_pass_no, :m_client_address,
+                  :m_client_birth_date, :m_our_clients, :m_from_reg_id, :m_no, :m_datetime, :m_datetime_edit,
+                  :m_user_create, :m_user_edit, :m_db_code, :m_original_id);
+          k = :k + 1;
+        end
+      end
+    end
+--  Если все прошло успешно то обновляет запись лога на успешное
+    update logmorsyn
+    set lms_rec_count = :k,
+--        lms_datetime_end = current_timestamp,
+        lms_datetime_end = cast(&#x27;now&#x27; as timestamp),
+        lms_syn = 1
+    where (lms_from_mss_id = :mss_id) and
+          (lms_date = current_date) and
+          (lms_number = :lms_number);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

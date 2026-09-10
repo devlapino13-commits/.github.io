@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_WORKDOCLIST_TMP — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_WORKDOCLIST_TMP: 3 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_WORKDOCLIST_TMP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FIND_TXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">INCLUDE_ANNUL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">WDL_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">WDL_HAS_NEW</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">WDK_COUNT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">WDL_WORD_COUNT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_WORKDOCLIST_TMP(
+    UN_ID DECIMAL(18,0),
+    FIND_TXT VARCHAR(255),
+    INCLUDE_ANNUL INTEGER)
+RETURNS (
+    WDL_ID INTEGER,
+    WDL_HAS_NEW INTEGER,
+    WDK_COUNT INTEGER,
+    WDL_WORD_COUNT INTEGER)
+AS
+declare variable c_id decimal(18,0);
+declare variable ps_date_begin date;
+declare variable jl_id integer;
+declare variable wdl_is_open_access integer;
+declare variable wdl_from_un_id decimal(18,0);
+declare variable wdl_ready_user decimal(18,0);
+declare variable wdl_lock_user decimal(18,0);
+declare variable is_has_access integer;
+declare variable k integer;
+declare variable txt_tmp varchar(100);
+declare variable is_vip integer;
+declare variable has_access integer;
+begin
+  select un_from_c_id
+  from username
+  where un_id = :un_id
+  into :c_id;
+
+  is_vip = 0;
+  if (exists(select *
+             from workdocvipusers
+             where wdvip_from_c_id = :c_id)) then
+    is_vip = 1;
+
+  jl_id = 0;
+  has_access = 0;
+  select ps_date_begin, ps_from_jl_id
+  from hr_pstatus
+  where ps_from_c_id = :c_id and
+        ps_date_begin &lt;= current_date and
+        ps_date_end &gt;= current_date and
+        ps_is_working = 1
+  order by ps_date_begin
+  rows 1
+  into :ps_date_begin, :jl_id;
+  if (jl_id is null) then
+    jl_id = 0;
+  if (jl_id &lt;&gt; 0) then
+    has_access = 1;
+  if (has_access = 0) then
+  begin
+    if (exists(select *
+               from servicedog
+               where sd_from_c_id = :c_id and
+                     sd_date_begin &lt;= current_date and
+                     sd_date_end &gt;= current_date)) then
+      has_access = 1;
+    if ((has_access = 0) and
+        (c_id in (1090100224546, 1010100105262, 1090101324764, 1090101324762, 1090100299889, 1090100880978,
+        1090101324765, 1090101004395, 1090101324763, 1090100237638, 1090101324766, 1090101324769, 1090100300021,
+        1090101324768, 1090101324767, 1090100299963, 1090101326452, 1090101326456, 1090100532672, 1090101471274,1090101542739))) then
+      has_access = 1;
+  end
+  if (has_access = 1) then
+  begin
+    find_txt = trim(:find_txt);
+    if (:find_txt &lt;&gt; &#x27;&#x27;) then
+    begin
+      while (:find_txt &lt;&gt; &#x27;&#x27;) do
+      begin
+        wdl_word_count = 1;
+        k = position(&#x27; &#x27;, :find_txt) - 1;
+        if (k &gt;= 0) then
+        begin
+          txt_tmp = left(:find_txt, k);
+          find_txt = trim(substring(:find_txt from k + 1 for 255));
+        end
+        else
+        begin
+          if (find_txt &lt;&gt; &#x27;&#x27;) then
+          begin
+            txt_tmp = :find_txt;
+            find_txt = &#x27;&#x27;;
+          end
+        end
+        for with tab
+            as (select distinct wdl_id, wdl_is_open_access, wdl_from_un_id, wdl_ready_user, wdl_lock_user, wdk_count
+                from workdoclist, workdocblob, workdocwkol, workdocword
+                where wdb_from_wdl_id = wdl_id and
+                      wdk_from_wdb_id = wdb_id and
+                      wdk_from_wdw_id = wdw_id and
+                      wdw_inactive = 0 and
+                      ((:include_annul = 0 and
+                      wdl_stop_date is null) or
+                      (:include_annul = 1)) and
+                      wdw_word starting :txt_tmp
+                union
+                select distinct wdl_id, wdl_is_open_access, wdl_from_un_id, wdl_ready_user, wdl_lock_user,
+                                1 as wdk_count
+                from workdoclist
+                where ((:include_annul = 0 and
+                      wdl_stop_date is null) or
+                      (:include_annul = 1)) and
+                      wdl_name containing :txt_tmp)
+            select wdl_id, wdl_is_open_access, wdl_from_un_id, wdl_ready_user, wdl_lock_user, max(wdk_count)
+            from tab
+            group by wdl_id, wdl_is_open_access, wdl_from_un_id, wdl_ready_user, wdl_lock_user
+            into :wdl_id, :wdl_is_open_access, :wdl_from_un_id, :wdl_ready_user, :wdl_lock_user, :wdk_count
+        do
+        begin
+          if (is_vip = 0) then
+          begin
+            is_has_access = 0;
+            if ((wdl_is_open_access = 1) or (wdl_from_un_id = :un_id) or (wdl_ready_user = :un_id) or (wdl_lock_user = :un_id)) then
+              is_has_access = 1;
+
+            if (is_has_access = 0) then
+            begin
+              if (exists(select *
+                         from workdoccl
+                         where wdc_from_wdl_id = :wdl_id and
+                               wdc_from_c_id = :c_id)) then
+                is_has_access = 1;
+            end
+            if (is_has_access = 0) then
+            begin
+              if (exists(select *
+                         from workdocjl
+                         where wdu_from_wdl_id = :wdl_id and
+                               wdu_from_jl_id = :jl_id)) then
+                is_has_access = 1;
+            end
+          end
+          else
+            is_has_access = 1;
+          if (is_has_access = 1) then
+          begin
+            if (exists(select *
+                       from workdocstat
+                       where wds_from_wdl_id = :wdl_id and
+                             wds_from_un_id = :un_id)) then
+              wdl_has_new = 0;
+            else
+              wdl_has_new = 1;
+            suspend;
+            wdl_word_count = 0;
+          end
+        end
+      end
+    end
+    else
+    begin
+      wdl_word_count = 0;
+      wdk_count = 0;
+      for select distinct wdl_id, wdl_is_open_access, wdl_from_un_id, wdl_ready_user, wdl_lock_user
+          from workdoclist
+          where ((:include_annul = 0 and
+                wdl_stop_date is null) or
+                (:include_annul = 1))
+          into :wdl_id, :wdl_is_open_access, :wdl_from_un_id, :wdl_ready_user, :wdl_lock_user
+      do
+      begin
+        if (is_vip = 0) then
+        begin
+          is_has_access = 0;
+          if ((wdl_is_open_access = 1) or (wdl_from_un_id = :un_id) or (wdl_ready_user = :un_id) or (wdl_lock_user = :un_id)) then
+            is_has_access = 1;
+
+          if (is_has_access = 0) then
+          begin
+            if (exists(select *
+                       from workdoccl
+                       where wdc_from_wdl_id = :wdl_id and
+                             wdc_from_c_id = :c_id)) then
+              is_has_access = 1;
+          end
+          if (is_has_access = 0) then
+          begin
+            if (exists(select *
+                       from workdocjl
+                       where wdu_from_wdl_id = :wdl_id and
+                             wdu_from_jl_id = :jl_id)) then
+              is_has_access = 1;
+          end
+        end
+        else
+          is_has_access = 1;
+        if (is_has_access = 1) then
+        begin
+          if (exists(select *
+                     from workdocstat
+                     where wds_from_wdl_id = :wdl_id and
+                           wds_from_un_id = :un_id)) then
+            wdl_has_new = 0;
+          else
+            wdl_has_new = 1;
+          suspend;
+        end
+      end
+
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

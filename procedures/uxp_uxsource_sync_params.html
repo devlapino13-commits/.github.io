@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$UXSOURCE_SYNC_PARAMS — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$UXSOURCE_SYNC_PARAMS: 3 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$UXSOURCE_SYNC_PARAMS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">US_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AUTO_APPLY</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">US_UUID_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$UXSOURCE_SYNC_PARAMS(
+    US_UUID D_UUID,
+    AUTO_APPLY D_BOOL = 0,
+    US_UUID_CODE D_STR_CODE = null)
+AS
+declare variable us_is_table d_bool;
+declare variable res_code d_str_code;
+declare variable res_index d_integer;
+declare variable res_is_param d_bool;
+declare variable ufp_required d_bool;
+declare variable us_source d_str_code;
+declare variable uf_uuid d_uuid;
+declare variable uf_default d_str_100;
+declare variable uf_domain d_str_code;
+declare variable us_kind d_smallint;
+declare variable res_data_type d_str_code;
+declare variable uf_readonly d_boolean;
+begin
+  -- Сихронизирует индексы БД с таблицей uxIndex
+
+  if (coalesce(us_uuid, &#x27;&#x27;) = &#x27;&#x27;) then
+    us_uuid = uxf$uniq(us_uuid_code);
+
+  if (auto_apply is null) then
+    auto_apply = 0;
+
+  select us_code, us_is_table, us_kind
+  from ux$source
+  where us_uuid = :us_uuid
+  into us_source, us_is_table, us_kind;
+
+  if (us_kind &lt;&gt; 0) then
+    Exit;
+
+  if (auto_apply = 0) then
+  begin
+    if (not exists(select * from ux$field
+                   where uf_owner = :us_uuid)) then
+      auto_apply = 1;
+  end
+
+  -- Удаляем ранее не принятые изменения на добавление
+  delete from ux$field
+  where uf_owner = :us_uuid and
+        uf_state = 1;
+
+  -- Временно отмечаем как кандидат на удаление
+  update ux$field
+  set uf_state = -1
+  where uf_owner = :us_uuid and
+        uf_type = 0;
+
+  if (us_is_table = 1) then
+  begin
+    for select lower(trim(r.rdb$field_name)), r.rdb$field_position, coalesce(r.rdb$null_flag, 0)
+    from rdb$fields f, rdb$relation_fields r
+    where f.rdb$field_name = r.rdb$field_source and
+          r.rdb$system_flag = 0 and
+          r.rdb$relation_name = upper(:us_source)
+    order by r.rdb$relation_name, r.rdb$field_position
+    into :res_code, :res_index, :ufp_required
+    do
+    begin
+      res_is_param = 0;
+      for select field_default, field_domain, field_type, field_readonly
+      from uxp$uxfield_db_info(:us_source, :res_code, :us_is_table)
+      into uf_default, uf_domain, res_data_type, uf_readonly
+      do
+      begin
+        if (uf_domain starting &#x27;rdb$&#x27;) then
+          exception e_default &#x27;Field domain not defined: &#x27; || us_source || &#x27;.&#x27; || res_code || &#x27; -&gt; &#x27; || uf_domain;
+  
+        uf_uuid = uxf$uuid(us_uuid, &#x27;uxfield&#x27;, res_code);
+  
+        if (uf_uuid is null) then
+        begin
+          insert into ux$field (uf_owner, uf_field_name, uf_is_param, uf_position,
+                                uf_domain, uf_data_type, uf_not_null, uf_readonly, uf_default, uf_state)
+          values (:us_uuid, :res_code, :res_is_param, :res_index,
+                  :uf_domain, :res_data_type, :ufp_required, :uf_readonly, :uf_default, 1)
+          returning uf_uuid
+          into uf_uuid;
+        end else
+        begin
+          update ux$field
+          set uf_is_param = :res_is_param,
+              uf_position = :res_index,
+              uf_domain = :uf_domain,
+              uf_type = 0,
+              uf_data_type = :res_data_type,
+              uf_not_null = :ufp_required,
+              uf_readonly = :uf_readonly,
+              uf_default = :uf_default,
+              uf_state = 0
+          where uf_uuid = :uf_uuid;
+        end
+      end
+    end
+  end else
+  begin
+    for select lower(trim(rdb$parameter_name)), rdb$parameter_number, iif(rdb$parameter_type = 0, 1, 0),
+               coalesce(rdb$null_flag, 0)
+    from rdb$procedure_parameters
+    where rdb$procedure_name = upper(:us_source) and
+          rdb$package_name is null
+    order by 3, 2
+    into :res_code, :res_index, res_is_param, ufp_required
+    do
+    begin
+      res_code = lower(res_code);
+
+      for select field_default, field_domain, field_type, field_readonly
+      from uxp$uxfield_db_info(:us_source, :res_code, :us_is_table)
+      into uf_default, uf_domain, res_data_type, uf_readonly
+      do
+      begin
+        if (uf_domain starting &#x27;rdb$&#x27;) then
+          exception e_default &#x27;Field domain not defined: &#x27; || us_source || &#x27;.&#x27; || res_code || &#x27; -&gt; &#x27; || uf_domain;
+  
+        uf_uuid = uxf$uuid(us_uuid, &#x27;uxfield&#x27;, res_code);
+  
+        if (uf_uuid is null) then
+        begin
+          insert into ux$field (uf_owner, uf_field_name, uf_is_param, uf_position,
+                                uf_domain, uf_data_type, uf_not_null, uf_readonly, uf_default, uf_state)
+          values (:us_uuid, :res_code, :res_is_param, :res_index,
+                  :uf_domain, :res_data_type, :ufp_required, :uf_readonly, :uf_default, 1)
+          returning uf_uuid
+          into uf_uuid;
+        end else
+        begin
+          update ux$field
+          set uf_is_param = :res_is_param,
+              uf_position = :res_index,
+              uf_domain = :uf_domain,
+              uf_data_type = :res_data_type,
+              uf_type = 0,
+              uf_not_null = :ufp_required,
+              uf_readonly = :uf_readonly,
+              uf_default = :uf_default,
+              uf_state = 0
+          where uf_uuid = :uf_uuid;
+        end
+      end
+    end
+  end
+
+  if (auto_apply = 1) then
+  begin
+    update ux$field
+    set uf_type = -1,
+        uf_state = 0
+    where uf_owner = :us_uuid and
+          uf_state = -1;
+
+    update ux$field
+    set uf_state = 0
+    where uf_owner = :us_uuid and
+          uf_state &lt;&gt; 0;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ADD_DELINQ_TO_ACTIONLIST — процедура — схема БД</title>
+<meta name="description" content="Процедура ADD_DELINQ_TO_ACTIONLIST: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>ADD_DELINQ_TO_ACTIONLIST</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE ADD_DELINQ_TO_ACTIONLIST
+AS
+declare variable OBJ_ID D_ID;
+declare variable RD_ID D_ID;
+declare variable REG_ID D_ID;
+declare variable DELINQ_DAYS D_INTEGER;
+declare variable OBJ_KIND D_INTEGER;
+declare variable db_id d_id;
+begin
+    db_id = f_get_db_id();
+    if (db_id = 39801) then
+    begin
+        -- RFCKZ-201 --
+        -- Создает запись, фиксирующую 5 день просрочки
+        rd_id = f_get_rd_id(&#x27;ActionList.Delinq_Notif&#x27;);
+        for select k.k_id,
+                   k.k_last_reg_id,
+                   current_date - oks.oks_delinq_date
+        from oksummary oks
+        inner join kontract k on oks.oks_from_k_id = k.k_id
+        where oks.oks_close_state = 0
+          and current_date between oks.oks_date_begin and oks.oks_date_end
+          and current_date - oks.oks_delinq_date between 5 and 15 --Отбираем активные контракты от 5 до 15 дней просрочки
+        into obj_id, reg_id, delinq_days
+
+        do
+        begin
+            obj_kind = f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;);
+            if (not exists(select * -- Проверка на наличие уже существующей записи
+                       from actionlist acl
+                       where acl.acl_from_rd_id = :rd_id
+                         and acl.acl_date &lt; current_date
+                         and acl.acl_object_kind = :obj_kind
+                         and acl.acl_object_id = :obj_id
+                         and acl.acl_from_reg_id = :reg_id)
+                         and (delinq_days = 5)) then   --Проверка дня просрочки
+            begin  --Добавление записи в ActionList
+                insert into actionlist (acl_date, acl_from_reg_id, acl_object_kind, acl_object_id, acl_from_rd_id, acl_status,
+                                  acl_respons_c_id, acl_datetime, acl_from_un_id, acl_result_rd_id, acl_last_datetime)
+                values (current_date, :reg_id, :obj_kind, :obj_id, :rd_id, 2, 1000000000000, current_timestamp, 1000000000000, 0, current_timestamp);
+            end
+        end
+    end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

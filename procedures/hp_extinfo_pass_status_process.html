@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EXTINFO_PASS_STATUS_PROCESS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EXTINFO_PASS_STATUS_PROCESS: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EXTINFO_PASS_STATUS_PROCESS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_blobex_blob.html"><div class="to">HP_GET_BLOBEX_BLOB</div></a><a class="ref-card" href="hp_objectprops_set_with_rd.html"><div class="to">HP_OBJECTPROPS_SET_WITH_RD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_extinfotask_process.html"><div class="to">HP_EXTINFOTASK_PROCESS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EIL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EXTINFO_PASS_STATUS_PROCESS(
+    EIL_ID D_ID)
+AS
+declare variable RD_ID D_ID;
+declare variable C_ID D_ID;
+declare variable EIC_CODE D_STR_20;
+declare variable BLS_ID D_ID;
+declare variable RES_TEXT D_STR_255;
+declare variable GC_STATUS D_INTEGER;
+declare variable RD_MARITAL_STATUS D_INTEGER;
+begin
+    rd_id = 0;
+    c_id = 0;
+    bls_id = 0;
+    eic_code = &#x27;&#x27;;
+    res_text = &#x27;&#x27;;
+
+    select
+        eic.eic_code,
+        eil.eil_from_c_id,
+        eil.eil_from_bls_id
+    from extinfolist eil
+    inner join extinfocfg eic on eil.eil_from_eic_id = eic.eic_id
+        and eic.eic_code in (&#x27;passport_status&#x27;, &#x27;marital_status&#x27;)
+    where eil.eil_id = :eil_id
+        and eil.eil_status = 2
+        and eil.eil_from_bls_id is not null
+    into
+        eic_code,
+        c_id,
+        bls_id;
+
+    if (coalesce(c_id, 0) = 0) then
+        exit;
+
+    select blx_blob
+    from hp_get_blobex_blob(:bls_id)
+    into res_text;
+
+    if (res_text is null or res_text = &#x27;&#x27;) then
+        select json_text
+        from temp_grs
+        where bls_id = :bls_id
+        into res_text;
+
+    res_text = replace(res_text, &#x27;&quot;&#x27;, &#x27;&#x27;);
+    if (eic_code = &#x27;passport_status&#x27;) then
+    begin
+        res_text = lower(res_text);
+        if (res_text = &#x27;valid&#x27;) then
+        begin
+            select gc.gc_status
+            from grs_clients gc
+            where gc.gc_from_c_id = :c_id and
+                  gc.gc_is_last = 1
+            into gc_status;
+
+            update grs_clients
+            set gc_is_last = 0
+            where gc_from_c_id = :c_id
+                and gc_is_last = 1;
+            
+            insert into grs_clients (gc_from_c_id, gc_from_eil_id, gc_status, gc_status_datetime, gc_is_last)
+            values (:c_id, :eil_id, :gc_status, current_timestamp, 1);
+        end
+        else
+        begin
+            update grs_clients
+            set gc_is_last = 0
+            where gc_from_c_id = :c_id
+                and gc_is_last = 1;
+            
+            insert into grs_clients (gc_from_c_id, gc_from_eil_id, gc_status, gc_status_datetime, gc_is_last)
+            values (:c_id, :eil_id, -4, current_timestamp, 1);
+            
+            update clients c
+            set c.c_verify_status = -2
+            where c.c_id = :c_id;
+        end
+    end
+    else
+    begin
+        rd_id = f_get_rd_id(&#x27;AnketaQuestions.Family_tunduk&#x27;);
+        rd_marital_status =
+            case :res_text
+                when &#x27;Состоит в браке&#x27; then f_get_rd_id(&#x27;family.married&#x27;)
+                when &#x27;В браке не состоял(а)&#x27; then f_get_rd_id(&#x27;family.unmarried&#x27;)
+                when &#x27;Разведен(а)&#x27; then f_get_rd_id(&#x27;family.divorced&#x27;)
+                when &#x27;Вдовец/вдова&#x27; then f_get_rd_id(&#x27;family.widower&#x27;)
+            end;
+
+        execute procedure hp_objectprops_set_with_rd(&#x27;clients&#x27;, :c_id, -1, :rd_id, current_date, &#x27;&#x27;, 0, :rd_marital_status, 1000000000000);
+    end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

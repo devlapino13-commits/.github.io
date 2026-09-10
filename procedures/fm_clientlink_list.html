@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_CLIENTLINK_LIST — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_CLIENTLINK_LIST: 3 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_CLIENTLINK_LIST</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_param_list.html"><div class="to">FM_REPORT_PARAM_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FIND_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MCL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OBJ_KIND</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT_1</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT_2</div><div class="ptype">VARCHAR(10)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_CLIENTLINK_LIST(
+    UN_ID ID_TYPE,
+    FIND_TEXT D_STR_255,
+    MCL_ID D_ID = 0)
+RETURNS (
+    OBJ_KIND D_INTEGER,
+    OBJ_ID D_ID,
+    RES_TEXT_1 D_STR_255,
+    RES_TEXT_2 D_STR_10)
+AS
+declare variable C_ID ID_TYPE;
+declare variable LO_ID D_ID;
+declare variable COMMENT_STR D_STR_255;
+declare variable WB_TXT D_STR_100;
+begin
+  obj_kind = f_objkind(&#x27;clientlink&#x27;, &#x27;id&#x27;);
+
+  if (find_text is null) then find_text = &#x27;&#x27;;
+
+  select un_from_c_id
+  from username
+  where un_id = :un_id
+  into :c_id;
+
+  mcl_id = coalesce(mcl_id,0);
+  if (mcl_id &gt; 0) then
+  begin
+    select mcl.mcl_from_c_id
+    from mc_login mcl
+    where mcl.mcl_id = :mcl_id
+    into :c_id;
+  end 
+
+  if (c_id is null) then
+    exit;
+
+  lo_id = c_id;
+
+  for select clk_id, clk_link_name, clk_comment, clk_status,
+             (
+             case clk_status
+               when 0 then 1
+               when -1 then 2
+               when 1 then 3
+               when 2 then 4
+               when -2 then 5
+             end) as orderno,
+             clk_add_datetime, c_name_fio, clk_link_cell_no
+      from clientlink, clients
+      where (clk_from_un_id = :un_id or clk_from_c_id = :c_id) and
+            clk_status &lt;&gt; -2 and
+            clk_from_c_id = c_id
+      union
+      select clk_id, clk_link_name, clk_comment, clk_status,
+             (
+             case clk_status
+               when 0 then 1
+               when -1 then 2
+               when 1 then 3
+               when 2 then 4
+               when -2 then 5
+             end) as orderno,
+             clk_add_datetime, c_name_fio, clk_link_cell_no
+      from clientlink, oksummary, knclient, clients
+      where oks_date_begin &lt;= current_date and
+            oks_date_end &gt;= current_date and
+            oks_kc_id = :lo_id and
+            oks_from_k_id = kc_from_k_id and
+            oks_close_state = 0 and
+            kc_amount_approved &gt; 0 and
+            kc_from_c_id = clk_from_c_id and
+            clk_status &lt;&gt; -2 and
+            clk_from_c_id = c_id and
+            clk_from_un_id &lt;&gt; 1000000000000
+      order by 5, 6 desc as cursor clk
+  do
+  begin
+    obj_id = clk.clk_id;
+
+    res_text_1 = &#x27;&#x27;;
+    res_text_2 = &#x27;&#x27;;
+
+    comment_str = &#x27;&#x27;;
+    if (coalesce(clk.clk_comment, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+    begin
+      comment_str = &#x27;&lt;br&gt;&lt;font color=&quot;blue&quot;&gt;&#x27; || clk.clk_comment || &#x27;&lt;/font&gt;&#x27;;
+    end
+
+
+    wb_txt = &#x27;&#x27;;
+    if (exists(select * from extminiweb where emw_phone = clk.clk_link_cell_no)) then -- если через веб сайт то дбавляем &quot;ВБ&quot;
+    begin
+      wb_txt = &#x27;(WS)&#x27;;
+      wb_txt = &#x27;&lt;b&gt;&#x27; ||:wb_txt||&#x27;&lt;/b&gt;&#x27;;
+      wb_txt = &#x27;&lt;font color=&quot;blue&quot;&gt;&#x27; || :wb_txt || &#x27;&lt;/font&gt;&#x27;;
+    end 
+
+    res_text_1 = &#x27;&lt;br&gt;&lt;b&gt;&#x27; || clk.clk_link_name || &#x27;&lt;/b&gt; (от &#x27; || clk.c_name_fio || &#x27;)&#x27;||:wb_txt||comment_str;
+
+    res_text_2 = (case
+                    when clk.clk_status = -2 then &#x27;&amp;#9785;&#x27; -- хмурое лицо, отказался
+                    when clk.clk_status = -1 then &#x27;&amp;#9872;&#x27; -- флажок, перезвонить
+                    when clk.clk_status = 0 then &#x27;&amp;#9990;&#x27; -- телефон, новый контакт
+                    when clk.clk_status = 1 then &#x27;&amp;#9786;&#x27; -- улыбка, заинтересован
+                    when clk.clk_status = 2 then &#x27;&amp;#10004;&#x27; -- галочка, выдан
+                  end);
+
+    if (find_text = &#x27;&#x27; or res_text_1 containing find_text) then
+      suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

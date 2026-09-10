@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_JSON_FROM_SQL — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_JSON_FROM_SQL: 3 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_JSON_FROM_SQL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">3</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_demo_sched_action.html"><div class="to">FM_DEMO_SCHED_ACTION</div></a><a class="ref-card" href="fm_miniapp_action_extra.html"><div class="to">FM_MINIAPP_ACTION_EXTRA</div></a><a class="ref-card" href="hp_extsys_oper.html"><div class="to">HP_EXTSYS_OPER</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">JSON_KIND</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">JSON_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">JSON_SQL</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_JSON</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_JSON_FROM_SQL(
+    JSON_KIND VARCHAR(100),
+    JSON_NAME VARCHAR(100),
+    JSON_SQL BLOB SUB_TYPE TEXT SEGMENT SIZE 80)
+RETURNS (
+    RES_JSON BLOB SUB_TYPE TEXT SEGMENT SIZE 80)
+AS
+declare variable long_str varchar(3000);
+declare variable n_start integer;
+declare variable n_finish integer;
+declare variable sym varchar(1);
+declare variable n integer;
+declare variable as_name varchar(100);
+declare variable f_name varchar(100);
+declare variable rec_count integer;
+declare variable tab_sql blob sub_type 1 segment size 80;
+declare variable ss varchar(10);
+declare variable len integer;
+declare variable i integer;
+declare variable k1 integer;
+declare variable k2 integer;
+declare variable v_delimiter varchar(3);
+begin
+  if (json_name is null) then
+    json_name = &#x27;&#x27;;
+  json_name = lower(json_name);
+
+  if (not(json_kind in (&#x27;array&#x27;, &#x27;object&#x27;))) then
+    exception e_default &#x27;Incorrect JSON_Kind param&#x27;;
+  if (trim(coalesce(json_sql, &#x27;&#x27;)) = &#x27;&#x27;) then
+    exception e_default &#x27;Empty json_sql param&#x27;;
+
+  json_sql = replace(json_sql, ascii_char(10), &#x27;&#x27;);
+  json_sql = replace(json_sql, ascii_char(13), &#x27;&#x27;);
+  json_sql = trim(json_sql);
+  while (position(&#x27;  &#x27;, json_sql) &gt; 0) do
+  begin
+    json_sql = replace(json_sql, &#x27;  &#x27;, &#x27; &#x27;);
+  end
+  json_sql = &#x27; &#x27; || json_sql;
+  json_sql = replace(json_sql, &#x27; from &#x27;, &#x27;, from &#x27;);
+
+  res_json = &#x27;&#x27;;
+  n_start = position(&#x27; select &#x27;, json_sql);
+  if (n_start = 0) then
+    exception e_default &#x27;No &quot;select&quot; keyword found&#x27;;
+  n_start = n_start + 7;
+  n_finish = position(&#x27; from &#x27;, json_sql, n_start);
+  if (n_finish = 0) then
+    exception e_default &#x27;No &quot;from&quot; keyword found&#x27;;
+
+  i = n_start;
+  f_name = &#x27;&#x27;;
+  tab_sql = &#x27;&#x27;;
+  v_delimiter = &#x27; &#x27;&#x27;&#x27;;
+  while (i &lt; n_finish) do
+  begin
+    i = i + 1;
+    sym = substring(json_sql from i for 1);
+    if (sym = &#x27;,&#x27;) then
+    begin
+      n = position(&#x27; as &#x27;, f_name);
+      if (position(f_name, &#x27;(&#x27;) &gt; 0 and
+          n = 0) then
+      begin
+        exception e_default &#x27;Aggragated field without alias name&#x27;;
+      end
+      else
+      begin
+        if (n &gt; 0) then
+          as_name = substring(f_name from n + 4);
+        else
+          as_name = f_name;
+      end
+      as_name = trim(as_name);
+      as_name = lower(as_name);
+      tab_sql = BLOB_APPEND(tab_sql, v_delimiter, &#x27;•&#x27; || as_name || &#x27;•:•&#x27;&#x27;||coalesce(&#x27; || as_name || &#x27;,&#x27;&#x27;&#x27;&#x27;)||&#x27;&#x27;•&#x27;);
+      v_delimiter = &#x27;, &#x27;;
+      f_name = &#x27;&#x27;;
+    end
+    else
+      f_name = f_name || sym;
+  end
+  tab_sql = &#x27;select &#x27; || tab_sql || &#x27;&#x27;&#x27; from Tab&#x27;;
+  json_sql = replace(json_sql, &#x27;, from &#x27;, &#x27; from &#x27;);
+
+  tab_sql = BLOB_APPEND(&#x27;with tab as (&#x27;, json_sql, &#x27;) &#x27;, tab_sql);
+
+  res_json = &#x27;&#x27;;
+  v_delimiter = &#x27;&#x27;;
+  long_str = &#x27;&#x27;;
+
+  rec_count = 0;
+  for execute statement(tab_sql)
+          into :long_str
+  do
+  begin
+    i = 0;
+    len = char_length(long_str);
+    while (i &lt; len) do
+    begin
+      i = i + 1;
+      k1 = position(&#x27;•&#x27;, long_str, i);
+      if (k1 &gt; 0) then
+      begin
+        k2 = position(&#x27;•&#x27;, long_str, k1 + 1);
+        if (k2 - k1 = 11) then
+        begin
+          ss = substring(long_str from k1 + 1 for 10);
+          if (ss similar to &#x27;[[:DIGIT:]]{4}\-[[:DIGIT:]]{2}\-[[:DIGIT:]]{2}&#x27; escape &#x27;\&#x27;) then
+          begin
+            ss = right(ss, 2) || &#x27;.&#x27; || substring(ss from 6 for 2) || &#x27;.&#x27; || left(ss, 4);
+            long_str = left(long_str, k1) || ss || substring(long_str from k2);
+          end
+        end
+        i = k1;
+      end
+      else
+        i = len;
+    end
+
+    long_str = replace(long_str, &#x27;\&#x27;, &#x27;\\&#x27;);
+    long_str = replace(long_str, &#x27;&quot;&#x27;, &#x27;\&quot;&#x27;);
+    long_str = replace(long_str, &#x27;•&#x27;, &#x27;&quot;&#x27;);
+    res_json = BLOB_APPEND(res_json, v_delimiter, &#x27;{&#x27; || long_str || &#x27;}&#x27;);
+    v_delimiter = &#x27;,&#x27;;
+    rec_count = rec_count + 1;
+  end
+  if (json_kind = &#x27;array&#x27;) then
+    res_json = BLOB_APPEND(iif(json_name &lt;&gt; &#x27;&#x27;, &#x27;&quot;&#x27; || json_name || &#x27;&quot;:&#x27;, &#x27;&#x27;), &#x27;[&#x27;, res_json, &#x27;]&#x27;);
+  else
+  begin
+    if (rec_count = 0) then
+      exception e_default &#x27;No record found in JSON object&#x27;;
+    if (rec_count &gt; 1) then
+      exception e_default &#x27;Too many records in JSON object&#x27;;
+    if (rec_count = 1) then
+      res_json = BLOB_APPEND(iif(json_name &lt;&gt; &#x27;&#x27;, &#x27;&quot;&#x27; || json_name || &#x27;&quot;:&#x27;, &#x27;&#x27;), res_json);
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

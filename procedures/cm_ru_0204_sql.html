@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0204_SQL — процедура — схема БД</title>
+<meta name="description" content="Процедура CM_RU_0204_SQL: 3 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0204_SQL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0204_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable PR_CODE D_STR_100;
+declare variable C_ID ID_TYPE;
+declare variable DISB_DATE D_DATE;
+declare variable CLI_BALANCE CURR_TYPE;
+declare variable CLI_AMOUNT CURR_TYPE;
+declare variable RE_DISB_DATE D_DATE;
+declare variable LAST_ACTIVE D_SMALLINT;
+declare variable CURR_ACTIVE D_SMALLINT;
+declare variable PR_CODE_ACTIVE D_STR_100;
+declare variable BAL_REFUND CURR_TYPE;
+declare variable KOL_REFUND D_SMALLINT;
+declare variable LAST_BALANCE CURR_TYPE;
+declare variable LIMIT CURR_TYPE;
+declare variable K_PERIOD CURR_TYPE;
+declare variable DISB_DATE_REFUND D_DATE;
+begin
+  if (k_id = 101010095263800601) then
+  exit;
+  for
+  select pr_code, kc_from_c_id, k_disb_date, kc_amount_approved, k_period from kontract, product, knclient
+  where k_id = :k_id
+  and ((k_refund = 1 and pr_code similar to &#x27;%(.reliable_client.|.reliable_client_plus.|.loyal.)%&#x27;)
+       or pr_code containing &#x27;.support.&#x27;)
+  and k_from_pr_id = pr_id
+  and pr_code similar to &#x27;%(.reliable_client.|.reliable_client_plus.|.loyal.|.support.)%&#x27;
+  and k_id = kc_from_k_id
+  and kc_amount_approved &gt; 0
+  into pr_code, c_id, disb_date, cli_amount, k_period
+  do
+  begin
+    -- у клиента не должно быть активной просрочки
+    if (exists(
+    select * from knclient,oksummary
+    where kc_from_c_id = :c_id
+    and kc_amount_approved &gt; 0
+    and kc_from_k_id = oks_from_k_id
+    and :disb_date between oks_date_begin and oks_date_end
+    and oks_close_state = 0
+    and :disb_date - oks_delinq_date &gt; 0)) then
+    begin
+      res_error_text = &#x27;У клиента имеется активная просрочка.&#x27;;
+      res_error_is_critical = 2;
+      suspend;
+    end
+
+
+    if (pr_code containing &#x27;.support.&#x27;) then
+    begin
+      res_error_text = &#x27;По акции Поддержка выдачи запрещены.&#x27;;
+      res_error_is_critical = 2;
+      suspend;
+      exit;
+      -- 1) если у клиента два займа, выданных до 1 марта по участвующим в акции продуктам, чтобы подучить новый заём «Поддержка», он должен рефинансировать оба займа;
+      -- т.е. если имеется надежный сотрудник и параллельный то обе займа должны рефинанироваться чтобы получить поддержку
+      last_active = null;
+      select max(iif(pr_code containing &#x27;.reliable_client&#x27;, 1, 0)) + max(iif(pr_code containing &#x27;.loyal.&#x27;, 1, 0))
+      from kontstate, kontract, product, knclient
+      where ks_ol_is_delete = 0
+      and ks_state = 1
+      and ks_from_k_id = k_id
+      and k_disb_date &lt; &#x27;01.03.2022&#x27;  -- выданные до 1 марта 2022г.
+      and :disb_date - 1 between ks_date_begin and ks_date_end -- проверяем на предыдущую дату
+      and k_from_pr_id = pr_id
+      and pr_code similar to &#x27;%(.reliable_client.|.reliable_client_plus.|.loyal.)%&#x27;
+      and k_id = kc_from_k_id
+      and kc_amount_approved &gt; 0
+      and kc_from_c_id = :c_id
+      into last_active;
+      last_active = coalesce(last_active, 0);
+
+      -- проверка кол-во рефинансированных кредитов
+      curr_active = null;
+      select max(iif(pr_code containing &#x27;.reliable_client&#x27;, 1, 0)) + max(iif(pr_code containing &#x27;.loyal.&#x27;, 1, 0))
+      from kontract, product, kontstate, knclient
+      where k_refund = 1
+      and ks_date_begin &gt;= &#x27;01.03.2022&#x27;
+      and k_from_pr_id = pr_id
+      and pr_code similar to &#x27;%(.reliable_client.|.reliable_client_plus.|.loyal.)%&#x27;
+      and k_id = ks_from_k_id
+      and ks_state = 1
+      and :disb_date between ks_date_begin and ks_date_end
+      and k_id = kc_from_k_id
+      and kc_amount_approved &gt; 0
+      and kc_from_c_id = :c_id
+      into curr_active;
+      curr_active = coalesce(curr_active, 0);
+
+      if (curr_active = 0) then
+      begin
+        res_error_text = &#x27;по продукту &quot;Поддержка&quot; могут получить рефинансированные займы&#x27;;
+        res_error_is_critical = 2;
+        suspend;
+      end else
+      if (last_active &gt; curr_active) then
+      begin
+        res_error_text = &#x27;чтобы получить &quot;Поддержка&quot; нужно обе займа рефинансировать&#x27;;
+        res_error_is_critical = 2;
+        suspend;
+      end
+
+      if (k_period not between 5.5 and 6.5) then
+      begin
+        res_error_text = &#x27;Срок займа не соответсвует параметрам продукта&#x27;;
+        res_error_is_critical = 2;
+        suspend;
+      end
+
+    end else
+    begin
+      -- вычисляем баланс рефинансированных займов полученные от 1 марта
+      kol_refund = 0;
+      limit = 20000;
+      for
+      select iif(pr_code containing &#x27;.reliable_client&#x27;, &#x27;.reliable_client&#x27;, &#x27;.loyal.&#x27;), k_disb_date, sum(oks_balance)
+      from knclient, kontract, product, oksummary
+      where kc_from_c_id = :c_id
+      and kc_amount_approved &gt; 0
+      and kc_from_k_id = oks_from_k_id
+      and :disb_date between oks_date_begin and oks_date_end
+      and oks_close_state = 0
+      and oks_from_k_id = k_id
+      and k_refund = 1
+      and k_disb_date &gt;= &#x27;01.03.2022&#x27;
+      and k_from_pr_id = pr_id
+      and pr_code similar to &#x27;%(.reliable_client.|.reliable_client_plus.|.loyal.)%&#x27;
+      group by 1, 2
+      into pr_code_active, disb_date_refund, bal_refund
+      do
+      begin
+        kol_refund = kol_refund + 1;
+        if (kol_refund &gt;= 2 and 1&lt;&gt;1) then -- убрал по письму от Лауры от 17.04.2024
+        begin
+          res_error_text = &#x27;Клиент 2 раза рефинансировался.&#x27;;
+          res_error_is_critical = 2;
+          suspend;
+          exit;
+        end
+
+        -- вычисляем предыдущий баланс рефинансированного займа
+        select oks_balance from knclient, kontract, product, oksummary
+        where kc_from_c_id = :c_id
+        and kc_amount_approved &gt; 0
+        and kc_from_k_id = oks_from_k_id
+        and :disb_date_refund - 1 between oks_date_begin and oks_date_end
+        and oks_close_state = 0
+        and oks_from_k_id = k_id
+        and k_from_pr_id = pr_id
+        and pr_code containing trim(:pr_code_active)
+        and k_disb_date &lt; &#x27;01.03.2022&#x27;
+        order by k_disb_date desc
+        rows 1
+        into last_balance;
+
+        limit = limit - (bal_refund - last_balance);
+        if (limit &gt; 20000) then limit = 20000;
+      end 
+
+
+--      if (pr_code containing &#x27;.reliable_client&#x27;) then pr_code = &#x27;.reliable_client&#x27;;
+--      else pr_code = &#x27;.loyal.&#x27;;
+
+      -- находим находим остаток
+--      cli_balance = null;
+--      select oks_balance, k_disb_date from knclient, kontract, product, oksummary
+--      where kc_from_c_id = :c_id
+--      and kc_amount_approved &gt; 0
+--      and kc_from_k_id = oks_from_k_id
+--      and :disb_date between oks_date_begin and oks_date_end
+--      and oks_close_state = 0
+--      and oks_from_k_id = k_id
+--      and k_from_pr_id = pr_id
+--      and pr_code containing :pr_code
+--      order by k_disb_date desc
+--      rows 1
+--      into cli_balance, re_disb_date;
+
+--      cli_balance = coalesce(cli_balance,0);
+--      if (cli_balance &gt; 0) then
+--      begin
+--        if (cli_amount &gt; cli_balance + limit) then
+--        begin
+--          res_error_text = &#x27;Сумма не должно превышать &#x27;||round(limit,0)||&#x27; от активного займа.&#x27;;
+--          res_error_is_critical = 2;
+--          suspend;
+--        end
+--      end else
+--      begin
+--        res_error_text = &#x27;Рефинансирование запрещено&#x27;;  -- RFCRU-3486
+--        res_error_is_critical = 2;
+--        suspend;
+--      end
+
+--      if (re_disb_date &gt;= &#x27;01.03.2022&#x27;) then
+--      begin
+--        res_error_text = &#x27;Рефинансируются выданные до 1 марта 2022.&#x27;;
+--        res_error_is_critical = 2;
+--        suspend;
+--      end
+    end
+
+
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_GET_HTML_STOP_CREDIT_INFO — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_GET_HTML_STOP_CREDIT_INFO: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_GET_HTML_STOP_CREDIT_INFO</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_stop_credit_query_status.html"><div class="to">HP_STOP_CREDIT_QUERY_STATUS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_html_client_info.html"><div class="to">HP_GET_HTML_CLIENT_INFO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OBJ_KIND</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_HTML</div><div class="ptype">VARCHAR(2048)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_GET_HTML_STOP_CREDIT_INFO(
+    OBJ_KIND D_INTEGER,
+    OBJ_ID D_ID)
+RETURNS (
+    RES_HTML D_STR_2048)
+AS
+declare variable STATUS_STOP_CREDIT D_SMALLINT;
+declare variable STATUS_TEXT_STOP_CREDIT D_STR_255;
+declare variable QUERY_DATE_STOP_CREDIT D_DATE;
+declare variable QUERY_DATETIME_STOP_CREDIT D_DATETIME;
+declare variable ANSWER_DATE_STOP_CREDIT D_DATE;
+declare variable LINK_STOP_CREDIT D_STR_LONG;
+declare variable LINK_STOP_CREDIT_REPEAT D_STR_LONG;
+declare variable STOP_CREDIT_MAX_QUERIES D_INTEGER;
+declare variable STOP_CREDIT_QUERY_COUNT D_INTEGER;
+declare variable STOP_CREDIT_STATUS_IS_ACTUAL D_BOOL;
+declare variable SERVICE_MAX_DELAY_SECONDS D_INTEGER;
+declare variable IS_STOP_CREDIT_DOC_LOADED D_INTEGER;
+declare variable TEXT_TMP D_STR_255;
+begin
+  -- RFCKG-4392, RFCKZ-23
+  if (f_get_const(&#x27;stop_credit_is_active&#x27;) = 0) then
+    exit;
+
+  text_tmp = &#x27;&#x27;;
+  res_html = &#x27;&#x27;;
+
+  select status, query_date, query_datetime, answer_date
+  from hp_stop_credit_query_status(:obj_kind, :obj_id)
+  into :status_stop_credit, :query_date_stop_credit, :query_datetime_stop_credit, :answer_date_stop_credit;
+
+  status_text_stop_credit = (case status_stop_credit
+                   when 0 then &#x27;У клиента не установлен стоп-кредит.&#x27;
+                   when 1 then &#x27;У клиента действует стоп-кредит, выдача невозможна&#x27;
+                   when -1 then &#x27;Запрос не отправлен&#x27;
+                   when -2 then &#x27;Запрос отправлен&#x27;
+                   when -3 then &#x27;Внутренняя ошибка сервиса&#x27;
+                   else &#x27;&#x27;
+                 end);
+
+  stop_credit_status_is_actual = f_is_stopcred_actual(:answer_date_stop_credit);
+  service_max_delay_seconds = cast(f_get_const(&#x27;stop_credit_service_max_delay_seconds&#x27;) as d_integer);
+  is_stop_credit_doc_loaded = cast(f_is_stopcred_doc_loaded(:obj_kind, :obj_id) as d_integer);
+  link_stop_credit = f_uri_sql(&#x27;Проверить&#x27;, &#x27;stop_credit_status&#x27;, :obj_kind, :obj_id, &#x27;none&#x27;, &#x27;Подтверждаете отправку запроса для проверки статуса стоп-кредита?&#x27;, &#x27;&#x27;, 0, 0, &#x27;&#x27;, &#x27;&#x27;, &#x27;dialog&#x27;, &#x27;&#x27;);
+  link_stop_credit_repeat = f_uri_sql(&#x27;Проверить повторно&#x27;, &#x27;stop_credit_status&#x27;, :obj_kind, :obj_id, &#x27;none&#x27;, &#x27;Подтверждаете отправку запроса для проверки статуса стоп-кредита?&#x27;, &#x27;&#x27;, 0, 0, &#x27;&#x27;, &#x27;&#x27;, &#x27;dialog&#x27;, &#x27;&#x27;);
+
+  if (status_stop_credit = -1) then
+    begin
+        -- На уровне контракта нет автоматического триггера отправки запроса, он должен отправляться вручную
+        if (obj_kind = f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;)) then
+          begin
+              -- Если документ был прикреплен на этапе заявки (и он все еще актуален), то отправлять запрос на уровне контракта нет смысла
+              if (is_stop_credit_doc_loaded = 1) then
+                begin
+                    res_html = blob_append(res_html, &#x27;&lt;table width=&quot;100%&quot; style=&quot;margin: 0; padding 0;&quot;&gt;&lt;col width=&quot;40%&quot;&gt;&lt;col width=&quot;60%&quot;&gt;&#x27;);
+                    res_html = blob_append(res_html, f_html_table_row(&#x27;Стоп Кредит&#x27;,
+                                                                      &#x27;Прикреплен документ&#x27;,
+                                                                      &#x27;&#x27;, &#x27;&#x27;, -1, -1, -1, -1, 2, &#x27;&#x27;));
+                end
+              else
+                begin
+                    res_html = blob_append(res_html, &#x27;&lt;table width=&quot;100%&quot; style=&quot;margin: 0; padding 0;&quot;&gt;&lt;col width=&quot;40%&quot;&gt;&lt;col width=&quot;40%&quot;&gt;&lt;col width=&quot;20%&quot;&gt;&#x27;);
+                    res_html = blob_append(res_html, f_html_table_row(&#x27;Стоп Кредит&#x27;,
+                                                                      f_format(&#x27;&lt;span style=&quot;color: red;&quot;&gt;%1&lt;/span&gt;&#x27;, status_text_stop_credit),
+                                                                      link_stop_credit,
+                                                                      -1, -1, -1, -1, -1, 3, &#x27;&#x27;));
+                end
+          end
+        else
+          begin
+              res_html = blob_append(res_html, &#x27;&lt;table width=&quot;100%&quot; style=&quot;margin: 0; padding 0;&quot;&gt;&lt;col width=&quot;40%&quot;&gt;&lt;col width=&quot;60%&quot;&gt;&#x27;);
+              res_html = blob_append(res_html, f_html_table_row(&#x27;Стоп Кредит&#x27;,
+                                                                :status_text_stop_credit,
+                                                                &#x27;&#x27;, &#x27;&#x27;, -1, -1, -1, -1, 2, &#x27;&#x27;));
+          end
+    end
+  else if (status_stop_credit = -2) then
+    begin
+          if (query_datetime_stop_credit is not null and
+              datediff(second, query_datetime_stop_credit, current_timestamp) &gt;= service_max_delay_seconds) then
+            begin
+                res_html = blob_append(res_html, &#x27;&lt;table width=&quot;100%&quot; style=&quot;margin: 0; padding 0;&quot;&gt;&lt;col width=&quot;40%&quot;&gt;&lt;col width=&quot;60%&quot;&gt;&#x27;);
+                res_html = blob_append(res_html, f_html_table_row(&#x27;Стоп Кредит&#x27;,
+                                                                  &#x27;&lt;span style=&quot;color: red;&quot;&gt;Сервис не отвечает. Приложите документ&lt;/span&gt;&#x27;,
+                                                                  &#x27;&#x27;, &#x27;&#x27;, -1, -1, -1, -1, 2, &#x27;&#x27;));
+            end
+          else
+            begin
+                res_html = blob_append(res_html, &#x27;&lt;table width=&quot;100%&quot; style=&quot;margin: 0; padding 0;&quot;&gt;&lt;col width=&quot;40%&quot;&gt;&lt;col width=&quot;60%&quot;&gt;&#x27;);
+                res_html = blob_append(res_html, f_html_table_row(&#x27;Стоп Кредит&#x27;,
+                                                                  :status_text_stop_credit,
+                                                                  &#x27;&#x27;, &#x27;&#x27;, -1, -1, -1, -1, 2, &#x27;&#x27;));
+            end
+    end
+  else if (status_stop_credit = 1) then
+    begin
+        -- Если дата ответа актуальна, то статус актуальный и кнопку &quot;Проверить повторно&quot; выводить не нужно
+        if (stop_credit_status_is_actual = 1) then
+          begin
+              res_html = blob_append(res_html, &#x27;&lt;table width=&quot;100%&quot; style=&quot;margin: 0; padding 0;&quot;&gt;&lt;col width=&quot;40%&quot;&gt;&lt;col width=&quot;60%&quot;&gt;&#x27;);
+              res_html = blob_append(res_html, f_html_table_row(&#x27;Стоп Кредит&#x27;,
+                                                                f_format(&#x27;&lt;span style=&quot;color: red;&quot;&gt;%1&lt;/span&gt;&#x27;, status_text_stop_credit),
+                                                                &#x27;&#x27;, &#x27;&#x27;, -1, -1, -1, -1, 2, &#x27;&#x27;));
+          end
+        else -- Если дата ответа НЕ актуальна, то нужно сделать запрос заново, т.к. результат уже не актуален
+          begin
+              res_html = blob_append(res_html, &#x27;&lt;table width=&quot;100%&quot; style=&quot;margin: 0; padding 0;&quot;&gt;&lt;col width=&quot;40%&quot;&gt;&lt;col width=&quot;40%&quot;&gt;&lt;col width=&quot;20%&quot;&gt;&#x27;);
+              res_html = blob_append(res_html, f_html_table_row(&#x27;Стоп Кредит&#x27;,
+                                                                f_format(&#x27;&lt;span style=&quot;color: red;&quot;&gt;%1&lt;/span&gt;&#x27;, status_text_stop_credit),
+                                                                f_format(&#x27;Дата проверки: %1&lt;br&gt;%2&#x27;, f_datetostr(answer_date_stop_credit), link_stop_credit_repeat),
+                                                                -1, -1, -1, -1, -1, 3, &#x27;&#x27;));
+          end
+    end
+  else if (status_stop_credit = 0) then
+    begin
+        if (stop_credit_status_is_actual = 1) then
+          begin
+              res_html = blob_append(res_html, &#x27;&lt;table width=&quot;100%&quot; style=&quot;margin: 0; padding 0;&quot;&gt;&lt;col width=&quot;40%&quot;&gt;&lt;col width=&quot;60%&quot;&gt;&#x27;);
+              res_html = blob_append(res_html, f_html_table_row(&#x27;Стоп Кредит&#x27;,
+                                                                status_text_stop_credit,
+                                                                &#x27;&#x27;, &#x27;&#x27;, -1, -1, -1, -1, 2, &#x27;&#x27;));
+          end
+        else
+          begin
+              res_html = blob_append(res_html, &#x27;&lt;table width=&quot;100%&quot; style=&quot;margin: 0; padding 0;&quot;&gt;&lt;col width=&quot;40%&quot;&gt;&lt;col width=&quot;40%&quot;&gt;&lt;col width=&quot;20%&quot;&gt;&#x27;);
+              res_html = blob_append(res_html, f_html_table_row(&#x27;Стоп Кредит&#x27;,
+                                                                status_text_stop_credit,
+                                                                f_format(&#x27;Дата проверки: %1&lt;br&gt;%2&#x27;, f_datetostr(answer_date_stop_credit), link_stop_credit_repeat),
+                                                                -1, -1, -1, -1, -1, 3, &#x27;&#x27;));
+          end
+    end
+  else if (status_stop_credit = -3) then
+    begin
+        -- Получаем количество ошибочных запросов к сервису стоп-кредит для пары object_kind/object_id
+        select count(eil.eil_id)
+        from extinfolist eil
+        where eil.eil_object_kind = :obj_kind
+            and eil.eil_object_id = :obj_id
+            and eil.eil_from_eic_id = 4 -- интересует только стоп-кредит
+            and eil.eil_status in (-2, -3) -- Ошибка
+            and eil.eil_date = :query_date_stop_credit
+        into :stop_credit_query_count;
+
+        stop_credit_max_queries = cast(f_get_const(&#x27;stop_credit_max_queries&#x27;) as integer);
+
+        if (stop_credit_query_count &lt;= stop_credit_max_queries) then
+          begin
+              res_html = blob_append(res_html, &#x27;&lt;table width=&quot;100%&quot; style=&quot;margin: 0; padding 0;&quot;&gt;&lt;col width=&quot;40%&quot;&gt;&lt;col width=&quot;40%&quot;&gt;&lt;col width=&quot;20%&quot;&gt;&#x27;);
+              res_html = blob_append(res_html, f_html_table_row(&#x27;Стоп Кредит&#x27;,
+                                                                f_format(&#x27;&lt;span style=&quot;color: red;&quot;&gt;%1&lt;/span&gt;&#x27;, status_text_stop_credit),
+                                                                link_stop_credit,
+                                                                -1, -1, -1, -1, -1, 3, &#x27;&#x27;));
+          end
+        else
+          begin
+              if (is_stop_credit_doc_loaded = 1) then
+                text_tmp = &#x27;Ошибка при получении статуса клиента. Документ прикреплен&#x27;;
+              else
+                text_tmp = f_format(&#x27;&lt;span style=&quot;color: red;&quot;&gt;%1&lt;/span&gt;&#x27;, &#x27;Ошибка при получении статуса клиента. Прикрепите документ&#x27;);
+
+              if (stop_credit_status_is_actual = 1) then
+                begin
+                    res_html = blob_append(res_html, &#x27;&lt;table width=&quot;100%&quot; style=&quot;margin: 0; padding 0;&quot;&gt;&lt;col width=&quot;40%&quot;&gt;&lt;col width=&quot;60%&quot;&gt;&#x27;);
+                    res_html = blob_append(res_html, f_html_table_row(&#x27;Стоп Кредит&#x27;,
+                                                                       text_tmp,
+                                                                        &#x27;&#x27;, &#x27;&#x27;, -1, -1, -1, -1, 2, &#x27;&#x27;));
+                end
+              else
+                begin
+                    res_html = blob_append(res_html, &#x27;&lt;table width=&quot;100%&quot; style=&quot;margin: 0; padding 0;&quot;&gt;&lt;col width=&quot;40%&quot;&gt;&lt;col width=&quot;40%&quot;&gt;&lt;col width=&quot;20%&quot;&gt;&#x27;);
+                    res_html = blob_append(res_html, f_html_table_row(&#x27;Стоп Кредит&#x27;,
+                                                                        text_tmp,
+                                                                        f_format(&#x27;Дата проверки: %1&lt;br&gt;%2&#x27;, f_datetostr(answer_date_stop_credit), link_stop_credit_repeat),
+                                                                        -1, -1, -1, -1, -1, 3, &#x27;&#x27;));
+                end
+          end
+    end
+  else
+    begin
+        res_html = blob_append(res_html, &#x27;&lt;table width=&quot;100%&quot; style=&quot;margin: 0; padding 0;&quot;&gt;&lt;col width=&quot;40%&quot;&gt;&lt;col width=&quot;60%&quot;&gt;&#x27;);
+        res_html = blob_append(res_html, f_html_table_row(&#x27;Стоп Кредит&#x27;,
+                                                          f_format(&#x27;&lt;span style=&quot;color: red;&quot;&gt;%1&lt;/span&gt;&#x27;, &#x27;Произошла неизвестная ошибка&#x27;),
+                                                          &#x27;&#x27;, &#x27;&#x27;, -1, -1, -1, -1, 2, &#x27;&#x27;));
+    end
+
+
+  res_html = blob_append(res_html, &#x27;&lt;/table&gt;&#x27;);
+    
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EXTINFO_TO_SEND_POLICY_INFO — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EXTINFO_TO_SEND_POLICY_INFO: 3 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EXTINFO_TO_SEND_POLICY_INFO</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="get_policy_commission_amount.html"><div class="to">GET_POLICY_COMMISSION_AMOUNT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_extinfo_to_send.html"><div class="to">HP_EXTINFO_TO_SEND</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJECT_KIND</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJECT_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">JSON_TEXT</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EXTINFO_TO_SEND_POLICY_INFO(
+    C_ID ID_TYPE,
+    OBJECT_KIND D_INTEGER,
+    OBJECT_ID D_ID)
+RETURNS (
+    JSON_TEXT D_STR_8100)
+AS
+declare variable CREDIT_NO D_STR_20; /* номер кредита */
+declare variable POLICY_NO D_STR_20; /* аналогичен номеру кредита */
+declare variable ISSUE_DATE D_DATE; /* дата выдачи кредита */
+declare variable EMPLOYEE_ID D_ID; /* фамилия сотрудника выдавшего кредит */
+declare variable EMPLOYEE_LAST_NAME D_STR_CODE; /* фамилия сотрудника выдавшего кредит */
+declare variable EMPLOYEE_FIRST_NAME D_STR_CODE; /* имя сотрудника выдавшего кредит */
+declare variable DATE_START D_DATE; /* дата начала действия полиса, аналогична с датой выдачи кредита */
+declare variable DATE_END D_DATE; /* дата конца действия полиса, аналогична с датой конца займа */
+declare variable DATE_DIFF D_INTEGER; /* дата конца действия полиса, аналогична с датой конца займа */
+declare variable COMMISSION decimal(18,2); /* сумма комиссии (п. №6) */
+declare variable INSURANCE_DATA D_STR_LONG;
+declare variable ADDRESS D_STR_CODE; /* всегда &quot;Кыргызская Республика&quot; */
+declare variable CLIENT D_STR_255; /* фамилия и имя клиента */
+declare variable INN D_STR_20; /* ИНН клиента */
+declare variable PASSPORT D_STR_20; /* Паспортные данные */
+declare variable BIRTHDAY D_STR_20; /* Дата рождения */
+declare variable TSP D_CURRENCY; /* Страховая сумма, аналогична сумме займа */
+declare variable INSURANCE_SUMM D_CURRENCY; /* Страховая сумма, аналогична сумме займа */
+declare variable IK_POLICY_NO_SPARE D_STR_20;
+declare variable IK_TSP_SPARE D_CURRENCY;
+begin
+    json_text = &#x27;&#x27;;
+    if (object_kind &lt;&gt; f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;)
+        and f_get_db_id() not in (41701, 39801)
+        and f_get_const(&#x27;kont_insurance_active&#x27;) &lt;&gt; 1
+    ) then
+        exit;
+
+    select
+        k.k_kontract_no,
+        k.k_fact_disb_date,
+        k.k_kredline_end,
+        iif(k.k_kredline_end - k.k_disb_date &lt; 365, 365, k.k_kredline_end - k.k_disb_date),
+        kc.kc_amount_approved,
+        kal.kal_new_kf_officer
+    from kontract k
+    inner join knclient kc on kc.kc_from_k_id = k.k_id
+        and kc.kc_from_c_id = :c_id
+        and kc.kc_amount_approved &gt; 0
+    inner join knaktlist kal on kal.kal_from_kf_id = k.k_from_kf_id
+        and current_date between kal.kal_date and kal.kal_date_end
+        and kal.is_delete = 0
+    where k.k_id = :object_id
+    into
+        :credit_no,
+        :date_start,
+        :date_end,
+        :date_diff,
+        :insurance_summ,
+        :employee_id;
+
+    select
+        upper(substring(fl.fl_name1 from 1 for 1)) || lower(substring(fl.fl_name1 from 2)),
+        upper(substring(fl.fl_name2 from 1 for 1)) || lower(substring(fl.fl_name2 from 2))
+    from clients c
+    inner join fiolist fl on fl.fl_id = c.c_from_fl_id
+    where c.c_id = :employee_id
+    into
+        :employee_last_name,
+        :employee_first_name;
+
+    select
+        c.c_name_fio,
+        c.c_inn, 
+        c.c_pass_no,
+        c.c_birth_date
+    from clients c
+    where c.c_id = :c_id
+    into
+        :client, 
+        :inn,
+        :passport,
+        :birthday;
+
+    select coalesce(ag.ag_commis_cards_mb, ag.ag_commis_cards_other, 1)
+    from agreements ag
+    where current_date between ag.ag_date_begin and ag.ag_date_end
+        and ag.ag_from_rd_id = f_get_rd_id(&#x27;AgreementKinds.insurance&#x27;)
+        and ag.ag_object_kind = f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;)
+        and ag.ag_object_id = 1090101889505 /* один статичный c_id страхового агентства*/
+        and ag.ag_status = 1
+    into tsp;
+
+    select commission_amount
+    from get_policy_commission_amount(:object_id)
+    into commission;
+
+    select ik_policy_no_spare, ik_tsp_spare
+    from insurance_kontract
+    where ik_from_k_id = :object_id
+    into ik_policy_no_spare, ik_tsp_spare;
+    
+    policy_no = credit_no;
+    if (coalesce(ik_policy_no_spare, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then -- RFCKG-4843
+    begin
+      policy_no = ik_policy_no_spare;
+      tsp = ik_tsp_spare;
+    end
+
+    insurance_data =
+    &#x27;{&#x27;||
+        f_json_make_pair(&#x27;adres&#x27;, &#x27;Кыргызская Республика&#x27;, &#x27;str&#x27;)||&#x27;,&#x27;||
+        f_json_make_pair(&#x27;client&#x27;, coalesce(:client, &#x27;-&#x27;), &#x27;str&#x27;)||&#x27;,&#x27;||
+        f_json_make_pair(&#x27;inn&#x27;, coalesce(:inn, &#x27;-&#x27;), &#x27;str&#x27;)||&#x27;,&#x27;||
+        f_json_make_pair(&#x27;pasport&#x27;, coalesce(:passport, &#x27;-&#x27;), &#x27;str&#x27;)||&#x27;,&#x27;||
+        f_json_make_pair(&#x27;birthday&#x27;, f_date_format(&#x27;yyyy-mm-dd&#x27;, coalesce(:birthday, &#x27;01.01.1900&#x27;)), &#x27;str&#x27;)||&#x27;,&#x27;||
+        f_json_make_pair(&#x27;insurance_summ&#x27;, coalesce(:insurance_summ, 0), &#x27;num&#x27;)||&#x27;,&#x27;||
+        f_json_make_pair(&#x27;insurance_premium&#x27;, coalesce(:commission, 0), &#x27;num&#x27;)||
+    &#x27;}&#x27;;
+
+    json_text =
+    &#x27;{&#x27;||
+        f_json_make_pair(&#x27;credit_no&#x27;, coalesce(:credit_no, &#x27;-&#x27;), &#x27;str&#x27;)||&#x27;,&#x27;||
+        f_json_make_pair(&#x27;policy_no&#x27;, coalesce(:policy_no, &#x27;-&#x27;), &#x27;str&#x27;)||&#x27;,&#x27;||
+        f_json_make_pair(&#x27;issue_date&#x27;, f_date_format(&#x27;yyyy-mm-dd&#x27;, coalesce(:date_start, &#x27;01.01.1900&#x27;)), &#x27;str&#x27;)||&#x27;,&#x27;||
+        f_json_make_pair(&#x27;product_id&#x27;, &#x27;c5231c2c-b78f-4c28-8c5f-acc467a06995&#x27;, &#x27;str&#x27;)||&#x27;,&#x27;||
+        f_json_make_pair(&#x27;client&#x27;, coalesce(:client, &#x27;-&#x27;), &#x27;str&#x27;)||&#x27;,&#x27;||
+        f_json_make_pair(&#x27;employee_last_name&#x27;, coalesce(:employee_last_name, &#x27;-&#x27;), &#x27;str&#x27;)||&#x27;,&#x27;||
+        f_json_make_pair(&#x27;employee_first_name&#x27;, coalesce(:employee_first_name, &#x27;-&#x27;), &#x27;str&#x27;)||&#x27;,&#x27;||
+        f_json_make_pair(&#x27;company_id&#x27;, &#x27;24a5d050-3119-4183-b514-6b772be1c780&#x27;, &#x27;str&#x27;)||&#x27;,&#x27;||
+        f_json_make_pair(&#x27;date_start&#x27;, f_date_format(&#x27;yyyy-mm-dd&#x27;, coalesce(:date_start, &#x27;01.01.1900&#x27;)), &#x27;str&#x27;)||&#x27;,&#x27;||
+        f_json_make_pair(&#x27;date_end&#x27;, f_date_format(&#x27;yyyy-mm-dd&#x27;, coalesce(:date_end, &#x27;01.01.1900&#x27;)), &#x27;str&#x27;)||&#x27;,&#x27;||
+        f_json_make_pair(&#x27;currency_id&#x27;, &#x27;3f994c4c-afbc-404d-9266-7d48f0294467&#x27;, &#x27;str&#x27;)||&#x27;,&#x27;||
+        f_json_make_pair(&#x27;username&#x27;, &#x27;admin&#x27;, &#x27;str&#x27;)||&#x27;,&#x27;||
+        f_json_make_pair(&#x27;diffDays&#x27;, coalesce(:date_diff, 0), &#x27;num&#x27;)||&#x27;,&#x27;||
+        f_json_make_pair(&#x27;commission&#x27;, coalesce(:commission * :tsp / 100, 0), &#x27;num&#x27;)||&#x27;,&#x27;||
+        f_json_make_pair(&#x27;insurance_data&#x27;, coalesce(:insurance_data, &#x27;{}&#x27;), &#x27;object&#x27;)||
+    &#x27;}&#x27;;
+
+    suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

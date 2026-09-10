@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_CHANGE_DISB_DATE — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_CHANGE_DISB_DATE: 4 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_CHANGE_DISB_DATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">4</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_make_schedule.html"><div class="to">HP_MAKE_SCHEDULE</div></a><a class="ref-card" href="hp_miniapp_kontract_sync.html"><div class="to">HP_MINIAPP_KONTRACT_SYNC</div></a><a class="ref-card" href="hp_update_miniapp_cert_time.html"><div class="to">HP_UPDATE_MINIAPP_CERT_TIME</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">4 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_cmd.html"><div class="to">FM_REPORT_CMD</div></a><a class="ref-card" href="hp_disb_installment_goods.html"><div class="to">HP_DISB_INSTALLMENT_GOODS</div></a><a class="ref-card" href="hp_do_expressapp_process.html"><div class="to">HP_DO_EXPRESSAPP_PROCESS</div></a><a class="ref-card" href="hp_expressapp_disb_loan.html"><div class="to">HP_EXPRESSAPP_DISB_LOAN</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_KIND</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DISB_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_CHANGE_DISB_DATE(
+    UN_ID DECIMAL(18,0),
+    OBJ_KIND VARCHAR(100),
+    OBJ_ID DECIMAL(18,0),
+    DISB_DATE DATE)
+RETURNS (
+    RES_ID INTEGER,
+    RES_TXT VARCHAR(255))
+AS
+declare variable reg_id integer;
+declare variable manager_id decimal(18,0);
+declare variable ma_plan_disb_time timestamp;
+declare variable k_status integer;
+declare variable k_id decimal(18,0);
+declare variable k_disb_date date;
+begin
+  k_status = 0;
+  if (obj_kind = &#x27;miniapp&#x27;) then
+  begin
+    select k_id, k_status, k_disb_date
+    from kontract
+    where k_from_ma_app_id = :obj_id
+    order by k_disb_date
+    rows 1
+    into :k_id, :k_status, k_disb_date;
+
+    if (k_id is null) then
+    begin
+      select ma_date_oper
+      from miniapp
+      where ma_id = :obj_id and
+            ma_date_end &gt;= &#x27;31.12.2999&#x27;
+      into :k_disb_date;
+    end
+  end
+  else
+  begin
+    select k_id, k_status, k_disb_date
+    from kontract
+    where k_id = :obj_id
+    into :k_id, :k_status, k_disb_date;
+  end
+
+  if (disb_date = k_disb_date) then
+  begin
+    res_id = -1;
+    res_txt = &#x27;Вы не поменяли дату выдачи.&#x27;;
+    suspend;
+    exit;
+  end
+
+  if (k_status = 1) then
+  begin
+    res_id = -1;
+    res_txt = &#x27;Договор уже утвержден. Необходимо вернуть в процесс, либо поменять дату через КОБД.&#x27;;
+    suspend;
+    exit;
+  end
+
+  if (disb_date &lt; current_date) then
+  begin
+    res_id = -1;
+    res_txt = &#x27;Нельзя устанавливать дату выдачи в прошлом.&#x27;;
+    suspend;
+    exit;
+  end
+
+  if (datediff(day, current_date, disb_date) &gt; 60) then
+  begin
+    res_id = -1;
+    res_txt = &#x27;Слишком далекая дата выдачи.&#x27;;
+    suspend;
+    exit;
+  end
+
+  if (k_id is not null) then
+  begin
+    if (exists(select *
+               from kontstate
+               where ks_from_k_id = :k_id and
+                     ks_state = 1 and
+                     ks_ol_is_delete = 0)) then
+    begin
+      res_id = -1;
+      res_txt = &#x27;По договору уже осуществлена выдача. Нельзя менять дату выдачи.&#x27;;
+      suspend;
+      exit;
+    end
+  end
+  res_id = 1;
+
+  if (obj_kind = &#x27;miniapp&#x27;) then
+  begin
+    execute procedure hp_update_miniapp_cert_time(:obj_id, 0, null, :un_id, :disb_date);
+
+    execute procedure hp_miniapp_kontract_sync(11, :obj_id);
+
+    select res_id, res_txt
+    from hp_make_schedule(:un_id, 11, :obj_id, 0, null, 0)
+    into res_id, res_txt;
+
+  end
+  else
+  begin
+    update kontract
+    set k_disb_date = :disb_date,
+        k_kontract_date = f_get_kontract_date(:obj_id, :disb_date),
+        k_user_id = :un_id
+    where k_id = :obj_id;
+
+    execute procedure hp_miniapp_kontract_sync(9, :obj_id);
+
+    select res_id, res_txt
+    from hp_make_schedule(:un_id, 9, :obj_id, 0, null, 0)
+    into res_id, res_txt;
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

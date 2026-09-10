@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_SEND_MAIL_HIGH_ALT_EXP — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_SEND_MAIL_HIGH_ALT_EXP: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_SEND_MAIL_HIGH_ALT_EXP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_high_mountain_exp_calc.html"><div class="to">HP_HIGH_MOUNTAIN_EXP_CALC</div></a><a class="ref-card" href="hp_send_quick_message.html"><div class="to">HP_SEND_QUICK_MESSAGE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_SEND_MAIL_HIGH_ALT_EXP
+AS
+declare variable curr_day_7 d_integer;
+declare variable c_id d_id;
+declare variable hired_date d_date;
+declare variable hm_mount d_integer;
+declare variable exp d_integer;
+declare variable date_start d_date;
+declare variable mail_to d_str_255;
+declare variable mail_subject d_str_255;
+declare variable mail_body varchar(1024);
+declare variable reg_id d_integer;
+declare variable reg_id_tmp d_integer;
+declare variable jl_name d_str_100;
+declare variable reg_concat d_str_100;
+declare variable fio d_str_100;
+declare variable birth_date d_date;
+declare variable curr_date d_date;
+declare variable curr_month d_integer;
+begin
+  curr_date = current_date;
+  curr_day_7 = extract(day from (:curr_date + 7));
+  mail_to = &#x27;hr_branch@mbulak.kg, ch.abdykerimova@mbulak.kg, b.abdraeva@mbulak.kg&#x27;;
+  reg_id = 0;
+
+  for select ps.ps_from_c_id, jl.jl_name, rl.id_list
+      from hr_pstatus ps
+      inner join region_list(1000000, 1, 3, 1) rl on rl.id_list = cast(ps.ps_from_reg_id as integer)
+      inner join region reg on reg.reg_unicode = rl.id_list and
+            f_reg_mount_koef(reg.reg_unicode) &gt; 1 -- RFCKG-4782
+      inner join joblist jl on jl.jl_id = ps.ps_from_jl_id
+      where :curr_date between ps.ps_date_begin and ps.ps_date_end and
+            ps.ps_is_working = 1 and
+            ps.ps_status = 1 and
+            (((ps_is_working = 0) and
+            ((ps_transfer_office is null) or
+            (ps_transfer_office = ps_from_reg_id))) or
+            (ps_is_working = 1))
+      order by rl.id_list
+      into :c_id, :jl_name, :reg_id_tmp
+
+  do
+  begin
+    mail_body = &#x27;&#x27;;
+    hm_mount = 0;
+
+    select ps.ps_date_begin, hm.hm_mount
+    from hr_pstatus ps
+    inner join hr_mount hm on ps.ps_from_ho_id = hm.hm_ps_from_ho_id and
+          ps.ps_id = hm.hm_from_ps_id
+    where ps.ps_from_c_id = :c_id
+    order by ps.ps_date_begin desc
+    rows 1
+    into :hired_date, :hm_mount;
+
+    select month_out, last_date
+    from hp_high_mountain_exp_calc(:c_id, :hired_date, :curr_date)
+    into :exp, :date_start;
+
+    exp = :exp + :hm_mount;
+
+    select c.c_name_fio, c.c_birth_date
+    from clients c
+    where c.c_id = :c_id
+    into :fio, :birth_date;
+
+    if (:reg_id &lt;&gt; :reg_id_tmp) then
+    begin
+      reg_id = :reg_id_tmp;
+
+      select reg.reg_code || &#x27; &#x27; || reg.reg_name
+      from region reg
+      where reg.reg_unicode = :reg_id
+      into :reg_concat;
+    end
+
+    if (f_is_valid_date(extract(day from :date_start) || &#x27;.&#x27; || extract(month from :curr_date) || &#x27;.&#x27; || extract(year from :curr_date)) = 0) then
+      :date_start = extract(day from f_date_month_end(:curr_date)) || &#x27;.&#x27; || extract(month from :date_start) || &#x27;.&#x27; || extract(year from :date_start);
+
+    if (:curr_day_7 = extract(day from :date_start) and
+        mod(:exp, 60) = 0) then
+    begin
+      mail_subject = &#x27;Уведомление о высокогорном стаже&#x27;;
+      mail_body = &#x27;&lt;b&gt;Внимание !&lt;/b&gt;&lt;br&gt;&lt;br&gt;&#x27; || &#x27;&lt;b&gt;Высокорный стаж составил &lt;font color=&quot;red&quot;&gt;&#x27; ||((:exp) / 60 * 5) || &#x27;&lt;/font&gt; лет:&lt;/b&gt;&lt;br&gt;&lt;br&gt;&#x27; || &#x27;ОП: &lt;b&gt;&#x27; || :reg_concat || &#x27;&lt;/b&gt;&lt;br&gt;&#x27; || &#x27;ФИО: &lt;b&gt;&#x27; || :fio || &#x27;&lt;/b&gt;&lt;br&gt;&#x27; || &#x27;Должность: &lt;b&gt;&#x27; || :jl_name || &#x27;&lt;/b&gt;&lt;br&gt;&lt;br&gt;&#x27; || &#x27;Дата наступления стажа: &lt;b&gt;&#x27; || f_datetostr(:curr_date + 7) || &#x27;&lt;/b&gt;&#x27;;
+      execute procedure hp_send_quick_message(&#x27;email&#x27;, :mail_to, :mail_subject, :mail_body, &#x27;&#x27;, 1, 1000000000000);
+    end
+
+    if (f_age(:birth_date, :curr_date) = 27 and
+        extract(day from :birth_date) = :curr_day_7 and
+        extract(month from :birth_date) = extract(month from :curr_date + 7)) then
+    begin
+      mail_subject = &#x27;Уведомление о высокогорном стаже, 28 лет&#x27;;
+      mail_body = &#x27;&lt;b&gt;Внимание !&lt;/b&gt;&lt;br&gt;&lt;br&gt;&#x27; || &#x27;&lt;b&gt;Исполнилось &lt;font color=&quot;red&quot;&gt;&#x27; || f_age(:birth_date, :curr_date + 7) || &#x27;&lt;/font&gt; лет:&lt;/b&gt;&lt;br&gt;&lt;br&gt;&#x27; || &#x27;ОП: &lt;b&gt;&#x27; || :reg_concat || &#x27;&lt;/b&gt;&lt;br&gt;&#x27; || &#x27;ФИО: &lt;b&gt;&#x27; || :fio || &#x27;&lt;/b&gt;&lt;br&gt;&#x27; || &#x27;Должность: &lt;b&gt;&#x27; || :jl_name || &#x27;&lt;/b&gt;&lt;br&gt;&lt;br&gt;&#x27; || &#x27;Дата исполнения: &lt;b&gt;&#x27; || f_datetostr(:curr_date + 7) || &#x27;&lt;/b&gt;&#x27;;
+      execute procedure hp_send_quick_message(&#x27;email&#x27;, :mail_to, :mail_subject, :mail_body, &#x27;&#x27;, 1, 1000000000000);
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

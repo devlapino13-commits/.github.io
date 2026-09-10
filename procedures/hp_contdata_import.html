@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CONTDATA_IMPORT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CONTDATA_IMPORT: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CONTDATA_IMPORT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_contdata_one_check.html"><div class="to">HP_CONTDATA_ONE_CHECK</div></a><a class="ref-card" href="hp_contdata_update.html"><div class="to">HP_CONTDATA_UPDATE</div></a><a class="ref-card" href="hp_contveri_set_ok.html"><div class="to">HP_CONTVERI_SET_OK</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_contdata_import_all.html"><div class="to">HP_CONTDATA_IMPORT_ALL</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MAX_LINE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CONTDATA_IMPORT(
+    C_ID D_ID,
+    MAX_LINE D_INTEGER = 0)
+AS
+declare variable opr_id d_id;
+declare variable ovs_value d_str_100;
+declare variable un_id d_id;
+declare variable un_datetime d_datetime;
+declare variable prior_value d_str_100;
+declare variable cda_id d_id;
+declare variable rd_id d_integer;
+declare variable rd_code d_str_100;
+declare variable cont_kind d_str_code;
+declare variable cont_kind_id d_integer;
+declare variable cda_status d_smallint;
+declare variable cv_password d_str_100;
+declare variable cv_status d_smallint;
+declare variable pin d_str_code;
+declare variable cda_is_main d_smallint;
+declare variable sign_kind d_str_code;
+declare variable eds_id d_id;
+declare variable msg_id d_id;
+declare variable clt_id d_integer;
+begin
+--  for select cda_id
+--  from contdata
+--  where cda_from_c_id = :c_id
+--  into cda_id
+--  do
+--  begin
+--    update edoc_msg
+--    set edm_from_cda_id = null
+--    where edm_from_cda_id = :cda_id;
+--  end
+
+  delete from contdata
+  where cda_from_c_id = :c_id;
+
+  for select rd_id, rd_code
+      from refdata
+      where rd_main_code = &#x27;ContactInfo&#x27; and
+            rd_main_code &lt;&gt; rd_code
+      into rd_id, rd_code
+  do
+  begin
+    opr_id = null;
+    select opr_id
+    from objectprops
+    where opr_object_kind = 0 and
+          opr_object_id = :c_id and
+          opr_subject_kind = -1 and
+          opr_subject_id = :rd_id
+    into opr_id;
+
+    if (opr_id is null) then
+      continue;
+
+    cont_kind = replace(rd_code, &#x27;ContactInfo.&#x27;, &#x27;&#x27;);
+    if (cont_kind in (&#x27;cell_main&#x27;, &#x27;cell_add&#x27;)) then
+      cont_kind = &#x27;cell&#x27;;
+
+    cont_kind_id = f_enum(&#x27;cont_kind&#x27;, cont_kind, &#x27;id&#x27;);
+
+    cda_id = 0;
+    cda_status = -1;
+    prior_value = &#x27;***&#x27;;
+
+    if (rd_code = &#x27;ContactInfo.Cell_Main&#x27;)
+    then cda_is_main = 1;
+    else cda_is_main = 0;
+
+    for select ovs_value, ovs_from_un_id, ovs_datetime, ovs_add_value
+        from objectvalues
+        where ovs_from_opr_id = :opr_id and
+              ovs_is_active = 1 and
+              (:max_line = 0 or ovs_id &lt;= :max_line)
+        order by ovs_date_begin, ovs_id
+        into :ovs_value, :un_id, :un_datetime, :cda_status
+    do
+    begin
+      if (cda_status = 2) then
+        cda_status = 1;
+
+      if (ovs_value is null) then ovs_value = &#x27;&#x27;;
+
+      if (un_id is null) then
+        un_id = 1000000000000;
+
+      select cda_id
+      from hp_contdata_update(:c_id, :cont_kind_id, :ovs_value, :cda_is_main, :un_id, :un_datetime)
+      into :cda_id;
+
+      if (cda_status = 1 and cda_id &lt;&gt; 0) then
+        execute procedure hp_contveri_set_ok(:cda_id, :un_id, :un_datetime);
+    end
+
+    prior_value = &#x27;***&#x27;;
+
+    for select cv_contact_value, cv_password, cv_status, coalesce(cv_verify_un_id, cv_from_un_id),
+               coalesce(cv_verify_datetime, cv_datetime)
+        from contverify
+        where cv_object_kind = 0 and
+              cv_object_id = :c_id and
+              cv_from_rd_id = :rd_id and
+              cv_status &gt;= 0
+        order by 1, 5, 3
+        into :ovs_value, cv_password, cv_status, un_id, un_datetime
+    do
+    begin
+      if (ovs_value is null) then
+        ovs_value = &#x27;&#x27;;
+
+      if (ovs_value &lt;&gt; prior_value) then
+        cda_id = f_contdata_id(c_id, cont_kind_id, ovs_value, cda_is_main, current_date, &#x27;null&#x27;, :un_id);
+
+      if (cda_id is not null) then
+      begin
+        sign_kind = &#x27;&#x27;;
+        sign_kind = case cv_status
+          when 0 then &#x27;none&#x27;
+          when 1 then &#x27;finstart&#x27;
+          when 2 then &#x27;paper&#x27;
+          when 3 then &#x27;sms&#x27;
+        end;
+
+        if (cv_status &lt;&gt; 0) then cv_status = 1;
+
+        pin = cv_password;
+
+        insert into contveri (cvr_from_cda_id, cvr_hash_pin, cvr_status, cvr_sign_kind, cvr_datetime)
+        values (:cda_id, :pin, :cv_status, f_enum(&#x27;edoc_sign_kind&#x27;, :sign_kind, &#x27;id&#x27;), :un_datetime);
+
+        prior_value = ovs_value;
+      end
+    end
+  end
+
+  for select edm_from_eds_id, edm_from_msg_id, edm_from_clt_id
+  from edoc_msg, edoc_sign
+  where edm_from_eds_id = eds_id and
+        eds_from_c_id = :c_id and
+        coalesce(edm_from_clt_id, 0) &lt;&gt; 0 and
+        edm_from_cda_id is null
+  into :eds_id, :msg_id, :clt_id
+  do
+  begin
+    cda_id = null;
+    select cda_id
+    from contdata
+    where cda_from_c_id = :c_id and
+          cda_from_clt_id = :clt_id and
+          cda_cont_kind = 0
+    order by cda_status desc, cda_id desc
+    rows 1
+    into cda_id;
+
+    if (cda_id is not null) then
+    begin
+      update edoc_msg
+      set edm_from_cda_id = :cda_id
+      where edm_from_eds_id = :eds_id and
+            edm_from_msg_id = :msg_id and
+            edm_from_clt_id = :clt_id;
+    end else
+      exception e_default &#x27;There are null value in eDoc_Msg&#x27;;
+  end
+
+  max_line = 0;
+  select count(*)
+  from hp_contdata_one_check(:c_id)
+  into max_line;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

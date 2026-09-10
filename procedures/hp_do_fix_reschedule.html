@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DO_FIX_RESCHEDULE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DO_FIX_RESCHEDULE: 4 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DO_FIX_RESCHEDULE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_repayment_recalc_sh.html"><div class="to">HP_DO_REPAYMENT_RECALC_SH</div></a><a class="ref-card" href="hp_edoc_ins_kontpsk.html"><div class="to">HP_EDOC_INS_KONTPSK</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_fix_reschedule_list.html"><div class="to">HP_FIX_RESCHEDULE_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc">Id договора для исправления</div></div><div class="prow"><div class="pname">RECALC_DATE</div><div class="ptype">DATE</div><div class="pdesc">Дата исправления</div></div><div class="prow"><div class="pname">RECALC_START_DATE</div><div class="ptype">DATE</div><div class="pdesc">С какой даты пересчитывать</div></div><div class="prow"><div class="pname">NEED_EDOC</div><div class="ptype">SMALLINT</div><div class="pdesc">Нужно ли формировать эл.док уведомления</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DO_FIX_RESCHEDULE(
+    K_ID D_ID,
+    RECALC_DATE D_DATE,
+    RECALC_START_DATE D_DATE,
+    NEED_EDOC D_BOOL)
+AS
+declare variable ol_id d_id;
+declare variable reg_id d_integer;
+declare variable ol_memo d_str_long;
+declare variable un_id d_id;
+declare variable kd_percent_effect d_percent;
+declare variable curr_sh_date d_date;
+declare variable curr_sh_id d_integer;
+declare variable sh_date d_date;
+declare variable sh_id d_id;
+declare variable sum_os d_currency;
+declare variable sum_perc d_currency;
+declare variable fix_delinq d_bool = 0;
+declare variable oks_delinq_date d_date;
+declare variable ok_sh_os d_currency;
+declare variable ok_sh_perc d_currency;
+declare variable oks_balance d_currency;
+declare variable oks_close_state d_currency;
+declare variable sh_count d_integer;
+begin
+  -- Процедура исправляет график создав новую операцию
+  -- Является аналогом принятия нулевого платежа
+
+  un_id = 1000000000000;
+  if (need_edoc is null) then
+    need_edoc = 0;
+
+  if (recalc_start_date &gt; recalc_date) then
+    exception e_message &#x27;Incorrect_date&#x27;;
+
+  select oks_region_id, oks_delinq_date, oks_balance, oks_close_state, k_kontract_no || &#x27; от &#x27; || f_datetostr(k_disb_date) || &#x27;г. &#x27;
+  from oksummary, kontract
+  where oks_from_k_id = :k_id and
+        oks_from_k_id = k_id
+  order by oks_from_k_id desc, oks_date_begin desc
+  rows 1
+  into reg_id, curr_sh_date, oks_balance, oks_close_state, ol_memo;
+
+  if (coalesce(oks_balance, 0) &lt;= 500) then
+    exit;
+
+  if (coalesce(oks_close_state, 1) &gt; 0) then
+    exit;
+
+  if (reg_id is null) then
+    exception e_default &#x27;reg_id not found&#x27;;
+
+
+  sh_count = 0;
+  for select ok_sh_date, ok_sh_id
+  from operkred
+  where ok_from_k_id = :k_id and
+        ok_ol_is_active = 1 and
+        ok_type &lt;= 7 and
+        ok_ol_date &lt;= :recalc_date
+  group by ok_sh_date, ok_sh_id
+  having sum(ok_os + ok_sh_os) &lt;&gt; 0 or sum(ok_perc + ok_sh_perc) &lt;&gt; 0
+  order by ok_sh_date, ok_sh_id
+  into sh_date, sh_id
+  do
+  begin
+    if (sh_date = curr_sh_date and curr_sh_id is null) then
+      curr_sh_id = sh_id;
+
+    sh_count = sh_count + 1;
+  end
+
+  if (sh_count &lt;= 1) then
+    exit;
+
+  if (curr_sh_id is null) then
+    exception e_message &#x27;current sh_id not found&#x27;;
+
+  ol_memo = &#x27;Корректировка графика погашений по договору &#x27; || ol_memo;
+
+  insert into operlist (ol_from_reg_id, ol_oper_type, ol_oper_subtype, ol_date, ol_doc_kind,
+                        ol_memo, ol_parent_id, is_delete, ol_user_id)
+  values (:reg_id, 1, 4, :recalc_date, 9, :ol_memo, null, 0, :un_id)
+  returning ol_id
+  into :ol_id;
+
+  fix_delinq = 0;
+
+  select ok_sh_date
+  from operkred
+  where ok_from_k_id = :k_id and
+        ok_ol_is_active = 1 and
+        ok_type &lt;= 7 and
+        ok_ol_date &lt;= :recalc_date and
+        not(ok_ol_date between :recalc_start_date and :recalc_date and ok_type = 3)
+  group by ok_sh_date
+  having sum(ok_os + ok_sh_os) &lt;&gt; 0 or sum(ok_perc + ok_sh_perc) &lt;&gt; 0
+  order by ok_sh_date
+  rows 1
+  into oks_delinq_date;
+
+  if (oks_delinq_date &lt; curr_sh_date) then
+    fix_delinq = 1;
+
+  for select ok_sh_id, ok_sh_date, sum(ok_sh_os), sum(ok_sh_perc)
+  from operkred
+  where ok_from_k_id = :k_id and
+        ok_type = 3 and
+        ok_ol_is_active = 1 and
+        ok_ol_date between :recalc_start_date and :recalc_date and
+        (ok_sh_os &lt;&gt; 0 or ok_sh_perc &lt;&gt; 0)
+  group by ok_sh_id, ok_sh_date
+  into sh_id, sh_date, ok_sh_os, ok_sh_perc
+  do
+  begin
+    if (ok_sh_os is null) then
+      ok_sh_os = 0;
+
+    if (ok_sh_perc is null) then
+      ok_sh_perc = 0;
+
+    insert into operkred (ok_from_ol_id, ok_number, ok_from_k_id, ok_sh_id, ok_sh_date, ok_type, ok_os, ok_perc, ok_fine,
+                          ok_pay_type, ok_kommis, ok_sh_os, ok_sh_perc)
+    values (:ol_id, -1, :k_id, :sh_id, :sh_date, 3, 0, 0, 0, 3, 0, -:ok_sh_os, -:ok_sh_perc);
+  end
+
+  if (fix_delinq = 1) then
+  begin
+    for select ok_sh_date, ok_sh_id, sum(ok_os + ok_sh_os), sum(ok_perc + ok_sh_perc)
+    from operkred
+    where ok_from_k_id = :k_id and
+          ok_ol_is_active = 1 and
+          ok_type &lt;= 7 and
+          ok_ol_date &lt;= :recalc_date and
+          ok_sh_date &lt; :curr_sh_date
+    group by ok_sh_date, ok_sh_id
+    having sum(ok_os + ok_sh_os) &lt;&gt; 0 or sum(ok_perc + ok_sh_perc) &lt;&gt; 0
+    into sh_date, sh_id, sum_os, sum_perc
+    do
+    begin
+      if (sum_os is null) then
+        sum_os = 0;
+
+      if (sum_perc is null) then
+        sum_perc = 0;
+
+      -- Переносим просроченные платежи на ближайший
+      insert into operkred (ok_from_ol_id, ok_number, ok_from_k_id, ok_sh_id, ok_sh_date, ok_type, ok_os, ok_perc, ok_fine,
+                            ok_pay_type, ok_kommis, ok_sh_os, ok_sh_perc)
+      values (:ol_id, -1, :k_id, :sh_id, :sh_date, 3, 0, 0, 0, 3, 0, -:sum_os, -:sum_perc);
+
+      insert into operkred (ok_from_ol_id, ok_number, ok_from_k_id, ok_sh_id, ok_sh_date, ok_type, ok_os, ok_perc, ok_fine,
+                            ok_pay_type, ok_kommis, ok_sh_os, ok_sh_perc)
+      values (:ol_id, -1, :k_id, :curr_sh_id, :curr_sh_date, 3, 0, 0, 0, 3, 0, :sum_os, :sum_perc);
+    end
+  end
+
+  execute procedure hp_do_repayment_recalc_sh(:ol_id, :k_id);
+
+  if (need_edoc = 1) then
+  begin
+    select kps_psk
+    from hp_edoc_ins_kontpsk(:k_id, :ol_id, :un_id)
+    into :kd_percent_effect;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

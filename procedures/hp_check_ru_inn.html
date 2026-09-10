@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CHECK_RU_INN — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CHECK_RU_INN: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CHECK_RU_INN</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">3</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_cmd.html"><div class="to">FM_REPORT_CMD</div></a><a class="ref-card" href="hp_perstemp_kk_update.html"><div class="to">HP_PERSTEMP_KK_UPDATE</div></a><a class="ref-card" href="hp_perstemp_update.html"><div class="to">HP_PERSTEMP_UPDATE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_INN</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_TYPE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CHECK_RU_INN(
+    C_INN D_STR_CODE,
+    C_TYPE D_SMALLINT)
+AS
+declare variable msg_wrong_length d_str_255;
+declare variable msg_wrong_char d_str_255;
+declare variable msg_wrong_check d_str_255;
+declare variable inn_length d_integer;
+declare variable i d_integer;
+declare variable c1 d_integer;
+declare variable n d_integer;
+declare variable c2 d_integer;
+begin
+  msg_wrong_length = &#x27;Неверное количество цифр в поле ИНН: %1, должно быть %2&#x27;;
+  msg_wrong_char = &#x27;Неверные символы в поле ИНН: %1, должны быть цифры&#x27;;
+  msg_wrong_check = &#x27;Не совпадает контрольная сумма в поле ИНН: %1, проверьте правильность ввода.&#x27;;
+
+  inn_length = char_length(c_inn);
+
+  -- У физ. лиц длина ИНН 12
+  if (c_type = 0 and inn_length &lt;&gt; 12) then
+    exception e_message f_format(msg_wrong_length, inn_length, 12);
+
+  -- У юр. лиц длина ИНН 10, у ИП длина 12
+  if (c_type = 1 and inn_length not in (10, 12)) then
+    exception e_message f_format(msg_wrong_length, inn_length, &#x27;10 или 12&#x27;);
+
+  if (c_inn not similar to &#x27;[[:DIGIT:]]+&#x27;) then
+    exception e_message f_format(msg_wrong_char, c_inn);
+
+  -- Юр. лица, проверка контрольной последней цифры
+  if (inn_length = 10) then
+  begin
+    i = 1;
+    c1 = 0;
+    while (i &lt;= 9) do
+    begin
+      n = substring(c_inn from i for 1);
+      c1 = c1 + n *
+        case i
+          when 1 then 2
+          when 2 then 4
+          when 3 then 10
+          when 4 then 3
+          when 5 then 5
+          when 6 then 9
+          when 7 then 4
+          when 8 then 6
+          when 9 then 8
+        end;
+      i = i + 1;
+    end
+    c1 = mod(mod(c1, 11), 10);
+    n = substring(c_inn from 10 for 1);
+    if (n &lt;&gt; c1) then
+      exception e_message f_format(msg_wrong_check, c_inn);
+  end
+
+  -- Физ. лица и ИП, проверка контрольных двух последних цифр
+  if (inn_length = 12) then
+  begin
+    i = 1;
+    c1 = 0;
+    c2 = 0;
+    while (i &lt;= 10) do
+    begin
+      n = substring(c_inn from i for 1);
+      c1 = c1 + n * decode(i,1,7,2,2,3,4,4,10,5,3,6,5,7,9,8,4,9,6,10,8);
+      c2 = c2 + n * decode(i,1,3,2,7,3,2,4,4,5,10,6,3,7,5,8,9,9,4,10,6);
+      i = i + 1;
+    end
+    c1 = mod(mod(c1, 11), 10);
+    n = substring(c_inn from 11 for 1);
+    if (n &lt;&gt; c1) then
+      exception e_message f_format(msg_wrong_check, c_inn);
+    c2 = mod(mod(c2 + c1 * 8, 11), 10);
+    n = substring(c_inn from 12 for 1);
+    if (n &lt;&gt; c2) then
+      exception e_message f_format(msg_wrong_check, c_inn);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

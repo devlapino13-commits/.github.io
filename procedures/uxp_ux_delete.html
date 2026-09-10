@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$UX_DELETE — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$UX_DELETE: 3 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$UX_DELETE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UX_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FILL_DEPEND</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UX_UUID_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_UUID_STR</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_DELETED</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$UX_DELETE(
+    UX_UUID D_UUID,
+    FILL_DEPEND D_BOOL,
+    UX_UUID_CODE D_STR_CODE = null)
+RETURNS (
+    RES_UUID_STR D_STR_CODE,
+    RES_DELETED D_BOOL,
+    RES_TEXT D_STR_255)
+AS
+declare variable form_count d_integer;
+declare variable ufm_ux_uuid d_uuid;
+begin
+  if (coalesce(ux_uuid, &#x27;&#x27;) = &#x27;&#x27;) then
+    ux_uuid = uxf$uniq(ux_uuid_code);
+
+  res_deleted = 1;
+  res_text = &#x27;Объект успешно удален&#x27;;
+  res_uuid_str = &#x27;&#x27;;
+
+  select ufm_ux_uuid
+  from ux$form
+  where ufm_uuid = :ux_uuid
+  into ufm_ux_uuid;
+
+  form_count = 0;
+  if (ufm_ux_uuid is not null) then
+  begin
+    select count(*)
+    from ux$form
+    where ufm_ux_uuid = :ufm_ux_uuid
+    into form_count;
+  end else
+  begin
+    if (exists(select * from ux$frame
+               where ufr_uuid = :ux_uuid)) then
+    begin
+      delete from ux$frame
+      where ufr_uuid = :ux_uuid;
+
+      res_text = &#x27;Фрейм успешно удален&#x27;;
+
+      suspend;
+      exit;
+    end
+  end
+
+  if (exists(select * from ux$uniq
+  where uu_id = :ux_uuid)) then
+  begin
+    if (fill_depend = 1) then
+      execute procedure uxp$uxdepend_fill(:ux_uuid, 1);
+
+    if (exists(select * from ux$depend
+    where udp_uuid = :ux_uuid and
+          (udp_lock_delete = 1 or udp_child_locked = 1))) then
+    begin
+      res_deleted = 0;
+      res_uuid_str = uuid_to_char(ux_uuid);
+      res_text = &#x27;Имеются зависимые объекты, запрет на удаление.&#x27;;
+    end
+  end
+
+  if (res_deleted = 1) then
+  begin
+    delete from ux$uniq
+    where uu_id = :ux_uuid;
+  
+    delete from ux$depend
+    where udp_uuid = :ux_uuid;
+
+    if (form_count = 1) then
+    begin
+      delete from ux$uniq
+      where uu_id = :ufm_ux_uuid;
+    end
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

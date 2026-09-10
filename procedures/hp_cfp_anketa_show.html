@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CFP_ANKETA_SHOW — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CFP_ANKETA_SHOW: 4 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CFP_ANKETA_SHOW</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_priority_rep_id.html"><div class="to">HP_GET_PRIORITY_REP_ID</div></a><a class="ref-card" href="hp_susn_get_status.html"><div class="to">HP_SUSN_GET_STATUS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_html_get_loan_status.html"><div class="to">HP_HTML_GET_LOAN_STATUS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LANG</div><div class="ptype">VARCHAR(3)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_DISB_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_HTML</div><div class="ptype">VARCHAR(4096)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CFP_ANKETA_SHOW(
+    UN_ID D_ID,
+    MA_ID D_INTEGER,
+    LANG D_STR_LANG,
+    K_DISB_DATE D_DATE)
+RETURNS (
+    RES_HTML D_STR_4096)
+AS
+declare variable MAC_ID D_INTEGER;
+declare variable C_ID D_ID;
+declare variable C_NAME_FIO D_STR_100;
+declare variable DB_ID D_INTEGER;
+declare variable CIB_IS_WORKING D_BOOL;
+declare variable PR_CODE D_STR_100;
+declare variable BASE_K_ID D_ID;
+declare variable BASE_MA_ID D_INTEGER;
+declare variable DISB_DATE D_DATE;
+declare variable IS_SUSN D_SMALLINT; /* RFCKZ-996 */
+declare variable SUSN_STATUS D_SMALLINT; /* RFCKZ-996 */
+declare variable KDN_LIMIT D_CURRENCY; /* RFCKZ-996 */
+declare variable CAN_EDIT D_SMALLINT;
+declare variable ERR_TEXT D_STR_255;
+begin
+  db_id = f_get_db_id();
+  res_html = &#x27;&#x27;;
+  can_edit = 1;
+
+  select pr.pr_code,
+         ma.ma_date_oper
+  from miniapp ma
+  inner join product pr on ma.ma_from_pr_id = pr.pr_id
+  where ma.ma_id = :ma_id and
+        ma.ma_is_active = 1 and
+        ma.ma_date_end &gt;= &#x27;31.12.2999&#x27;
+  order by ma.ma_number desc
+  rows 1
+  into pr_code,
+       disb_date;
+
+  -- RFCKG-3574
+  select cw.is_working
+  from cib_working_status cw
+  into cib_is_working;
+
+  if (db_id = 41701 and
+      pr_code containing &#x27;.insur_kontrakt.&#x27;) then  -- RFCKG-5051 Для данного продукта не запрашивается История КИБ
+  begin
+    select lir.lir_kontract_base
+    from kontract k
+    inner join loan_insurance_relation lir on k.k_id = lir.lir_kontract_insurance
+    where k.k_from_ma_app_id = :ma_id
+    into base_k_id;
+
+    select k.k_from_ma_app_id
+    from kontract k
+    where k.k_id = :base_k_id
+    into base_ma_id;
+  end
+
+  for select mac.mac_id,
+             mac.mac_from_c_id
+      from miniappclient mac
+      where mac.mac_from_ma_id = :ma_id and
+            mac.mac_amount &gt; 0
+      into mac_id,
+           c_id
+  do
+  begin
+    select c.c_name_fio
+    from clients c
+    where c.c_id = :c_id
+    into c_name_fio;
+
+    -- RFCKZ-996: статус СУСН и предельное значение КДН для него
+    is_susn = 0;
+    susn_status = 0;
+    kdn_limit = 0.5;
+
+    if (db_id = 39801) then
+    begin
+      select res_status, is_susn
+      from hp_susn_get_status(:c_id, :ma_id)
+      into susn_status, is_susn;
+
+      if (susn_status &lt;&gt; 2) then
+        res_html = blob_append(res_html,
+          &#x27;&lt;span style=&quot;color: red;&quot;&gt;Статус СУСН не получен&lt;/span&gt;&lt;br&gt;&#x27;);
+
+      if (is_susn = 1) then
+        kdn_limit = 0.25;
+    end
+
+    select err.eir_answer
+    from extinfolist eil
+    inner join extinfocfg eic on eic.eic_id = eil.eil_from_eic_id
+    inner join extinfoerr err on err.eir_from_eil_id = eil.eil_id
+    where eic.eic_code = &#x27;kdn_score&#x27; and               -- RFCKZ-871
+          eil.eil_object_kind = f_objkind(&#x27;miniappclient&#x27;, &#x27;id&#x27;) and
+          eil.eil_object_id = :mac_id and
+          eil.eil_status = -2
+    order by eil.eil_id desc
+    rows 1
+    into err_text;
+
+    if (db_id = 39801 and exists (select *                             -- RFCKZ-871
+                                  from extinfolist eil
+                                  inner join extinfocfg eic on eic.eic_id = eil.eil_from_eic_id
+                                  where eic.eic_code = &#x27;kdn_score&#x27; and
+                                        eil.eil_object_kind = f_objkind(&#x27;miniappclient&#x27;, &#x27;id&#x27;) and
+                                        eil.eil_status in (-1, 0) and
+                                        eil.eil_object_id = :mac_id)) then
+      can_edit = 0;
+
+    if (db_id = 39801 and not exists(select *
+                                     from extinfolist eil
+                                     where eil.eil_from_eic_id in (9, 10, 12) and -- RFCKZ-237
+                                           eil.eil_object_kind = f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;) and
+                                           eil.eil_from_c_id = :c_id and
+                                           eil.eil_object_id = :c_id and
+                                           eil.eil_status = 2 and
+                                           eil.eil_date = current_date) and not exists(select *
+                                                                                       from clientdocs cds
+                                                                                       inner join passkind pk on pk.pk_id = cds.cds_from_pk_id
+                                                                                       inner join passdoctype pdt on pdt.pdt_id = pk.pk_from_pdt_id and
+                                                                                             pdt.pdt_code = &#x27;card_statement&#x27;
+                                                                                       where cds.cds_from_c_id = :c_id and
+                                                                                             cds.cds_is_delete = 0 and
+                                                                                             cds.cds_doc_date_begin = current_date)) then --RFCKZ-90
+      res_html = blob_append(res_html, &#x27;Для заполнения Анкеты необходимо прикрепить актуальную выписку по карте либо получить справку о (ЗП, пенсии, АСП) &lt;br&gt;&#x27;);
+
+    else
+    if (db_id = 39801 and
+       (not exists(select 1
+                   from extinfolist eil
+                   inner join extinfocfg eic on eic.eic_id = eil.eil_from_eic_id
+                   where eic.eic_code = &#x27;pkb_available_reports&#x27; and  -- RFCKZ-1026
+                         eil.eil_object_kind = f_objkind(&#x27;miniapp&#x27;, &#x27;id&#x27;) and
+                         eil.eil_object_id = :ma_id and
+                         eil.eil_status = 2)
+        or
+       ((select priority_id
+         from hp_get_priority_rep_id(f_objkind(&#x27;miniapp&#x27;, &#x27;id&#x27;), :ma_id)) &lt;&gt; -1
+        and not exists(select 1
+                       from extinfolist eil
+                       inner join extinfocfg eic on eic.eic_id = eil.eil_from_eic_id
+                       where eic.eic_code = &#x27;pkb_cib_report&#x27; and
+                             eil.eil_object_kind = f_objkind(&#x27;miniapp&#x27;, &#x27;id&#x27;) and
+                             eil.eil_object_id = :ma_id and
+                             eil.eil_status = 2 and
+                             eil.eil_from_bls_id is not null)))) then
+      res_html = blob_append(res_html, &#x27;Для заполнения Анкеты необходимо получить кредитный отчет (ответ от ПКБ) &lt;br&gt;&#x27;);
+
+    else
+    if (db_id = 39801 and coalesce((select cak.cakdn_kdn
+                                    from cfp_anketa_kdn cak
+                                    where cak.cakdn_from_c_id = :c_id and
+                                          cak.cakdn_from_mac_id = :mac_id), 1) &lt;= :kdn_limit) then
+    begin
+      res_html = blob_append(res_html, &#x27;&lt;span style=&quot;color: green;&quot;&gt;Анкета доходов/расходов заполнена успешно!&lt;/span&gt;&lt;br&gt;&#x27;);
+      res_html = blob_append(res_html, f_uri_html(f_lang(lang, &#x27;Просмотр&#x27;), &#x27;cfp_anketa_info&#x27;, f_lang(lang, &#x27;Анализ доходов/расходов&#x27;), &#x27;miniappclient&#x27;, :mac_id, current_date, current_date, &#x27;&#x27;));
+    end
+    else
+    begin
+      res_html = blob_append(res_html, &#x27;&lt;table width=&quot;100%&quot;&gt;
+       &lt;col width=&quot;40%&quot;&gt;
+       &lt;col width=&quot;30%&quot;&gt;
+       &lt;col width=&quot;30%&quot;&gt;
+       &lt;tr&gt;&#x27;);
+
+      if (exists(select * /* &#x27;Не заполнен &#x27; ||*/
+                 from cfp_anketa ca
+                 where ca.ca_object_kind = f_objkind(&#x27;miniappclient&#x27;, &#x27;id&#x27;) and
+                       ca.ca_object_id = :mac_id and
+                       ca.ca_from_c_id = :c_id)) then
+        -- RFCKG-3249
+        res_html = blob_append(res_html, f_html_table_row(:c_name_fio, &#x27;Заполнен&lt;br&gt;&#x27; || f_uri_html(f_lang(lang, &#x27;Просмотр&#x27;), &#x27;cfp_anketa_info&#x27;, f_lang(lang, &#x27;Анализ доходов/расходов&#x27;), &#x27;miniappclient&#x27;, :mac_id, current_date, current_date, &#x27;&#x27;), iif(k_disb_date &lt; current_date, &#x27;&#x27;, iif(can_edit = 0, &#x27;&#x27;,  f_uri_open(f_lang(lang, &#x27;Изменить&#x27;), &#x27;cli_financial_profile&#x27;, f_objkind(&#x27;miniappclient&#x27;, &#x27;id&#x27;), :mac_id, null, null, un_id))), &#x27;&#x27;, -1, -1, -1, -1, 3, &#x27;&#x27;));
+      else
+      begin
+
+        if (:db_id &lt;&gt; 41701 and cib_is_working = 0) then
+          res_html = blob_append(res_html, f_html_table_row(:c_name_fio, &#x27;Не заполнен&#x27;, f_uri_open(f_lang(lang, &#x27;Заполнить&#x27;), &#x27;cli_financial_profile&#x27;, f_objkind(&#x27;miniappclient&#x27;, &#x27;id&#x27;), :mac_id, null, null, un_id), &#x27;&#x27;, -1, -1, -1, -1, 3, &#x27;&#x27;));
+
+        else
+        if (exists(select 1
+                   from kibminiapp kbm
+                   where kbm.kbm_from_c_id = :c_id and
+                         cast(kbm.kbm_checked_datetime as d_date) between :disb_date - 1 and :disb_date and
+                   kbm.kbm_is_checked = 1)) then
+        begin
+          res_html = blob_append(res_html, f_html_table_row(:c_name_fio, &#x27;Не заполнен&#x27;, f_uri_open(f_lang(lang, &#x27;Заполнить&#x27;), &#x27;cli_financial_profile&#x27;, f_objkind(&#x27;miniappclient&#x27;, &#x27;id&#x27;), :mac_id, null, null, un_id), &#x27;&#x27;, -1, -1, -1, -1, 3, &#x27;&#x27;));
+        end
+        else if (:db_id = 41701 and exists (select 1
+                                            from extinfolist eil
+                                            inner join extinfocfg eic on eil.eil_from_eic_id = eic.eic_id
+                                            where ((eil.eil_date between :disb_date - 1 and :disb_date) or (eil.eil_object_kind = f_objkind(&#x27;miniapp&#x27;, &#x27;id&#x27;) and  eil.eil_object_id = :ma_id)) and  -- RFCKG-5396
+                                                   eil.eil_from_c_id = :c_id and
+                                                   eic.eic_code = &#x27;ss_cib_report&#x27; and
+                                                   eil.eil_status = 2)) then
+        begin
+          res_html = blob_append(res_html, f_html_table_row(:c_name_fio, &#x27;Не заполнен&#x27;, f_uri_open(f_lang(lang, &#x27;Заполнить&#x27;), &#x27;cli_financial_profile&#x27;, f_objkind(&#x27;miniappclient&#x27;, &#x27;id&#x27;), :mac_id, null, null, un_id), &#x27;&#x27;, -1, -1, -1, -1, 3, &#x27;&#x27;));
+        end
+      end
+    end
+    res_html = blob_append(res_html, &#x27;&lt;/table&gt;&#x27;);
+
+    if (coalesce(:err_text, &#x27;&#x27;) &lt;&gt; &#x27;&#x27; and :err_text &lt;&gt; &#x27;OK&#x27;) then
+      res_html = blob_append(res_html, f_format(&#x27;&lt;p style=&quot;color: red; margin: 5px 0;&quot;&gt;%1&lt;/p&gt;&#x27;, :err_text));
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

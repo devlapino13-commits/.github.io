@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IPC_TOKEN_REPAYMENT — процедура — схема БД</title>
+<meta name="description" content="Процедура IPC_TOKEN_REPAYMENT: 6 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>IPC_TOKEN_REPAYMENT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">TOKEN_ID</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACTION_CODE</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REQUEST_TXT</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ANSWER_TXT</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ERROR_TXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE IPC_TOKEN_REPAYMENT(
+    C_ID D_ID,
+    K_ID D_ID,
+    TOKEN_ID D_STR_100,
+    ACTION_CODE D_STR_20,
+    REQUEST_TXT D_STR_8100,
+    ANSWER_TXT D_STR_8100)
+RETURNS (
+    ERROR_TXT D_STR_255)
+AS
+declare variable ESM_AMOUNT D_CURRENCY;
+declare variable ET_ID D_ID;
+declare variable ESM_ID D_ID;
+declare variable STATE D_INTEGER;
+declare variable ETR_ID D_ID;
+declare variable ERR_MESSAGE D_STR_255;
+declare variable TRANS_ID D_STR_CODE;
+declare variable OLD_STATE D_INTEGER;
+declare variable DB_IS_ACTUAL D_SMALLINT;
+begin
+  error_txt = &#x27;&#x27;;
+
+  db_is_actual = 0;
+  if (exists(select *
+             from hp_db_is_actual)) then
+    db_is_actual = 1;
+
+  if (c_id is null) then
+      error_txt = &#x27;Поле c_id не заполнено&#x27;;
+  if (k_id is null) then
+      error_txt = &#x27;Поле k_id не заполнено&#x27;;
+  if (coalesce(token_id, &#x27;&#x27;) = &#x27;&#x27;) then
+      error_txt = &#x27;Поле token_id не заполнено&#x27;;
+  if (coalesce(action_code, &#x27;&#x27;) = &#x27;&#x27;) then
+      error_txt = &#x27;Поле action_code не заполнено&#x27;;
+  if ((coalesce(answer_txt, &#x27;&#x27;) = &#x27;&#x27;) and (action_code &lt;&gt; &#x27;check_payment&#x27;)) then
+      error_txt = &#x27;Поле answer_txt не заполнено&#x27;;
+
+  if (answer_txt &lt;&gt; &#x27;&#x27;) then
+  begin
+      trans_id = f_json_str_get_value(:answer_txt, &#x27;transaction_id&#x27;, &#x27;&#x27;);
+      if ((coalesce(trans_id, &#x27;&#x27;) = &#x27;&#x27;) and (action_code &lt;&gt; &#x27;check_payment&#x27;)) then
+          error_txt = &#x27;transaction_id не передан&#x27;;
+  end
+
+  if (error_txt &lt;&gt; &#x27;&#x27;) then
+  begin
+    suspend;
+    exit;
+  end
+
+  if (action_code = &#x27;check_payment&#x27;) then
+  begin
+    if (not exists(select *
+                   from extsys_token et
+                   inner join extsys_token_add eta on eta.eta_from_et_id = et.et_id
+                   where et.et_from_c_id = :c_id and
+                         et.et_is_actual = 1 and
+                         eta.eta_token_id = :token_id)) then
+    begin
+      error_txt = &#x27;Не найден актуальный токен&#x27;;
+      suspend;
+      exit;
+    end
+
+    if (exists (select *
+                from oksummary oks
+                where current_date between oks.oks_date_begin and oks.oks_date_end and
+                      oks.oks_from_k_id = :k_id and
+                      oks.oks_close_state not in (0, 1))) then
+    begin
+      error_txt = &#x27;Кредит не активный/без активного долга&#x27;;
+      suspend;
+      exit;
+    end
+
+    if (db_is_actual = 1) then
+    begin
+        if (exists(select *
+                   from extsys_token_repayment etr
+                   inner join extsys_token et on et.et_id = etr.etr_from_et_id
+                   where et.et_from_c_id = :c_id
+                   and etr.etr_is_finished = 0)) then
+        begin
+          error_txt = &#x27;Имеется платеж в процессе ч/з подвязанную карту&#x27;;
+          suspend;
+          exit;
+        end
+    
+        if (exists(
+            select esm_from_k_id
+              from extsysmain
+              where esm_object_kind = 0 and
+                    esm_object_id = :c_id and
+                    esm_action = &#x27;pay&#x27; and
+                    esm_status = 0)) then
+        begin
+          error_txt = &#x27;Имеется необработанный платеж ч/з платежную систему&#x27;;
+          suspend;
+          exit;
+        end
+    end
+  end
+  else if ((action_code = &#x27;create_transaction&#x27;) or (action_code = &#x27;confirm_transaction&#x27;))  then
+  begin
+    state = f_json_str_get_value(:answer_txt, &#x27;state&#x27;, null);
+    esm_amount = f_json_str_get_value(:answer_txt, &#x27;amount&#x27;, 0);
+
+    select et.et_id
+    from extsys_token et
+    inner join extsys_token_add eta on eta.eta_from_et_id = et.et_id
+    where et.et_from_c_id = :c_id and
+         et.et_is_actual = 1 and
+         eta.eta_token_id = :token_id
+    into :et_id;
+
+    if (state is not null) then
+    begin
+       select etr.etr_id,
+              etr.etr_state
+       from extsys_token_repayment etr
+       where etr.etr_transaction_id = :trans_id
+       into :etr_id,
+            :old_state;
+
+       if (old_state not in (0, 1)) then
+       begin
+            error_txt = &#x27;Опрерация, с текущим transaction_id ранее была передана с конечным статусом&#x27;;
+            suspend;
+            exit;
+       end
+
+       if (etr_id is null) then
+       begin
+           insert into extsys_token_repayment (etr_from_et_id, etr_transaction_id, etr_state, etr_from_k_id, etr_amount)
+           values (:et_id, :trans_id, :state, :k_id, :esm_amount)
+           returning etr_id
+           into :etr_id;
+       end   
+
+       if (state = 2) then
+       begin
+          insert into extsysmain (esm_project, esm_action, esm_date, esm_object_kind, esm_object_id,
+                                  esm_amount, esm_from_k_id, esm_full_source)
+          values (&#x27;ipc_token_payment&#x27;, &#x27;pay&#x27;, current_date,  0, :c_id,
+                   :esm_amount, :k_id, &#x27;request: [&#x27;||:request_txt||&#x27;]; answer: [&#x27;||:answer_txt||&#x27;]&#x27;)
+          returning esm_id
+          into :esm_id;
+       end
+
+       err_message = f_json_str_get_value(:answer_txt, &#x27;message&#x27;, &#x27;&#x27;);
+
+
+       update extsys_token_repayment etr
+       set etr.etr_error_msg = :err_message,
+           etr.etr_state = :state,
+           etr.etr_from_esm_id = :esm_id
+       where etr.etr_id = :etr_id;
+
+       insert into extsys_token_repayment_query (etj_from_etr_id, etj_request, etj_answer)
+       values (:etr_id, :request_txt, :answer_txt);
+    end
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

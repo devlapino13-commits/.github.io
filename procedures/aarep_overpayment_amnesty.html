@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_OVERPAYMENT_AMNESTY — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_OVERPAYMENT_AMNESTY: 1 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_OVERPAYMENT_AMNESTY</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_make_zad_list.html"><div class="to">AAREP_MAKE_ZAD_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_KONTRACT_NO</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CURR_DEBT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LIST_KONTRACT_NO</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SUM_OVERPAY</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_OVERPAYMENT_AMNESTY(
+    REP_DATE DATE)
+RETURNS (
+    K_KONTRACT_NO STR_20,
+    CURR_DEBT CURR_TYPE,
+    LIST_KONTRACT_NO STR_255,
+    SUM_OVERPAY CURR_TYPE)
+AS
+declare variable debt_operkroff curr_type;
+declare variable kd_k_orig id_type;
+declare variable kd_k_new id_type;
+declare variable can_suspend smallint;
+declare variable k_id decimal(18,0);
+declare variable sum_overpay_temp curr_type;
+begin
+  for
+  select kd_k_orig from kontdevides
+  where kd_date &lt;= :rep_date
+  union
+  select kd_k_new from kontdevides
+  where kd_date &lt;= :rep_date
+  into k_id
+  do
+  begin
+--  проверка договор активный или имеется задолженность на спец учете.
+    debt_operkroff = null;
+    select sum(oko_os + oko_perc + oko_sh_os + oko_sh_perc)
+    from operkroff
+    where oko_from_k_id = :k_id
+    and oko_ol_date &lt;= :rep_date
+    and oko_ol_is_active = 1
+    into debt_operkroff;
+    debt_operkroff = coalesce(debt_operkroff,0);
+
+    can_suspend = 0;
+    sum_overpay = 0;
+    if (exists(select * from kontstate
+    where ks_ol_is_delete = 0
+    and ks_state = 1
+    and ks_from_k_id = :k_id
+    and :rep_date between ks_date_begin and ks_date_end)
+    or
+    debt_operkroff &gt; 0) then
+    begin
+--    Ищем связанные контракты по которым имеется переплата
+--    Находим основной контракт
+      kd_k_orig = null;
+      select kd_k_orig
+      from kontdevides
+      where kd_k_new = :k_id
+      into kd_k_orig;
+      kd_k_orig = coalesce(kd_k_orig, k_id);
+
+--    далее каждый контракт проверяем на переплату
+      list_kontract_no = &#x27;&#x27;;
+      for
+      select kd_k_orig from kontdevides
+      where kd_k_orig = :kd_k_orig
+      union
+      select kd_k_new from kontdevides
+      where kd_k_orig = :kd_k_orig
+      into kd_k_new
+      do
+      begin
+--      если закрытый то только тогда проверяем на переплату
+        if (exists(select * from kontstate
+        where ks_ol_is_delete = 0
+        and ks_from_k_id = :kd_k_new
+        and ks_state = 2
+        and :rep_date between ks_date_begin and ks_date_end)) then
+        begin
+          sum_overpay_temp = null;
+          select -sum(ok_os) from operkred
+          where ok_ol_is_active = 1
+          and ok_from_k_id = :kd_k_new
+          and ok_type = 9
+          into sum_overpay_temp;
+          sum_overpay_temp = coalesce(sum_overpay_temp, 0);
+
+          if (sum_overpay_temp &gt; 0) then
+          begin
+            sum_overpay = sum_overpay + sum_overpay_temp;
+            select k_kontract_no from kontract
+            where k_id = :kd_k_new
+            into k_kontract_no;
+
+            if (list_kontract_no = &#x27;&#x27;) then list_kontract_no = k_kontract_no;
+            else list_kontract_no = list_kontract_no||&#x27;; &#x27;||k_kontract_no;
+          end
+        end
+      end
+
+    end
+
+    if (sum_overpay &gt; 0) then
+    begin
+      select k_kontract_no from kontract
+      where k_id = :k_id
+      into k_kontract_no;
+
+      curr_debt = null;
+      select sum(zad_os + sh_calc_perc)
+      from aarep_make_zad_list(:k_id, :rep_date, 1)
+      into curr_debt;
+      curr_debt = coalesce(curr_debt,0);
+
+      suspend;
+    end
+
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

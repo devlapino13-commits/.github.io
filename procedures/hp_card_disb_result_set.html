@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CARD_DISB_RESULT_SET — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CARD_DISB_RESULT_SET: 3 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CARD_DISB_RESULT_SET</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OL_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RESPONSE_DATA</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RESULT_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CARD_DISB_RESULT_SET(
+    OL_ID ID_TYPE,
+    ERROR_TEXT STR_255,
+    RESPONSE_DATA BLOB SUB_TYPE TEXT SEGMENT SIZE 80)
+RETURNS (
+    RESULT_TEXT STR_255)
+AS
+declare variable ol_is_delete smallint;
+declare variable ecd_status smallint;
+begin
+  error_text = trim(coalesce(error_text, &#x27;&#x27;));
+  result_text = &#x27;Saved&#x27;;
+
+  if (ol_id is null) then
+  begin
+    result_text = &#x27;Ошибка! OL_ID не передан&#x27;;
+    suspend;
+    exit;
+  end
+
+  ol_is_delete = null;
+
+  select ol.is_delete, ecd.ecd_status
+  from extsys_card_disb ecd
+  inner join operlist ol on ol.ol_id = ecd.ecd_from_ol_id
+  where ecd.ecd_from_ol_id = :ol_id
+  order by ecd.ecd_id
+  rows 1
+  into :ol_is_delete, :ecd_status;
+
+  ol_is_delete = coalesce(ol_is_delete, -777);
+
+  if (ol_is_delete = 0) then
+  begin
+    result_text = &#x27;Ошибка! Ранее выдача кредита уже была осуществлена. Отмена операции&#x27;;
+    suspend;
+    exit;
+  end
+
+  if (ol_is_delete = -777) then
+  begin
+    result_text = &#x27;Ошибка! Переданная операция не связана с выдачей кредита на карту&#x27;;
+    suspend;
+    exit;
+  end
+
+  if (ecd_status &lt;&gt; 0) then
+  begin
+    result_text = &#x27;Ошибка! Операция перевода денежных стредств уже обработана. Отмена операции&#x27;;
+    suspend;
+    exit;
+  end
+
+  update operlist ol
+  set ol.is_delete = 0
+  where ol.ol_id = :ol_id;
+
+  update operlist ol
+  set ol.is_delete = 0
+  where ol.ol_parent_id = :ol_id;
+
+  update extsys_card_disb ecd
+  set ecd.ecd_status = iif(:error_text = &#x27;&#x27;, 1, -2),
+      ecd.ecd_err_text = :error_text,
+      ecd.ecd_response = :response_data
+  where ecd.ecd_from_ol_id = :ol_id;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

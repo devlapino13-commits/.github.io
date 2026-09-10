@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PRINT_APP_CONSULT_INFO — процедура — схема БД</title>
+<meta name="description" content="Процедура PRINT_APP_CONSULT_INFO: 2 входных, 8 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>PRINT_APP_CONSULT_INFO</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">8</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_html_app_return_consult.html"><div class="to">FM_HTML_APP_RETURN_CONSULT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ARC_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ADD_PARAMS</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">8 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_NAME_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_PASS_NO</div><div class="ptype">VARCHAR(30)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_PASS_WHO</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_PASS_DATE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DOC_NO_TMP</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OL_DATE_TMP</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">QR_CODE</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE PRINT_APP_CONSULT_INFO(
+    ARC_ID D_INTEGER,
+    ADD_PARAMS D_STR_LONG = null)
+RETURNS (
+    C_NAME_FIO D_STR_100,
+    C_PASS_NO VARCHAR(30),
+    C_PASS_WHO D_STR_255,
+    C_PASS_DATE D_INTEGER,
+    AMOUNT D_CURRENCY,
+    DOC_NO_TMP D_INTEGER,
+    OL_DATE_TMP DATE,
+    QR_CODE D_STR_LONG)
+AS
+declare variable CDS_DATETIME timestamp;
+declare variable C_ID bigint;
+declare variable EDL_ID integer;
+begin
+
+  select c.c_name_fio, cds.cds_doc_no, cds.cds_doc_issued_by, extract(year from cds.cds_doc_date_begin),
+         cds.cds_datetime, arci.arci_amount, c.c_id
+  from app_return_consult arc
+  inner join app_return_consult_info arci on arci.arci_id = arc.arc_id
+  inner join clients c on arc.arc_from_c_id = c.c_id
+  inner join clientdocs cds on cds.cds_from_c_id = arc.arc_from_c_id and
+        current_date between cds.cds_doc_date_begin and coalesce(cds.cds_doc_date_end, &#x27;31.12.2999&#x27;) and
+        cds.cds_is_delete = 0
+  inner join passkind pk on pk.pk_id = cds.cds_from_pk_id and
+        pk.pk_passport_issuers containing &#x27;PassportIssuers&#x27;
+  where arc.arc_id = :arc_id
+  order by cds.cds_datetime desc rows 1
+  into :c_name_fio, :c_pass_no, :c_pass_who, :c_pass_date, :cds_datetime, :amount, :c_id;
+
+  select ol.ol_date, ol.ol_doc_no
+  from operkontract ok
+  inner join operlist ol on ol.ol_id = ok.ok_from_ol_id and
+        ol.is_delete = 0 and
+        ol.ol_document_client = :c_id
+  order by 1 desc rows 1
+  into :ol_date_tmp, doc_no_tmp;
+
+  if (coalesce(add_params, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+  begin
+    edl_id = f_json_str_get_value(:add_params, &#x27;edl_id&#x27;, null);
+    qr_code = f_edoc_qr_by_edl(:edl_id, :c_id);
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

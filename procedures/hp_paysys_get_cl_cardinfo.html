@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_PAYSYS_GET_CL_CARDINFO — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_PAYSYS_GET_CL_CARDINFO: 1 входных, 6 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_PAYSYS_GET_CL_CARDINFO</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_disbursement.html"><div class="to">HP_DO_DISBURSEMENT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PSM_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PSL_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PSI_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PSI_CODE</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PSM_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PSP_NAME</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_PAYSYS_GET_CL_CARDINFO(
+    C_ID DECIMAL(18,0))
+RETURNS (
+    PSM_ID DECIMAL(18,0),
+    PSL_ID DECIMAL(18,0),
+    PSI_ID DECIMAL(18,0),
+    PSI_CODE VARCHAR(20),
+    PSM_DATE DATE,
+    PSP_NAME VARCHAR(255))
+AS
+declare variable psp_id integer;
+begin
+-- Ищем все закрепления банковских карт за клиентом
+  psm_id = null;
+  psl_id = null;
+  psi_id = null;
+  psi_code = null;
+  for select psi_id, psi_code, psp_name
+      from paysys_main, paysys_list, paysys_item, paysys_project
+      where psl_from_psm_id = psm_id and
+            psl_from_psi_id = psi_id and
+            psl_object_kind = 5 -- Клиент/Сотрудник (Clients)
+            and
+            psp_is_card = 1 -- банковская карта, привязка к клиенту
+            and
+            psm_is_delete = 0 and
+            psi_from_psp_id = psp_id and
+            psl_object_id = :c_id
+      group by psi_id, psi_code, psp_name
+      having sum(psl_sign) = 1
+      into psi_id, psi_code, psp_name
+  do
+  begin
+    select psl_id, psl_from_psm_id, psl_date
+    from paysys_list
+    where psl_from_psi_id = :psi_id and
+          psl_sign = 1
+    order by psl_from_psm_id desc
+    rows 1
+    into psl_id, psm_id, psm_date;
+
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

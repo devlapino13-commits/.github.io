@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_SVZ_INFORM_MA_CANCEL — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_SVZ_INFORM_MA_CANCEL: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_SVZ_INFORM_MA_CANCEL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fsrobot_insert_event.html"><div class="to">FSROBOT_INSERT_EVENT</div></a><a class="ref-card" href="hp_miniapp_status_change.html"><div class="to">HP_MINIAPP_STATUS_CHANGE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_SVZ_INFORM_MA_CANCEL(
+    REP_DATE DATE)
+AS
+declare variable c_id id_type;
+declare variable holidays_qty integer;
+declare variable difdays integer;
+declare variable ma_date_app date;
+declare variable ma_id integer;
+declare variable kf_name str_100;
+declare variable un_id id_type;
+declare variable rd_id integer;
+begin
+  un_id = 1000000000000;
+
+  select rd.rd_id
+  from refdata rd
+  where rd.rd_code = &#x27;LOPenaltyReason.Miniapp_6_Days&#x27;
+  into :rd_id;
+
+-- если это выходной день, не отправляю уведомление
+  if (not exists(select sc.scd_work_hours
+                 from sa_calendays sc
+                 where sc.scd_date = :rep_date and
+                       sc.scd_work_hours &gt; 0)) then
+    exit;
+
+-- получаю список работающих свз на дату отчета
+  for select hps.ps_from_c_id
+      from hr_pstatus hps
+      inner join joblist jl on jl.jl_id = ps_from_jl_id
+      inner join jobkind jk on jk.jk_id = jl.jl_kind
+      where :rep_date between ps_date_begin and ps_date_end and
+            ps_is_working = 1 and
+            jk.jk_system_code = &#x27;JobSystem.LO_Standart&#x27;
+      into :c_id
+  do
+  begin
+    for select maa.ma_id, datediff(day, maa.ma_date_oper, :rep_date), kal.kal_new_kf_name, maa.ma_date_oper
+        from miniapp maa
+        inner join knaktlist kal on kal.kal_from_kf_id = maa.ma_from_kf_id
+        where maa.ma_date_oper &lt; :rep_date and
+              maa.ma_is_active = 1 and
+              maa.ma_date_end = &#x27;31.12.9999&#x27; and
+              :rep_date between kal.kal_date and kal.kal_date_end and
+              kal.is_delete = 0 and
+              kal.kal_new_kf_officer = :c_id and
+              maa.ma_date_oper &gt;= &#x27;01.06.2017&#x27;
+        order by 2
+        into :ma_id, :difdays, :kf_name, :ma_date_app
+    do
+    begin
+      holidays_qty = 0;
+
+      select count(*)
+      from sa_calendays sc
+      where sc.scd_date between :ma_date_app and :rep_date and
+            sc.scd_work_hours = 0
+      into :holidays_qty;
+
+      holidays_qty = coalesce(holidays_qty, 0);
+
+      difdays = difdays - holidays_qty + 1;
+
+      if (not(exists(select *
+                     from kontract kont
+                     where kont.k_from_ma_app_id = :ma_id and
+                           kont.k_status = 1))) then
+      begin
+        if ((difdays = 3) or (difdays &gt;= 5)) then -- уведомляю СВЗ
+        begin
+          execute procedure fsrobot_insert_event(&#x27;DoMailing&#x27;, &#x27;Push_Svz_Ma_Notification&#x27;,
+              :c_id || &#x27;;&#x27; || :difdays || &#x27;;&#x27; || :kf_name || &#x27;;6_days;0&#x27;, :un_id);
+        end
+
+        if (difdays &gt;= 6) then
+        begin
+          insert into lo_penalty (lp_from_c_id, lp_from_ma_id, lp_days, lp_ma_date, lp_amount, lp_reason)
+          values (:c_id, :ma_id, :difdays, :ma_date_app, 1000, :rd_id);
+
+          execute procedure hp_miniapp_status_change(:ma_id, :un_id, 0);
+
+          insert into kontreslist (krl_from_kr_id, krl_from_un_id, krl_from_k_id, krl_ma_reg_id, krl_ma_id)
+          values (10, :un_id, null, 0, :ma_id);
+
+          update kontract kont
+          set kont.k_status = -1
+          where kont.k_status = 0 and
+                kont.k_from_ma_app_id = :ma_id;
+        end
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0304_SQL — процедура — схема БД</title>
+<meta name="description" content="Процедура CM_RU_0304_SQL: 3 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0304_SQL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_make_zad_list.html"><div class="to">AAREP_MAKE_ZAD_LIST</div></a><a class="ref-card" href="perc_amount_interval_by_point.html"><div class="to">PERC_AMOUNT_INTERVAL_BY_POINT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0304_SQL(
+    MA_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable c_id d_id;
+declare variable is_refund d_integer;
+declare variable amount curr_type;
+declare variable disb_date d_date;
+declare variable point d_integer;
+declare variable cli_balance curr_type;
+declare variable cli_balance_tmp curr_type;
+declare variable amount_max curr_type;
+declare variable pr_id d_integer;
+declare variable delinq_days d_integer;
+declare variable count_delinq_days d_integer;
+declare variable ref_count d_integer;
+declare variable ref_balance curr_type;
+declare variable ref_balance_tmp curr_type;
+declare variable office_id d_integer;
+declare variable ref_k_id d_id;
+declare variable ref_disb_date d_date;
+begin
+  res_error_is_critical = 2;
+
+  for select mac_from_c_id, ma_refund, mac_amount, ma_date_oper, pr_id, ma_office_id
+      from miniapp
+      inner join miniappclient on mac_from_ma_id = ma_id
+      inner join product on pr_id = ma_from_pr_id
+      where ma_id = :ma_id and
+            ma_is_active = 1 and
+            ma_date_end = &#x27;31.12.9999&#x27; and
+            pr_code containing &#x27;.selfemployed_plus.&#x27;
+      into c_id, is_refund, amount, disb_date, pr_id, office_id
+  do
+  begin
+    point = f_point_get(11, ma_id, c_id, disb_date);
+
+    if (office_id in (1012800, 1490600, 1050600)) then
+    begin
+      res_error_text = &#x27;В текущем офисе выдача запрещена&#x27;;
+      suspend;
+    end
+
+    if (point &lt; 11) then
+    begin
+      res_error_text = &#x27;У клиента менее 11 баллов, выдача запрещена&#x27;;
+      suspend;
+    end
+
+    if (is_refund = 1) then
+    begin
+      res_error_text = &#x27;Галочка рефинансирования должна отсутствовать&#x27;;
+      suspend;
+    end
+
+    cli_balance = 0;
+    cli_balance_tmp = 0;
+    delinq_days = 0;
+    count_delinq_days = 0;
+    ref_count = 0;
+    ref_balance = 0;
+    for select sum(oks_balance), sum(iif((:disb_date - oks_delinq_date) &lt; 0, 0, :disb_date - oks_delinq_date)),
+               kc_from_k_id, k_disb_date
+        from knclient, oksummary, kontract
+        where kc_from_c_id = :c_id and
+              kc_amount_approved &gt; 0 and
+              kc_from_k_id = oks_from_k_id and
+              k_id = kc_from_k_id and
+              oks_balance &gt; 0 and
+              oks_close_state = 0 and
+              :disb_date between oks_date_begin and oks_date_end
+        group by 3, 4
+        order by 1
+        into cli_balance_tmp, count_delinq_days, ref_k_id, ref_disb_date
+    do
+    begin
+      cli_balance = coalesce(cli_balance, 0) + coalesce(cli_balance_tmp, 0);
+      ref_count = ref_count + (iif(ref_disb_date &gt;= &#x27;13.04.2026&#x27;, 0, 1));
+      delinq_days = delinq_days + count_delinq_days;
+      if (amount = 200000) then
+      begin
+        if (ref_count &lt;= 2 and ref_disb_date &lt; &#x27;13.04.2026&#x27;) then
+        begin
+          select sum(zad_os + sh_calc_perc)
+          from aarep_make_zad_list(:ref_k_id, :disb_date, 1)
+          into ref_balance_tmp;
+          ref_balance = coalesce(ref_balance, 0) + coalesce(ref_balance_tmp, 0);
+        end
+      end
+      if (amount = 100000) then
+      begin
+        if (ref_count = 1 and ref_disb_date &lt; &#x27;13.04.2026&#x27;) then
+        begin
+          select sum(zad_os + sh_calc_perc)
+          from aarep_make_zad_list(:ref_k_id, :disb_date, 1)
+          into ref_balance_tmp;
+          ref_balance = coalesce(ref_balance, 0) + coalesce(ref_balance_tmp, 0);
+        end
+      end
+    end
+    cli_balance = coalesce(cli_balance, 0);
+    delinq_days = coalesce(delinq_days, 0);
+    ref_count = coalesce(ref_count, 0);
+    ref_balance = coalesce(ref_balance, 0);
+
+    if (cli_balance + amount &gt; 500000) then
+    begin
+      res_error_text = &#x27;Общий баланс всех займов превысит 500 000 р.&#x27;;
+      suspend;
+    end
+
+    if (delinq_days &gt; 0) then
+    begin
+      res_error_text = &#x27;У клиента имеется активная просрочка&#x27;;
+      suspend;
+    end
+
+    select amount_max
+    from perc_amount_interval_by_point(:pr_id, :point)
+    into amount_max;
+
+    if (amount &gt; amount_max) then
+    begin
+      res_error_text = f_format(&#x27;Бал клиента: %1, Разрешенная максимальная сумма для выдачи: %2&#x27;, point, round(amount_max));
+      suspend;
+    end
+
+    if (amount not in (100000, 200000)) then
+    begin
+      res_error_text = &#x27;Выбрана непрвильная сумма для выдачи&#x27;;
+      suspend;
+    end
+
+    if (ref_count = 0) then
+    begin
+      res_error_text = &#x27;Нет займов для рефинансирования&#x27;;
+      suspend;
+    end
+
+    if (amount &lt; ref_balance) then
+    begin
+      res_error_text = &#x27;Суммы нового займа недостаточно для рефинансирования всех выбранных займов, измените выбор&#x27;;
+      suspend;
+    end
+
+    if (amount = 200000 and
+        ref_count &lt; 2) then
+    begin
+      res_error_text = &#x27;Сумма займа 200 000 руб.: у клиента должно быть 2 активных займа&#x27;;
+      suspend;
+    end
+
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_FCM_USER_LIST_FILL — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_FCM_USER_LIST_FILL: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_FCM_USER_LIST_FILL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_fcm_user_remove.html"><div class="to">HP_FCM_USER_REMOVE</div></a><a class="ref-card" href="hp_split_str.html"><div class="to">HP_SPLIT_STR</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CMD_LIST</div><div class="ptype">VARCHAR(255)</div><div class="pdesc">Список команд, разделитель-запятая</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_FCM_USER_LIST_FILL(
+    CMD_LIST D_STR_255)
+AS
+declare variable cmd d_str_code;
+declare variable ful_id d_id;
+declare variable fcm_id d_str_255;
+begin
+  -- Сервис: FsSvc
+  -- Заполняем fcm_user_list пользователями, для которых будут
+  -- синхронизироваться топики в FsService
+  -- Допустимые значения команд в списке cmd_list:
+  --   clear_username - очистка списка из username
+  --   clear_mc_login - очистка списка из mc_login
+  --   clear_all - полная очистка таблицы fcm_user_list
+  --   add_username - добавить пользователей из username
+  --   add_mc_login - добавить пользователей из mc_login
+
+  for select res_str
+  from hp_split_str(:cmd_list, &#x27;,&#x27;)
+  into cmd
+  do
+  begin
+    if (cmd = &#x27;clear_username&#x27;) then
+    begin
+      delete from fcm_user_list
+      where ful_un_id is not null;
+    end
+    else if (cmd = &#x27;clear_mc_login&#x27;) then
+    begin
+      delete from fcm_user_list
+      where ful_mcl_id is not null;
+    end
+    else if (cmd = &#x27;clear_all&#x27;) then
+    begin
+      delete from fcm_user_list
+      where 1=1;
+    end
+    else if (cmd = &#x27;add_username&#x27;) then
+    begin
+      -- Добавляем отсутствующие в fcm_user_list, но присутствующие в username
+      insert into fcm_user_list (ful_un_id, ful_mcl_id, ful_fcm_id)
+      select un_id, null, un_google_id
+      from username left join fcm_user_list on ful_un_id = un_id
+      where coalesce(un_google_id, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;
+        and ful_un_id is null;
+
+      -- Обновляем fcm_id в fcm_user_list, если поменялся google_id в username
+      -- Удаляем из fcm_user_list, если google_id очищен в username
+      for select ful_id, un_google_id
+      from fcm_user_list left join username on ful_un_id = un_id
+      where un_google_id is distinct from ful_fcm_id
+        and ful_mcl_id is null
+      into ful_id, fcm_id
+      do
+      begin
+        if (coalesce(fcm_id, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+        begin
+          update fcm_user_list
+          set ful_fcm_id = :fcm_id
+          where ful_id = :ful_id;
+        end
+        else
+          execute procedure hp_fcm_user_remove(ful_id);
+      end
+    end
+    else if (cmd = &#x27;add_mc_login&#x27;) then
+    begin
+      -- Добавляем отсутствующие в fcm_user_list, но присутствующие в mc_login
+      insert into fcm_user_list (ful_un_id, ful_mcl_id, ful_fcm_id)
+      select null, mcl_id, mcl_google_id
+      from mc_login left join fcm_user_list on ful_mcl_id = mcl_id
+      where coalesce(mcl_google_id, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;
+        and mcl_is_delete = 0
+        and ful_mcl_id is null;
+
+      -- Обновляем fcm_id в fcm_user_list, если поменялся google_id в mc_login
+      -- Удаляем из fcm_user_list, если google_id очищен в mc_login
+      for select ful_id, mcl_google_id
+      from fcm_user_list left join mc_login on ful_mcl_id = mcl_id
+      where mcl_google_id is distinct from ful_fcm_id
+        and mcl_is_delete = 0
+        and ful_un_id is null
+      into ful_id, fcm_id
+      do
+      begin
+        if (coalesce(fcm_id, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+        begin
+          update fcm_user_list
+          set ful_fcm_id = :fcm_id
+          where ful_id = :ful_id;
+        end
+        else
+          execute procedure hp_fcm_user_remove(ful_id);
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

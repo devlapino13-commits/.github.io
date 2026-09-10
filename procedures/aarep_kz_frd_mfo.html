@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_KZ_FRD_MFO — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_KZ_FRD_MFO: 3 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_KZ_FRD_MFO</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_make_zad_list.html"><div class="to">AAREP_MAKE_ZAD_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_REGION_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PERIOD_STR</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KOL_DISB_ONLINE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SUM_DISB_ONLINE</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ZAD_ALL_ONLINE</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_KZ_FRD_MFO(
+    REP_REGION_ID D_INTEGER,
+    REP_DATE_BEGIN D_DATE,
+    REP_DATE_END D_DATE)
+RETURNS (
+    PERIOD_STR D_STR_CODE,
+    KOL_DISB_ONLINE D_INTEGER,
+    SUM_DISB_ONLINE D_CURRENCY,
+    ZAD_ALL_ONLINE D_CURRENCY)
+AS
+declare variable K_ID D_ID;
+declare variable OKS_BALANCE D_CURRENCY;
+declare variable PERC_FINE D_CURRENCY;
+begin
+  period_str = &#x27;Отчетный период: c &#x27;||f_datetostr(:rep_date_begin)||&#x27; по &#x27;||f_datetostr(:rep_date_end);
+
+  kol_disb_online = null;
+  sum_disb_online = null;
+  select count(*), sum(k_amount_approved)
+  from kontstate, region_list(:rep_region_id, 1, 3, 1), kontract
+  where ks_ol_is_delete = 0
+  and ks_state = 1
+  and ks_date_begin between :rep_date_begin and :rep_date_end
+  and ks_region_id = id_list
+  and ks_from_k_id = k_id
+  and k_is_online = 1
+  into kol_disb_online, sum_disb_online;
+  kol_disb_online = coalesce(kol_disb_online, 0);
+  sum_disb_online = coalesce(sum_disb_online, 0);
+
+  zad_all_online = 0;
+  for
+  select k_id, oks_balance from oksummary, region_list(:rep_region_id, 1, 3, 1), kontract
+  where oks_region_id = id_list
+  and oks_close_state = 0
+  and :rep_date_end between oks_date_begin and oks_date_end
+  and oks_from_k_id = k_id
+  and k_is_online = 1
+  into k_id, oks_balance
+  do
+  begin
+
+
+    perc_fine = null;
+    select sum(sh_calc_perc + sh_calc_fine)
+    from aarep_make_zad_list(:k_id, :rep_date_end, 1)
+    into perc_fine;
+
+    zad_all_online = zad_all_online + coalesce(oks_balance,0) + coalesce(perc_fine, 0);
+  end 
+
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

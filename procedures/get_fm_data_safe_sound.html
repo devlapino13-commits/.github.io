@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GET_FM_DATA_SAFE_SOUND — процедура — схема БД</title>
+<meta name="description" content="Процедура GET_FM_DATA_SAFE_SOUND: 3 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>GET_FM_DATA_SAFE_SOUND</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_blobex_blob.html"><div class="to">HP_GET_BLOBEX_BLOB</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_safe_sound_basic_data.html"><div class="to">AAREP_SAFE_SOUND_BASIC_DATA</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CATEGORY</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">BLS_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">BASE_PATH</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MAX_PAST_DUE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">TOTAL_OUTSTANDING_NOT_OUR</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">TOTAL_AMOUNT_NOT_OUR</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">GUARANTOR</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE GET_FM_DATA_SAFE_SOUND(
+    CATEGORY D_STR_20,
+    BLS_ID D_ID,
+    BASE_PATH D_STR_100)
+RETURNS (
+    MAX_PAST_DUE D_INTEGER,
+    TOTAL_OUTSTANDING_NOT_OUR D_CURRENCY,
+    TOTAL_AMOUNT_NOT_OUR D_CURRENCY,
+    GUARANTOR D_INTEGER)
+AS
+declare variable path d_str_255;
+declare variable subcategory d_str_20;
+declare variable max_past_due_days d_integer;
+declare variable arr_length d_integer;
+declare variable i d_integer;
+declare variable json_blb d_blob_text;
+declare variable provider d_str_255;
+declare variable loan_status_code d_str_10;
+declare variable role_code d_str_10;
+begin
+  select blx_blob
+  from hp_get_blobex_blob(:bls_id)
+  into :json_blb;
+  
+  max_past_due = 0;
+  subcategory = null;
+  total_outstanding_not_our = 0;
+  total_amount_not_our = 0;
+  guarantor = 0;
+
+  for select trim(&#x27;granted_contract&#x27;) as subcategory
+    from rdb$database
+    union all
+    select trim(&#x27;not_granted_contract&#x27;) from rdb$database
+    into :subcategory
+  do
+  begin
+    path = base_path || &#x27;.&#x27; || category || &#x27;.&#x27; || subcategory;
+    arr_length = f_json_blob_get_count(:json_blb, :path);
+    i = 0;
+    max_past_due_days = 0;
+    while (i &lt; arr_length)
+    do
+    begin
+      provider = f_json_blob_get_value(:json_blb, :path || f_format(&#x27;[%1].%2.provider_code_desc&#x27;, i, :subcategory), &#x27;&#x27;);
+      if (provider &lt;&gt; &#x27;MKK M Bulak&#x27;) then
+      begin
+        max_past_due_days = cast(f_json_blob_get_value(json_blb, path || f_format(&#x27;[%1].maximum.max_days_past_due&#x27;, i), 0) as d_integer);
+        if (max_past_due_days &gt; max_past_due) then
+          max_past_due = max_past_due_days;
+        total_outstanding_not_our = total_outstanding_not_our + cast(f_json_blob_get_value(json_blb, path || f_format(&#x27;[%1].granted_installment.principal_outstanding_amount&#x27;, i), 0) as d_currency);
+        loan_status_code = f_json_blob_get_value(json_blb, path || f_format(&#x27;[%1].granted_contract.contract_phase&#x27;, i), &#x27;&#x27;);
+        if (loan_status_code = &#x27;AC&#x27;) then
+          total_amount_not_our = total_amount_not_our + 1;
+          
+        role_code = f_json_blob_get_value(json_blb, path || f_format(&#x27;[%1].granted_contract.role&#x27;, i), &#x27;&#x27;);
+        if (role_code = &#x27;G&#x27;) then
+          guarantor = guarantor + 1;
+      end
+      i = i + 1;
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MKR_FILL_CUSTOM_POKET — процедура — схема БД</title>
+<meta name="description" content="Процедура MKR_FILL_CUSTOM_POKET: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>MKR_FILL_CUSTOM_POKET</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="mkr_fill_indiv_poket_temp.html"><div class="to">MKR_FILL_INDIV_POKET_TEMP</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REPORT_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KONT_LIST</div><div class="ptype">BLOB SUB_TYPE BINARY SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE MKR_FILL_CUSTOM_POKET(
+    REPORT_DATE_END DATE,
+    KONT_LIST BLOB SUB_TYPE BINARY SEGMENT SIZE 80 = &#x27;&#x27;)
+AS
+declare variable pocket_id id_type;
+declare variable kont_list_tmp blob sub_type 0 segment size 80;
+declare variable x integer;
+declare variable kont_data str_100;
+declare variable k_id id_type;
+declare variable kc_number integer;
+declare variable k_id_devide id_type;
+declare variable pass_no varchar(50);
+declare variable kont_account varchar(20);
+begin
+--  Пример KONT_LIST = 101010001839000101-3|AZE07392640;101010001597200101-1|AZE13385778;
+-- или  101010001839000101-3;
+-- или 101010001839000101;
+-- или 101010001839000101|AZE07392640;
+
+  kont_list = coalesce(kont_list, &#x27;&#x27;);
+  if (kont_list &lt;&gt; &#x27;&#x27;) then
+  begin
+
+    pocket_id = gen_id(gen_mkrpoket_id, 1);
+    insert into mkr_poket (mp_id, mp_create_time, mp_date_begin, mp_date_end, mp_type, mp_categ)
+    values (:pocket_id, cast(&#x27;NOW&#x27; as timestamp), :report_date_end, :report_date_end, 3, 0);
+
+    kont_list_tmp = kont_list;
+    x = position(&#x27;;&#x27;, kont_list_tmp);
+    while (x &gt; 0) do
+    begin
+      x = position(&#x27;;&#x27;, kont_list_tmp);
+      if (x &gt; 0) then
+      begin
+        kont_data = substring(kont_list_tmp from 1 for x - 1);
+
+        k_id = cast(substring(kont_data from 1 for 18) as id_type);
+        kc_number = null;
+        k_id_devide = null;
+        if (position(&#x27;-&#x27;, kont_data) &gt; 0) then
+        begin
+          kc_number = cast(substring(kont_data from position(&#x27;-&#x27;, kont_data) + 1 for 1) as integer);
+
+          if (not exists(select *
+                         from knclient kncl
+                         where kncl.kc_from_k_id = :k_id and
+                               kncl.kc_number = :kc_number)) then
+          begin
+            -- Если не удается найти кнтракт из списка МКР, скрорее всего, это амнистированный заем
+            pass_no = substring(kont_data from position(&#x27;|&#x27;, kont_data) + 1);
+
+            select kd.kd_k_new
+            from knclient kncl
+            inner join kontdevides kd on kd.kd_k_new = kncl.kc_from_k_id
+            inner join clients cl on cl.c_id = kncl.kc_from_c_id
+            where kd.kd_k_orig = :k_id and
+                  cl.c_pass_no = :pass_no and
+                  kncl.kc_amount_approved &gt; 0
+            into :k_id_devide;
+          end
+        end
+        if (kc_number is null) then
+          kont_account = substring(kont_data from 1 for 18);
+        else
+          kont_account = substring(kont_data from 1 for 20);
+
+        insert into mkr_credit (mc_type, mc_from_mp_id, mc_id, mc_from_c_id, mc_name, mc_placeofbirth, mc_countrycode,
+                                mc_pincode, mc_bankruptcystatus, mc_dateofbirth, mc_from_k_id, mc_accountno,
+                                mc_credittype, mc_creditlineamount, mc_purposeofcredit, mc_currencyofcredit,
+                                mc_initialamountofcredit, mc_disoutamountofcredit, mc_annualinterestrate,
+                                mc_dateofgrant, mc_duetimefirstcontract, mc_duetimelastcontract, mc_lastpaymentdate,
+                                mc_monthlypaymentamount, mc_daysmainsumisoverdue, mc_daysinterestisoverdue,
+                                mc_creditperiodinmonths, mc_oiaforrepperiod, mc_oiaforlastthreemonths,
+                                mc_numberofprolongs, mc_creditclasscode, mc_creditstatuscode, mc_provision)
+        select cr_type, :pocket_id, id, knc_id, name, &#x27;azerbaycan&#x27;, --Po umolchaniyu
+               countrycode, pincode, 0, --Po umolchaniyu
+               dateofbirth, :k_id, iif(:kc_number is null, accountno, :kont_account), &#x27;001&#x27;, --Po umolchaniyu
+               0, --Po umolchaniyu
+               purposeofcredit, currencyofcredit, initialamountofcredit, disoutamountofcredit, annualinterestrate,
+               dateofgrant, duetimefirstcontract, duetimelastcontract, lastpaymentdate, monthlypaymentamount,
+               daysmainsumisoverdue, daysinterestisoverdue, creditperiodinmonths, oiaforrepperiod,
+               oiaforlastthreemonths, numberofprolongs, creditclasscode, creditstatuscode, 0 --Po umolchaniyu
+        from mkr_fill_indiv_poket_temp(:report_date_end, iif(:k_id_devide is null, :k_id, :k_id_devide), :kc_number, 0);
+      end
+
+      kont_list_tmp = substring(kont_list_tmp from x + 1);
+    end
+
+    /* Procedure Text */
+--suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

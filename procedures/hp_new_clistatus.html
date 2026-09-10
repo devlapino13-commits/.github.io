@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_NEW_CLISTATUS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_NEW_CLISTATUS: 8 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_NEW_CLISTATUS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">8</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="get_kv.html"><div class="to">GET_KV</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">8 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_CURR_STATUS</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_NEW_STATUS</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_CLI_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">POLEZ_PLATEJ</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DETAIL</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_NEW_CLISTATUS(
+    REP_C_ID ID_TYPE,
+    REP_CURR_STATUS SMALLINT,
+    REP_NEW_STATUS SMALLINT,
+    REP_DATE DATE,
+    UN_ID ID_TYPE,
+    REP_CLI_FIO VARCHAR(100),
+    POLEZ_PLATEJ SMALLINT,
+    REP_DETAIL VARCHAR(1024))
+RETURNS (
+    RES_TEXT VARCHAR(255))
+AS
+declare variable last_date_status date;
+declare variable k_last_reg_id integer;
+declare variable new_ol_id id_type;
+declare variable ol_memo varchar(1024);
+declare variable k_id id_type;
+begin
+-- присвоение клиенту новый статус
+  res_text = &#x27;&#x27;;
+  if (rep_curr_status &gt;= rep_new_status) then
+  begin
+    res_text = &#x27;Заданный статус не должно быть меньше или равно чем текущий статус!&#x27;;
+    suspend;
+    exit;
+  end
+  rep_detail = coalesce(rep_detail, &#x27;&#x27;);
+  if (rep_detail = &#x27;&#x27;) then
+  begin
+    res_text = &#x27;Укажите основание!&#x27;;
+    suspend;
+    exit;
+  end
+
+  last_date_status = null;
+  select max(cs_date_begin)
+  from clientstatus
+  where cs_from_c_id = :rep_c_id and
+        cs_ol_is_delete = 0
+  into last_date_status;
+
+  if (last_date_status is not null and
+      last_date_status &gt; rep_date) then
+  begin
+    res_text = &#x27;Имеется присвоенный статус более поздней датой, дата:&#x27; || last_date_status;
+    suspend;
+    exit;
+  end
+
+  k_last_reg_id = null;
+  select k_last_reg_id, k_id
+  from knclient, kontract, kontstate
+  where kc_from_c_id = :rep_c_id and
+        kc_amount_approved &gt; 0 and
+        kc_from_k_id = k_id and
+        k_id = ks_from_k_id and
+        ks_ol_is_delete = 0 and
+        ks_state = 1
+  order by ks_date_begin desc
+  rows 1
+  into k_last_reg_id, k_id;
+
+  if (k_last_reg_id is null) then
+  begin
+    res_text = &#x27;У клиента не имеется кредитная история!&#x27;;
+    suspend;
+    exit;
+  end
+
+  select kv
+  from get_kv(:k_last_reg_id, 5)
+  into :new_ol_id;
+  if (rep_cli_fio is null) then
+  begin
+    select c_name_fio
+    from clients
+    where c_id = :rep_c_id
+    into rep_cli_fio;
+  end
+
+  ol_memo = &#x27;Изменение статуса клиента:&#x27; || rep_cli_fio;
+
+  insert into operlist (ol_id, ol_from_reg_id, ol_oper_type, ol_date, ol_doc_no, ol_doc_no_str, ol_doc_kind, ol_memo,
+                        ol_status, is_delete, ol_datetime, ol_user_id, ol_document_client, ol_from_mo_id,
+                        ol_is_mo_modified, ol_document_office, ol_acc_no_client, ol_acc_no_office, ol_oper_subtype,
+                        ol_date_oper_day, ol_pocket, ol_doc_client_name, ol_is_client, ol_year, ol_month, ol_parent_id,
+                        ol_manager_c_id, ol_from_rd_id)
+  values (:new_ol_id, :k_last_reg_id, 1, :rep_date, null, null, null, :ol_memo, 0, 0, current_timestamp, :un_id,
+          :rep_c_id, null, null, null, null, null, null, :rep_date, null, null, null, null, null, null, null, null);
+
+  update or insert into clientstatus (cs_from_c_id, cs_from_k_id, cs_from_ol_id, cs_ol_is_delete, cs_date_begin,
+                                      cs_date_end, cs_star_total, cs_polez_platej)
+  values (:rep_c_id, :k_id, :new_ol_id, 0, :rep_date, &#x27;31.12.9999&#x27;, :rep_new_status, :polez_platej)
+  matching (cs_from_c_id, cs_from_k_id, cs_from_ol_id);
+
+  update or insert into clientnewstatus (cns_from_ol_id, cns_from_c_id, cns_ol_is_delete, cns_date, cns_old_status,
+                                         cns_new_status, cns_polez_platej, cns_detail, cns_user_id)
+  values (:new_ol_id, :rep_c_id, 0, :rep_date, :rep_curr_status, :rep_new_status, :polez_platej, :rep_detail, :un_id)
+  matching (cns_from_ol_id);
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

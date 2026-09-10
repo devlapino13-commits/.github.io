@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CHECK_RATING_RESULT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CHECK_RATING_RESULT: 2 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CHECK_RATING_RESULT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">3</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_kibminiapp_last.html"><div class="to">HP_KIBMINIAPP_LAST</div></a><a class="ref-card" href="print_report_safe_and_sound.html"><div class="to">PRINT_REPORT_SAFE_AND_SOUND</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_html_get_loan_status.html"><div class="to">HP_HTML_GET_LOAN_STATUS</div></a><a class="ref-card" href="hp_insert_insurance_kontract.html"><div class="to">HP_INSERT_INSURANCE_KONTRACT</div></a><a class="ref-card" href="insert_new_kontract.html"><div class="to">INSERT_NEW_KONTRACT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OBJ_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">BY_RATING</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_RATING_SOURCE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CHECK_RATING_RESULT(
+    OBJ_KIND D_STR_CODE,
+    OBJ_ID D_ID)
+RETURNS (
+    BY_RATING D_SMALLINT,
+    K_RATING_SOURCE D_INTEGER)
+AS
+declare variable amount d_currency;
+declare variable c_id d_id;
+declare variable ma_date_oper d_date;
+declare variable ma_id d_id;
+declare variable kib_score d_integer;
+declare variable point_kind d_smallint;
+declare variable i d_integer;
+declare variable min_kib_score d_integer;
+declare variable pr_code d_str_100;
+declare variable base_k_id d_id;
+declare variable base_ma_id d_integer;
+declare variable risk_level d_str_10;
+declare variable data_source d_integer;
+begin
+  --JIRA 1519
+  if ((select cv.cv_value
+       from const_var cv
+       where cv.cv_code = &#x27;credit_rating_active&#x27;) = 0) then
+  begin
+    by_rating = 0;
+    suspend;
+    exit;
+  end
+
+  by_rating = 1;
+  k_rating_source = 0;
+
+  if (f_objkind(:obj_kind, &#x27;name&#x27;) = &#x27;kontract&#x27;) then
+  begin
+    select kt.k_from_ma_app_id
+    from kontract kt
+    where kt.k_id = :obj_id
+    into obj_id;
+  end
+
+  select pr.pr_code
+  from miniapp ma
+  inner join product pr on pr.pr_id = ma.ma_from_pr_id
+  where ma.ma_id = :obj_id and
+        ma.ma_is_active = 1 and
+        ma.ma_date_end &gt;= &#x27;31.12.2999&#x27;
+  order by ma.ma_number desc rows 1
+  into pr_code;
+
+  if (f_get_db_id() = 41701 and
+      pr_code containing &#x27;.insur_kontrakt.&#x27;) then  -- RFCKG-5051 Для Страховки берем данные из КИБ из Основного контракта
+  begin
+    select lir.lir_kontract_base
+    from kontract k
+    inner join loan_insurance_relation lir on k.k_id = lir.lir_kontract_insurance
+    where k.k_from_ma_app_id = :obj_id
+    into base_k_id;
+
+    select k.k_from_ma_app_id
+    from kontract k
+    where k.k_id = :base_k_id
+    into base_ma_id;
+  end
+
+  i = 0;
+
+  for select ma.ma_summa_minus,
+             mac.mac_from_c_id,
+             ma.ma_date_oper,
+             ma.ma_id,
+             iif(pr.pr_code containing &#x27;.IPF.&#x27;, 2, 0) --2 ИПФ, 0 - общий балл
+      from miniapp ma
+      inner join miniappclient mac on mac.mac_from_ma_id = ma.ma_id
+      inner join product pr on pr.pr_id = ma.ma_from_pr_id
+      where ma.ma_id = :obj_id and
+            ma.ma_is_active = 1 and
+            ma.ma_date_end &gt;= &#x27;31.12.2999&#x27; and
+            mac.mac_amount &gt; 0
+      into amount,
+           c_id,
+           ma_date_oper,
+           ma_id,
+           point_kind
+  do
+  begin
+    i = i + 1;
+
+    data_source = f_get_rd_id(&#x27;CfpAnketaCalcSource.Ishenim&#x27;);
+    kib_score = 0;
+    select kbm_score_rate
+    from hp_kibminiapp_last(:c_id, iif(:pr_code containing &#x27;.insur_kontrakt.&#x27;, :base_ma_id, :ma_id))   -- RFCKG-5051 Для Страховки берем данные из КИБ из Основного контракта
+    into kib_score;
+
+    if (coalesce(kib_score, 0) = 0) then    -- RFCKG-5233
+    begin
+      data_source = f_get_rd_id(&#x27;CfpAnketaCalcSource.SafeAndSound&#x27;);
+      select risk_level
+      from print_report_safe_and_sound(iif(:pr_code containing &#x27;.insur_kontrakt.&#x27;, :base_ma_id, :ma_id), :c_id)
+      rows 1
+      into risk_level;
+
+      risk_level = coalesce(risk_level, &#x27;--&#x27;);
+    end
+
+    kib_score = coalesce(kib_score, 0);
+
+    --Получаем минимальный уровень риска в отчете КБ
+    if (i = 1) then
+      min_kib_score = kib_score;
+    else
+      min_kib_score = iif(kib_score &lt; min_kib_score, kib_score, min_kib_score);
+
+    --&gt;--RFCKG-3546(Начало)
+    --Если Сумма меньше 5 000 или больше 100 000 или уровень риска в отчете КБ = очень высокий
+    if (amount &lt; 5000 or amount &gt; 100000 or
+    iif(f_get_rd_code(:data_source) = &#x27;CfpAnketaCalcSource.Ishenim&#x27;, min_kib_score &lt; 573, risk_level in (&#x27;I&#x27;, &#x27;J&#x27;))) then
+    begin
+      by_rating = 0;
+      suspend;
+      exit;
+    end
+
+    --Нижний порог среднеге риска или когда кредитный рейтинг по КИБ не может быть рассчитан
+    if (iif(f_get_rd_code(:data_source) = &#x27;CfpAnketaCalcSource.Ishenim&#x27;, kib_score &lt; 641, risk_level in (&#x27;G&#x27;, &#x27;H&#x27;, &#x27;I&#x27;, &#x27;J&#x27;)) or
+        iif(f_get_rd_code(:data_source) = &#x27;CfpAnketaCalcSource.Ishenim&#x27;, kib_score = 999, risk_level = &#x27;--&#x27;)) then
+    begin
+      by_rating = 0;
+    end
+
+    --Если Нижни порог среднего риска и сумма более 20 000
+    if (iif(f_get_rd_code(:data_source) = &#x27;CfpAnketaCalcSource.Ishenim&#x27;, min_kib_score &lt; 653, risk_level in (&#x27;G&#x27;, &#x27;H&#x27;, &#x27;I&#x27;, &#x27;J&#x27;))and amount &gt; 20000) then
+    begin
+      by_rating = 0;
+      suspend;
+      exit;
+    end
+  end
+  --&lt;--RFCKG-3546(Конец)
+  if (by_rating = 1) then
+  begin
+    k_rating_source = 1;
+    suspend;
+    exit;
+  end 
+  else
+  begin
+    min_kib_score = coalesce(min_kib_score, 0);
+
+    --Нижний порог высокого риска или когда кредитный рейтинг по КИБ не может быть рассчитан
+    if (iif(f_get_rd_code(:data_source) = &#x27;CfpAnketaCalcSource.Ishenim&#x27;, min_kib_score &lt; 573, risk_level in (&#x27;I&#x27;, &#x27;J&#x27;)) or
+        iif(f_get_rd_code(:data_source) = &#x27;CfpAnketaCalcSource.Ishenim&#x27;, min_kib_score = 999, risk_level = &#x27;--&#x27;)) then
+    begin
+      by_rating = 0;
+      suspend;
+      exit;
+    end
+
+    --Если есть активная просрочка, кредит тоже не идёт по кредитному рейтингу k_rating_soucre = 2
+    if ((select sum(iif((:ma_date_oper - oks.oks_delinq_date &lt; 0), 0, :ma_date_oper - oks.oks_delinq_date))
+         from miniappclient mac
+         inner join knclient kc on kc.kc_from_c_id = mac.mac_from_c_id and
+               kc.kc_amount_approved &gt; 0
+         inner join kontract kt on kt.k_id = kc.kc_from_k_id and
+               kt.k_from_ma_app_id &lt;&gt; mac.mac_from_ma_id
+         inner join oksummary oks on oks.oks_from_k_id = kt.k_id and
+               :ma_date_oper between oks.oks_date_begin and oks.oks_date_end and
+               oks.oks_close_state = 0
+         where mac.mac_from_ma_id = :obj_id and
+               mac.mac_amount &gt; 0) &gt; 0) then
+     begin
+       by_rating = 0;
+       suspend;
+       exit;
+     end
+    
+    by_rating = 1;
+    k_rating_source = 2;
+  end 
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_EXTERNAL_CALLS_STATISTICS — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_EXTERNAL_CALLS_STATISTICS: 2 входных, 6 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_EXTERNAL_CALLS_STATISTICS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">D1</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">D2</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CHECKED_SUM</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CALL_USER</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">COUNT_CHECKS</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">COUNT_CHECKS_CURRENT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">COUNT_CHECKS_OLD</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">COUNT_CHECKS_P</div><div class="ptype">DECIMAL(3,2)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_EXTERNAL_CALLS_STATISTICS(
+    D1 DATE,
+    D2 DATE)
+RETURNS (
+    CHECKED_SUM INTEGER,
+    CALL_USER VARCHAR(255),
+    COUNT_CHECKS INTEGER,
+    COUNT_CHECKS_CURRENT INTEGER,
+    COUNT_CHECKS_OLD INTEGER,
+    COUNT_CHECKS_P DECIMAL(3,2))
+AS
+declare variable checked_sum_v decimal(18,2);
+declare variable count_checks_v decimal(18,2);
+begin
+  select count(*) /*всего проверено за период*/
+  from contacts cont
+  where cont.cc_total_res &lt;&gt; 0 and
+        cont.cc_checked_date between :d1 and :d2
+  into :checked_sum;
+
+  if (checked_sum is null) then
+    checked_sum = 0;
+
+  /* всего проверенных за период в разрезе оператора*/
+  for select count(cont.cc_id), cc_call_user
+      from contacts cont
+      where cont.cc_total_res &lt;&gt; 0 and
+            cont.cc_checked_date between :d1 and :d2
+      group by cc_call_user
+      order by cont.cc_call_user
+      into :count_checks, :call_user
+  do
+  begin
+    if (coalesce(checked_sum, 0) &gt; 0) then
+    begin
+      count_checks_v = count_checks;
+      count_checks_p = count_checks_v / checked_sum * 100;
+    end
+    else
+      count_checks_p = 0;
+
+    select count(cont.cc_id)
+    from contacts cont
+    where cont.cc_total_res &lt;&gt; 0 and
+          cont.cc_checked_date between :d1 and :d2 and
+          cc_date + 0 &lt; :d1 --  + 0   не убирать, иначе не тот индекс цепляется
+          and
+          cc_call_user = :call_user
+    into :count_checks_old;
+    if (count_checks_old is null) then
+      count_checks_old = 0;
+    count_checks_current = count_checks - count_checks_old;
+
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

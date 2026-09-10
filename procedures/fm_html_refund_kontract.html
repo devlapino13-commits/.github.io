@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_HTML_REFUND_KONTRACT — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_HTML_REFUND_KONTRACT: 4 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_HTML_REFUND_KONTRACT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">5 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_make_zad_list.html"><div class="to">AAREP_MAKE_ZAD_LIST</div></a><a class="ref-card" href="hp_bki_get_list_for_refinace.html"><div class="to">HP_BKI_GET_LIST_FOR_REFINACE</div></a><a class="ref-card" href="hp_bki_get_status.html"><div class="to">HP_BKI_GET_STATUS</div></a><a class="ref-card" href="hp_get_info_extinfocfg.html"><div class="to">HP_GET_INFO_EXTINFOCFG</div></a><a class="ref-card" href="hp_refund_kontract_ssp.html"><div class="to">HP_REFUND_KONTRACT_SSP</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_html_main.html"><div class="to">FM_REPORT_HTML_MAIN</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_KIND</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_HTML</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_HTML_REFUND_KONTRACT(
+    MA_ID D_INTEGER,
+    OBJ_KIND D_STR_100,
+    DATE_END D_DATE,
+    UN_ID D_ID)
+RETURNS (
+    RES_HTML D_BLOB_TEXT)
+AS
+declare variable enabled_to_refund_table d_blob_text;
+declare variable refund_table d_blob_text;
+declare variable thead d_str_long;
+declare variable c_id d_id;
+declare variable k_id d_id;
+declare variable k_kontract_no d_str_20;
+declare variable k_disb_date d_date;
+declare variable pr_name d_str_code;
+declare variable zad_os d_currency;
+declare variable zad_perc d_currency;
+declare variable zad_total d_currency;
+declare variable zad_str d_str_255;
+declare variable res_link d_str_long;
+declare variable row_counter d_integer;
+declare variable row_counter_internal d_integer;
+declare variable row_counter_external d_integer;
+declare variable bki_status_id d_smallint;
+declare variable bki_status_text d_str_255;
+declare variable ma_date_app d_date;
+declare variable ma_date_oper d_date;
+declare variable uuid d_str_code;
+declare variable cred_partner_type_str d_str_code;
+declare variable cred_debt_sum d_currency;
+declare variable ssp_summ d_currency;
+declare variable ssp_total d_currency;
+declare variable params d_str_long;
+declare variable is_error d_smallint;
+declare variable rez_text d_str_100;
+declare variable kontract_name d_str_100;
+declare variable cred_sum_overdue d_currency;
+declare variable cred_sum d_currency;
+begin
+  -- RFCRU-3486 Изменение порядка рефинансирования займов
+  -- процедура отвечает за отображение таблицы всех активных займов клиента, подпадающих под рефинансирование на новый продукт
+  -- вызывается через f_uri_html() см FM_REPORT_HTML_MAIN
+
+  thead = &#x27;&lt;table width=&quot;100%&quot;&gt;
+                  &lt;col width=&quot;30%&quot;&gt;
+                  &lt;col width=&quot;35%&quot;&gt;
+                  &lt;col width=&quot;30%&quot;&gt;
+                  &lt;col width=&quot;5%&quot;&gt;
+                  &lt;thead&gt;
+                    &lt;tr&gt;
+                      &lt;th scope=&quot;col&quot;&gt;Договор&lt;/th&gt;
+                      &lt;th scope=&quot;col&quot;&gt;Продукт&lt;/th&gt;
+                      &lt;th scope=&quot;col&quot;&gt;Остаток Долга&lt;/th&gt;
+                      &lt;th scope=&quot;col&quot;&gt;Действие&lt;/th&gt;
+                    &lt;/tr&gt;
+                  &lt;/thead&gt;&#x27;;
+
+  select mac.mac_from_c_id
+  from miniappclient mac
+  where mac.mac_from_ma_id = :ma_id
+    and mac.mac_amount &gt; 0
+  into :c_id;
+
+  select ma.ma_date_app, ma.ma_date_oper
+  from miniapp ma
+  where ma.ma_id = :ma_id
+  rows 1
+  into ma_date_app, ma_date_oper;
+
+  res_html = (select res_style from fm_html_styles) || &#x27;&lt;body&gt;&#x27;; -- добавление стилей
+  res_html = blob_append(res_html, &#x27;&lt;style&gt;.nowrap{text-wrap: nowrap;}&lt;/style&gt;&#x27;);
+
+  res_html = blob_append(res_html, &#x27;&lt;h4&gt;Укажите займы, которые будут рефинансированы&lt;/h4&gt;&#x27;);
+
+  -- Таблица ВОЗМОЖНО РЕФИНАНСИРОВАТЬ
+  enabled_to_refund_table = &#x27;&lt;p&gt;Возможно рефинансировать:&lt;/p&gt;&#x27;;
+  enabled_to_refund_table = blob_append(enabled_to_refund_table, thead);
+  row_counter_internal = 0;
+  for select
+          k.k_id,
+          k.k_kontract_no,
+          k.k_disb_date,
+          pr.pr_name,
+          f_uuid_cbr(f_uuid(&#x27;knclient&#x27;, kc_id))
+  from kontstate ks
+  inner join knclient kc on kc.kc_from_k_id = ks.ks_from_k_id
+  inner join kontract k on k.k_id = ks.ks_from_k_id
+  inner join product pr on pr.pr_id = k.k_from_pr_id
+  where ks.ks_ol_is_delete = 0
+    and ks.ks_state = 1
+    and :date_end between ks.ks_date_begin and ks.ks_date_end
+    and kc.kc_from_c_id = :c_id
+    and kc.kc_amount_applicate &lt;&gt; 0
+  into k_id,
+       k_kontract_no,
+       k_disb_date,
+       pr_name,
+       uuid
+  do
+  begin
+    if (exists (select * from kontrefinance kr where kr.kr_from_ma_id = :ma_id and kr.kr_from_k_id = :k_id)) then
+      continue;
+
+    if (exists (select *
+                from kontrefinance kr
+                inner join kontract k on k.k_from_ma_app_id = kr.kr_from_ma_id
+                inner join kontstate ks on ks.ks_from_k_id = k.k_id
+                where kr.kr_loan_uuid = :uuid
+                and ks.ks_ol_is_delete = 0
+                and ks.ks_state = 1)) then
+    continue;   --RFCRU-4492
+
+    -- основная сумма и проценты
+    select sum(zad_os), sum(sh_calc_perc),
+      sum(iif(coalesce(sh_date, cast(&#x27;01.01.1900&#x27; as date)) &lt; :date_end, zad_os + sh_calc_perc, 0))
+    from aarep_make_zad_list(:k_id, :date_end, 1)
+    into zad_os, zad_perc, cred_sum_overdue;
+
+    -- среднемесячная сумма платежа (RFCRU-4021)
+    ssp_summ = 0;
+    select calc_month_repay_final
+    from hp_refund_kontract_ssp(:k_id, :date_end)
+    into ssp_summ;
+
+    if (ssp_summ is null) then
+      ssp_summ = 0;
+
+    zad_os = round_currency_up(zad_os, &#x27;int&#x27;);
+    zad_perc = round_currency_up(zad_perc, &#x27;int&#x27;);
+    ssp_summ = round_currency_up(ssp_summ, &#x27;int&#x27;);
+    cred_sum_overdue = round_currency_up(cred_sum_overdue, &#x27;int&#x27;);
+
+    cred_debt_sum = zad_os + zad_perc;
+
+    zad_str = f_format(&#x27;&lt;div class=&quot;nowrap&quot; style=&quot;color:%4&quot;&gt;%1 ОС&lt;br&gt;%2 %%&lt;br&gt;%3 СП&lt;/div&gt;&#x27;,
+          f_numtostr(zad_os, 0),
+          f_numtostr(zad_perc, 0),
+          f_numtostr(ssp_summ, 0),
+          iif(cred_sum_overdue &gt; 0, &#x27;red&#x27;, &#x27;black&#x27;));
+
+    params = f_format(&#x27;%1|%2|%3|&#x27;, ma_id, ma_date_app, &#x27;insert&#x27;);
+    params = params || f_format(&#x27;%1|%2|%3|%4|%5|&#x27;, uuid, cred_debt_sum, zad_perc, ssp_summ, &#x27;-&#x27;);  -- RFCRU-4456 То что показано, то и должно быть записано.
+    params = params || f_format(&#x27;%1|&#x27;, cred_sum_overdue);  -- RFCRU-4646
+
+    kontract_name = f_format(&#x27;&lt;div class=&quot;nowrap&quot;&gt;%1&lt;/div&gt; от %2&#x27;, k_kontract_no, f_datetostr(k_disb_date));
+    res_link = f_uri_sql(&#x27;Добавить&#x27;, &#x27;refund_kontract&#x27;, &#x27;kontract&#x27;, k_id, &#x27;none&#x27;, &#x27;Подтверждаете?&#x27;, &#x27;&#x27;, 0, 0, &#x27;&#x27;, &#x27;&#x27;, &#x27;dialog&#x27;, params);
+    enabled_to_refund_table = blob_append(:enabled_to_refund_table, f_html_table_row(kontract_name, pr_name, zad_str, res_link, 0, 0, 1, 0, 4, &#x27;&#x27;));
+    row_counter_internal = row_counter_internal + 1;
+  end
+
+  select status_id, status_text
+  from hp_bki_get_status(:c_id)
+  into bki_status_id, bki_status_text;
+
+  if (coalesce(bki_status_id, 0) &lt;&gt; 2) then
+  begin
+    res_html = bki_status_text; -- нет запроса в БКИ или другая причина отсутствия БКИ (RFCRU-4132)
+    suspend;
+    exit;
+  end
+
+  select is_error, rez_text
+  from hp_get_info_extinfocfg(:c_id, current_date, &#x27;bki_ssp_40&#x27;)
+  into :is_error, rez_text;
+
+  if (is_error = 1) then
+  begin
+    res_html = :rez_text;
+    suspend;
+    exit;
+  end
+
+  bki_status_text = &#x27;&#x27;;
+  row_counter_external = 0;
+
+  if (
+    (current_date between &#x27;10.06.2026&#x27; and &#x27;30.06.2026&#x27;) or
+    (current_date between &#x27;06.08.2026&#x27; and &#x27;31.08.2026&#x27;)
+    ) then  -- ограничения по показу внешних займов для рефинансирования указывать тут15
+  begin
+    -- внешние займы клиента (RFCRU-4021)
+    for select uuid, cred_partner_type_str, cred_debt_sum, ssp_summ, error_text, cred_sum_overdue, cred_date, cred_sum
+    from hp_bki_get_list_for_refinace(:c_id, null, 0, 1)
+    into uuid, cred_partner_type_str, cred_debt_sum, ssp_summ, bki_status_text, cred_sum_overdue, k_disb_date, cred_sum
+    do
+    begin
+      if (exists (select * from kontrefinance where kr_from_ma_id = :ma_id and kr_loan_uuid = :uuid)) then
+        continue;
+  
+      if (exists (select *
+                  from kontrefinance kr
+                  inner join kontract k on k.k_from_ma_app_id = kr.kr_from_ma_id
+                  inner join kontstate ks on ks.ks_from_k_id = k.k_id
+                  where kr.kr_loan_uuid = :uuid
+                  and ks.ks_ol_is_delete = 0
+                  and ks.ks_state = 1)) then
+      continue;  --RFCRU-4492
+  
+      if (coalesce(bki_status_text, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+      begin
+        res_html = bki_status_text;
+        suspend;
+        exit;
+      end
+  
+      cred_debt_sum = round_currency_up(cred_debt_sum, &#x27;int&#x27;);
+      ssp_summ = round_currency_up(ssp_summ, &#x27;int&#x27;);
+  
+      params = f_format(&#x27;%1|%2|%3|&#x27;, ma_id, ma_date_oper, &#x27;insert&#x27;);
+      params = params || f_format(&#x27;%1|%2|%3|%4|%5|&#x27;, uuid, cred_debt_sum, 0, ssp_summ, cred_partner_type_str);
+      params = params || f_format(&#x27;%1|%2|%3|&#x27;,cred_sum_overdue, cred_sum, k_disb_date);  -- RFCRU-4646
+  
+      kontract_name = f_format(&#x27;&lt;div class=&quot;nowrap&quot;&gt;%1&lt;/div&gt; от %2 ****%3&#x27;, f_numtostr(cred_sum, 0), f_datetostr(k_disb_date), right(uuid, 6));
+      res_link = f_uri_sql(&#x27;Добавить&#x27;, &#x27;refund_kontract&#x27;, &#x27;kontract&#x27;, 0, &#x27;none&#x27;, &#x27;Подтверждаете?&#x27;, &#x27;&#x27;, 0, 0, &#x27;&#x27;, &#x27;&#x27;, &#x27;dialog&#x27;, :params);
+      zad_str = f_format(&#x27;&lt;div class=&quot;nowrap&quot; style=&quot;color:%3&quot;&gt;%1 ВД&lt;br&gt;%2 СП&lt;/div&gt;&#x27;,
+          f_numtostr(round_currency_up(cred_debt_sum, &#x27;int&#x27;), 0),
+          f_numtostr(round_currency_up(ssp_summ, &#x27;int&#x27;), 0),
+          iif(cred_sum_overdue &gt; 0, &#x27;red&#x27;, &#x27;black&#x27;));
+  
+      enabled_to_refund_table = blob_append(enabled_to_refund_table, f_html_table_row(kontract_name, cred_partner_type_str, zad_str, res_link, 0, 0, 1, 0, 4));
+      row_counter_external = row_counter_external + 1;
+    end
+  end
+
+  enabled_to_refund_table = blob_append(:enabled_to_refund_table, &#x27;&lt;/table&gt;&#x27;);
+
+  if (row_counter = 0) then
+    enabled_to_refund_table = &#x27;&#x27;;
+
+  -- Таблица БУДУТ РЕФИНАНСИРОВАНЫ
+  refund_table = &#x27;&lt;p&gt;Будут рефинансированы:&lt;/p&gt;&#x27;;
+  refund_table = blob_append(refund_table, thead);
+  row_counter = 0;
+  zad_total = 0;
+  ssp_total = 0;
+
+  for select kr_loan_uuid, kr_balance, kr_perc_saldo, kr_avg_repay, kr_mfo_type, kr_from_k_id, kr_debt_overdue, kr_cred_sum, kr_cred_date
+  from kontrefinance
+  where kr_from_ma_id = :ma_id
+  order by kr_id
+  into uuid, cred_debt_sum, zad_perc, ssp_summ, cred_partner_type_str, k_id, cred_sum_overdue, cred_sum, k_disb_date
+  do
+  begin
+    if (k_id is not null) then
+    begin
+      select k_kontract_no, k_disb_date, pr_name
+      from kontract, product
+      where pr_id = k_from_pr_id
+        and k_id = :k_id
+      into k_kontract_no, k_disb_date, cred_partner_type_str;
+
+      kontract_name = f_format(&#x27;&lt;div class=&quot;nowrap&quot;&gt;%1&lt;/div&gt; от %2&#x27;, k_kontract_no, f_datetostr(k_disb_date));
+      zad_str = f_format(&#x27;&lt;div class=&quot;nowrap&quot; style=&quot;color:%4&quot;&gt;%1 ОС&lt;br&gt;%2 %%&lt;br&gt;%3 СП&lt;/div&gt;&#x27;,
+          f_numtostr(cred_debt_sum - zad_perc, 0),
+          f_numtostr(zad_perc, 0),
+          f_numtostr(ssp_summ, 0),
+          iif(cred_sum_overdue &gt; 0, &#x27;red&#x27;, &#x27;black&#x27;));
+    end
+    else
+    begin
+      zad_str = f_format(&#x27;&lt;div class=&quot;nowrap&quot; style=&quot;color:%3&quot;&gt;%1 ВД&lt;br&gt;%2 СП&lt;/div&gt;&#x27;,
+          f_numtostr(cred_debt_sum, 0),
+          f_numtostr(ssp_summ, 0),
+          iif(cred_sum_overdue &gt; 0, &#x27;red&#x27;, &#x27;black&#x27;));
+
+      kontract_name = f_format(&#x27;&lt;div class=&quot;nowrap&quot;&gt;%1&lt;/div&gt; от %2 ****%3&#x27;, f_numtostr(cred_sum, 0), f_datetostr(k_disb_date), right(uuid, 6));
+    end
+
+    params = f_format(&#x27;%1|%2|%3|%4|&#x27;, ma_id, ma_date_oper, &#x27;delete&#x27;, uuid);
+    res_link = f_uri_sql(&#x27;Удалить&#x27;, &#x27;refund_kontract&#x27;, &#x27;kontract&#x27;, 0, &#x27;none&#x27;, &#x27;Подтверждаете?&#x27;, &#x27;&#x27;, 0, 0, &#x27;&#x27;, &#x27;&#x27;, &#x27;dialog&#x27;, params);
+    refund_table = blob_append(refund_table, f_html_table_row(kontract_name, cred_partner_type_str, zad_str, res_link, 0, 0, 1, 0, 4));
+
+    zad_total = zad_total + cred_debt_sum;
+    ssp_total = ssp_total + ssp_summ;
+    row_counter = row_counter + 1;
+  end
+
+  zad_str = &#x27;&lt;b&gt;&#x27; || f_format(&#x27;&lt;div class=&quot;nowrap&quot;&gt;%1 ВД&lt;/div&gt;%2 СП&#x27;, f_numtostr(zad_total, 0), f_numtostr(ssp_total, 0)) || &#x27;&lt;/b&gt;&#x27;;
+  refund_table = blob_append(refund_table, f_html_table_row(&#x27;&lt;b&gt;Итого&lt;/b&gt;&#x27;, &#x27;&lt;b&gt;&#x27; || row_counter || &#x27;&lt;/b&gt;&#x27;, zad_str, &#x27;&#x27;, 0, 0, 1, 0, 4));
+  refund_table = blob_append(:refund_table, &#x27;&lt;/table&gt;&#x27;);
+
+  if (row_counter = 0) then
+    refund_table = &#x27;&#x27;;
+
+  if (row_counter = 0 and row_counter_internal = 0 and row_counter_external = 0) then
+    res_html = &#x27;Нет займов, подходящих под рефинансирование&#x27;; -- RFCRU-4132
+  else
+    res_html = blob_append(res_html, coalesce(enabled_to_refund_table || refund_table, &#x27;&#x27;) || &#x27;&lt;/body&gt;&#x27;);
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

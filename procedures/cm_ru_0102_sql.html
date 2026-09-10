@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0102_SQL — процедура — схема БД</title>
+<meta name="description" content="Общая проверка. Паспорт, Гражданство, Мигр. лист и частота погашений т.е. 30 или 360 дней">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0102_SQL</code></h1>
+<p class="desc">Общая проверка. Паспорт, Гражданство, Мигр. лист и частота погашений т.е. 30 или 360 дней</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_client_status.html"><div class="to">HP_GET_CLIENT_STATUS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0102_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable KC_AMOUNT CURR_TYPE;
+declare variable KF_DISB_DATE D_DATE;
+declare variable KF_CLIENT_PASS_NO varchar(30);
+declare variable KC_FROM_C_ID ID_TYPE;
+declare variable C_CITIZEN integer;
+declare variable RD_CODE varchar(255);
+declare variable C_PASS_DATE date;
+declare variable C_PASS_DATE_EXPIRE date;
+declare variable K_PERCENT_FOR_DAYS integer;
+declare variable PR_PERCENT_FOR_DAYS integer;
+declare variable DB_ID integer;
+declare variable K_KOLICH_REPAY integer;
+declare variable KC_CIRCLE integer;
+declare variable K_KOMMIS CURR_TYPE;
+declare variable KC_KOMMIS_LGOTA CURR_TYPE;
+declare variable K_KREDLINE_END date;
+declare variable KF_CLIENT_PASS_NO_TMP varchar(30);
+declare variable C_PASS_DATE_TMP date;
+declare variable C_PASS_DATE_EXPIRE_TMP date;
+declare variable C_CURR_STATUS integer;
+declare variable LGOTA_BEGIN D_DATE;
+declare variable LGOTA_END D_DATE;
+declare variable V_EXPIRE D_DATE;
+begin
+  lgota_begin = &#x27;15.03.2020&#x27;;
+  lgota_end = &#x27;15.05.2021&#x27;;
+
+  select com.cm_database_id
+  from company com
+  into :db_id;
+  if (not exists (select *
+                    from kontract, product
+                    where k_id = :k_id
+                    and k_from_pr_id = pr_id
+                    and pr_code containing &#x27;.EMP.&#x27;)) then
+  
+  for select kc_from_c_id,
+             kc_amount_approved,
+             coalesce(k_percent_for_days,-777),
+             coalesce(pr_percent_for_days,-777),
+             k_disb_date,
+             k_kolich_repay,
+             kc_circle,
+             KC_AMOUNT_APPROVED*K_KOMMIS_PERC/100 as k_kommis,
+             KC_KOMMIS_LGOTA,
+             kont.k_kredline_end
+  from knclient
+  inner join kontract kont on k_id = kc_from_k_id
+  inner join product on pr_id  = k_from_pr_id
+  where kc_from_k_id = :k_id
+  and kc_amount_approved &gt; 0
+  into kc_from_c_id,
+       kc_amount,
+       k_percent_for_days,
+       pr_percent_for_days,
+       kf_disb_date,
+       k_kolich_repay,
+       kc_circle,
+       k_kommis,
+       KC_KOMMIS_LGOTA,
+       k_kredline_end
+  do
+  begin
+    select c_curr_status from hp_get_client_status(:kc_from_c_id,:kf_disb_date)
+    into c_curr_status;
+    If (k_kommis &lt; KC_KOMMIS_LGOTA) then
+    begin
+        res_error_text = &#x27;Дополнительный процент указан не правильно!&#x27;;
+        res_error_is_critical = 2;
+        suspend;
+    end
+    if (k_percent_for_days &lt;&gt; pr_percent_for_days) then
+    begin
+        res_error_text = &#x27;Неправильное значение ежедневной ставки. Просим заново перестроить график&#x27;;
+        res_error_is_critical = 1;
+        suspend;
+    end
+    c_citizen = null;
+    rd_code   = null;
+    select c_name_fio,
+           c_citizen,
+           c_pass_no,
+           C_PASS_DATE,
+           C_PASS_DATE_EXPIRE
+    from clients
+    where c_id = :kc_from_c_id
+    into res_info_text,
+         c_citizen,
+         KF_CLIENT_PASS_NO,
+         C_PASS_DATE,
+         C_PASS_DATE_EXPIRE;
+
+    select rd_code from refdata
+    where rd_id = :c_citizen
+    into rd_code;
+    if (rd_code not in (&#x27;Citizen.RU&#x27;,&#x27;Citizen.KG&#x27;,&#x27;Citizen.TJ&#x27;,&#x27;Citizen.UZ&#x27;,&#x27;Citizen.KZ&#x27;)) then
+    begin
+      res_error_text = &#x27;Клиент не является гражданином след. республик: РФ, КГ, ТЖ, УЗ, КЗ&#x27;;
+      res_error_is_critical = 1;
+      suspend;
+      Exit;
+    end
+
+    if (kf_disb_date &lt; &#x27;23.03.18&#x27;
+        and kf_disb_date &gt; dateadd(month, -6, :c_pass_date_expire)
+        and k_kredline_end &gt; c_pass_date_expire  -- если срок паспорта заканчивается позже срока кредита то не проверять
+        and c_curr_status &lt; 4 -- Для статусных 4 и 5 звезд достаточно, чтобы паспорт был действителен на момент выдачи займа.
+       ) then
+    begin
+      kf_client_pass_no_tmp = null;
+      c_pass_date_tmp = null;
+      c_pass_date_expire_tmp = null;
+      select cds_doc_no,
+             cds_doc_date_begin,
+             cds_doc_date_end
+      from clientdocs cds, passkind, passdoctype
+      where cds_from_c_id = :kc_from_c_id
+      and cds_from_pk_id = pk_id
+      and pk_from_pdt_id = pdt_id
+      and cds_is_delete = 0
+      and pdt_is_main_doc = 1 -- Паспорт, загран и другие.
+      and cds_is_main_doc = 0 -- Это строка исключает прикрепленный основной паспорт.
+      and coalesce(cds.cds_doc_blob_1,0) &gt; 0
+      order by cds_doc_date_end desc
+      rows 1
+      into kf_client_pass_no_tmp,
+           c_pass_date_tmp,
+           c_pass_date_expire_tmp;
+      if (kf_client_pass_no_tmp is not null) then
+      begin
+        if (c_pass_date_expire &lt; c_pass_date_expire_tmp) then
+        begin
+          kf_client_pass_no = kf_client_pass_no_tmp;
+          c_pass_date = c_pass_date_tmp;
+          c_pass_date_expire = c_pass_date_expire_tmp;
+        end 
+      end 
+      if (kf_disb_date &lt; &#x27;23.03.18&#x27;
+          and kf_disb_date &gt; dateadd(month, -6, :c_pass_date_expire)
+          and rd_code &lt;&gt; &#x27;Citizen.RU&#x27;   -- добавлено от 25.04.2017 Улан
+           ) then
+      begin
+        res_error_text = &#x27;Срок паспорта заканчивается в течении 6 месяцев&#x27;;
+        res_error_is_critical = 1;
+        suspend;
+      end
+    end
+
+    if (C_PASS_DATE &lt; cast(&#x27;01.01.1990&#x27; as date) or C_PASS_DATE &gt; current_date) then
+    begin
+      res_error_text = &#x27;Дата выдачи паспорта, указана не верно!&#x27;;
+      res_error_is_critical = 1;
+      suspend;
+    end
+
+    v_expire = c_pass_date_expire;
+    if (rd_code = &#x27;Citizen.RU&#x27;) then
+      v_expire = dateadd(90 day to v_expire);
+
+    if (not(kf_disb_date between C_PASS_DATE and v_expire)) then
+    begin
+      res_error_text = &#x27;Срок паспорта не действителен!&#x27;;
+      res_error_is_critical = 1;
+      suspend;
+    end
+
+     -- &lt;&lt; Добавлял Музаффар
+    if (kf_disb_date &lt; &#x27;23.03.18&#x27;
+        and rd_code &lt;&gt; &#x27;Citizen.RU&#x27; and c_curr_status &lt; 4) then
+    begin
+        if ((k_kolich_repay between 3 and 5) and kc_circle &gt; 1) then
+        begin
+            if (datediff(day, k_kredline_end, C_PASS_DATE_EXPIRE)&lt;15) then
+            begin
+                res_error_text = &#x27;Разница между датой окончания паспорта и датой погашения займа не должна быть менее 15 дней&#x27;;
+                  if(:rd_code in (&#x27;Citizen.TJ&#x27;, &#x27;Citizen.KG&#x27;, &#x27;Citizen.KZ&#x27;) and
+                  exists (select distinct 1
+                  from CLIENTDOCS cds, PASSKIND, PASSDOCTYPE
+                  where CDS_FROM_C_ID = :kc_from_c_id
+                  and cds_from_pk_id = pk_id
+                  and pk_from_pdt_id = pdt_id
+                  and cds_is_delete = 0
+                  and :k_kredline_end+15  &lt; CDS_DOC_DATE_END
+                  and :kf_disb_date between CDS_DOC_DATE_BEGIN and CDS_DOC_DATE_END
+                  and pdt_code containing &#x27;passport&#x27;
+                  and coalesce(cds.cds_doc_blob_1,0) &gt; 0)) then
+                    res_error_is_critical = 0;
+                  else
+                    res_error_is_critical = 1;
+                suspend;    
+            end
+        end
+    end
+    -- &gt;&gt; конец добавлении
+    if (rd_code &lt;&gt; &#x27;Citizen.RU&#x27;) then
+    begin
+      if (not exists(select *
+                     from CLIENTDOCS cds, PASSKIND, PASSDOCTYPE
+                     where CDS_FROM_C_ID = :kc_from_c_id
+                     and cds_from_pk_id = pk_id
+                     and pk_from_pdt_id = pdt_id
+                     and cds_is_delete = 0
+                     and (:kf_disb_date between cds_doc_date_begin and cds_doc_date_end or
+                          (:rd_code in (&#x27;Citizen.TJ&#x27;,&#x27;Citizen.UZ&#x27;) and cds_doc_date_end between :lgota_begin and :lgota_end))
+                     and pdt_code in (&#x27;magration_card&#x27;,
+                                      &#x27;registration_rvp&#x27;,
+                                      &#x27;registration_vnj&#x27;)
+                    and coalesce(cds.cds_doc_blob_1,0) &gt; 0
+           )) then
+      begin
+        res_error_text = &#x27;У иностранного гражданина должен быть указан хотя бы один из документов: миграц. карта, РВП, ВНЖ&#x27;;
+        res_error_is_critical = 1;
+        suspend;
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

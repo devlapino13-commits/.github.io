@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EXTSYSMAIN_CHANGE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EXTSYSMAIN_CHANGE: 4 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EXTSYSMAIN_CHANGE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_extsys_process_one.html"><div class="to">HP_EXTSYS_PROCESS_ONE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ESM_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEW_ESM_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EXTSYSMAIN_CHANGE(
+    ESM_ID DECIMAL(18,0),
+    C_ID DECIMAL(18,0),
+    K_ID DECIMAL(18,0),
+    NEW_ESM_DATE D_DATE = null)
+RETURNS (
+    RES_TEXT VARCHAR(255))
+AS
+declare variable ol_id decimal(18,0);
+declare variable esm_date date;
+declare variable is_once boolean;
+declare variable is_restruct boolean;
+declare variable restruct_ol_id d_id;
+begin
+  res_text = &#x27;&#x27;;
+  select eso_from_ol_id, ol_date
+  from operlist, extsysoper
+  where eso_from_ol_id = ol_id and
+        eso_from_esm_id = :esm_id and
+        operlist.is_delete = 0
+  into :ol_id, :esm_date;
+
+  if (ol_id is null) then
+  begin
+    res_text = &#x27;Данная транзакция еще не обработана либо аннулирована.&#x27;;
+    suspend;
+    exit;
+  end
+
+  if (coalesce(k_id, 0) = 0) then
+    k_id = null;
+
+  with t1 as (
+      select distinct ok_from_ol_id, ok_type
+      from operkred
+      where ok_from_k_id = :k_id
+        and ok_ol_is_active = 1
+        and ok_ol_date &gt;= :esm_date)
+  select count(ok_from_ol_id) = 1,                             -- операция единственная
+      count(ok_from_ol_id) = 1 and list(ok_type) = 3,          -- это реструктуризация
+      iif(count(ok_from_ol_id) = 1, list(ok_from_ol_id), null) -- id операции, если операция единственная
+  from t1
+  into is_once, is_restruct, restruct_ol_id;
+
+  -- если есть только одна более поздняя операция и это реструктуризация, то удалим ее.
+  if (is_once
+    and is_restruct
+    and (select count(distinct ok_from_k_id) = 1 from operkred where ok_from_ol_id = :restruct_ol_id) -- индивидуальная операция
+    and (exists(select kd_id
+                from kontdata
+                where kd_from_ol_id = :restruct_ol_id
+                  and kd_float_perc_level &gt; 0)))                                                      -- операция повышения %% ставки
+  then
+  begin
+    update operlist ol
+    set ol.is_delete = 1
+    where ol_id = :restruct_ol_id;
+
+    when any do
+    begin
+      res_text = &#x27;Не удалось удалить операцию повышения %% ставки по новому договору. Обратитесь к тех.поддержке.&#x27;;
+      suspend;
+      exit;
+    end 
+  end
+
+  if (exists(select *
+             from operkred
+             where ok_ol_date &gt;= :esm_date and
+                   ok_from_ol_id &gt; :ol_id and
+                   ok_from_k_id = :k_id and
+                   ok_ol_is_active = 1)) then
+  begin
+    res_text = &#x27;По новому договору существуют более поздние операции. Обратитесь к тех.поддержке.&#x27;;
+    suspend;
+    exit;
+  end
+
+  if (exists(select *
+             from operkred ok
+             where ok_ol_date = :esm_date and
+                   ok_from_k_id = :k_id and
+                   ok.ok_type = 3 and
+                   ok_ol_is_active = 1)) then
+  begin
+    res_text = &#x27;По новому договору существует операция реструктуризации этой датой. Обратитесь к тех.поддержке.&#x27;;
+    suspend;
+    exit;
+  end
+
+  update operlist
+  set is_delete = 1
+  where ol_id = :ol_id;
+
+  -- если указана new_esm_date, то будет меняться только дата
+  if (new_esm_date is not null) then
+  begin
+      k_id = (select esm_from_k_id from extsysmain esm where esm_id = :esm_id);
+
+      update extsysmain
+      set esm_date = : new_esm_date,
+          esm_from_k_id = :k_id
+      where esm_id = :esm_id;
+  end 
+  else
+    if (coalesce(c_id, 0) &lt;&gt; 0) then
+    begin
+      update extsysmain
+      set esm_object_id = :c_id,
+          esm_from_k_id = :k_id
+      where esm_id = :esm_id;
+    end
+
+  update extsysmain
+  set esm_status = 0
+  where esm_id = :esm_id;
+
+  select err_text
+  from hp_extsys_process_one(:esm_id)
+  into res_text;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

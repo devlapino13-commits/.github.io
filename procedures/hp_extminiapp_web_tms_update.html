@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EXTMINIAPP_WEB_TMS_UPDATE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EXTMINIAPP_WEB_TMS_UPDATE: 4 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EXTMINIAPP_WEB_TMS_UPDATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_expressapp_by_extminiapp_tms.html"><div class="to">HP_EXPRESSAPP_BY_EXTMINIAPP_TMS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">IN_UUID</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">IN_TARIF</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">IN_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">IN_PERIOD</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_JSON</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EXTMINIAPP_WEB_TMS_UPDATE(
+    IN_UUID D_STR_CODE,
+    IN_TARIF D_STR_CODE,
+    IN_AMOUNT D_CURRENCY,
+    IN_PERIOD D_INTEGER)
+RETURNS (
+    RES_JSON D_STR_8100)
+AS
+declare variable EMA_UUID D_UUID;
+declare variable EMA_ID D_ID;
+declare variable RES_TEXT D_STR_255;
+declare variable OBJ_KIND D_INTEGER;
+declare variable PR_ID D_INTEGER;
+begin
+  res_text = &#x27;&#x27;;
+  res_json = &#x27;{&quot;result&quot;:{&quot;success&quot;:%1, &quot;text&quot;:&quot;%2&quot;}}&#x27;;
+
+  begin
+    ema_uuid = char_to_uuid(in_uuid);
+    when any do
+      res_text = &#x27;Неверная ссылка&#x27;;
+  end
+
+  if (res_text = &#x27;&#x27;) then
+  begin
+    obj_kind = f_objkind(&#x27;extminiapp&#x27;, &#x27;id&#x27;);
+
+    select udl_object_id
+    from uuidlist
+    where udl_uuid = char_to_uuid(:in_uuid) and -- :ema_uuid and
+          udl_object_kind = :obj_kind
+    into ema_id;
+
+    if (ema_id is not null) then
+    begin
+      pr_id = 490; -- по IN_TARIF вычислить продукт
+
+      update extminiapp
+      set ema_period = :in_period,
+          ema_amount = :in_amount,
+          ema_from_pr_id = :pr_id,
+          ema_address_str = :in_tarif
+      where ema_id = :ema_id and
+            ema_period = 0 and
+            ema_amount = 0;
+
+      if (row_count = 0) then
+        res_json = f_format(res_json, &#x27;false&#x27;, &#x27;Ссылка более не актуальна, принят на обработку в МБулак&#x27;);
+      else
+      begin
+        execute procedure hp_expressapp_by_extminiapp_tms(:ema_id);
+
+        res_json = f_format(res_json, &#x27;true&#x27;, &#x27;Заявка на рассроку сформирована, ждите ссылку по СМС&#x27;);
+      end
+    end else
+      res_json = f_format(res_json, &#x27;false&#x27;, &#x27;Не найдено приглашение по запросу&#x27;);
+  end else
+    res_json = f_format(res_json, &#x27;false&#x27;, res_text);
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

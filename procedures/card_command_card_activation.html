@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CARD_COMMAND_CARD_ACTIVATION — процедура — схема БД</title>
+<meta name="description" content="Процедура CARD_COMMAND_CARD_ACTIVATION: 4 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CARD_COMMAND_CARD_ACTIVATION</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_cardsync_action_exec_one.html"><div class="to">HP_CARDSYNC_ACTION_EXEC_ONE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ACTIVATION_CODE</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJECT_KIND</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJECT_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PARENT_CS_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CARD_COMMAND_CARD_ACTIVATION(
+    ACTIVATION_CODE D_STR_100,
+    OBJECT_KIND D_STR_100,
+    OBJECT_ID D_ID,
+    PARENT_CS_ID D_INTEGER = null)
+AS
+declare variable object_kind_str d_str_100;
+declare variable card_id d_integer;
+declare variable cca_id d_integer;
+declare variable cs_request_json d_str_8100;
+declare variable cs_id d_integer;
+declare variable object_kind_parent d_integer;
+declare variable object_id_parent d_id;
+declare variable cbo_region_id d_integer;
+declare variable un_id d_id;
+declare variable card_id_tmp d_integer;
+declare variable k_id d_id;
+declare variable c_id d_id;
+begin
+    /*
+         Процедура отвечает за формирование операции для МПЦ
+         &quot;Активация карты&quot;
+    */
+    activation_code = coalesce(activation_code, &#x27;&#x27;);
+
+    if (activation_code not in (&#x27;card_activation_on_disb&#x27;, &#x27;card_activation&#x27;)) then
+        exception e_message &#x27;Данный тип активации [&#x27;||:activation_code||&#x27;] не поддерживается&#x27;;
+
+    if (parent_cs_id is not null) then
+    begin
+        select cs.cs_object_kind,
+               cs.cs_object_id,
+               cs.cs_card_id,
+               cs.cs_from_cca_id,
+               cs.cs_from_k_id,
+               cs.cs_from_c_id
+        from cardsync cs
+        where cs.cs_id = :parent_cs_id
+        into :object_kind_parent,
+             :object_id_parent,
+             :card_id,
+             :cca_id,
+             :k_id,
+             :c_id;
+
+        if ((object_kind is null) and(object_id is null)) then
+        begin
+            object_kind = :object_kind_parent;
+            object_id = object_id_parent;
+        end
+    end
+
+
+    object_kind_str = f_objkind(object_kind, &#x27;name&#x27;);
+    
+    if (object_kind_str = &#x27;cardblockopers&#x27;) then
+    begin
+        select cbo.cbo_from_cal_id,
+               cbo.cbo_region_id,
+               cbo.cbo_from_un_id
+        from cardblockopers cbo
+        where cbo.cbo_id = :object_id
+        into :card_id_tmp,
+             :cbo_region_id,
+             :un_id;
+
+        if (card_id is null) then
+            card_id = card_id_tmp;
+
+        if (cca_id is null) then
+        begin
+            select cal_from_cca_id
+            from cardlist cal
+            where cal.cal_card_id = :card_id
+            into :cca_id;
+        end
+    end
+    else if (object_kind_str = &#x27;cardaktclient&#x27;) then
+    begin
+        select ckc.cac_from_reg_id,
+               ckc.cac_from_un_id
+        from cardaktclient ckc
+        where ckc.cac_id = :object_id
+        into :cbo_region_id,
+             :un_id;
+    end
+
+    cs_request_json = f_format(&#x27;{&quot;card_id&quot;:%1}&#x27;, :card_id);
+
+    insert into cardsync(
+      cs_parent_id,
+      cs_from_csc_id,
+      cs_card_id,
+      cs_from_cca_id,
+      cs_object_kind,
+      cs_object_id,
+      cs_request_json,
+      cs_office_id,
+      cs_from_un_id,
+      cs_from_k_id,
+      cs_from_c_id
+      )
+    values(
+      :parent_cs_id,
+      f_get_cardsynccfg(:activation_code, &#x27;id&#x27;),
+      :card_id,
+      :cca_id,
+      :object_kind,
+      :object_id,
+      :cs_request_json,
+      :cbo_region_id,
+      :un_id,
+      :k_id,
+      :c_id
+      )
+     returning cs_id
+     into :cs_id;
+
+     if (object_kind_str = &#x27;cardblockopers&#x27;) then
+     begin
+        update cardblockopers cbo
+        set cbo.cbo_from_cs_id = :cs_id
+        where cbo.cbo_id = :object_id;
+     end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

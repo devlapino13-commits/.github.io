@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CORRECT_OPERSALMAIN_OKLAD — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CORRECT_OPERSALMAIN_OKLAD: 0 входных, 6 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CORRECT_OPERSALMAIN_OKLAD</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OL_YEAR</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OL_MONTH</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OL_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REG_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OSM_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CORRECT_OPERSALMAIN_OKLAD
+RETURNS (
+    C_ID DECIMAL(18,0),
+    OL_YEAR INTEGER,
+    OL_MONTH INTEGER,
+    OL_ID DECIMAL(18,0),
+    REG_ID INTEGER,
+    OSM_ID INTEGER)
+AS
+declare variable kol integer;
+declare variable os_value decimal(18,4) = 0;
+declare variable osm_id_first integer;
+begin
+  for select os_from_c_id, ol_year, ol_month, os_value
+      from opersalary, operlist
+      where os_from_ol_id = ol_id and
+            operlist.is_delete = 0 and
+            os_from_sac_id = 2 -- для КР
+            and
+            os_value &lt;&gt; 0
+      group by os_from_c_id, ol_year, ol_month, os_value
+      having count(*) &gt; 1
+      into :c_id, :ol_year, :ol_month, :os_value
+  do
+  begin
+    kol = 0;
+    osm_id_first = null;
+    for select os_from_ol_id, os_from_reg_id
+        from opersalary, operlist
+        where os_from_ol_id = ol_id and
+              operlist.is_delete = 0 and
+              os_from_sac_id = 2 -- для КР
+              and
+              os_value = :os_value and
+              ol_year = :ol_year and
+              ol_month = :ol_month and
+              os_from_c_id = :c_id
+        into :ol_id, :reg_id
+    do
+    begin
+      osm_id = null;
+      select osm_id
+      from opersalmain
+      where osm_from_c_id = :c_id and
+            osm_from_ol_id = :ol_id
+      into :osm_id;
+
+      if (osm_id is not null) then
+      begin
+        update opersaldetail
+        set osd_value = 0
+        where osd_from_osm_id = :osm_id and
+              osd_from_sac_id = 2 -- для КР
+              and
+              osd_value &lt;&gt; 0;
+        kol = kol + 1;
+        if (osm_id_first is null) then
+          osm_id_first = :osm_id;
+      end
+    end
+    update opersaldetail
+    set osd_value = :os_value
+    where osd_from_osm_id = :osm_id_first and
+          osd_from_sac_id = 2; -- для КР
+
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

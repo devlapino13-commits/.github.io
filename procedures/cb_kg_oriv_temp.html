@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CB_KG_ORIV_TEMP — процедура — схема БД</title>
+<meta name="description" content="Процедура CB_KG_ORIV_TEMP: 2 входных, 5 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CB_KG_ORIV_TEMP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">3</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_cb_kg_law.html"><div class="to">AAREP_CB_KG_LAW</div></a><a class="ref-card" href="cb_kg_oriv.html"><div class="to">CB_KG_ORIV</div></a><a class="ref-card" href="cb_kg_oriv_new.html"><div class="to">CB_KG_ORIV_NEW</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SBL_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REPAY_ACTIVE</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REPAY_CLOSE</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">IS_COURT</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CB_KG_ORIV_TEMP(
+    REP_DATE_END DATE,
+    REP_DATE_BEGIN DATE = null)
+RETURNS (
+    K_ID ID_TYPE,
+    SBL_ID INTEGER,
+    REPAY_ACTIVE CURR_TYPE,
+    REPAY_CLOSE CURR_TYPE,
+    IS_COURT SMALLINT)
+AS
+begin
+  if (rep_date_begin is null) then
+    rep_date_begin = rep_date_end - extract(day from rep_date_end) + 1;
+  repay_active = 0;
+  repay_close = 0;
+  --  проверка, были ли операции по operkred за выбранный период
+  for select sba_from_k_id, sba_from_sbl_id, -sum(ok_os + ok_perc)
+      from sb_akt, operkred
+      where sba_is_delete = 0 and
+            sba_status = 2 and
+            sba_from_k_id = ok_from_k_id and
+            sba_from_sbl_id &gt; 0 and
+            ok_ol_is_active = 1 and
+            ok_ol_date between :rep_date_begin and :rep_date_end and
+--            sba_date_begin &lt;= :rep_date_end and
+--            sba_date_end &gt;= :rep_date_begin and
+            ok_ol_date between sba_date_begin and sba_date_end and
+--            :rep_date_end between sba_date_begin and sba_date_end and
+            ok_from_c_id = 0 and
+            ok_type = 4 and
+            sba_from_sbl_id &lt;&gt; 55
+      group by sba_from_k_id, sba_from_sbl_id
+      having sum(ok_os + ok_perc) &lt;&gt; 0
+      into k_id, sbl_id, repay_active
+  do
+  begin
+    if (:k_id in (109010107649000201, 109010114207900201, 109010114207900301, 109010111341700101, 109010111337500201, 109010072951100201, 109010072951100301, 109010072951100401, 109010093060500301, 109010115136100101,
+                  109010116846500101, 109010108614000101)) then
+      continue;
+    is_court = 0;
+    if (exists(select *
+               from lawmain, lawkredit
+               where lam_is_active = 1 and
+                     lam_id = lak_from_lam_id and
+                     lak_from_k_id = :k_id)) then
+      is_court = 1;
+
+    suspend;
+  end
+  --  проверка, были ли операции по operkroff т.е. погашении из внесистемного учета
+  repay_active = 0;
+  repay_close = 0;
+  for select sba_from_k_id, sba_from_sbl_id, -sum(oko_os + oko_perc + oko_other)  --  RFCKG-3465
+      from sb_akt, operkroff
+      where sba_is_delete = 0 and
+            sba_status = 2 and
+            sba_from_k_id = oko_from_k_id and
+            sba_from_sbl_id &gt; 0 and
+            oko_ol_is_active = 1 and
+            oko_ol_date between :rep_date_begin and :rep_date_end and
+            oko_ol_date between sba_date_begin and sba_date_end and
+--            :rep_date_end between sba_date_begin and sba_date_end and
+            oko_type = 4 and
+            sba_from_sbl_id &lt;&gt; 55
+      group by sba_from_k_id, sba_from_sbl_id
+      having sum(oko_os + oko_perc) &lt;&gt; 0
+      into k_id, sbl_id, repay_close
+  do
+  begin
+    if (:k_id in (109010107649000201, 109010114207900201, 109010114207900301, 109010111341700101, 109010111337500201, 109010072951100201, 109010072951100301, 109010072951100401, 109010093060500301, 109010115136100101,
+                  109010116846500101, 109010108614000101)) then
+      continue;
+    is_court = 0;
+    if (exists(select *
+               from lawmain, lawkredit
+               where lam_is_active = 1 and
+                     lam_id = lak_from_lam_id and
+                     lak_from_k_id = :k_id)) then
+      is_court = 1;
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

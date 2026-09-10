@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CLIENTSTATE_GET — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CLIENTSTATE_GET: 1 входных, 7 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CLIENTSTATE_GET</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">7</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">4</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">4 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_clientstate_fix_one.html"><div class="to">HP_CLIENTSTATE_FIX_ONE</div></a><a class="ref-card" href="hp_clientstate_set.html"><div class="to">HP_CLIENTSTATE_SET</div></a><a class="ref-card" href="hp_ft_inactive_asp_cancel.html"><div class="to">HP_FT_INACTIVE_ASP_CANCEL</div></a><a class="ref-card" href="hp_writeoff_asp_cancel.html"><div class="to">HP_WRITEOFF_ASP_CANCEL</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">7 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_CLIENT_STATE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_REGION_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_LO_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_KF_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_CIRCLE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_STAFF_STATE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CLIENTSTATE_GET(
+    C_ID DECIMAL(18,0))
+RETURNS (
+    RES_DATE D_DATE,
+    RES_CLIENT_STATE D_INTEGER,
+    RES_REGION_ID D_INTEGER,
+    RES_LO_ID D_ID,
+    RES_KF_NAME D_STR_100,
+    RES_CIRCLE D_INTEGER,
+    RES_STAFF_STATE D_INTEGER)
+AS
+declare variable k_id d_id;
+declare variable kf_id d_id;
+declare variable ks_date_end d_date;
+declare variable staff_office d_integer;
+declare variable tmp_date d_date;
+begin
+-- Процедура возвращает актуальный статус контрагента.
+  res_client_state = -1;
+  res_staff_state = -1;
+  res_circle = 0;
+
+-- Ищем среди активных или закрытых кредитов
+  for select ks_from_k_id, ks_date_begin, ks_date_end, k_from_kf_id
+      from kontstate, knclient, kontract
+      where kc_from_c_id = :c_id and
+            kc_amount_approved &gt; 0 and
+            kc_from_k_id = ks_from_k_id and
+            ks_ol_is_delete = 0 and
+            ks_state = 1 and
+            k_id = ks_from_k_id
+      order by ks_date_end, ks_date_begin desc
+      into :k_id, res_date, ks_date_end, :kf_id
+  do
+  begin
+    res_circle = res_circle + 1;
+  end
+  if (k_id is not null) then
+  begin
+    if (ks_date_end = &#x27;31.12.9999&#x27;) then
+      res_client_state = 1;
+    else
+    begin
+      res_client_state = 2;
+      res_date = ks_date_end + 1;
+    end
+  end
+
+  if (res_client_state &lt;&gt; 1) then
+  begin
+-- Ищем среди заявок за последний 45 дней
+    for select ma_from_kf_id, ma_date_app
+        from miniapp, miniappclient
+        where mac_from_c_id = :c_id and
+              mac_amount &gt; 0 and
+              mac_from_ma_id = ma_id and
+              ma_is_active = 1 and
+              ma_date_end = &#x27;31.12.9999&#x27; and
+              ma_date_app &gt;= (current_date - 45)
+        order by ma_date_app desc
+        rows 1
+        into :kf_id, :res_date
+    do
+    begin
+      res_client_state = 0; -- Заявка
+    end
+  end
+  if (kf_id is not null) then
+  begin
+    select kal_new_reg_id, kal_date, kal_new_kf_officer, kal_new_kf_name
+    from knaktlist
+    where knaktlist.is_delete = 0 and
+          kal_date_end = &#x27;31.12.9999&#x27; and
+          kal_from_kf_id = :kf_id
+    into :res_region_id, :tmp_date, :res_lo_id, res_kf_name;
+  end
+
+  res_date = maxvalue(res_date, tmp_date);
+
+  select ps_from_reg_id, ps_date_begin, ps_is_working
+  from hr_pstatus
+  where ps_from_c_id = :c_id and
+        ps_date_end = &#x27;31.12.9999&#x27; and
+        ps_status = 1
+  order by ps_date_begin desc
+  rows 1
+  into :staff_office, tmp_date, :res_staff_state;
+
+  res_date = maxvalue(res_date, tmp_date);
+
+  if (res_region_id is null) then
+    res_region_id = staff_office;
+
+  if (res_staff_state is null) then
+    res_staff_state = -1;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

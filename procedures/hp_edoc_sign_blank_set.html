@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EDOC_SIGN_BLANK_SET — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EDOC_SIGN_BLANK_SET: 3 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EDOC_SIGN_BLANK_SET</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_edoc_sign_unlock.html"><div class="to">HP_EDOC_SIGN_UNLOCK</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EDS_ID</div><div class="ptype">BIGINT</div><div class="pdesc">ID подписанта</div></div><div class="prow"><div class="pname">EDB_ID</div><div class="ptype">BIGINT</div><div class="pdesc">ID бланка</div></div><div class="prow"><div class="pname">EDB_BLOB</div><div class="ptype">BLOB SUB_TYPE BINARY SEGMENT SIZE 80</div><div class="pdesc">Подписанный pdf-файл</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EDOC_SIGN_BLANK_SET(
+    EDS_ID TYPE OF D_ID,
+    EDB_ID TYPE OF D_ID,
+    EDB_BLOB TYPE OF D_BLOB_BINARY)
+RETURNS (
+    ERROR_TEXT D_STR_255)
+AS
+declare variable lang d_str_lang;
+begin
+  -- Процедура сохранения подписанного документа для сервиса интеграции с sima.az
+  error_text = &#x27;&#x27;;
+  if (f_get_db_id() &lt;&gt; 94401) then
+    exception e_default &#x27;Not implemented&#x27;;
+
+  lang = f_get_lang_code(null, null); -- Это робот, берем настройку языка БД по-умолчанию
+
+  -- Проверяем, что наша блокировка действительна
+  if (not exists(
+      select *
+      from edoc_sign_lock
+      where esl_from_eds_id = :eds_id)) then
+  begin
+    -- Если нет, выходим, нет смысла сохранять
+    error_text = f_lang(lang, &#x27;Время для подписания истекло&#x27;);
+    suspend;
+    exit;
+  end
+
+  -- Сохраняем блоб в edoc_blank_taken
+  update edoc_blank_taken
+  set ebt_blob = :edb_blob
+  where ebt_from_edb_id = :edb_id
+    and ebt_from_eds_id = :eds_id;
+
+  -- Если все подписанные файлы получены (блобы сохранены)
+  if (not exists(
+    select * from edoc_blank_taken
+    where ebt_from_eds_id = :eds_id
+      and ebt_blob is null)) then
+  begin
+    -- Подписанные бланки из edoc_blank_taken переносим в edoc_blank
+    for select ebt_from_edb_id, ebt_blob
+    from edoc_blank_taken
+    where ebt_from_eds_id = :eds_id
+    as cursor cur
+    do
+      update edoc_blank
+      set edb_blob = cur.ebt_blob
+      where edb_id = cur.ebt_from_edb_id;
+
+    -- Отправлять сообещния в АЗ не планируется, поэтому edoc_msg не подписываем,
+    -- но подписываем edoc_sign
+    update edoc_sign
+    set eds_status = 1,
+        eds_enum_edoc_sign_kind = f_enum(&#x27;edoc_sign_kind&#x27;, &#x27;sima&#x27;, &#x27;id&#x27;)
+    where eds_id = :eds_id and
+          (eds_status &lt;&gt; 1 or
+          eds_enum_edoc_sign_kind &lt;&gt; f_enum(&#x27;edoc_sign_kind&#x27;, &#x27;sima&#x27;, &#x27;id&#x27;));
+
+    execute procedure hp_edoc_sign_unlock(eds_id);
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

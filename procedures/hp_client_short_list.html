@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CLIENT_SHORT_LIST — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CLIENT_SHORT_LIST: 1 входных, 10 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CLIENT_SHORT_LIST</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">10</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_contdata_get_cell_main.html"><div class="to">HP_CONTDATA_GET_CELL_MAIN</div></a><a class="ref-card" href="hp_contdata_get_email_main.html"><div class="to">HP_CONTDATA_GET_EMAIL_MAIN</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_kont_clients_future_repay.html"><div class="to">AAREP_KONT_CLIENTS_FUTURE_REPAY</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">10 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">KC_NUMBER</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KC_FROM_C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KC_STATUS</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KC_AMOUNT_APPROVED</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CLIENT_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CLIENT_PASS</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_TYPE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_IS_PERSONAL</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_PLASTCARD_NO</div><div class="ptype">VARCHAR(80)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_EMAIL</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CLIENT_SHORT_LIST(
+    K_ID DECIMAL(18,0))
+RETURNS (
+    KC_NUMBER INTEGER,
+    KC_FROM_C_ID DECIMAL(18,0),
+    KC_STATUS SMALLINT,
+    KC_AMOUNT_APPROVED DECIMAL(18,4),
+    CLIENT_NAME VARCHAR(100),
+    CLIENT_PASS VARCHAR(100),
+    C_TYPE INTEGER,
+    C_IS_PERSONAL SMALLINT,
+    C_PLASTCARD_NO VARCHAR(80),
+    C_EMAIL VARCHAR(100))
+AS
+declare variable can_suspend integer;
+declare variable kc_closed_ol_id decimal(18,0);
+begin
+  for select kc_number, kc_from_c_id, kc_status, kc_amount_approved, c_name_fio as client_name,
+             c_pass_no as client_pass, c_type, c_is_personal,
+             (select cont_value
+              from hp_contdata_get_cell_main(0, kc_from_c_id)),
+             (select cont_value
+              from hp_contdata_get_email_main(0, kc_from_c_id)), kc_closed_ol_id
+      from knclient, clients
+      where kc_from_k_id = :k_id and
+            kc_from_c_id = clients.c_id and
+            (kc_amount_approved &gt; 0 or
+            kc_status = 2)
+      order by kc_status desc, kc_number
+      into :kc_number, :kc_from_c_id, :kc_status, :kc_amount_approved, :client_name, :client_pass, :c_type,
+           :c_is_personal, :c_plastcard_no, :c_email, :kc_closed_ol_id
+  do
+  begin
+    can_suspend = 1;
+    if (c_is_personal is null) then
+      c_is_personal = 0;
+    if (kc_closed_ol_id is not null) then
+    begin
+      if (exists(select *
+                 from operlist
+                 where ol_id = :kc_closed_ol_id and
+                       is_delete = 0)) then
+        can_suspend = 0;
+    end
+    if (can_suspend = 1) then
+      suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0101_SQL — процедура — схема БД</title>
+<meta name="description" content="проверка суммы клиентов по новому паспорту от 16.10.2017">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0101_SQL</code></h1>
+<p class="desc">проверка суммы клиентов по новому паспорту от 16.10.2017</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_client_status_str.html"><div class="to">HP_GET_CLIENT_STATUS_STR</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0101_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare kc_amount curr_type;
+declare kf_disb_date d_date;
+declare variable c_id id_type;
+declare variable c_curr_status integer;
+declare variable c_curr_status_str varchar(100);
+declare variable disb_date_last date;
+declare variable kc_amount_last curr_type;
+declare variable plan_max_sum curr_type;
+declare variable cl_amount id_type;
+declare variable is_povtor smallint;
+declare variable k_refund smallint;
+declare variable k_add_month smallint;
+declare variable pr_code varchar(100);
+begin
+  if (k_id = 101010026669200101) then  exit; --101010011575200501
+  select k_disb_date, pr_code, k.k_add_month, k_refund
+  from kontract k, product
+  where k_id = :k_id
+  and k_from_pr_id = pr_id
+  into kf_disb_date, pr_code, k_add_month, k_refund;
+  if (pr_code not similar to &#x27;%(.uspeh.|.blago.|.loyal.)%&#x27;) then exit;
+  for
+  select kc_from_c_id, kc_amount_approved
+  from knclient
+  where kc_from_k_id = :k_id 
+  and kc_amount_approved &gt; 0
+  into c_id, kc_amount
+  do
+  begin
+--  определяем сумму предыдущего цикла, основного кредита
+    kc_amount_last = null;
+    disb_date_last = null;
+    select kc_amount_approved, k_disb_date
+    from knclient, kontract, product, kontstate
+    where kc_from_c_id = :c_id
+    and kc_amount_approved &gt; 0
+    and kc_from_k_id = k_id
+    and k_from_pr_id = pr_id
+    and pr_product_kind &lt;&gt; 2
+    and k_id = ks_from_k_id
+    and ks_ol_is_delete = 0
+    and ks_state = 1
+    and ks_date_begin &lt; :kf_disb_date
+    order by ks_date_begin desc
+    rows 1
+    into kc_amount_last, disb_date_last;
+--  определение статуса
+    select c_curr_status, c_curr_status_str
+    from hp_get_client_status_str(:c_id, :kf_disb_date)
+    into c_curr_status, c_curr_status_str;
+--  определение суммы по статусу
+    plan_max_sum = case c_curr_status
+                     when 5 then 90000
+                     when 4 then 90000
+                     when 3 then 60000
+                     when 2 then 60000
+                     when 1 then 45000
+                     else 30000
+                   end;
+--  могут получить ту сумму от предыдущего цикла который выдан до 15.10.2017г.
+    if (kc_amount_last is null or disb_date_last &gt; &#x27;15.10.2017&#x27; or c_curr_status = 0) then kc_amount_last = 0;
+    if (plan_max_sum &lt; kc_amount_last) then plan_max_sum = kc_amount_last;
+    cl_amount = null;
+    select cl_amount from clients, clilist
+    where c_id = :c_id
+    and c_name_fio = cl_fio
+--    and c_birth_date = cl_birth_date
+    rows 1
+    into cl_amount;
+    if (cl_amount = 0) then cl_amount = 90000; -- если существует только в списке без суммы то сумма будет 90 тыс.
+    if (cl_amount is null) then cl_amount = 0;
+    if (cl_amount &gt; 0) then
+    begin
+      is_povtor = null;
+      select 1 from knclient, kontstate
+      where kc_from_c_id = :c_id
+      and kc_amount_approved &gt; 0
+      and kc_from_k_id = ks_from_k_id
+      and ks_ol_is_delete = 0
+      and ks_state = 1
+      and ks_date_begin &gt;= &#x27;14.11.2017&#x27;
+      and ks_date_begin &lt; :kf_disb_date
+      rows 1
+      into is_povtor;
+      if (is_povtor is null) then is_povtor = 0;
+      if (is_povtor = 0) then
+      begin
+        if (plan_max_sum &lt; cl_amount) then plan_max_sum = cl_amount;
+      end
+    end 
+    if (kc_amount &gt; plan_max_sum) then
+    begin
+      select c_name_fio from clients
+      where c_id = :c_id
+      into res_info_text;
+      res_error_text = &#x27;Сумма клиента не должно превышать: &#x27;||round(plan_max_sum,2);
+      res_error_is_critical = 2;
+      if (k_add_month&gt;0 or k_refund &gt; 0) then
+      res_error_is_critical = 0;
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

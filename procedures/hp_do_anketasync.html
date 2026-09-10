@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DO_ANKETASYNC — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DO_ANKETASYNC: 6 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DO_ANKETASYNC</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_cmd.html"><div class="to">FM_REPORT_CMD</div></a><a class="ref-card" href="hp_do_actionsave.html"><div class="to">HP_DO_ACTIONSAVE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RD_CODE</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJECT_KIND</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJECT_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_RD_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_VALUE</div><div class="ptype">VARCHAR(2048)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DO_ANKETASYNC(
+    RD_CODE VARCHAR(100),
+    OBJECT_KIND INTEGER,
+    OBJECT_ID DECIMAL(18,0),
+    RES_RD_ID INTEGER,
+    RES_VALUE D_STR_2048,
+    UN_ID DECIMAL(18,0))
+AS
+declare variable sql_text varchar(255);
+declare variable object_kind_name varchar(100);
+begin
+   if (rd_code = &#x27;AnketaQuestions.Family&#x27; and
+      object_kind = 0 and (not exists(select * from grs_clients gc
+                                               where gc.gc_from_c_id = :object_id and
+                                                     gc.gc_status in (2,3) and
+                                                     gc.gc_is_last = 1) or
+                               exists(select * from clients c
+                                     where c.c_id = :object_id and
+                                           c.c_family = 0))) then
+  begin
+    sql_text = &#x27;update clients set c_family=&#x27; || :res_rd_id || &#x27; where c_id=&#x27; || :object_id || &#x27; and coalesce(c_family,-777)&lt;&gt;&#x27; || :res_rd_id;
+    execute statement :sql_text;
+    when any do
+    begin
+      insert into fsrobot_eventlist (fel_event_name, fel_command_kind, fel_params, fel_from_un_id)
+      values (&#x27;Exec_SQL&#x27;, &#x27;ClientSync&#x27;, :sql_text, :un_id);
+    end
+  end
+
+  if (rd_code = &#x27;AnketaQuestions.Education&#x27; and
+      object_kind = 0) then
+  begin
+    sql_text = &#x27;update clients set c_education=&#x27; || :res_rd_id || &#x27; where c_id=&#x27; || :object_id || &#x27; and coalesce(c_education,-777)&lt;&gt;&#x27; || :res_rd_id;
+    execute statement :sql_text;
+    when any do
+    begin
+      insert into fsrobot_eventlist (fel_event_name, fel_command_kind, fel_params, fel_from_un_id)
+      values (&#x27;Exec_SQL&#x27;, &#x27;ClientSync&#x27;, :sql_text, :un_id);
+    end
+  end
+
+  if (rd_code = &#x27;AnketaQuestions.Nation&#x27; and
+      object_kind = 0) then
+  begin
+    sql_text = &#x27;update clients set c_nation=&#x27; || :res_rd_id || &#x27; where c_id=&#x27; || :object_id || &#x27; and coalesce(c_nation,-777)&lt;&gt;&#x27; || :res_rd_id;
+    execute statement :sql_text;
+    when any do
+    begin
+      insert into fsrobot_eventlist (fel_event_name, fel_command_kind, fel_params, fel_from_un_id)
+      values (&#x27;Exec_SQL&#x27;, &#x27;ClientSync&#x27;, :sql_text, :un_id);
+    end
+  end
+
+  if (rd_code = &#x27;AnketaQuestions.InfoSource&#x27; and
+      object_kind = 0) then
+  begin
+    sql_text = &#x27;update clients set c_from_is_id=&#x27; || :res_rd_id || &#x27; where c_id=&#x27; || :object_id || &#x27; and coalesce(c_from_is_id,-777)&lt;&gt;&#x27; || :res_rd_id;
+    execute statement :sql_text;
+    when any do
+    begin
+      insert into fsrobot_eventlist (fel_event_name, fel_command_kind, fel_params, fel_from_un_id)
+      values (&#x27;Exec_SQL&#x27;, &#x27;ClientSync&#x27;, :sql_text, :un_id);
+    end
+  end
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

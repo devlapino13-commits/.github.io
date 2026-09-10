@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_HTML_MAILMESSAGE_BODY — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_HTML_MAILMESSAGE_BODY: 3 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_HTML_MAILMESSAGE_BODY</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_json_extract.html"><div class="to">FM_JSON_EXTRACT</div></a><a class="ref-card" href="hp_fio_clear.html"><div class="to">HP_FIO_CLEAR</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_html_main.html"><div class="to">FM_REPORT_HTML_MAIN</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJECT_KIND</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJECT_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_HTML_MAILMESSAGE_BODY(
+    UN_ID DECIMAL(18,0),
+    OBJECT_KIND VARCHAR(100),
+    OBJECT_ID DECIMAL(18,0))
+RETURNS (
+    RES_TEXT BLOB SUB_TYPE TEXT SEGMENT SIZE 80)
+AS
+declare variable TMP_BODY blob sub_type 1 segment size 80;
+declare variable RES_TYPE integer;
+declare variable RES_SUBJECT varchar(255);
+declare variable RES_DATETIME timestamp;
+declare variable SENDER_UN_ID decimal(18,0);
+declare variable RES_SENDER_FIO varchar(100);
+declare variable RES_TYPE_STR varchar(20);
+declare variable MAIL_TO varchar(2048);
+declare variable DB_ID integer;
+declare variable UN_NAME D_STR_100;
+begin
+  select un_name
+  from username
+  where un_id = :un_id
+  into :un_name;
+
+  if (:un_name = &#x27;fmtest&#x27;) then
+  begin
+    if (object_kind = &#x27;fsrobot_mailmain_ceo&#x27;) then
+    begin
+      select html_content
+      from apple_test_data
+      where report_type = &#x27;CEO_MESSAGE&#x27;
+      into :res_text;
+      suspend;
+    end
+    else if (object_kind = &#x27;fsrobot_mailmain_other&#x27;) then
+    begin
+      select html_content
+      from apple_test_data
+      where report_type = &#x27;OTHER_MESSAGE&#x27;
+      into :res_text;
+      suspend;
+    end
+    exit;
+  end
+
+  db_id = f_get_db_id();
+  res_text = iif(db_id &lt;&gt; 94401, &#x27;Сообщение не найдено&#x27;, &#x27;Mesaj tapılmadı&#x27;);
+  for select 0, fsm_subject, fsm_body, fsm_datetime, fsm_from_un_id, fsm_mail_to
+      from fsrobot_mailmain
+      where fsm_is_delete = 0 and
+            fsm_id = :object_id and
+            :object_kind = &#x27;fsrobot_mailmain&#x27;
+      union
+      select msg_type, msg_subject, msg_body, msg_datetime, msg_from_un_id, &#x27;&#x27;
+      from fsrobot_msgbox
+      where msg_id = :object_id and
+            :object_kind = &#x27;fsrobot_msgbox&#x27; and
+            msg_status = 1
+      into :res_type, :res_subject, :tmp_body, :res_datetime, :sender_un_id, mail_to
+  do
+  begin
+    select c_name_fio
+    from username, clients
+    where un_id = :sender_un_id and
+          un_from_c_id = c_id
+    into :res_sender_fio;
+
+    if (tmp_body is null) then
+      tmp_body = &#x27;&#x27;;
+    if (res_type = 2 and
+        tmp_body &lt;&gt; &#x27;&#x27;) then
+    begin
+      select title, t.body
+      from fm_json_extract(:tmp_body) t
+      into res_subject, :tmp_body;
+    end
+
+    res_type_str = (case res_type
+                      when 0 then &#x27;mail&#x27;
+                      when 1 then &#x27;sms&#x27;
+                      when 2 then &#x27;push&#x27;
+                      when 3 then &#x27;sms&#x27;
+                      when 4 then &#x27;email&#x27;
+                    end);
+
+    select name_surname
+    from hp_fio_clear(:res_sender_fio)
+    into :res_sender_fio;
+
+    res_text = &#x27;&lt;b&gt;&#x27; || res_subject || f_format(&#x27;&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;small&gt;%1: &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&#x27;, iif(db_id &lt;&gt; 94401, &#x27;От кого&#x27;, &#x27;Kimdən&#x27;), res_sender_fio);
+    if (sender_un_id = un_id and
+        coalesce(mail_to, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+      res_text = BLOB_APPEND(res_text, f_format(&#x27;%1: &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&#x27;, iif(db_id &lt;&gt; 94401, &#x27;Кому&#x27;, &#x27;Kimə&#x27;), mail_to));
+    res_text = BLOB_APPEND(res_text, res_type_str || iif(db_id &lt;&gt; 94401, &#x27; от &#x27;, &#x27; vasitəsi ilə &#x27;) || f_datetimetostr(res_datetime) || &#x27;&lt;/small&gt;&lt;br&gt;&#x27;);
+
+    res_text = BLOB_APPEND(res_text, &#x27;&lt;hr width=&quot;100%&quot; color=&quot;#0b7fab&quot;&gt;&#x27;);
+    res_text = BLOB_APPEND(res_text, tmp_body);
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

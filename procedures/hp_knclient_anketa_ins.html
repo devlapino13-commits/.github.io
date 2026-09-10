@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_KNCLIENT_ANKETA_INS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_KNCLIENT_ANKETA_INS: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_KNCLIENT_ANKETA_INS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">6 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_json_parse.html"><div class="to">FM_JSON_PARSE</div></a><a class="ref-card" href="hp_addrclient.html"><div class="to">HP_ADDRCLIENT</div></a><a class="ref-card" href="hp_get_check_loan_data.html"><div class="to">HP_GET_CHECK_LOAN_DATA</div></a><a class="ref-card" href="hp_get_client_status.html"><div class="to">HP_GET_CLIENT_STATUS</div></a><a class="ref-card" href="hp_get_client_verify_info.html"><div class="to">HP_GET_CLIENT_VERIFY_INFO</div></a><a class="ref-card" href="hp_objectprops_get.html"><div class="to">HP_OBJECTPROPS_GET</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_KNCLIENT_ANKETA_INS(
+    K_ID ID_TYPE)
+AS
+declare variable KC_ID ID_TYPE;
+declare variable C_ID ID_TYPE;
+declare variable C_STATUS integer;
+declare variable COMMUNAL_EXPENSES CURR_TYPE;
+declare variable OVS_VALUE STR_255;
+declare variable COMMITMENT_EXPENSES CURR_TYPE;
+declare variable LIVING_EXPENSES CURR_TYPE;
+declare variable TRANSFER_TO_FAMILY CURR_TYPE;
+declare variable LEGAL_DOCS_EXPENSES CURR_TYPE;
+declare variable WORK_MONTHLY_INCOME CURR_TYPE;
+declare variable WORK_EXTRA_AMOUNT CURR_TYPE;
+declare variable WORK_BUSINESS_KIND integer;
+declare variable ADDRESS STR_255;
+declare variable WORK_PLACE_NAME STR_255;
+declare variable WORK_PLACE_ADD_NAME STR_255;
+declare variable WORK_JOB_SCHEDULE integer;
+declare variable WORK_BOSS_TITUL integer;
+declare variable WORK_BOSS_PHONE_NO STR_255;
+declare variable MAX_VAL CURR_TYPE = 9999999999;
+declare variable REG_ID integer;
+declare variable AVG_MONTLY_PAYMENT CURR_TYPE;
+declare variable AVG_INCOME CURR_TYPE;
+declare variable AVG_INCOME_ROSSTAT CURR_TYPE;
+declare variable RESULT_EXPENSES CURR_TYPE;
+declare variable RESULT_COMMITMENT CURR_TYPE;
+declare variable RESULT_INCOME CURR_TYPE;
+declare variable RESULT_DIVIDER integer;
+declare variable ALIVE_MINIMUM CURR_TYPE;
+declare variable MONTHLY_PAYMENTS_LOANS CURR_TYPE;
+declare variable DATE_VERIFY date;
+declare variable WORK_INCOME_PERIOD D_STR_100;
+declare variable ACM_MEMO D_BLOB_TEXT;
+declare variable JSON_KEY D_STR_100;
+declare variable JSON_VALUE D_STR_255;
+declare variable RD_CHECK_INFO_ID D_INTEGER;
+declare variable RD_CODE D_STR_100;
+begin
+-- Cреднемесячный платеж по займу
+  avg_montly_payment = 0;
+  select avg(sh_os + sh_perc)
+  from schedule
+  where sh_from_k_id = :k_id and
+        ((sh_os &gt; 0) or
+        (sh_perc &gt; 0))
+  into :avg_montly_payment;
+
+  select rd_code
+  from hp_get_check_loan_data(:k_id)
+  into:rd_code;
+
+-- дата оценки платежеспособности = дате проверки КК
+  select cast(al.acl_last_datetime as date)
+  from actionlist al
+  inner join refdata rd on al.acl_from_rd_id = rd.rd_id
+  where al.acl_object_kind = 9 and
+        al.acl_object_id = :k_id and
+        rd.rd_code = :rd_code
+  order by al.acl_id desc
+  rows 1
+  into :date_verify;
+
+-- Среднедушевой денежный доход &amp; прожиточный минимум ---
+-- (данные Росстата) ------------------------------------
+  avg_income_rosstat = 0;
+  alive_minimum = 0;
+  select kal_new_reg_id, coalesce(rai_income_value, 0), coalesce(ram_value, 0)
+  from kontract
+  inner join knaktlist on kal_from_kf_id = k_from_kf_id and
+        k_disb_date between kal_date and kal_date_end and
+        is_delete = 0
+  inner join region on reg_unicode = kal_new_reg_id
+  left join rosstat_relation rrl on rr_item_id = reg_rosstat_id and
+        current_date between rrl.rr_date_begin and rrl.rr_date_end
+  left join rosstat_avg_income on rai_okrug_id = rr_okrug_id and
+        current_date between rai_date_begin and rai_date_end
+  left join rosstat_alive_minimum on ram_item_id = reg_rosstat_id and
+        current_date between ram_date_begin and ram_date_end
+  where k_id = :k_id
+  into :reg_id, :avg_income_rosstat, :alive_minimum;
+
+  for select kncl.kc_id, kncl.kc_from_c_id
+      from knclient kncl
+      where kncl.kc_from_k_id = :k_id and
+            kncl.kc_amount_approved &gt; 0
+      into :kc_id, :c_id
+  do
+  begin
+-- Статус клиента
+    c_status = 0;
+    select c_curr_status
+    from hp_get_client_status(:c_id, current_date)
+    into :c_status;
+
+-- Расходы клиента -------------------------------------
+-- Расход на жилье и ком.платежи (в месяц)
+    communal_expenses = 0;
+    ovs_value = &#x27;&#x27;;
+    select ovs_value
+    from hp_objectprops_get(0, :c_id, -1, &#x27;AnketaQuestions.Communal_Expenses&#x27;, current_date)
+    into :ovs_value;
+
+    ovs_value = coalesce(ovs_value, 0);
+    ovs_value = trim(replace(ovs_value, &#x27;Значение: &#x27;, &#x27;&#x27;));
+    if (ovs_value similar to &#x27;[-]?[[:DIGIT:]]+&#x27;) then
+      communal_expenses = cast(ovs_value as id_type);
+
+--------------------------------------------------------
+-- Расход на проживание (в месяц)
+    living_expenses = 0;
+    ovs_value = &#x27;&#x27;;
+    select ovs_value
+    from hp_objectprops_get(0, :c_id, -1, &#x27;AnketaQuestions.Living_Expenses&#x27;, current_date)
+    into :ovs_value;
+
+    ovs_value = coalesce(ovs_value, 0);
+    ovs_value = trim(replace(ovs_value, &#x27;Значение: &#x27;, &#x27;&#x27;));
+    if (ovs_value similar to &#x27;[-]?[[:DIGIT:]]+&#x27;) then
+      living_expenses = cast(ovs_value as id_type);
+
+--------------------------------------------------------
+-- Переводы на Родину (в месяц)
+    transfer_to_family = 0;
+    ovs_value = &#x27;&#x27;;
+    select ovs_value
+    from hp_objectprops_get(0, :c_id, -1, &#x27;AnketaQuestions.Transfer_To_Family&#x27;, current_date)
+    into :ovs_value;
+
+    ovs_value = coalesce(ovs_value, 0);
+    ovs_value = trim(replace(ovs_value, &#x27;значение: &#x27;, &#x27;&#x27;));
+    if (ovs_value similar to &#x27;[-]?[[:DIGIT:]]+&#x27;) then
+      transfer_to_family = cast(ovs_value as id_type);
+
+--------------------------------------------------------
+-- Расходы на патент и др. (в месяц)
+    legal_docs_expenses = 0;
+    ovs_value = &#x27;&#x27;;
+    select ovs_value
+    from hp_objectprops_get(0, :c_id, -1, &#x27;AnketaQuestions.Legal_Docs_Expenses&#x27;, current_date)
+    into :ovs_value;
+
+    ovs_value = coalesce(ovs_value, 0);
+    ovs_value = trim(replace(ovs_value, &#x27;значение: &#x27;, &#x27;&#x27;));
+    if (ovs_value similar to &#x27;[-]?[[:DIGIT:]]+&#x27;) then
+      legal_docs_expenses = cast(ovs_value as id_type);
+
+--------------------------------------------------------
+-- Сумма платежей по обязательствам
+    commitment_expenses = 0;
+    ovs_value = &#x27;&#x27;;
+    select ovs_value
+    from hp_objectprops_get(0, :c_id, -1, &#x27;AnketaQuestions.CommitmentsSumMonth&#x27;, current_date)
+    into :ovs_value;
+
+    ovs_value = coalesce(ovs_value, 0);
+    ovs_value = trim(replace(ovs_value, &#x27;значение: &#x27;, &#x27;&#x27;));
+    if (ovs_value similar to &#x27;[-]?[[:DIGIT:]]+&#x27;) then
+      commitment_expenses = cast(ovs_value as id_type);
+
+-- Доходы клиента --------------------------------------
+-- Ежемесячный доход
+    work_monthly_income = 0;
+    ovs_value = &#x27;&#x27;;
+    select ovs_value
+    from hp_objectprops_get(0, :c_id, -1, &#x27;Work_Monthly_Income&#x27;, current_date)
+    into :ovs_value;
+
+    ovs_value = coalesce(ovs_value, 0);
+    ovs_value = trim(replace(ovs_value, &#x27;Значение: &#x27;, &#x27;&#x27;));
+    if (ovs_value similar to &#x27;[-]?[[:DIGIT:]]+&#x27;) then
+    begin
+      work_income_period = null;
+
+      select res_rd_code
+      from hp_objectprops_get(0, :c_id, -1, &#x27;work_income_period&#x27;, current_date)
+      into :work_income_period;
+
+      work_income_period = coalesce(work_income_period, &#x27;&#x27;);
+      work_monthly_income = cast(ovs_value as id_type);
+
+      -- RFCRU-2059
+      /*work_monthly_income = cast((case work_income_period
+                             when &#x27;work_income_period.daily&#x27; then  work_monthly_income*30
+                             when &#x27;work_income_period.three_times_per_week&#x27; then work_monthly_income/7*30*3
+                             when &#x27;work_income_period.twice_per_week&#x27; then work_monthly_income/7*30*2
+                             when &#x27;work_income_period.weekly&#x27; then work_monthly_income/7*30
+                             when &#x27;work_income_period.three_times_per_month&#x27; then work_monthly_income*3
+                             when &#x27;work_income_period.twice_per_month&#x27; then work_monthly_income*2
+                             when &#x27;work_income_period.monthly&#x27; then work_monthly_income
+                             else work_monthly_income
+                             end)as id_type);*/
+
+    end
+--------------------------------------------------------
+-- Сумма доп. дохода
+    work_extra_amount = 0;
+    ovs_value = &#x27;&#x27;;
+    select ovs_value
+    from hp_objectprops_get(0, :c_id, -1, &#x27;Work_Extra_Amount&#x27;, current_date)
+    into :ovs_value;
+
+    ovs_value = coalesce(ovs_value, 0);
+    ovs_value = trim(replace(ovs_value, &#x27;Значение: &#x27;, &#x27;&#x27;));
+    if (ovs_value similar to &#x27;[-]?[[:DIGIT:]]+&#x27;) then
+      work_extra_amount = cast(ovs_value as id_type);
+
+-- Сфера деятельности клиента
+    work_business_kind = 0;
+    select res_rd_id
+    from hp_objectprops_get(0, :c_id, -1, &#x27;Work_Business_Kind&#x27;, current_date)
+    into :work_business_kind;
+
+-- Среднедушевой денежный доход (классификатор Компании)
+    avg_income = 0;
+    select aic_avr_income
+    from avr_incomes_classifier
+    inner join region reg on reg.parent = aic_region_id and
+          reg.reg_unicode = :reg_id
+    where current_date between aic_date_begin and aic_date_end and
+          aic_work_business_kind = :work_business_kind
+    into :avg_income;
+
+    -- Сумма ежемесячных платежей по займам/кредитам
+    -- согласно внешним источникам
+    monthly_payments_loans = 0;
+    rd_check_info_id = f_get_rd_id(&#x27;ActionGroup.Check_Info&#x27;);
+
+    for select acm.acm_memo
+    from actionlist acl
+    inner join actionmemo acm  on acm_from_acl_id = acl_id
+    where acl.acl_object_kind = 0
+    and acl.acl_object_id = :c_id
+    and acl.acl_status = 2
+    and acl.acl_from_rd_id = :rd_check_info_id
+    order by acl.acl_id desc
+    rows 1
+    into :acm_memo
+    do
+    begin
+        for select json_key, json_value
+        from fm_json_parse(:acm_memo, 0, &#x27;verify&#x27;)
+        into :json_key, :json_value
+        do
+        begin
+            if (json_key = &#x27;sumpayment&#x27;) then
+              monthly_payments_loans = cast(json_value as curr_type);
+        end
+    end
+
+/*
+    monthly_payments_loans = 0;
+    select sum_payment
+    from hp_get_client_verify_info(:c_id)
+    into :monthly_payments_loans;
+*/
+
+-- Дополнительные вопросы из анкеты --------------------
+-- Место работы, название организации
+    address = &#x27;&#x27;;
+    select adc_address_str
+    from hp_addrclient(:c_id)
+    where adc_address_type = 3
+    into :address;
+
+    work_place_name = &#x27;&#x27;;
+    select replace(ovs_value, &#x27;значение: &#x27;, &#x27;&#x27;)
+    from hp_objectprops_get(0, :c_id, -1, &#x27;Work_Place_Name&#x27;, current_date)
+    into :work_place_name;
+    work_place_name = left(work_place_name || iif(work_place_name = &#x27;&#x27;, &#x27;&#x27;, &#x27;; &#x27;) || address, 255);
+
+-- Дополнительный доход
+    work_place_add_name = &#x27;&#x27;;
+    select replace(ovs_value, &#x27;другое: &#x27;, &#x27;&#x27;)
+    from hp_objectprops_get(0, :c_id, -1, &#x27;Work_Extra_Income&#x27;, current_date)
+    into :work_place_add_name;
+
+-- График работы
+    work_job_schedule = 0;
+    select res_rd_id
+    from hp_objectprops_get(0, :c_id, -1, &#x27;Work_Job_Schedule&#x27;, current_date)
+    into :work_job_schedule;
+
+-- Должность руководителя клиента
+    work_boss_titul = 0;
+    select res_rd_id
+    from hp_objectprops_get(0, :c_id, -1, &#x27;Work_Boss_Titul&#x27;, current_date)
+    into :work_boss_titul;
+
+-- Телефон руководителя клиента
+    work_boss_phone_no = &#x27;&#x27;;
+    select replace(ovs_value, &#x27;значение: &#x27;, &#x27;&#x27;)
+    from hp_objectprops_get(0, :c_id, -1, &#x27;Work_Boss_Phone_No&#x27;, current_date)
+    into :work_boss_phone_no;
+
+-- Итоги -----------------------------------------------
+-- Размер дохода
+    if (c_status &lt; 3) then
+    begin
+      result_income = minvalue(iif(work_monthly_income + work_extra_amount = 0, max_val, work_monthly_income + work_extra_amount), iif(avg_income_rosstat = 0, max_val, avg_income_rosstat), iif(avg_income = 0, max_val, avg_income));
+      result_income = iif(result_income = max_val, 0, result_income);
+    end
+    else
+    begin
+      result_income = work_monthly_income + work_extra_amount + avg_income_rosstat + avg_income;
+      result_divider = iif(work_monthly_income + work_extra_amount = 0, 0, 1) + iif(avg_income_rosstat = 0, 0, 1) + iif(avg_income = 0, 0, 1);
+      result_income = result_income / iif(result_divider = 0, 1, result_divider);
+    end
+
+-- Размер расходов
+    result_expenses = maxvalue(communal_expenses + living_expenses + transfer_to_family + legal_docs_expenses, alive_minimum);
+-- Размер обязательств
+    result_commitment = monthly_payments_loans + commitment_expenses;
+
+    update or insert into knclient_anketa (kca_from_kc_id, kca_communal_expenses, kca_living_expenses,
+                                           kca_commitment_expenses, kca_transfer_to_family, kca_legal_docs_expenses,
+                                           kca_work_business_kind, kca_work_place_name, kca_work_place_add_name,
+                                           kca_work_job_schedule, kca_work_boss_titul, kca_work_boss_phone_no,
+                                           kca_work_monthly_income, kca_work_extra_amount, kca_monthly_payments_loans,
+                                           kca_date_verify, kca_avg_montly_payment, kca_from_c_id, kca_c_status,
+                                           kca_from_reg_id, kca_avg_income_rosstat, kca_avg_income, kca_alive_minimum,
+                                           kca_result_income, kca_result_expenses, kca_result_commitment)
+    values (:kc_id, :communal_expenses, :living_expenses, :commitment_expenses, :transfer_to_family,
+            :legal_docs_expenses, :work_business_kind, :work_place_name, :work_place_add_name, :work_job_schedule,
+            :work_boss_titul, :work_boss_phone_no, :work_monthly_income, :work_extra_amount, :monthly_payments_loans,
+            :date_verify, :avg_montly_payment, :c_id, :c_status, :reg_id, :avg_income_rosstat, :avg_income,
+            :alive_minimum, :result_income, :result_expenses, :result_commitment)
+    matching (kca_from_kc_id);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

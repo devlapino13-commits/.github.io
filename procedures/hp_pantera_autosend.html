@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_PANTERA_AUTOSEND — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_PANTERA_AUTOSEND: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_PANTERA_AUTOSEND</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">4 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_make_zad_list.html"><div class="to">AAREP_MAKE_ZAD_LIST</div></a><a class="ref-card" href="hp_pantera_autosend_balance.html"><div class="to">HP_PANTERA_AUTOSEND_BALANCE</div></a><a class="ref-card" href="hp_pantera_autosend_sbl_get.html"><div class="to">HP_PANTERA_AUTOSEND_SBL_GET</div></a><a class="ref-card" href="okt_sirena_make_call.html"><div class="to">OKT_SIRENA_MAKE_CALL</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_PROJECT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_PANTERA_AUTOSEND(
+    REP_DATE DATE,
+    REP_PROJECT STR_100)
+AS
+declare variable K_ID ID_TYPE;
+declare variable MESS_STR STR_255;
+declare variable DB_ID D_INTEGER;
+declare variable BACK_DAYS_S1 D_INTEGER;
+declare variable DELINQ_DAYS_QTY D_INTEGER;
+declare variable TRANSFER_REASON_CODE STR_100;
+declare variable UN_ID_V ID_TYPE;
+declare variable PANT_ID ID_TYPE;
+declare variable SBL_ID D_INTEGER;
+declare variable SIRENA_ID D_INTEGER;
+declare variable SIRENA1_ID D_INTEGER;
+declare variable CC_PROJECT STR_100;
+declare variable OPERATION STR_100;
+declare variable UN_VIRT STR_100;
+declare variable PANTERA_ID D_INTEGER;
+declare variable PANT_DATE_BEGIN D_DATE;
+declare variable LAST_PAY_DATE D_DATE;
+declare variable BALANCE_OS CURR_TYPE;
+declare variable DELINQ_OS CURR_TYPE;
+declare variable AUTO_INFORMER D_INTEGER;
+declare variable CLOSED_OL_ID D_ID;
+declare variable CLOSED_OL_ID_TMP D_ID;
+declare variable SBL_ID_CURRENT D_INTEGER;
+declare variable SBL_PANTERA D_INTEGER;
+declare variable SBL_KS_FINANCE D_INTEGER;
+begin
+  --test_k_id = 101010095408800401;  -- Для теста
+
+  db_id = f_get_db_id();
+
+  -- получаем id проектов ----------
+  sirena_id = (select rd.rd_id from refdata rd where rd.rd_code = &#x27;OKTELL.Projects.Sirena&#x27;);
+  sirena1_id = (select rd.rd_id from refdata rd where rd.rd_code = &#x27;OKTELL.Projects.Sirena1&#x27;);
+  auto_informer = (select rd.rd_id from refdata rd where rd.rd_code = &#x27;oktell.projects.auto_informer&#x27;);
+
+  select rd.rd_id,
+         rd.rd_str_id
+  from refdata rd
+  where rd.rd_code = &#x27;OKTELL.Projects.Pantera&#x27;
+  into :pantera_id,
+       :sbl_pantera;
+
+  if (db_id = 81001) then
+    sbl_ks_finance = (select rd.rd_str_id from refdata rd where rd.rd_code = &#x27;OKTELL.Projects.ks_finance_2&#x27;);
+
+  cc_project = &#x27;OKTELL.Projects.Sirena1&#x27;;
+  if (db_id &lt;&gt; 81001) then
+    cc_project = &#x27;OKTELL.Projects.Sirena&#x27;;
+  -------------------------------------
+
+  if (db_id = 81001) then -- РФ
+    back_days_s1 = 21;
+  else if (db_id = 94401) then -- АЗ
+  begin
+    back_days_s1 = 21;
+    sirena1_id = sirena_id;
+  end
+
+  -- виртуалиный оператор -- &gt;
+  un_virt = &#x27;IGUSEV&#x27;;
+
+  select un.un_id
+  from username un
+  where un.un_name = :un_virt
+  into :un_id_v;
+  -------------------------- &lt;
+
+  if (rep_project = &#x27;AUTO_INFORMER&#x27;) then -- BOARD-4936  -- Автоинформатор
+  begin
+    cc_project = &#x27;OKTELL.Projects.AUTO_INFORMER&#x27;;
+
+    -- ЛОГИКА ОТКРЕПЛЕНИЯ ГРУПП ОТ АВТОИНФОРМАТОРА ============================&gt;
+    -- выявляю все договора, которые висят на авто-информаторе и если:
+        -- 1) договор закрыт
+        -- 2) договор числится на СБ
+        -- 3) по договору число дней просрочки вне диапазона 7 - 20 дней
+        -- тогда разблокирую
+
+    for select pantk.pant_from_k_id,
+               pantk.pant_id,
+               kont.k_fact_closed_ol_id
+    from pantera_kontracts pantk
+    left join kontract kont on kont.k_id = pantk.pant_from_k_id
+    where pantk.pant_rd_project_type = :auto_informer
+    and pantk.pant_date_begin &lt; pantk.pant_date_end
+    and :rep_date between pantk.pant_date_begin and pantk.pant_date_end
+    --and pantk.pant_from_k_id = :test_k_id
+    into :k_id,
+         :pant_id,
+         :closed_ol_id_tmp
+    do
+    begin
+      transfer_reason_code = &#x27;&#x27;;
+      closed_ol_id = null;
+
+      if (closed_ol_id_tmp is not null) then
+      begin
+        select ol.ol_id
+        from operlist ol
+        where ol.ol_id = :closed_ol_id_tmp
+        and ol.is_delete = 0
+        into :closed_ol_id;
+      end
+
+      if (closed_ol_id is not null) then -- если закрыт договор
+      begin
+        transfer_reason_code = &#x27;SirenaTransferReason.LoanClosed&#x27;;
+        operation = &#x27;UNBLOCK&#x27;;  
+      end
+      else
+      begin
+          -- проверяю группу по СБ
+          sbl_id = null;
+    
+          select sa.sba_from_sbl_id
+          from sb_akt sa
+          where sa.sba_is_delete = 0 and
+                sa.sba_from_k_id = :k_id and
+                sa.sba_status = 2 and
+                sa.sba_from_sbl_id &lt;&gt; 0 and
+                :rep_date between sa.sba_date_begin and sa.sba_date_end and
+                sa.sba_date_begin &lt;= sa.sba_date_end
+          into :sbl_id;
+    
+          -- если группа числится за СБ, но продолжает висеть по какой-то причине на операторе КЦ Сирена 1, тогда разблокирую такую группу
+          if (sbl_id is not null) then
+          begin
+            transfer_reason_code = &#x27;SirenaTransferReason.ToSB&#x27;;
+            operation = &#x27;UNBLOCK&#x27;;
+          end
+          else -- если группа не числится за СБ
+          begin
+            delinq_days_qty = null;
+    
+            select :rep_date - oks.oks_delinq_date
+            from oksummary oks
+            where oks.oks_from_k_id = :k_id
+            and :rep_date between oks.oks_date_begin and oks.oks_date_end
+            and oks.oks_close_state = 0
+            into :delinq_days_qty;
+    
+            delinq_days_qty = coalesce(delinq_days_qty, 0);
+    
+            if (delinq_days_qty &lt; 7) then
+            begin
+                transfer_reason_code = &#x27;SirenaTransferReason.DelinqDaysMinLimit&#x27;;
+                operation = &#x27;UNBLOCK&#x27;;
+            end
+            else if (delinq_days_qty &gt; 20) then
+            begin
+                transfer_reason_code = &#x27;SirenaTransferReason.ForSirena1&#x27;;
+                operation = &#x27;UNBLOCK&#x27;;
+            end
+          end
+      end
+    
+      if (transfer_reason_code &lt;&gt; &#x27;&#x27;) then
+      begin
+        execute procedure okt_sirena_make_call(1, :rep_date - 1, :operation, :transfer_reason_code, :cc_project,  :pant_id, null, 0, null, null, null, null, null, null, null, null, 0)
+        returning_values :mess_str;
+      end
+    end
+    -- &lt; =======================================================================
+    -- &gt; ЛОГИКА ЗАКРЕПЛЕНИЯ ГРУПП ЗА АВТОИНФОРМАТОРОМ =========================&gt;
+
+    -- Выявляю все договора с активной просрочкой 7 - 20 дней
+    for select oks.oks_from_k_id
+    from oksummary oks
+    where :rep_date between oks.oks_date_begin and oks.oks_date_end
+    and oks.oks_close_state = 0
+    and :rep_date - oks.oks_delinq_date between 7 and 20
+    --and oks.oks_from_k_id = :test_k_id
+    into :k_id
+    do
+    begin
+      sbl_id = (select sbl_id from hp_pantera_autosend_sbl_get(:k_id, :rep_date));
+
+      -- если договор не числится за СБ
+      if (sbl_id is null) then
+      begin
+        pant_id = null;
+
+        select pantk.pant_id
+        from pantera_kontracts pantk
+        where pantk.pant_rd_project_type &lt;&gt; :auto_informer
+        and pantk.pant_date_begin &lt; pantk.pant_date_end
+        and :rep_date between pantk.pant_date_begin and pantk.pant_date_end
+        and pantk.pant_from_k_id = :k_id
+        into :pant_id;
+
+        if (pant_id is not null) then -- Если договор висит не на авто-информаторе, тогда его нужно повесить на авто-информатор
+        begin
+           transfer_reason_code = &#x27;SirenaTransferReason.ToAuto_Informer&#x27;;
+           operation = &#x27;UNBLOCK&#x27;;
+
+           -- открепляем от службы, где висит договора
+           execute procedure okt_sirena_make_call(1, :rep_date - 1, :operation, :transfer_reason_code, :cc_project,  :pant_id, null, 0, null, null, null, null, null, null, null, null, 0)
+           returning_values :mess_str;
+
+           transfer_reason_code = &#x27;SirenaTransferReason.ToAuto_Informer&#x27;;
+           operation = &#x27;BLOCK&#x27;;
+
+           -- вешаем его на автоинформатор
+           execute procedure okt_sirena_make_call(1, :rep_date, :operation, :transfer_reason_code, :cc_project, 0, :k_id, 0, null, null, null, null, :un_virt, null, null, null, 0)
+           returning_values :mess_str;
+        end
+        else
+        begin
+           --- ЗА�©ИТА ОТ ДУРАКА. нужно, чтобы если HP_PANTERA_AUTOSEND с пераметром AUTO_INFORMER запускается дважды в день, чтобы лишние операции не создались
+           if (exists(
+               select pantk.pant_id
+               from pantera_kontracts pantk
+               where pantk.pant_rd_project_type = :auto_informer
+               and pantk.pant_date_begin &lt; pantk.pant_date_end
+               and :rep_date + 1 between pantk.pant_date_begin and pantk.pant_date_end
+               and pantk.pant_from_k_id = :k_id)) then
+             continue;
+           -- &lt; ----------------------------------------------------------------
+
+           transfer_reason_code = &#x27;SirenaTransferReason.ToAuto_Informer&#x27;;
+           operation = &#x27;BLOCK&#x27;;
+
+           execute procedure okt_sirena_make_call(1, :rep_date, :operation, :transfer_reason_code, :cc_project, 0, :k_id, 0, null, null, null, null, :un_virt, null, null, null, 0)
+           returning_values :mess_str;    
+        end
+      end
+    end
+  end
+
+  if (rep_project = &#x27;SIRENA&#x27;) then
+  begin
+    -- ЛОГИКА ОТКРЕПЛЕНИЯ ГРУПП ОТ СИРЕНА ============================&gt;
+
+    -- Беру все, активные, группы, по проекту Сирена 1, которые находятся на руках у операторов.
+    -- Если группа вышла из просрочки, перекидываю ее на виртуального оператора
+    for select pantk.pant_from_k_id, pantk.pant_id
+        from pantera_kontracts pantk
+        inner join kontstate ks on ks.ks_from_k_id = pantk.pant_from_k_id
+        where :rep_date between pantk.pant_date_begin and pantk.pant_date_end and
+              pantk.pant_rd_project_type = :sirena1_id and
+              pantk.pant_date_begin &lt; pantk.pant_date_end and
+              ks.ks_state = 1 and -- беру только активные займы
+              ks.ks_ol_is_delete = 0 and -- !
+              :rep_date between ks.ks_date_begin and ks.ks_date_end
+              --and pantk.pant_from_k_id = :test_k_id
+        into :k_id, :pant_id
+    do
+    begin
+      operation = &#x27;&#x27;;
+
+      -- проверяю группу по СБ
+      sbl_id = (select sbl_id from hp_pantera_autosend_sbl_get(:k_id, :rep_date));
+
+      -- если группа числится за СБ, но продолжает вистесть по какой-то причине на операторе КЦ Сирена 1,
+      -- разблокирую такую группу
+      if (sbl_id is not null) then
+      begin
+        if (sbl_id = sbl_pantera) then -- Пантера
+          transfer_reason_code = &#x27;SirenaTransferReason.ToPantera&#x27;;
+        else
+          transfer_reason_code = &#x27;SirenaTransferReason.ToSB&#x27;;
+
+        operation = &#x27;UNBLOCK&#x27;;
+      end
+      else -- если группа не числится за СБ
+      begin
+        if (operation = &#x27;&#x27;) then
+        begin
+          delinq_days_qty = 0;
+
+          select :rep_date - oks_delinq_date
+          from oksummary oks
+          where :rep_date between oks_date_begin and oks_date_end and
+                oks_from_k_id = :k_id and
+                oks.oks_close_state = 0 -- !
+          into :delinq_days_qty;
+
+          delinq_days_qty = coalesce(delinq_days_qty, 0);
+          if (delinq_days_qty &lt; 0) then
+            delinq_days_qty = 0;
+
+          if (delinq_days_qty = 0) then
+          begin
+            transfer_reason_code = &#x27;SirenaTransferReason.DelinqOut&#x27;;
+            operation = &#x27;UNBLOCK&#x27;;
+          end
+          else
+          begin
+            if ((db_id = 81001) and (delinq_days_qty &gt; 60)) then
+            begin
+              -- если группа висит на Сирена 1 и число дней просрочки больше 60, группа должна быть разблокирована и уйти в Пантеру
+              transfer_reason_code = &#x27;SirenaTransferReason.ToPantera&#x27;;
+              operation = &#x27;UNBLOCK&#x27;;
+            end
+            else
+            begin
+              if (delinq_days_qty &lt; back_days_s1) then
+              begin
+                transfer_reason_code = &#x27;SirenaTransferReason.DelinqDaysMinLimit&#x27;;
+                operation = &#x27;UNBLOCK&#x27;;
+              end
+            end
+
+            balance_os = 0;
+            delinq_os = 0;
+
+            select sum(zad_os),
+                   sum(iif(sh_date &lt; :rep_date, zad_os, 0))
+            from aarep_make_zad_list(:k_id, :rep_date, 0)
+            where sh_date is not null
+            into :balance_os,
+                 :delinq_os;
+
+            balance_os = coalesce(balance_os, 0);
+            delinq_os = coalesce(delinq_os, 0);
+
+            if (((balance_os &lt; 500) or (delinq_os &lt; 500)) and
+                (db_id = 81001)) then
+            begin
+              operation = &#x27;UNBLOCK&#x27;;
+
+              if (balance_os &lt; 500) then
+                transfer_reason_code = &#x27;SirenaTransferReason.BalanceOSLess500&#x27;;
+              else if (delinq_os &lt; 500) then
+                transfer_reason_code = &#x27;SirenaTransferReason.DelinqOSLess500&#x27;;
+            end
+          end
+        end
+      end
+      if (operation = &#x27;UNBLOCK&#x27;) then
+      begin
+        execute procedure okt_sirena_make_call(1, :rep_date - 1, :operation, :transfer_reason_code, :cc_project,
+            :pant_id, null, 0, null, null, null, null, null, null, null, null, 0)
+            returning_values :mess_str;
+      end
+    end
+    -- ======================================================================= &lt;
+    -- ЛОГИКИ АВТОМАТИЧЕСКОГО ЗАКРЕПЛЕНИЯ РОБОТОМ ГРУПП ЗА СИРЕНОЙ НЕТ
+  end
+
+  if (rep_project = &#x27;PANTERA&#x27;) then
+  begin
+    cc_project = &#x27;OKTELL.Projects.Pantera&#x27;;
+
+    -- ЛОГИКА ОТКРЕПЛЕНИЯ ГРУПП ОТ ПАНТЕРЫ ====================================&gt;
+
+    -- Беру все контракты Пантеры, которые висят на операторах
+    -- если с момента блокировки прошло 40 дней и нет погашения, тогда разблокирую
+
+    for select pantk.pant_from_k_id,
+               pantk.pant_date_begin,
+               pantk.pant_id
+        from pantera_kontracts pantk
+        inner join kontstate ks on ks.ks_from_k_id = pantk.pant_from_k_id
+        where ks.ks_state = 1 and
+              ks.ks_ol_is_delete = 0 and
+              :rep_date between ks.ks_date_begin and ks.ks_date_end and
+              pantk.pant_rd_project_type = :pantera_id and
+              :rep_date between pantk.pant_date_begin and pantk.pant_date_end
+              --and pantk.pant_from_k_id = :test_k_id
+        into :k_id,
+             :pant_date_begin,
+             :pant_id
+    do
+    begin
+      transfer_reason_code = &#x27;&#x27;;
+
+      select balance_os, delinq_os
+      from hp_pantera_autosend_balance(:k_id, :rep_date)
+      into :balance_os, :delinq_os;
+
+      if ((balance_os &lt; 500) or (delinq_os &lt; 500)) then
+      begin
+        if (balance_os &lt; 500) then
+          transfer_reason_code = &#x27;SirenaTransferReason.BalanceOSLess500&#x27;;
+        else if (delinq_os &lt; 500) then
+          transfer_reason_code = &#x27;SirenaTransferReason.DelinqOSLess500&#x27;;
+      end
+
+      if (transfer_reason_code &lt;&gt; &#x27;&#x27;) then
+      begin
+        execute procedure okt_sirena_make_call(1, :rep_date - 1, &#x27;UNBLOCK&#x27;, :transfer_reason_code,
+            &#x27;OKTELL.Projects.Pantera&#x27;, :pant_id, null, 0, null, null, null, null, null, null, null, null, 0)
+            returning_values :mess_str;
+      end
+    end
+    -- ======================================================================= &lt;
+    -- ЛОГИКА АВТОМАТИЧЕСКОГО ЗАКРЕПЛЕНИЯ ГРУПП ЗА ПАНТЕРОЙ ОТРАЖЕНА В БЛОКЕ ПОСВЕ�©ЕННОМ СИРЕНЕ
+  end
+
+  if (rep_project = &#x27;COMMON_ALG&#x27;) then
+  begin
+    -- == ОБ�©ИЙ АЛГОРИТМ ЗАКРЕПЕЛНИЯ ГРУПП ЗА СБ
+    -- Беру все группы с просрочкой от 61 до X дней и если группа не числится за СБ/Коллекторами, перекидываю ее на соотвествующую службу
+    if (db_id = 81001) then
+    begin
+      for select oks.oks_from_k_id,
+                 :rep_date - oks.oks_delinq_date
+          from oksummary oks
+          where :rep_date between oks.oks_date_begin and oks.oks_date_end and
+                :rep_date - oks.oks_delinq_date &gt;= 61 and
+                oks.oks_close_state = 0
+                --and oks.oks_from_k_id = :test_k_id
+          into :k_id,
+               :delinq_days_qty
+      do
+      begin
+        sbl_id = null;
+        sbl_id_current = coalesce((select sbl_id from hp_pantera_autosend_sbl_get(:k_id, :rep_date)), 0);
+
+        if ((delinq_days_qty between 61 and 140) and -- На Пантера допутим перевод только из Сирена (т.е. договор не должен быть на СБ)
+            (sbl_id_current = 0)) then
+                sbl_id = sbl_pantera; -- Пантера
+        else if ((delinq_days_qty &gt;= 141) and
+                 (sbl_id_current = sbl_pantera)) then -- На КС Финанс допустим перевод роботом только из Панетра
+             sbl_id = sbl_ks_finance;  -- КС Финанс
+
+        if (sbl_id is null) then continue;
+
+        select balance_os,
+               delinq_os
+        from hp_pantera_autosend_balance(:k_id, :rep_date)
+        into :balance_os,
+             :delinq_os;
+
+        if ((delinq_os &lt; 500) or (balance_os &lt; 500)) then
+            continue;
+
+        if (sbl_id = sbl_ks_finance) then  -- если баланс ОС или просрочка по ОС меньше 500, такое заем не трогаем
+        begin
+            pant_date_begin = null;
+
+            select pantk.pant_date_begin
+            from pantera_kontracts pantk
+            where pantk.pant_rd_project_type = :pantera_id and
+                  :rep_date between pantk.pant_date_begin and pantk.pant_date_end  and
+                  pantk.pant_from_k_id = :k_id
+                  --and pantk.pant_from_k_id = :test_k_id
+            into :pant_date_begin;
+
+            if (datediff(day from :pant_date_begin to :rep_date) &gt;= 40) then -- с момента блокировки прошло 40 дней, теперь проверяю когда было последнее погашение
+            begin
+              last_pay_date = null;
+    
+              select ol_date
+              from
+              (
+                  select ok.ok_ol_date as ol_date,
+                         -(ok.ok_os + ok.ok_perc + ok.ok_fine)  as payed_sum
+                  from operkred ok
+                  where ok.ok_from_k_id = :k_id and
+                        ok.ok_type = 4 and
+                        ok.ok_ol_is_active = 1 and
+                        ok.ok_ol_date between :pant_date_begin  and :rep_date
+                  union all
+                  select oko_ol_date as ol_date,
+                        -(okf.oko_os + okf.oko_perc + okf.oko_other)
+                  from operkroff okf
+                  where okf.oko_ol_is_active = 1 and
+                        okf.oko_from_k_id = :k_id  and
+                        okf.oko_type = 4  and
+                        okf.oko_ol_date between :pant_date_begin  and :rep_date
+                  union all
+                  select oe.ox_ol_date as ol_date,
+                        oe.ox_amount_minus
+                  from operextra oe
+                  where oe.ox_object_kind = 9  and
+                        oe.ox_object_id = :k_id and
+                        oe.ox_from_rd_id = f_get_rd_id(&#x27;OperExtraKind.LawClientExpense&#x27;) and
+                        oe.ox_ol_date between :pant_date_begin  and :rep_date and
+                        oe.ox_ol_is_active = 1
+            
+              ) A
+              group by ol_date
+              having sum(payed_sum) &gt; 0
+              order by ol_date desc
+              rows 1
+              into :last_pay_date;
+    
+              last_pay_date = coalesce(last_pay_date, &#x27;01.01.2000&#x27;);
+    
+              if (datediff(day from last_pay_date to :rep_date) &lt; 40) then -- если последний платеж был менее 40 дней назад, группа остается висеть за Пантерой, на КС Финанс не перекдывается
+                continue;
+            end    
+        end
+
+        insert into sb_akt (sba_from_k_id, sba_number, sba_date_begin, sba_from_sbl_id, sba_status, sba_from_un_id, sba_is_delete)
+        values (:k_id, -1, :rep_date, :sbl_id, 2, :un_id_v, 0);
+      end
+    end    
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

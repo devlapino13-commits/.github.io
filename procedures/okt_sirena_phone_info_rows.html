@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OKT_SIRENA_PHONE_INFO_ROWS — процедура — схема БД</title>
+<meta name="description" content="Процедура OKT_SIRENA_PHONE_INFO_ROWS: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>OKT_SIRENA_PHONE_INFO_ROWS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_find_client_by_continfo.html"><div class="to">HP_FIND_CLIENT_BY_CONTINFO</div></a><a class="ref-card" href="hp_show_clientuniq_acc_no.html"><div class="to">HP_SHOW_CLIENTUNIQ_ACC_NO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CELL_NO</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">HTML</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE OKT_SIRENA_PHONE_INFO_ROWS(
+    CELL_NO D_STR_20)
+RETURNS (
+    HTML D_STR_8100)
+AS
+declare variable C_ID D_ID;
+declare variable C_BIRTH_DATE D_DATE;
+declare variable C_NAME_FIO D_STR_100;
+declare variable CITIZEN D_STR_255;
+declare variable NATION D_STR_255;
+declare variable ADC_ADDRESS_TYPE D_INTEGER;
+declare variable ADDRESS_STR D_STR_255;
+declare variable ADDRESS_JUR D_STR_255;
+declare variable ADDRESS_FACT D_STR_255;
+declare variable ADDRESS_RODINA_JUR D_STR_255;
+declare variable ADDRESS_RODINA_FACT D_STR_255;
+declare variable TIMEZONE_RU D_INTEGER;
+declare variable CL_TIME D_STR_100;
+declare variable PAYSYS_ACC_NO D_STR_10;
+declare variable KS_STATE D_SMALLINT;
+declare variable K_KONTRACT_NO D_STR_20;
+declare variable K_ID D_ID;
+declare variable STATUS varchar(50);
+declare variable AGE D_INTEGER;
+declare variable TIMEZONE D_INTEGER;
+declare variable LOAN_COUNTER D_INTEGER;
+begin
+
+  html = &#x27;&#x27;;
+
+  select c_id, c_birth_date, c_name_fio
+  from hp_find_client_by_continfo(null, :cell_no)
+  into c_id, c_birth_date, c_name_fio;
+
+  if (coalesce(c_id, 0) = 0) then
+  begin
+    html = &#x27;Информация о клиенте не найдена&#x27;;
+    suspend;
+    exit;
+  end
+
+  select rd.rd_name,
+         rd2.rd_name
+  from clients cl
+  inner join refdata rd on rd.rd_id = cl.c_citizen
+  inner join refdata rd2 on rd2.rd_id = cl.c_nation
+  where cl.c_id = :c_id
+  into :citizen,
+       :nation;
+
+  age = f_age(:c_birth_date, current_date);
+
+  for select adcl.adc_address_type, trim(coalesce(adl.adl_address_str, &#x27;&#x27;))
+      from addrclient adcl
+      inner join addrlist adl on adl.adl_id = adcl.adc_from_adl_id
+      where adcl.adc_from_c_id = :c_id and
+            adcl.adc_address_type in (1, 3, 4, 5)
+      into :adc_address_type,
+           :address_str
+  do
+  begin
+    if (adc_address_type = 1) then
+      address_jur = :address_str;
+    if (adc_address_type = 2) then
+      address_fact = :address_str;
+    if (adc_address_type = 4) then
+      address_rodina_jur = :address_str;
+    if (adc_address_type = 5) then
+      address_rodina_fact = :address_str;
+  end
+  address_jur = coalesce(address_jur,&#x27;&#x27;);
+  address_fact = coalesce(address_fact,&#x27;&#x27;);
+  address_rodina_jur = coalesce(address_rodina_jur,&#x27;&#x27;);
+  address_rodina_fact = coalesce(address_rodina_fact,&#x27;&#x27;);
+
+  timezone_ru = coalesce(timezone_ru, 3);
+
+  if (cell_no starting(&#x27;996&#x27;)) then
+    timezone = 6;
+  else
+  if (cell_no starting(&#x27;998&#x27;)) then
+    timezone = 5;
+  else
+  if (cell_no starting(&#x27;992&#x27;)) then
+    timezone = 5;
+  else
+    timezone = timezone_ru;
+
+  cl_time = trim(substring((dateadd(hour, :timezone - 3, current_timestamp)) from 12 for 5));
+
+  select uniq_acc_str
+  from hp_show_clientuniq_acc_no(:c_id)
+  into :paysys_acc_no;
+
+  html = &#x27;&lt;br&gt;&lt;b&gt;&#x27; || :c_name_fio || &#x27;&lt;/b&gt;&lt;/br&gt;&#x27;;
+  suspend;
+
+  html = &#x27;&lt;br&gt;&lt;b&gt;&#x27; || &#x27;Общая информация по клиенту&#x27; || &#x27;&lt;/b&gt;&lt;/br&gt;&#x27;;
+  suspend;
+
+  html = &#x27;Гражданство:&#x27; || :citizen || &#x27;&lt;/br&gt;&#x27;;
+  suspend;
+
+  html = &#x27;Национальность:&#x27; || :nation || &#x27;&lt;/br&gt;&#x27;;
+  suspend;
+
+  html = &#x27;Дата рождения:&#x27; || :c_birth_date || &#x27;&lt;/br&gt;&#x27;;
+  suspend;
+
+  html = &#x27;Возраст (лет):&#x27; || :age || &#x27;&lt;/br&gt;&#x27;;
+  suspend;
+
+  html = &#x27;Адрес прописки:&#x27; || iif(:address_jur &lt;&gt; &#x27;&#x27;, :address_jur, &#x27;Незаполнено&#x27;) || &#x27;&lt;/br&gt;&#x27;;
+  suspend;
+
+  html = &#x27;Адрес проживания:&#x27; || iif(:address_fact &lt;&gt; &#x27;&#x27;, :address_fact, &#x27;Незаполнено&#x27;)  || &#x27;&lt;/br&gt;&#x27;;
+  suspend;
+
+  html = &#x27;Адрес прописки (Родина):&#x27; || iif(:address_rodina_jur &lt;&gt; &#x27;&#x27;, :address_rodina_jur, &#x27;Незаполнено&#x27;) || &#x27;&lt;/br&gt;&#x27;;
+  suspend;
+
+  html = &#x27;Адрес проживания (Родина):&#x27; || iif(:address_rodina_fact &lt;&gt; &#x27;&#x27;, :address_rodina_fact, &#x27;Незаполнено&#x27;) || &#x27;&lt;/br&gt;&#x27;;
+  suspend;
+
+  html = &#x27;Часовой пояс:&#x27; || :timezone || &#x27;&lt;/br&gt;&#x27;;
+  suspend;
+
+  html = &#x27;Сейчас у абонента:&#x27; || :cl_time || &#x27;&lt;/br&gt;&#x27;;
+  suspend;
+
+  html = &#x27;&lt;b&gt;&#x27; || &#x27;Лицевой счёт клиента:&#x27; || :paysys_acc_no || &#x27;&lt;/b&gt;&lt;/br&gt;&#x27;;
+  suspend;
+
+  html = &#x27;&lt;br&gt;&lt;b&gt;Кредитные договора&lt;/b&gt;&lt;/br&gt;&#x27;;
+  suspend;
+
+  html = &#x27;&lt;table border=&quot;1&quot;&gt;&#x27;;
+
+  loan_counter = 0;
+  for select ks.ks_state,
+             kt.k_kontract_no,
+             kt.k_id
+      from knclient kc
+      inner join kontstate ks on ks.ks_from_k_id = kc.kc_from_k_id
+      inner join kontract kt on kt.k_id = ks.ks_from_k_id
+      where kc.kc_from_c_id = :c_id and
+            kc.kc_amount_approved &gt; 0 and
+            ks.ks_ol_is_delete = 0 and
+            current_date between ks.ks_date_begin and ks.ks_date_end
+      into :ks_state,
+           :k_kontract_no,
+           :k_id
+  do
+  begin
+    if (exists(select *
+               from oksummary oks
+               where oks.oks_from_k_id = :k_id and
+                     oks.oks_close_state = 1 and
+                     current_date between oks.oks_date_begin and oks.oks_date_end)) then
+      status = &#x27;Внесистемный учёт&#x27;;
+    else
+      status = (case
+                  when :ks_state = 0 then &#x27;В процессе&#x27;
+                  when :ks_state = 1 then &#x27;Активный&#x27;
+                  when :ks_state = 2 then &#x27;Закрытый&#x27;
+                end);
+    html = html || &#x27;&lt;tr&gt;&lt;th&gt;&#x27; ||:k_kontract_no||&#x27;&lt;/th&gt;&lt;th&gt;&#x27;||:status||&#x27;&lt;/th&gt;&lt;/tr&gt;&#x27;;
+    loan_counter = loan_counter + 1;
+  end
+
+  if (loan_counter = 0) then
+    html = html || &#x27;&lt;br&gt;&lt;b&gt;Кредитные договора отсуствуют&lt;/b&gt;&lt;/br&gt;&#x27;;
+
+
+  html = html || &#x27;&lt;/table&gt;&#x27;;
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

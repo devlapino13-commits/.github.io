@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$PREBLANKS_SIGNER_BY_REGION — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$PREBLANKS_SIGNER_BY_REGION: 3 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$PREBLANKS_SIGNER_BY_REGION</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="print_company.html"><div class="to">PRINT_COMPANY</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_OFFICE_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEED_COMMON_SIGNER</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$PREBLANKS_SIGNER_BY_REGION(
+    REP_OFFICE_ID D_INTEGER,
+    REP_DATE D_DATE,
+    NEED_COMMON_SIGNER D_BOOL)
+RETURNS (
+    ID D_INTEGER,
+    TEXT D_STR_255)
+AS
+declare variable job_name d_str_255;
+declare variable can_sign d_smallint;
+declare variable edoc_managers d_str_long;
+declare variable c_id d_id;
+begin
+  if (rep_date is null) then
+    rep_date = current_date;
+
+  if (need_common_signer is null) then
+    need_common_signer = 0;
+
+  if (rep_office_id is null) then
+    exit;
+
+  if (need_common_signer = 1) then
+  begin
+    for select distinct edc_default_manager_id
+    from edoc_cfg
+    where edc_default_manager_id is not null
+    into c_id
+    do
+    begin
+      id = null;
+      select ksr_id
+      from kontsignmen, kontsignreg, region_list(:rep_office_id, 1, -1, 0)
+      where ksm_from_c_id = :c_id and
+            ksr_from_ksm_id = ksm_id and
+            ksr_from_reg_id = id_list and
+            coalesce(ksr_date_begin, &#x27;01.01.1990&#x27;) &lt;= current_date and
+            coalesce(ksr_date_end, &#x27;31.12.9999&#x27;) &gt;= current_date
+      order by ksr_is_active desc, ksr_id desc
+      rows 1
+      into id;
+
+      if (id is not null) then
+      begin
+        select c_name_fio
+        from clients
+        where c_id = :c_id
+        into text;
+
+        if (text = &#x27;Исламов Санжар Якубжанович&#x27;) then
+          Continue;
+
+        suspend;
+      end
+    end
+  end else
+  begin
+    select list(distinct edc_default_manager_id)
+    from edoc_cfg
+    where edc_default_manager_id is not null
+    into edoc_managers;
+  
+    for select ksr_id, ksr_fio, ksr_kont_position, ksr_can_sign_loans, ksr_from_c_id
+    from print_company(:rep_office_id, 1, :rep_date, 0)
+    order by ksr_can_sign_loans desc, ksr_fio
+    into :id, :text, :job_name, :can_sign, :c_id
+    do
+    begin
+      job_name = trim(coalesce(job_name, &#x27;&#x27;));
+      if (job_name &lt;&gt; &#x27;&#x27;) then
+        text = text || &#x27;   - &#x27; || job_name;
+  
+      if (can_sign = 0) then
+      begin
+        if (position(c_id, edoc_managers) = 0) then
+          Continue;
+  
+        text = &#x27;Без доверен.: &#x27; || text;
+      end
+  
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DOCRECOG_CALC_ACCEPTED — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DOCRECOG_CALC_ACCEPTED: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DOCRECOG_CALC_ACCEPTED</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_docrecog_action.html"><div class="to">FM_DOCRECOG_ACTION</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">DRL_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DOCRECOG_CALC_ACCEPTED(
+    DRL_ID ID_TYPE)
+AS
+declare variable drm_id d_integer;
+declare variable drf_id d_integer;
+declare variable drf_tag d_smallint;
+declare variable drf_mrz_id d_integer;
+declare variable drf_mrz_value d_str_255;
+declare variable mrz_is_accepted d_bool;
+begin
+  -- Расчет drv_is_accepted_calc для документа.
+  -- Базовая проверка: поля с одинаковым drf_tag должны иметь одинаковые значения
+  for select drf_from_drm_id, drf_tag
+      from docrecogvalue, docrecogfield
+      where drv_from_drf_id = drf_id and
+            drv_from_drl_id = :drl_id and
+            coalesce(drf_tag, 0) &lt;&gt; 0 and
+            drf_inactive = 0
+      group by drf_from_drm_id, drf_tag
+      having min(drv_recog_value) &lt;&gt; max(drv_recog_value)
+      into drm_id, drf_tag
+  do
+  begin
+    -- если значения полей с одинаковым TAG отличаются, за выставляем drv_is_accepted_calc = 0
+    -- и если одно из этих полей является MRZ полем, то его значение берем за базу и копируем в
+    -- остальные обычные поля с идентичным TAG.
+    drf_mrz_id = null;
+    mrz_is_accepted = 0;
+    drf_mrz_value = &#x27;&#x27;;
+    select drv_from_drf_id, drv_is_accepted, drv_final_value
+    from docrecogvalue, docrecogfield
+    where drv_from_drl_id = :drl_id and
+          drv_from_drf_id = drf_id and
+          drf_inactive = 0 and
+          drf_tag = :drf_tag and
+          drf_api_code like &#x27;%_mrz&#x27; or drf_code like &#x27;%_mrz&#x27; -- Нежелательно. Лучше завести поле, на которое будет приоритет, при одинаковости tag&#x27;а
+    into :drf_mrz_id, mrz_is_accepted, drf_mrz_value;
+
+    for select drf_id
+        from docrecogfield
+        where drf_from_drm_id = :drm_id and
+              drf_tag = :drf_tag and
+              drf_id &lt;&gt; coalesce(:drf_mrz_id, 0)
+        into drf_id
+    do
+    begin
+      update docrecogvalue
+      set drv_is_accepted_calc = iif(:drf_mrz_id is not null, :mrz_is_accepted, 0),
+          drv_final_value = iif(:drf_mrz_id is not null, :drf_mrz_value, drv_final_value)
+      where drv_from_drl_id = :drl_id and
+            drv_from_drf_id = :drf_id;
+    end
+  end
+  -- Дополнительные проверки можно делать ниже
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

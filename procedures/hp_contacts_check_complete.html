@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CONTACTS_CHECK_COMPLETE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CONTACTS_CHECK_COMPLETE: 2 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CONTACTS_CHECK_COMPLETE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">3</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_is_close_relative.html"><div class="to">HP_IS_CLOSE_RELATIVE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="cm_ru_0081_sql.html"><div class="to">CM_RU_0081_SQL</div></a><a class="ref-card" href="cm_ru_0082_sql.html"><div class="to">CM_RU_0082_SQL</div></a><a class="ref-card" href="okt_check_action.html"><div class="to">OKT_CHECK_ACTION</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OBJ_KIND</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_CLIENT_FIO</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TXT</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CONTACTS_CHECK_COMPLETE(
+    OBJ_KIND VARCHAR(20),
+    OBJ_ID DECIMAL(18,0))
+RETURNS (
+    RES_CLIENT_FIO VARCHAR(255),
+    RES_TXT BLOB SUB_TYPE TEXT SEGMENT SIZE 80,
+    RES_IS_CRITICAL INTEGER)
+AS
+declare variable c_id id_type;
+declare variable cc_birth_date date;
+declare variable cc_from_adl_id id_type;
+declare variable cc_name str_100;
+declare variable res_client_fio_2 str_100;
+declare variable cc_status str_100;
+declare variable cc_type_1 integer;
+declare variable cc_type_0 integer;
+declare variable cc_type integer;
+declare variable c_citizen integer;
+declare variable rd_citizen str_100;
+declare variable db_id integer;
+declare variable ma_id id_type;
+declare variable object_kind integer;
+declare variable citizen_code str_100;
+declare variable rf_qty integer;
+declare variable rodina_qty integer;
+declare variable rodstv_qty integer;
+declare variable k_id id_type;
+declare variable is_filled_data smallint;
+declare variable is_rodstv smallint;
+declare variable pr_code varchar(100);
+declare variable cc_id integer;
+declare variable verif_qty integer;
+declare variable in_rodina integer;
+declare variable in_rf integer;
+declare variable is_ok smallint;
+declare variable in_rodina_tmp smallint;
+declare variable in_rf_tmp smallint;
+declare variable cc_total_res integer;
+declare variable ma_date_app date;
+declare variable c_curr_status integer;
+declare variable k_disb_date date;
+declare variable ma_date_oper date;
+declare variable cc_cell_no_old str_100;
+declare variable cc_cell_no str_100;
+begin
+  res_txt = &#x27;&#x27;;
+
+  db_id = f_get_db_id();
+  if (db_id &lt;&gt; 81001) then
+    exit; -- проверка должна работать только для РФ
+
+  ma_id = 0;
+  object_kind = f_objkind(obj_kind, &#x27;id&#x27;);
+
+  if (object_kind = 11) then -- Miniapp
+  begin
+    ma_id = cast(obj_id as integer);
+
+-- 1. На стадии регистрации заявки и ее сохранении установить критичность, если:
+--  - адреса и даты рождения близких родственников не заполнены;
+--  - не должно быть в качестве контактных лиц участников данной группы (если в группе Иванов и Петров,
+--    то они не могут быть друг у друга контактными лицами).
+
+--микрозаем сотруднику и ин. сотруднику - не подлежит проверке
+    select distinct pr_code, ma_date_app, ma.ma_date_oper
+    from miniapp ma, product
+    where ma.ma_is_active = 1 and
+          ma_id = :ma_id and
+          ma_from_pr_id = pr_id and
+          current_date between ma.ma_date_app and ma.ma_date_end
+    into pr_code, ma_date_app, ma_date_oper;
+
+    if (pr_code containing &#x27;.EMP.&#x27; or pr_code containing &#x27;.universal.&#x27; or pr_code containing &#x27;.oivo_pack.&#x27;) then
+      exit;
+
+--Участники из заявки
+    for select mac.mac_from_c_id
+        from miniappclient mac
+        where mac.mac_from_ma_id = :ma_id and
+              mac.mac_amount &gt; 0 --
+        into :c_id
+    do
+    begin
+      select cl.c_name_fio, cl.c_citizen
+      from clients cl
+      where cl.c_id = :c_id
+      into :res_client_fio, c_citizen;
+
+--Контакты родственники
+      cc_type_1 = 0;
+      cc_type_0 = 0;
+
+      select rd.rd_code
+      from refdata rd
+      where rd.rd_id = :c_citizen
+      into :rd_citizen;
+
+      rodstv_qty = 0;
+      is_filled_data = 0;
+
+      cc_cell_no_old = &#x27;&#x27;;
+
+      for select cont.cc_name, cc_status, cont.cc_birth_date, cont.cc_from_adl_id, cont.cc_type, cont.cc_total_res,
+                 coalesce(cc_cell_no, &#x27;&#x27;)
+          from contacts cont
+          where cont.cc_from_c_id = :c_id and
+                cont.cc_is_old_contact = 0
+          order by cont.cc_cell_no, cc_total_res desc
+          into cc_name, cc_status, cc_birth_date, cc_from_adl_id, cc_type, cc_total_res, cc_cell_no
+      do
+      begin
+        if (cc_cell_no &lt;&gt; cc_cell_no_old) then
+        begin
+          cc_cell_no_old = cc_cell_no;
+
+          if ((select result
+               from hp_is_close_relative(:cc_status)) = 1) then
+          begin
+--Если не указан адрес
+            if ((cc_from_adl_id is null --Пустой
+                or (mod(cc_from_adl_id, 1000000000) = 0)) and
+                (cc_total_res = 0)) then --Не указан
+            begin
+              res_txt = &#x27;Для контактного лица &#x27; || cc_name || &#x27;, не указан адрес&#x27;;
+              res_is_critical = 1;
+              suspend;
+            end
+
+            rodstv_qty = rodstv_qty + 1;
+          end
+          else
+          begin
+-- проверяю родственные связи
+            is_rodstv = 0;
+
+            if (cc_status like &#x27;%родственник%&#x27;) then
+            begin
+              rodstv_qty = rodstv_qty + 1;
+              is_rodstv = 1;
+            end
+            else
+            if (exists(select *
+                       from refdata rd
+                       where rd.rd_name = :cc_status and
+                             rd.rd_main_code = &#x27;Relation&#x27; and
+                             rd.rd_is_active = 1 -- Важно
+                )) then
+            begin
+              rodstv_qty = rodstv_qty + 1;
+              is_rodstv = 1;
+            end
+
+            if (is_rodstv = 1) then -- если родственник, проверяю наличае заполненных дата рождения + адрес проживания
+            begin
+              /* (1) закомментировал igusev 28.03.2017 на основании письма от Ильи Онищенко*/
+              if (/* (1) (cc_birth_date is not null) and*/ (mod(cc_from_adl_id, 1000000000) &lt;&gt; 0) and
+                  (cc_from_adl_id is not null)) then
+              begin
+                is_filled_data = is_filled_data + 1;
+              end
+            end
+          end
+
+          if (rd_citizen = &#x27;Citizen.RU&#x27;) then
+            cc_type_1 = 3;
+          else
+          begin
+            if (cc_type = 1) then
+              cc_type_1 = cc_type_1 + 1;
+          end
+
+          if (cc_type = 0) then
+            cc_type_0 = cc_type_0 + 1;
+        end
+      end
+
+      if (rodstv_qty = 0) then
+        res_txt = &#x27;Для клиента &#x27; || res_client_fio || &#x27;, должны должен быть указан хотя бы один родственник&#x27;;
+      else
+      if (is_filled_data = 0) then
+-- RES_TXT = &#x27;Для клиента &#x27;||RES_CLIENT_FIO||&#x27;, хотя бы у одного родственника должны быть заполнены дата рождения и адрес проживания&#x27;;
+        res_txt = &#x27;Для клиента &#x27; || res_client_fio || &#x27;, хотя бы у одного родственника должны быть заполнены адрес проживания&#x27;;
+
+      if ((cc_type_1 &lt; 2) or (cc_type_0 &lt; 2) and
+          (rd_citizen &lt;&gt; &#x27;Citizen.RU&#x27;)) then
+      begin
+        res_txt = &#x27;Для клиента &#x27; || res_client_fio || &#x27;, должны быть указаны 2 конт. лица на родине и 2 в РФ&#x27;;
+        res_is_critical = 1;
+        suspend;
+      end
+
+      if (((cc_type_0 + cc_type_1) &lt; 4) and
+          (rd_citizen = &#x27;Citizen.RU&#x27;)) then
+      begin
+        res_txt = &#x27;Для клиента &#x27; || res_client_fio || &#x27;, должны быть указаны 4 конт. лица в РФ&#x27;;
+        res_is_critical = 1;
+        suspend;
+      end
+
+-- если есть контактное лицо с ФИО как у участника группы...-------&gt;&gt;
+      res_client_fio_2 = res_client_fio;
+
+      for select c_name_fio, cont.cc_name
+          from contacts cont
+          inner join miniappclient mac on cont.cc_from_c_id = mac.mac_from_c_id
+          inner join clients cl on cl.c_id = mac.mac_from_c_id
+          where cont.cc_is_old_contact = 0 and
+                mac.mac_from_ma_id = :ma_id and
+                cont.cc_name = :res_client_fio_2 and
+                mac.mac_amount &gt; 0
+          into :res_client_fio, :cc_name
+      do
+      begin
+        res_txt = cc_name || &#x27; не может быть указан как контактное лицо, т.к. является участником группы&#x27;;
+        res_is_critical = 1;
+        suspend;
+      end
+
+      res_client_fio = res_client_fio_2; -- Важно присвоить обратно!
+--&lt;&lt;----------------------------------------------------------------
+--end
+    end
+  end
+
+  if (object_kind = 9) then -- Kontract
+  begin
+    k_id = obj_id;
+
+    /*  2.    Также после верификации контактов база должна проверять на наличие  следующего: 3 контакта должны быть подтверждены, из них:
+            - минимум один контакт близкого родственника;
+            - не менее 1 контакта на Родине и 1 контакт в РФ. Для граждан РФ, для которых родина в РФ -  оба контакта могут быть в РФ.   
+            Если нет подтверждения 3-х контактов, из которых по 1 на Родине и в РФ, и не менее одного – близкий родственник – то верификация не должна подтверждаться.
+
+------------
+        Да, Игорь, спасибо, что обратил внимание, для следующих продуктов это не должно быть обязательным:
+        1.    Микрозаем сотруднику
+        2.    Микрозаем иностранному сотруднику
+        3.    Заем по программе лояльности
+
+-----------
+        
+        Я правильно понимаю, что гражданин РФ/не гражданин РФ
+        все равно должно быть подтверждено 3 контакта, единственно для гражданина РФ все
+        контакты могут быть на территории РФ?
+        ДА.
+
+    */
+
+-- получаю всех учатсников группы
+    for select cl.c_id, cl.c_name_fio, rd.rd_code, kont.k_disb_date
+        from kontract kont, product, knclient kncl, clients cl, refdata rd
+        where k_id = :k_id and
+              k_from_pr_id = pr_id and
+              k_id = kc_from_k_id and
+              kc_amount_approved &gt; 0 and
+              cl.c_id = kncl.kc_from_c_id and
+              rd.rd_id = cl.c_citizen and
+              pr_code not similar to &#x27;%(.PAR.|.EMP.|.universal.|.oivo_pack.)%&#x27; -- лояльный, микрозаем сотруднику, иностранному сотруднику
+        into c_id, res_client_fio, citizen_code, k_disb_date
+    do
+    begin
+      rf_qty = 0; -- в РФ
+      rodina_qty = 0; -- на родине
+      rodstv_qty = 0; -- родственники
+
+-- получаю актуальных контактных лиц
+      cc_cell_no_old = &#x27;&#x27;;
+
+      for select coalesce(cont.cc_status, &#x27;---&#x27;), -- мама, папа, друг ...
+                 cont.cc_type, -- 1 - родина, 0 - РФ
+                 coalesce(cont.cc_cell_no, &#x27;&#x27;)
+          from contacts cont
+          where cont.cc_from_c_id = :c_id and
+                cont.cc_is_old_contact = 0 -- только актульаные
+                and
+                ((cont.cc_verif_ignore = 0) or
+                (cont.cc_check_result = 1)) -- cc_verif_ignore = 1 - если лицо не должно верифицироваться, поэтому тут таких не учитываю
+                and
+                cont.cc_check_result = 1 -- только проверифицированные
+          order by cont.cc_cell_no, cont.cc_check_result desc
+          into :cc_status, :cc_type, :cc_cell_no
+      do
+      begin
+        if (cc_cell_no &lt;&gt; cc_cell_no_old) then
+        begin
+          cc_cell_no_old = cc_cell_no;
+
+          if (cc_type = 1) then
+            rodina_qty = rodina_qty + 1;
+          else
+            rf_qty = rf_qty + 1;
+
+          /*
+-- проверяю родственные связи
+               if (cc_status like &#x27;%родственник%&#x27;) then rodstv_qty = rodstv_qty + 1;
+               else if (exists (select *
+                                from refdata rd
+                                where rd.rd_name = :cc_status
+                                and rd.rd_main_code = &#x27;Relation&#x27;
+                                and rd.rd_is_active = 1 -- Важно
+                                )) then
+                begin
+                    rodstv_qty = rodstv_qty + 1;
+                end
+                */
+        end
+      end
+
+      res_txt = &#x27;&#x27;; --Добавил, иначе не будут работать кр.сообщения где есть условие RES_TXT = &#x27;&#x27;
+
+      if ((rodina_qty + rf_qty) &lt; 1 /*3*/ ) then
+      begin
+--RES_TXT = &#x27;Для клиента &#x27;||RES_CLIENT_FIO||&#x27;, не проверифицировано 3 контактных лица&#x27;;
+        res_txt = &#x27;Для клиента &#x27; || res_client_fio || &#x27;, не проверифицировано ни одного контаткного лица&#x27;;
+        res_is_critical = 1;
+        suspend;
+      end
+
+      /*
+        if (rodstv_qty &lt; 1) then
+        begin
+            RES_TXT = &#x27;Для клиента &#x27;||RES_CLIENT_FIO||&#x27;, должен быть проверифицирован хоть один контакт родственника&#x27;;
+            RES_IS_CRITICAL = 1;
+            suspend;    
+        end  */
+
+      /*
+        if ((citizen_code &lt;&gt; &#x27;Citizen.RU&#x27;) and (RES_TXT = &#x27;&#x27;)) then -- если клиент НЕ гражданин  России
+        begin
+            if (RES_TXT = &#x27;&#x27;) then --Поменял на это условие
+            begin
+                if (rodina_qty = 0) then
+                begin
+                    RES_TXT = &#x27;Для клиента &#x27;||RES_CLIENT_FIO||&#x27;, нет проверифицированных контактов на родине&#x27;;
+                    RES_IS_CRITICAL = 1;
+                    suspend;                
+                end
+                if (rf_qty = 0) then
+                begin
+                    RES_TXT = &#x27;Для клиента &#x27;||RES_CLIENT_FIO||&#x27;, нет проверифицированных контактов в РФ&#x27;;
+                    RES_IS_CRITICAL = 1;
+                    suspend;                
+                end
+            end
+        end */
+    end
+  end
+
+  if (object_kind = 18) then -- Actionlist
+  begin
+    select al.acl_object_id
+    from actionlist al
+    where al.acl_id = :obj_id
+    into :cc_id;
+
+    select cont.cc_from_c_id
+    from contacts cont
+    where cont.cc_id = :cc_id
+    into :c_id;
+
+    verif_qty = 0;
+    rodstv_qty = 0;
+    in_rf = 0;
+    in_rodina = 0;
+    in_rodina_tmp = 0;
+    in_rf_tmp = 0;
+
+--  Закоментировал Игорь 24.03.2018 на основании письма от Зары (НА АВОМАТИЗАЦИЮ: Достаточно дозвона до 1 контакт в РФ и 1 контакт на родине - после подача на обзвон должна быть прекращена)
+    for select iif(cont.cc_type = 1, 1, 0), iif(cont.cc_type = 0, 1, 0), coalesce(cc_status, &#x27;&#x27;)
+        from contacts cont
+        where cont.cc_is_old_contact = 0 and
+              cont.cc_from_c_id = :c_id and
+              cont.cc_check_result = 1
+        into :in_rodina_tmp, :in_rf_tmp, :cc_status
+    do
+    begin
+      verif_qty = verif_qty + 1;
+      in_rodina = in_rodina + in_rodina_tmp;
+      in_rf = in_rf + in_rf_tmp;
+
+      /*
+        if (cc_status like &#x27;%родственник%&#x27;) then
+            rodstv_qty = rodstv_qty + 1;
+        else if (exists (select *
+                         from refdata rd
+                         where rd.rd_name = :cc_status
+                         and rd.rd_main_code = &#x27;Relation&#x27;
+                         and rd.rd_is_active = 1 -- Важно
+                         )) then
+        begin
+           rodstv_qty = rodstv_qty + 1;
+        end  */
+    end
+
+    is_ok = 0;
+
+    /*  Закоментировал Игорь 24.03.2018 на основании письма от Зары (НА АВОМАТИЗАЦИЮ: Достаточно дозвона до 1 контакт в РФ и 1 контакт на родине - после подача на обзвон должна быть прекращена)
+    if ((coalesce(verif_qty,0) &gt;= 3) and  -- если 3 контакта проверифицировано
+        (coalesce(in_rodina,0) &gt; 0) and   -- есть провеорифицированные на родине
+        (coalesce(in_rf,0) &gt; 0) and       -- есть провеорифицированные в РФ
+        (coalesce(rodstv_qty,0) &gt;0)) then -- есть родственник
+            is_ok = 1;
+
+       Вместо этого был добавлен код ниже
+     */
+    if ((coalesce(verif_qty, 0) &gt;= 1) /*and  -- если 1 контакт проверифицирован
+        (coalesce(in_rodina,0) &gt; 0) and   -- есть провеорифицированные на родине
+        (coalesce(in_rf,0) &gt; 0)  and       -- есть провеорифицированные в РФ
+        (coalesce(rodstv_qty,0) &gt;0)*/ ) then -- есть родственник
+      is_ok = 1;
+
+    if (is_ok = 0) then
+    begin
+      res_txt = &#x27;не все условия выполнены, верификация продолжается&#x27;;
+      res_is_critical = 1;
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

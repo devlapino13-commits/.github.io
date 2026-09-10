@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LAST_DOC_NUMBER_SERVER — процедура — схема БД</title>
+<meta name="description" content="Процедура LAST_DOC_NUMBER_SERVER: 4 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>LAST_DOC_NUMBER_SERVER</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">DD</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KIND</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REG_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OL_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">NUM</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE LAST_DOC_NUMBER_SERVER(
+    DD DATE,
+    KIND INTEGER,
+    REG_ID INTEGER,
+    OL_ID DECIMAL(18,0))
+RETURNS (
+    NUM INTEGER)
+AS
+declare variable dn_code varchar(255);
+declare variable dn_beg_type integer;
+declare variable dn_region_kind integer;
+declare variable branch_id integer;
+declare variable dd_year integer;
+declare variable dd_month integer;
+declare variable max_n integer;
+declare variable dn_id integer;
+declare variable max_n2 integer;
+declare variable reg_id2 integer;
+begin
+  /* Procedure Text */
+  select dn_admin_opertypes, dn_begin_type, dn_region_kind
+  from docname
+  where dn_id = :kind
+  into :dn_code, :dn_beg_type, dn_region_kind;
+  if (dn_region_kind is null) then
+    dn_region_kind = 0;
+  dd_year = extract(year from :dd);
+  dd_month = extract(month from :dd);
+  if (dn_code is null) then
+    dn_code = &#x27;&#x27;;
+  if (dn_code &lt;&gt; &#x27;&#x27;) then
+  begin
+    num = 0;
+    for select dn_id
+        from docname
+        where dn_admin_opertypes = :dn_code
+        into :dn_id
+    do
+    begin
+      max_n = 0;
+      if (dn_region_kind = 0) then
+      /* на уровне текущего офиса */
+      begin
+        if (dn_beg_type = 0) then
+        /* Нумерация не обнуляется */
+        begin
+          select max(ol_doc_no)
+          from operlist
+          where is_delete = 0 and
+                ol_doc_kind = :dn_id and
+                ol_doc_no is not null and
+                ol_from_reg_id = :reg_id and
+                ol_id &lt;&gt; :ol_id
+          into :max_n;
+        end
+        if (dn_beg_type = 1) then
+        /* Обнуляется раз в год*/
+        begin
+          select max(ol_doc_no)
+          from operlist
+          where is_delete = 0 and
+                ol_doc_kind = :dn_id and
+                ol_doc_no is not null and
+                ol_year = :dd_year and
+                ol_from_reg_id = :reg_id and
+                ol_id &lt;&gt; :ol_id
+          into :max_n;
+        end
+        if (dn_beg_type = 2) then
+        /* Обнуляется раз в Месяц*/
+        begin
+          select max(ol_doc_no)
+          from operlist
+          where is_delete = 0 and
+                ol_doc_kind = :dn_id and
+                ol_doc_no is not null and
+                ol_year = :dd_year and
+                ol_month = :dd_month and
+                ol_from_reg_id = :reg_id and
+                ol_id &lt;&gt; :ol_id
+          into :max_n;
+        end
+        if (dn_beg_type = 3) then
+        /* Обнуляется каждый день*/
+        begin
+          select max(ol_doc_no)
+          from operlist
+          where is_delete = 0 and
+                ol_doc_kind = :dn_id and
+                ol_doc_no is not null and
+                ol_date_oper_day = :dd and
+                ol_from_reg_id = :reg_id and
+                ol_id &lt;&gt; :ol_id
+          into :max_n;
+        end
+      end /* Конец DN_Region_Kind 0 */
+
+      if (dn_region_kind = 1) then
+      /* На уровне филиала */
+      begin
+        select reg_head_office
+        from region
+        where reg_unicode = :reg_id
+        into :branch_id;
+
+        for select reg_unicode
+            from region
+            where reg_head_office = :branch_id
+            into :reg_id2
+        do
+        begin
+          if (dn_beg_type = 0) then
+          /* Нумерация не обнуляется */
+          begin
+            select max(ol_doc_no)
+            from operlist
+            where operlist.is_delete = 0 and
+                  ol_doc_kind = :dn_id and
+                  ol_doc_no is not null and
+                  ol_from_reg_id = :reg_id2 and
+                  ol_id &lt;&gt; :ol_id
+            into :max_n2;
+          end
+          if (dn_beg_type = 1) then
+          /* Обнуляется раз в год*/
+          begin
+            select max(ol_doc_no)
+            from operlist
+            where operlist.is_delete = 0 and
+                  ol_doc_kind = :dn_id and
+                  ol_doc_no is not null and
+                  ol_year = :dd_year and
+                  ol_from_reg_id = :reg_id2 and
+                  ol_id &lt;&gt; :ol_id
+            into :max_n2;
+          end
+          if (dn_beg_type = 2) then
+          /* Обнуляется раз в Месяц*/
+          begin
+            select max(ol_doc_no)
+            from operlist
+            where operlist.is_delete = 0 and
+                  ol_doc_kind = :dn_id and
+                  ol_doc_no is not null and
+                  ol_year = :dd_year and
+                  ol_month = :dd_month and
+                  ol_from_reg_id = :reg_id2 and
+                  ol_id &lt;&gt; :ol_id
+            into :max_n2;
+          end
+          if (dn_beg_type = 3) then
+          /* Обнуляется каждый день*/
+          begin
+            select max(ol_doc_no)
+            from operlist
+            where operlist.is_delete = 0 and
+                  ol_doc_kind = :dn_id and
+                  ol_doc_no is not null and
+                  ol_date_oper_day = :dd and
+                  ol_from_reg_id = :reg_id2 and
+                  ol_id &lt;&gt; :ol_id
+            into :max_n2;
+          end
+          if (max_n2 is null) then
+            max_n2 = 0;
+          if (max_n2 &gt; max_n) then
+            max_n = :max_n2;
+        end
+      end /* Конец DN_Region_Kind 1 */
+
+      if (dn_region_kind = 2) then
+      /* на уровне компании */
+      begin
+        if (dn_beg_type = 0) then
+        /* Нумерация не обнуляется */
+        begin
+          select max(ol_doc_no)
+          from operlist
+          where is_delete = 0 and
+                ol_doc_kind = :dn_id and
+                ol_doc_no is not null and
+                ol_id &lt;&gt; :ol_id
+          into :max_n;
+        end
+        if (dn_beg_type = 1) then
+        /* Обнуляется раз в год*/
+        begin
+          select max(ol_doc_no)
+          from operlist
+          where is_delete = 0 and
+                ol_doc_kind = :dn_id and
+                ol_doc_no is not null and
+                ol_id &lt;&gt; :ol_id and
+                ol_year = :dd_year
+          into :max_n;
+        end
+        if (dn_beg_type = 2) then
+        /* Обнуляется раз в Месяц*/
+        begin
+          select max(ol_doc_no)
+          from operlist
+          where is_delete = 0 and
+                ol_doc_kind = :dn_id and
+                ol_doc_no is not null and
+                ol_year = :dd_year and
+                ol_month = :dd_month and
+                ol_id &lt;&gt; :ol_id
+          into :max_n;
+        end
+        if (dn_beg_type = 3) then
+        /* Обнуляется каждый день*/
+        begin
+          select max(ol_doc_no)
+          from operlist
+          where is_delete = 0 and
+                ol_doc_kind = :dn_id and
+                ol_doc_no is not null and
+                ol_date_oper_day = :dd and
+                ol_id &lt;&gt; :ol_id
+          into :max_n;
+        end
+      end /* Конец DN_Region_Kind 1 */
+      if (max_n is null) then
+        max_n = 0;
+      if (max_n &gt; num) then
+        num = max_n;
+    end
+    if (num is not null) then
+      num = num + 1;
+    else
+      num = 1;
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_JOIN_DOUBLE_CLIENT_ADD_3 — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_JOIN_DOUBLE_CLIENT_ADD_3: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_JOIN_DOUBLE_CLIENT_ADD_3</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_client_status.html"><div class="to">HP_GET_CLIENT_STATUS</div></a><a class="ref-card" href="hp_join_double_client_contdata.html"><div class="to">HP_JOIN_DOUBLE_CLIENT_CONTDATA</div></a><a class="ref-card" href="hp_join_double_client_inn_check.html"><div class="to">HP_JOIN_DOUBLE_CLIENT_INN_CHECK</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_join_double_client.html"><div class="to">HP_JOIN_DOUBLE_CLIENT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_STAY</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_REMOVE</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_JOIN_DOUBLE_CLIENT_ADD_3(
+    C_STAY DECIMAL(18,0),
+    C_REMOVE DECIMAL(18,0))
+AS
+declare variable opr_id decimal(18,0);
+declare variable opr_id_stay decimal(18,0);
+declare variable opr_subject_kind integer;
+declare variable opr_subject_id decimal(18,0);
+declare variable ovs_id integer;
+declare variable new_ovs_id integer;
+declare variable k_id d_id;
+declare variable ol_id d_id;
+declare variable close_date d_date;
+declare variable cs_star_total d_integer;
+declare variable polez_platej_total d_integer;
+declare variable eil_id d_integer;
+declare variable db_id d_integer;
+begin
+  db_id = f_get_db_id();
+  -- Подписанные электронные документы переносим
+  update edoc_list
+  set edl_object_id = :c_stay
+  where edl_status = 1 and
+        edl_object_kind = 0 and
+        edl_object_id = :c_remove;
+
+  -- Неподписанные электронные документы аннулируем
+  update edoc_list
+  set edl_object_id = :c_stay,
+      edl_status = -1
+  where edl_status &lt;&gt; 0 and
+        edl_object_kind = 0 and
+        edl_object_id = :c_remove;
+
+  -- Подписантов электронных документов переносим полностью
+  update edoc_sign
+  set eds_from_c_id = :c_stay
+  where eds_from_c_id = :c_remove;
+
+  update knclient_pdn
+  set kc_from_c_id = :c_stay
+  where (kc_from_c_id = :c_remove);
+
+  update fp_verify
+  set fpv_c_id = :c_stay
+  where (fpv_c_id = :c_remove);
+
+  update extminiapp
+  set ema_from_c_id = :c_stay
+  where (ema_from_c_id = :c_remove);
+
+  update paysys_list
+  set psl_object_id = :c_stay
+  where psl_object_id = :c_remove and
+        psl_object_kind = 2; -- Тип объекта - сотрудник
+
+  update actionlist
+  set acl_object_id = :c_stay
+  where acl_object_id = :c_remove and
+        acl_object_kind = 0;
+
+  update actionorder
+  set aco_object_id = :c_stay
+  where aco_object_id = :c_remove and
+        aco_object_kind = 0;
+
+  for select opr_id, opr_subject_kind, opr_subject_id
+      from objectprops
+      where opr_object_kind = 0 and
+            opr_object_id = :c_remove
+      into :opr_id, :opr_subject_kind, opr_subject_id
+  do
+  begin
+    opr_id_stay = null;
+    select opr_id
+    from objectprops
+    where opr_object_kind = 0 and
+          opr_object_id = :c_stay and
+          opr_subject_kind = :opr_subject_kind and
+          opr_subject_id = :opr_subject_id
+    into :opr_id_stay;
+
+    if (opr_id_stay is null) then
+    begin
+      update objectprops
+      set opr_object_id = :c_stay
+      where opr_id = :opr_id;
+    end
+    else
+    begin
+      for select ovs_id
+          from objectvalues
+          where ovs_from_opr_id = :opr_id
+          order by ovs_date_begin, ovs_datetime
+          into :ovs_id
+      do
+      begin
+        new_ovs_id = null;
+        insert into objectvalues (ovs_from_opr_id, ovs_date_begin, ovs_value, ovs_from_un_id, ovs_datetime,
+                                  ovs_is_active, ovs_add_value)
+        select :opr_id_stay, ovs_date_begin, ovs_value, ovs_from_un_id, ovs_datetime, ovs_is_active, ovs_add_value
+        from objectvalues
+        where ovs_from_opr_id = :opr_id and
+              ovs_id = :ovs_id
+        returning ovs_id
+        into new_ovs_id;
+
+        if (new_ovs_id is not null) then
+        begin
+          insert into objectvalres (ovr_from_opr_id, ovr_from_ovs_id, ovr_result_rd_id, ovr_state, ovr_value)
+          select :opr_id_stay, :new_ovs_id, ovr_result_rd_id, ovr_state, ovr_value
+          from objectvalres
+          where ovr_from_opr_id = :opr_id and
+                ovr_from_ovs_id = :ovs_id;
+        end
+      end
+
+      insert into objectmemo (obm_from_opr_id, obm_memo, obm_from_un_id, obm_datetime)
+      select :opr_id_stay, obm_memo, obm_from_un_id, obm_datetime
+      from objectmemo
+      where obm_from_opr_id = :opr_id;
+    end
+  end
+  delete from objectprops
+  where opr_object_kind = 0 and
+        opr_object_id = :c_remove;
+
+  update fsrobot_msgbox
+  set msg_object_id = :c_stay
+  where msg_object_id = :c_remove and
+        msg_object_kind = 0; -- Тип объекта - сотрудник
+
+  update fsrobot_msgtmp
+  set msg_object_id = :c_stay
+  where msg_object_id = :c_remove and
+        msg_object_kind = 0; -- Тип объекта - сотрудник
+
+  update fsrobot_mailusers
+  set fsu_object_id = :c_stay
+  where fsu_object_id = :c_remove and
+        fsu_object_kind = 0; -- Тип объекта - сотрудник
+
+  update operextra
+  set ox_object_id = :c_stay
+  where ox_object_id = :c_remove and
+        ox_object_kind = 0; -- Тип объекта - сотрудник
+
+  update bloblink
+  set bll_object_id = :c_stay
+  where bll_object_kind = 0 and
+        bll_object_id = :c_remove;
+
+  update competdetails
+  set cpd_object_id = :c_stay
+  where cpd_object_kind = 0 and
+        cpd_object_id = :c_remove;
+
+  update clientrelation_log
+  set crell_from_c_id = :c_stay
+  where crell_from_c_id = :c_remove;
+
+  update clientrelation_log
+  set crell_other_c_id = :c_stay
+  where crell_other_c_id = :c_remove;
+
+  update competresult
+  set cpr_object_id = :c_stay
+  where cpr_object_kind = 0 and
+        cpr_object_id = :c_remove;
+
+  update competresult
+  set cpr_object_id = :c_stay
+  where cpr_object_kind = 0 and
+        cpr_object_id = :c_remove;
+
+  update customdatavalue
+  set cdv_object_id = :c_stay
+  where cdv_object_kind = 0 and
+        cdv_object_id = :c_remove;
+
+  update extsysmain
+  set esm_object_id = :c_stay
+  where esm_object_kind = 0 and
+        esm_object_id = :c_remove;
+
+  update filestore
+  set fs_object_id = :c_stay
+  where fs_object_kind = 0 and
+        fs_object_id = :c_remove;
+
+  update agreements
+  set ag_object_id = :c_stay
+  where ag_object_id = :c_remove and
+        ag_object_kind = 0;
+
+  update fsdatalog
+  set fl_object_id = :c_stay
+  where fl_object_id = :c_remove and
+        fl_object_kind = 0;
+
+  update miniapp_verify
+  set mv_from_c_id = :c_stay
+  where mv_from_c_id = :c_remove;
+
+  update ref_account
+  set acc_object_id = :c_stay
+  where acc_object_id = :c_remove and
+        acc_object_kind = 0;
+
+  update docrecoglist
+  set drl_from_c_id = :c_stay
+  where drl_from_c_id = :c_remove;
+
+  update kontpaytasks
+  set kpt_seller_id = :c_stay
+  where kpt_seller_id = :c_remove;
+
+  update cc_website_miniapp
+  set wma_from_c_id = :c_stay
+  where wma_from_c_id = :c_remove;
+
+  if (exists(select *
+             from grs_clients gc
+             where gc.gc_from_c_id = :c_remove)) then
+  begin
+    delete from grs_clients gc
+    where gc.gc_from_c_id = :c_remove;
+    for select distinct eil.eil_id
+        from extinfolist eil
+        inner join extinfocfg eic on eic.eic_id = eil.eil_from_eic_id and
+                                    (eic.eic_code = &#x27;fin&#x27; and :db_id = 94401) or (eic.eic_code = &#x27;Tunduk&#x27; and :db_id in (39801, 41701))
+        where eil.eil_from_c_id = :c_remove
+        into eil_id
+    do
+    begin
+      delete from grs_addrlist ga
+      where ga.ga_from_eil_id = :eil_id;
+
+      delete from grs_clients gc
+      where gc.gc_from_eil_id = :eil_id;
+
+      delete from extinfolist eil
+      where eil.eil_id = :eil_id;
+    end
+  end
+
+  update facerecoglist frl
+  set frl.frl_from_c_id = :c_stay
+  where frl.frl_from_c_id = :c_remove;
+
+  update extinfolist
+  set eil_from_c_id = :c_stay
+  where eil_from_c_id = :c_remove;
+
+  update kn_operbook
+  set kob_client_dt = :c_stay
+  where kob_client_dt = :c_remove;
+
+  update kn_operbook kob
+  set kob_client_kt = :c_stay
+  where kob_client_kt = :c_remove;
+
+  update extminiapp_log
+  set emal_from_c_id = :c_stay
+  where emal_from_c_id = :c_remove;
+
+  update epay_acc
+  set epa_from_c_id = :c_stay
+  where epa_from_c_id = :c_remove;
+
+  update com_list
+  set cml_init_c_id = :c_stay
+  where cml_init_c_id = :c_remove;
+
+  update extsys_token
+  set et_from_c_id = :c_stay
+  where et_from_c_id = :c_remove;
+
+  update relationlink
+  set rll_client_1 = :c_stay
+  where rll_client_1 = :c_remove;
+
+  update relationlink
+  set rll_client_2 = :c_stay
+  where rll_client_2 = :c_remove;
+
+  update mc_login
+  set mcl_from_c_id = :c_stay
+  where mcl_from_c_id = :c_remove;
+
+  execute procedure hp_join_double_client_contdata(:c_stay, :c_remove);
+
+  update qr_list
+  set qrl_from_c_id = :c_stay
+  where qrl_from_c_id = :c_remove;
+
+  delete from legitimcalc
+  where lgc_from_c_id = :c_remove;
+
+  if (row_count &gt; 0) then
+  begin
+    delete from pointcalc
+    where ptc_from_c_id in (:c_stay, :c_remove) order by ptc_from_c_id desc, ptc_date desc;
+
+    delete from pointsaldo
+    where pts_from_c_id in (:c_stay, :c_remove) order by pts_from_c_id desc, pts_date_begin desc;
+
+    delete from legitimcalc
+    where lgc_from_c_id = :c_stay;
+
+    delete from clientstatus
+    where cs_from_c_id in (:c_stay, :c_remove);
+
+    for select ks_from_k_id, ks_from_ol_id, ks_date_begin
+        from kontstate, knclient
+        where ks_ol_is_delete = 0 and
+              ks_state = 2 and
+              ks_from_k_id = kc_from_k_id and
+              kc_amount_approved &gt; 0 and
+              kc_from_c_id = :c_stay
+        order by ks_date_begin
+        into k_id, ol_id, close_date
+    do
+    begin
+      select c_curr_status, polez_platej_total
+      from hp_get_client_status(:c_stay, :close_date)
+      into cs_star_total, polez_platej_total;
+
+      update or insert into clientstatus (cs_from_c_id, cs_from_k_id, cs_from_ol_id, cs_ol_is_delete, cs_date_begin,
+                                          cs_date_end, cs_star_total, cs_polez_platej)
+      values (:c_stay, :k_id, :ol_id, 0, :close_date, &#x27;31.12.9999&#x27;, :cs_star_total, :polez_platej_total)
+      matching (cs_from_c_id, cs_from_k_id, cs_from_ol_id);
+    end
+  end
+
+  update printed_questionnaires
+  set pqt_from_c_id = :c_stay
+  where pqt_from_c_id = :c_remove;
+
+  update cib_kontract_errors
+  set cke_from_c_id = :c_stay
+  where cke_from_c_id = :c_remove;
+
+  update bankimpcfg
+  set bcg_from_c_id = :c_stay
+  where bcg_from_c_id = :c_remove;
+
+  update bki_last_send_data
+  set bks_from_c_id = :c_stay
+  where bks_from_c_id = :c_remove;
+
+  update bki_clients
+  set bkc_from_c_id = :c_stay
+  where bkc_from_c_id = :c_remove;
+
+  update finerefund
+  set fr_from_c_id = :c_stay
+  where fr_from_c_id = :c_remove;
+
+  update ft_anketa_list
+  set fal_from_c_id = :c_stay
+  where fal_from_c_id = :c_remove;
+
+  update expressapp
+  set exa_from_c_id = :c_stay
+  where exa_from_c_id = :c_remove;
+
+  update contacts_for_check
+  set cfc_from_c_id = :c_stay
+  where cfc_from_c_id = :c_remove;
+
+  update fps_client_banks
+  set fcb_from_c_id = :c_stay
+  where fcb_from_c_id = :c_remove;
+
+  -- У удаляемого клиента паспорта забираем с пометкой удаления,
+  -- чтобы не перетер информацию в clients
+  update clientdocs
+  set cds_from_c_id = :c_stay,
+      cds_is_delete = iif(cds_is_main_doc = 1, 1, cds_is_delete)
+  where cds_from_c_id = :c_remove;
+
+  update opercash oc
+  set oc.opc_from_c_id = :c_stay
+  where oc.opc_from_c_id = :c_remove;
+
+  -- RFCAZ-436
+  update opercard opc
+  set opc.opc_from_c_id = :c_stay
+  where opc.opc_from_c_id = :c_remove;
+
+  -- RFCKG-4470
+  update cardpinchange cph
+  set cph_from_c_id = :c_stay
+  where cph_from_c_id = :c_remove;
+
+  update lawkredit lk
+  set lk.lak_from_c_id = :c_stay
+  where lk.lak_from_c_id = :c_remove;
+
+  execute procedure hp_join_double_client_inn_check(:c_stay, :c_remove);
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

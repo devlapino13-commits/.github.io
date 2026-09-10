@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CALCPERC_FIX_FILL — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CALCPERC_FIX_FILL: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CALCPERC_FIX_FILL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_calc_perc_one_cls.html"><div class="to">AAREP_CALC_PERC_ONE_CLS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MAX_REC</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CPF_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CALCPERC_FIX_FILL(
+    MAX_REC D_INTEGER)
+RETURNS (
+    CPF_ID D_INTEGER)
+AS
+declare variable start_date d_date;
+declare variable rep_date d_date;
+declare variable closed_bal_perc d_currency;
+declare variable orig_bal_perc d_currency;
+declare variable orig_balance d_currency;
+declare variable k_id d_id;
+declare variable close_date d_date;
+declare variable disb_date d_date;
+declare variable new_bal_perc d_currency;
+declare variable new_balance d_currency;
+declare variable kcp_period d_integer;
+declare variable last_date d_date;
+declare variable rec_no d_integer;
+begin
+  delete from temp_calcperc_fix
+  where 1 = 1;
+
+  rep_date = cast(&#x27;01.01.2020&#x27; as date);
+  last_date = cast(&#x27;31.12.2999&#x27; as date);
+
+  if (max_rec is null) then
+    max_rec = 0;
+
+  rec_no = 0;
+  cpf_id = 0;
+
+  start_date = f_tmp_const(&#x27;new_classic_perc_start_date&#x27;);
+  start_date = start_date - 1;
+  kcp_period = extract(year from start_date) * 100 + extract(month from start_date);
+
+  for select ks_from_k_id, ks_date_begin, k_disb_date
+  from kontstate, kontract, product
+  where ks_state = 2 and
+        ks_ol_is_delete = 0 and
+        ks_date_begin &gt;= :rep_date and
+        ks_from_k_id = k_id and
+        k_from_pr_id = pr_id and
+        pr_interest_method &gt; 0 and
+        pr_percent_kind &lt;&gt; 2
+  into k_id, close_date, disb_date
+  do
+  begin
+    orig_bal_perc = 0;
+    closed_bal_perc = 0;
+    new_bal_perc = 0;
+    new_balance = 0;
+
+    select result_perc_end
+    from aarep_calc_perc_one_cls(:k_id, :close_date, :close_date, 0, 1, 1)
+    into :closed_bal_perc;
+
+    if (disb_date &lt;= start_date) then
+    begin
+      select result_perc_end, result_balance_end
+      from aarep_calc_perc_one_cls(:k_id, minvalue(:start_date, :close_date), :start_date, 0, 1, 0)
+      into :new_bal_perc, new_balance;
+
+      select kcp_perc_saldo
+      from kontcalcperc
+      where kcp_from_k_id = :k_id and
+            kcp_period = :kcp_period
+      into orig_bal_perc;
+    end
+    orig_balance = new_balance;
+
+    if (abs(closed_bal_perc) &gt; 1 or abs(new_bal_perc - orig_bal_perc) &gt; 1) then
+    begin
+      rec_no = rec_no + 1;
+      cpf_id = cpf_id + 1;
+      insert into temp_calcperc_fix (cpf_id, cpf_from_k_id, cpf_disb_date, cpf_close_date, cpf_check_date,
+                                     cpf_orig_bal_perc, cpf_orig_balance,
+                                     cpf_new_bal_perc, cpf_new_balance,
+                                     cpf_closed_bal_perc, cpf_status)
+      values (:cpf_id, :k_id, :disb_date, :close_date, :start_date,
+              :orig_bal_perc, :orig_balance,
+              :new_bal_perc, :new_balance,
+              :closed_bal_perc, 0);
+
+      if (rec_no = max_rec) then
+        Break;
+    end
+  end
+
+
+  close_date = null;
+  closed_bal_perc = 0;
+  rec_no = 0;
+
+  for select ks_from_k_id, ks_date_begin
+  from kontstate, kontract, product
+  where ks_state = 1 and
+        ks_ol_is_delete = 0 and
+        ks_date_begin &lt;= :start_date and
+        ks_date_end &gt;= :last_date and
+        ks_from_k_id = k_id and
+        k_from_pr_id = pr_id and
+        pr_interest_method &gt; 0 and
+        pr_percent_kind &lt;&gt; 2
+  into k_id, disb_date
+  do
+  begin
+    orig_bal_perc = 0;
+    new_bal_perc = 0;
+    new_balance = 0;
+
+    select result_perc_end, result_balance_end
+    from aarep_calc_perc_one_cls(:k_id, :start_date, :start_date, 0, 1, 1)
+    into :new_bal_perc, new_balance;
+
+    select kcp_perc_saldo
+    from kontcalcperc
+    where kcp_from_k_id = :k_id and
+          kcp_period = :kcp_period
+    into orig_bal_perc;
+    orig_balance = new_balance;
+
+    if (abs(new_bal_perc - orig_bal_perc) &gt; 1) then
+    begin
+      rec_no = rec_no + 1;
+      cpf_id = cpf_id + 1;
+      insert into temp_calcperc_fix (cpf_id, cpf_from_k_id, cpf_disb_date, cpf_close_date, cpf_check_date,
+                                     cpf_orig_bal_perc, cpf_orig_balance,
+                                     cpf_new_bal_perc, cpf_new_balance,
+                                     cpf_closed_bal_perc, cpf_status)
+      values (:cpf_id, :k_id, :disb_date, :close_date, :start_date,
+              :orig_bal_perc, :orig_balance,
+              :new_bal_perc, :new_balance,
+              :closed_bal_perc, 0);
+
+      if (rec_no = max_rec) then
+        Break;
+    end
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

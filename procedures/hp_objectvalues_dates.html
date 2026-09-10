@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_OBJECTVALUES_DATES — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_OBJECTVALUES_DATES: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_OBJECTVALUES_DATES</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_continfo_fix.html"><div class="to">HP_CONTINFO_FIX</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OPR_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_OBJECTVALUES_DATES(
+    OPR_ID DECIMAL(18,0))
+AS
+declare variable d_prior date;
+declare variable ovs_from_opr_id decimal(18,0);
+declare variable ovs_id integer;
+declare variable ovs_date_begin date;
+declare variable ovs_date_end date;
+declare variable ovs_is_active integer;
+declare variable actual_ovs_id integer;
+declare variable ovs_add_value decimal(18,4) = 0;
+declare variable fact_ovs_id integer;
+declare variable ovs_value varchar(255);
+begin
+  d_prior = &#x27;31.12.9999&#x27;;
+
+  actual_ovs_id = null; -- ID последней актуальной записи
+  fact_ovs_id = null; -- ID последней подтвержденной даты
+
+  for select ovs_from_opr_id, ovs_id, ovs_date_begin, ovs_date_end, ovs_is_active, ovs_add_value, ovs_value
+      from objectvalues
+      where ovs_from_opr_id = :opr_id
+      order by ovs_from_opr_id desc, ovs_date_begin desc, ovs_datetime desc, ovs_id desc
+      into ovs_from_opr_id, ovs_id, ovs_date_begin, ovs_date_end, ovs_is_active, ovs_add_value, ovs_value
+  do
+  begin
+    if (ovs_is_active = 1) then
+    begin
+      if (actual_ovs_id is null) then
+        actual_ovs_id = ovs_id;
+      if (fact_ovs_id is null and
+          ovs_add_value = 2) then
+        fact_ovs_id = ovs_id;
+
+      if (ovs_date_end &lt;&gt; d_prior) then
+      begin
+        update objectvalues
+        set ovs_date_end = :d_prior
+        where ovs_from_opr_id = :ovs_from_opr_id and
+              ovs_id = :ovs_id;
+      end
+      d_prior = ovs_date_begin - 1;
+    end
+    else
+    begin
+      if (ovs_date_end &lt;&gt; (ovs_date_begin - 1)) then
+      begin
+        update objectvalues
+        set ovs_date_end = (:ovs_date_begin - 1)
+        where ovs_from_opr_id = :ovs_from_opr_id and
+              ovs_id = :ovs_id;
+      end
+    end
+  end
+  update objectprops
+  set opr_actual_ovs_id = :actual_ovs_id,
+      opr_fact_ovs_id = :fact_ovs_id
+  where opr_id = :opr_id and
+        (coalesce(opr_actual_ovs_id, -777) &lt;&gt; coalesce(:actual_ovs_id, -777) or
+        coalesce(opr_fact_ovs_id, -777) &lt;&gt; coalesce(:fact_ovs_id, -777));
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

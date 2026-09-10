@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_WRITEOFF_ALL_PENALTY_2 — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_WRITEOFF_ALL_PENALTY_2: 1 входных, 8 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_WRITEOFF_ALL_PENALTY_2</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">8</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_make_zad_list.html"><div class="to">AAREP_MAKE_ZAD_LIST</div></a><a class="ref-card" href="get_kv_id.html"><div class="to">GET_KV_ID</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">8 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">AAREP_K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AAREP_REGION_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SH_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SH_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SH_CALC_FINE</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEW_OL_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ZAD_SUM</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ZAD_FINE</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_WRITEOFF_ALL_PENALTY_2(
+    REP_DATE DATE)
+RETURNS (
+    AAREP_K_ID DECIMAL(18,0),
+    AAREP_REGION_ID INTEGER,
+    SH_ID INTEGER,
+    SH_DATE DATE,
+    SH_CALC_FINE DECIMAL(18,4),
+    NEW_OL_ID DECIMAL(18,0),
+    ZAD_SUM DECIMAL(18,4),
+    ZAD_FINE DECIMAL(18,4))
+AS
+declare variable is_first_line integer;
+declare variable ol_year integer;
+declare variable ol_month integer;
+declare variable ks_number integer;
+begin
+  /*
+        Автор: Гусев Игорь
+        Дата: 15.01.2015 6:49:45
+        Назначение:  Списание пени, согласно приказу № 06-01-15 от 1301_2015 (РФ)
+                     по всем контрактам, у которых отсутсвует задолженность по ОС и начисленным процентам.
+    */
+
+  for select distinct ks_from_k_id, kal_new_reg_id
+      from kontstate, kontract, knaktlist
+      where ks_ol_is_delete = 0 and
+            ks_date_begin &lt;= :rep_date and
+            ks_date_end &gt;= :rep_date and
+            ks_state = 1 and
+            k_id = ks_from_k_id and
+            kal_from_kf_id = k_from_kf_id and
+            kal_date &lt;= :rep_date and
+            kal_date_end &gt;= :rep_date and
+            knaktlist.is_delete = 0
+      into :aarep_k_id, :aarep_region_id
+  do
+  begin
+    zad_sum = null;
+    zad_fine = null;
+
+    select sum(zad_os + sh_calc_perc), sum(sh_calc_fine)
+    from aarep_make_zad_list(:aarep_k_id, :rep_date, 1)
+    where sh_date is not null
+    into :zad_sum, :zad_fine;
+
+    if (zad_fine is null) then
+      zad_fine = 0;
+    if (zad_sum is null) then
+      zad_sum = 0;
+
+    if ((zad_sum = 0) and
+        (zad_fine &gt; 0)) then -- если нет задолженности по ОС и накопленным %, но есть задолженность по пеням
+    begin
+      ol_year = extract(year from rep_date);
+      ol_month = extract(month from rep_date);
+
+      is_first_line = 0;
+      for select sh_id, sh_date, sh_calc_fine
+          from aarep_make_zad_list(:aarep_k_id, :rep_date, 0)
+          where sh_date is not null and
+                sh_calc_fine &lt;&gt; 0
+          into :sh_id, :sh_date, :sh_calc_fine
+      do
+      begin
+        sh_calc_fine = -sh_calc_fine;
+        is_first_line = is_first_line + 1;
+        if (is_first_line = 1) then
+        begin
+          select result
+          from get_kv_id(5)
+          into :new_ol_id;
+
+          insert into operlist (ol_id, ol_from_reg_id, ol_oper_type, ol_date, ol_doc_no, ol_doc_no_str, ol_doc_kind,
+                                ol_memo, ol_status, is_delete, ol_datetime, ol_user_id, ol_document_client,
+                                ol_from_mo_id, ol_is_mo_modified, ol_document_office, ol_acc_no_client,
+                                ol_acc_no_office, ol_oper_subtype, ol_date_oper_day, ol_pocket, ol_doc_client_name,
+                                ol_is_client, ol_year, ol_month, ol_parent_id)
+          values (:new_ol_id, :aarep_region_id, 1, :rep_date, 0, &#x27;&#x27;, 4,
+                  &#x27;Списание накопленной пени согласно приказа № 06-01-15 от 1301_2015&quot;&#x27;,
+                  0, 0, null, 1000000000001, null, null, 0, null, null, null, 3, :rep_date, 0,
+                  &#x27;Приказ № 06-01-15 от 1301_2015&quot;&#x27;, 0, :ol_year, :ol_month, null);
+        end
+        insert into operkred (ok_from_ol_id, ok_number, ok_from_k_id, ok_sh_id, ok_sh_date, ok_type, ok_os, ok_perc,
+                              ok_fine, ok_pay_type, ok_kommis, ok_sh_os, ok_sh_perc, ok_kommis_adv, ok_tax)
+        values (:new_ol_id, :is_first_line, :aarep_k_id, :sh_id, :sh_date, 5, 0, 0, :sh_calc_fine, 3, 0, 0, 0, 0, 0);
+
+        suspend;
+      end
+
+-- закрываю контракт
+
+      ks_number = (select max(ks_number)
+                   from kontstate
+                   where ks_from_k_id = :aarep_k_id);
+
+      insert into kontstate (ks_from_ol_id, ks_from_k_id, ks_date_begin, ks_date_end, ks_ol_is_delete, ks_state,
+                             ks_number)
+      values (:new_ol_id, :aarep_k_id, :rep_date, &#x27;31.12.9999&#x27;, 0, 2, :ks_number + 1);
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

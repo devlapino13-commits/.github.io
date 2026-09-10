@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GET_CLIENT_MINIAPP_SUM — процедура — схема БД</title>
+<meta name="description" content="Процедура GET_CLIENT_MINIAPP_SUM: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>GET_CLIENT_MINIAPP_SUM</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_calc_credit_limit.html"><div class="to">HP_CALC_CREDIT_LIMIT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_SUM</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE GET_CLIENT_MINIAPP_SUM(
+    C_ID D_ID)
+RETURNS (
+    MA_SUM D_INTEGER)
+AS
+declare variable ma_id d_id;
+declare variable mac_amount d_integer;
+declare variable tkt_id d_id;
+declare variable ma_id_list d_str_long;
+declare variable mc_purchase_sum d_currency;
+begin
+  ma_id_list = &#x27;.&#x27;; --Проверенные заявки
+  ma_sum = 0;
+
+  -- Проходим по всем кредитным заявкам клиента
+  for select ma.ma_id, mac.mac_amount
+      from miniappclient mac
+      inner join miniapp ma on ma.ma_id = mac.mac_from_ma_id and
+            ma.ma_date_end = &#x27;31.12.9999&#x27; and
+            ma.ma_is_active = 1
+      where mac.mac_from_c_id = :c_id and
+            mac.mac_amount &gt; 0
+      into :ma_id, :mac_amount
+  do
+  begin
+    -- Если заявка уже имеет выданный кредит то пропускаем
+    if (exists(select *
+               from kontract k
+               inner join kontstate ks on ks.ks_from_k_id = k.k_id and
+                     current_date between ks.ks_date_begin and ks.ks_date_end and
+                     ks.ks_ol_is_delete = 0 and
+                     ks.ks_state &lt;&gt; 0
+               where k.k_from_ma_app_id = :ma_id)) then
+      continue;
+    --Если контракта нет или контракт не активный/закрытый, то прибавляем к сумме и добавляем ID
+    ma_id_list = ma_id_list || ma_id || &#x27;.&#x27;;
+    ma_sum = ma_sum + mac_amount;
+  end
+
+  -- Проходим по внешним заявкам
+  for select ema.ema_from_tkt_id, ema.ema_amount
+      from extminiapp ema
+      inner join product pr on pr.pr_id = ema.ema_from_pr_id and
+            pr.pr_code containing &#x27;.sugarmill.&#x27;
+      where ema.ema_from_c_id = :c_id and
+            ema.ema_amount &gt; 0 and
+            ema.ema_status = 0
+      into tkt_id, mac_amount
+  do
+  begin
+    -- Если заявку уже проверили в блоке выше, то пропускаем
+    if (exists(select *
+               from miniapp ma
+               where ma.ma_from_tkt_id = :tkt_id and
+                     ma.ma_date_end = &#x27;31.12.9999&#x27; and
+                     ma.ma_is_active = 1 and
+                     :ma_id_list containing ma.ma_id)) then
+      continue;
+    ma_sum = ma_sum + mac_amount;
+  end
+
+  -- Сумма в еще необработанных заявках(не отсканированы) с КМП
+  select coalesce(sum(mp.mp_amount),0)
+  from mc_purchase mp
+  inner join mc_login mcl on mcl.mcl_id = mp.mp_from_mcl_id and
+                             mcl.mcl_from_c_id = :c_id
+  where mp.mp_from_ma_id is null and
+        mp.mp_from_exa_id is null and
+        mp.mp_status = 2 and
+        mp.mp_is_finished = 1
+  into :mc_purchase_sum;
+
+  ma_sum = ma_sum + :mc_purchase_sum;
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

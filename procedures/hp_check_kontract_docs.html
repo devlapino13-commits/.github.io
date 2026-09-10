@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CHECK_KONTRACT_DOCS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CHECK_KONTRACT_DOCS: 1 входных, 7 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CHECK_KONTRACT_DOCS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">7</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">3</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_docprloan_valid.html"><div class="to">HP_DOCPRLOAN_VALID</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="cm_az_0000_sql.html"><div class="to">CM_AZ_0000_SQL</div></a><a class="ref-card" href="cm_kg_0000_sql.html"><div class="to">CM_KG_0000_SQL</div></a><a class="ref-card" href="cm_ru_0000_sql.html"><div class="to">CM_RU_0000_SQL</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">7 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_SET_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_DOC_SET_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_DOCPROP_NAME</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_VALID</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CLIENT_KIND</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_OBJECT_NAME</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CHECK_KONTRACT_DOCS(
+    K_ID ID_TYPE)
+RETURNS (
+    RES_ID D_INTEGER,
+    RES_SET_ID D_INTEGER,
+    RES_DOC_SET_NAME D_STR_100,
+    RES_DOCPROP_NAME D_STR_255,
+    RES_VALID D_SMALLINT,
+    CLIENT_KIND SMALLINT,
+    RES_OBJECT_NAME D_STR_255)
+AS
+declare variable pr_id d_integer;
+declare variable rep_date d_date;
+declare variable z_type d_smallint;
+declare variable z_from_c_id id_type;
+declare variable c_id id_type;
+declare variable k_kontract_no d_str_code;
+begin
+  --  client_kind: 0 - Клиент; 1 - Клиент и он сам является залогодателем; 2 - Залогодатель, он отличается от клиента; 3 - Поручитель
+  res_id = 0;
+  for
+  select k_from_pr_id,k_disb_date, k_kontract_no from kontract, product
+  where k_id = :k_id
+  and k_from_pr_id = pr_id
+  into pr_id, rep_date, k_kontract_no
+  do
+  begin
+    -- проверка клиентов
+    for
+    select kc_from_c_id from knclient
+    where kc_from_k_id = :k_id
+    and kc_amount_approved &gt; 0
+    into c_id
+    do
+    begin
+      client_kind = 0;
+      if (exists(select * from zalog
+      where z_from_c_id = :c_id
+      and z_from_k_id = :k_id
+      and :rep_date between coalesce(z_date_begin,&#x27;01.01.1990&#x27;)
+      and coalesce(z_date_end,&#x27;31.12.9999&#x27;))) then client_kind = 1;
+
+      if ((f_docprloan_valid(:c_id,:pr_id,:client_kind,:rep_date) = -1)) then
+      begin
+        for select res_set_id, res_doc_set_name, res_docprop_name, res_valid
+        from hp_docprloan_valid(:c_id, :pr_id, :client_kind, :rep_date, 1)
+--        where res_valid = 0 --возвращает только по недостающимся документам
+        into :res_set_id, :res_doc_set_name, :res_docprop_name, :res_valid
+        do
+        begin
+          res_object_name = &#x27;&#x27;;
+          select :k_kontract_no || &#x27;, &#x27;||trim(iif(:client_kind = 0, &#x27;клиент:&#x27;,&#x27;клиент/залогодатель:&#x27;))||c_name_fio
+          from clients
+          where c_id = :c_id
+          into res_object_name;
+
+          res_id = res_id + 1;
+          suspend;
+        end
+      end
+    end 
+    -- проверка поручителей и залогодателей
+    for
+    select distinct z_type, z_from_c_id from zalog
+    where z_from_k_id = :k_id
+    and :rep_date between coalesce(z_date_begin,&#x27;01.01.1990&#x27;) and coalesce(z_date_end,&#x27;31.12.9999&#x27;)
+    and z_from_c_id is not null
+    into z_type, z_from_c_id
+    do
+    begin
+      if (exists(select * from knclient
+      where kc_from_k_id = :k_id
+      and kc_from_c_id = :z_from_c_id
+      and kc_amount_approved &gt; 0
+      )) then continue;
+
+      if (z_type = 1)
+      then client_kind = 2;
+      else client_kind = 3;
+
+      if (f_docprloan_valid(:z_from_c_id,:pr_id,:client_kind,:rep_date) = -1) then
+      begin
+        for select res_set_id, res_doc_set_name, res_docprop_name, res_valid
+        from hp_docprloan_valid(:z_from_c_id, :pr_id, :client_kind, :rep_date, 1)
+--        where res_valid = 0 -- возвращает только по недостающимся документам
+        into :res_set_id, :res_doc_set_name, :res_docprop_name, :res_valid
+        do
+        begin
+          res_object_name = &#x27;&#x27;;
+          select :k_kontract_no || &#x27;, &#x27;||trim(iif(:client_kind = 2, &#x27;залогодатель:&#x27;,&#x27;поручитель:&#x27;))||c_name_fio
+          from clients
+          where c_id = :c_id
+          into res_object_name;
+
+          res_id = res_id + 1;
+          suspend;
+        end
+      end
+    end 
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

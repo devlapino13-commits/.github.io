@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$UXGRID_COPY_COLUMNS — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$UXGRID_COPY_COLUMNS: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$UXGRID_COPY_COLUMNS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SRC_GRID_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DST_GRID_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$UXGRID_COPY_COLUMNS(
+    SRC_GRID_UUID D_UUID,
+    DST_GRID_UUID D_UUID)
+AS
+declare variable uf_uuid d_uuid;
+declare variable us_uuid d_uuid;
+declare variable clone_count d_integer;
+declare variable ufr_add_table_fields d_str_code;
+declare variable main_us_uuid d_uuid;
+begin
+  clone_count = 0;
+
+  delete from ux$band
+  where bnd_grid_uuid = :dst_grid_uuid;
+
+  delete from ux$gritem
+  where ugi_ugr_uuid = :dst_grid_uuid
+  order by ugi_position desc;
+
+  select ufr_us_uuid, ufr_add_table_fields
+  from ux$grid, ux$frame
+  where ugr_uuid = :dst_grid_uuid and
+        ugr_ufr_uuid = ufr_uuid
+  into us_uuid, ufr_add_table_fields;
+
+  if (ufr_add_table_fields &lt;&gt; &#x27;&#x27;) then
+  begin
+    select us_uuid
+    from ux$source
+    where us_code = :ufr_add_table_fields
+    into main_us_uuid;
+  end
+
+  if (exists(select * from ux$grid
+             where ugr_uuid = :src_grid_uuid)) then
+  begin
+    insert into ux$band (bnd_grid_uuid, bnd_id, bnd_parent_id, bnd_index, bnd_childs, bnd_position, bnd_caption, bnd_hidden,
+                         bnd_hold_own, bnd_width, bnd_fixed_kind)
+    select :dst_grid_uuid, bnd_id, bnd_parent_id, bnd_index, bnd_childs, bnd_position, bnd_caption, bnd_hidden, bnd_hold_own,
+           bnd_width, bnd_fixed_kind
+    from ux$band
+    where bnd_grid_uuid = :src_grid_uuid
+    order by bnd_id;
+  
+    for select ugi_uuid, ugi_urt_uuid, ugi_ugr_uuid, ugi_uf_uuid, ugi_position, ugi_width, ugi_sizable, ugi_order_index,
+               ugi_group_index, ugi_fixed_kind, ugi_summary_kind, ugi_bnd_id, ugi_caption, ugi_hint, ugi_hidden,
+               ugi_readonly, ugi_header_align, ugi_value_align,
+               uf_field_name
+    from ux$gritem, ux$field
+    where ugi_ugr_uuid = :src_grid_uuid and
+          ugi_uf_uuid = uf_uuid
+    order by ugi_position
+    as cursor cur
+    do
+    begin
+      uf_uuid = null;
+  
+      select uf_uuid
+      from ux$field
+      where uf_owner = :us_uuid and
+            uf_field_name = cur.uf_field_name
+      into uf_uuid;
+  
+      if (uf_uuid is null and main_us_uuid is not null) then
+      begin
+        select uf_uuid
+        from ux$field
+        where uf_owner = :main_us_uuid and
+              uf_field_name = cur.uf_field_name
+        into uf_uuid;
+
+        Continue;
+      end
+
+      if (uf_uuid is null) then
+        Continue;
+  
+      insert into ux$gritem (ugi_ugr_uuid, ugi_uf_uuid, ugi_position, ugi_width, ugi_sizable,
+                             ugi_order_index, ugi_group_index, ugi_fixed_kind, ugi_summary_kind, ugi_bnd_id, ugi_caption,
+                             ugi_hint, ugi_hidden, ugi_readonly, ugi_header_align, ugi_value_align)
+      values (:dst_grid_uuid, :uf_uuid, cur.ugi_position, cur.ugi_width, cur.ugi_sizable,
+              cur.ugi_order_index, cur.ugi_group_index, cur.ugi_fixed_kind, cur.ugi_summary_kind, cur.ugi_bnd_id, cur.ugi_caption, cur.ugi_hint,
+              cur.ugi_hidden, cur.ugi_readonly, cur.ugi_header_align, cur.ugi_value_align);
+  
+      clone_count = clone_count + 1;
+    end
+  end else
+  if (exists(select * from ux$unititem
+             where uni_uuid = :src_grid_uuid)) then
+  begin
+    for select uni_position, uni_width, uni_sizable, uni_order_index,
+               uni_group_index, uni_fixed_kind, uni_summary_kind,
+               uni_caption, uni_hint, uni_hidden,
+               uni_readonly, uni_fieldname
+    from ux$unititem
+    where uni_parent_uuid = :src_grid_uuid
+    order by uni_position
+    as cursor cur
+    do
+    begin
+      uf_uuid = null;
+  
+      select uf_uuid
+      from ux$field
+      where uf_owner = :us_uuid and
+            uf_field_name = cur.uni_fieldname
+      into uf_uuid;
+  
+      if (uf_uuid is null and main_us_uuid is not null) then
+      begin
+        select uf_uuid
+        from ux$field
+        where uf_owner = :main_us_uuid and
+              uf_field_name = cur.uni_fieldname
+        into uf_uuid;
+
+        Continue;
+      end
+
+      if (uf_uuid is null) then
+        Continue;
+
+      insert into ux$gritem (ugi_ugr_uuid, ugi_uf_uuid, ugi_position, ugi_width, ugi_sizable,
+                             ugi_order_index, ugi_group_index, ugi_fixed_kind, ugi_summary_kind, ugi_caption,
+                             ugi_hint, ugi_hidden, ugi_readonly)
+      values (:dst_grid_uuid, :uf_uuid, cur.uni_position, cur.uni_width, cur.uni_sizable,
+              cur.uni_order_index, cur.uni_group_index, cur.uni_fixed_kind, cur.uni_summary_kind, cur.uni_caption, cur.uni_hint,
+              cur.uni_hidden, cur.uni_readonly);
+  
+      clone_count = clone_count + 1;
+    end
+  end
+
+  if (clone_count = 0) then
+    exception e_message &#x27;Совпадения по полям не найдены&#x27;;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

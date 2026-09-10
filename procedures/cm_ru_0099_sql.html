@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0099_SQL — процедура — схема БД</title>
+<meta name="description" content="Проверка ПАРАЛЛЕЛЬНЫХ кредитов">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0099_SQL</code></h1>
+<p class="desc">Проверка ПАРАЛЛЕЛЬНЫХ кредитов</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_client_status_str.html"><div class="to">HP_GET_CLIENT_STATUS_STR</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0099_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare kc_amount curr_type;
+declare kf_disb_date d_date;
+declare variable KF_ID ID_TYPE;
+declare variable CURR_K_PERIOD integer;
+declare variable CURR_K_DISB_DATE date;
+declare variable k_kredline_end date;
+declare variable IS_DELINQ smallint;
+declare variable KC_FROM_C_ID CURR_TYPE;
+declare variable K_KOLICH_CLIENT_APPROVED integer;
+declare variable C_LAST_BONUS_STATUS integer;
+declare variable C_ID ID_TYPE;
+declare variable K_PERCENT PERC_TYPE;
+declare variable K_KOLICH_REPAY integer;
+declare variable OK_SH_ID integer;
+declare variable OK_OS CURR_TYPE;
+declare variable OK_PERC CURR_TYPE;
+declare variable k_amount_approved CURR_TYPE;
+declare variable KC_AMOUNT_APPROVED CURR_TYPE;
+declare variable K_KONTRACT_NO varchar(30);
+declare variable CURR_K_ID id_type;
+declare variable LAST_K_ID id_type;
+declare variable c_curr_status smallint;
+declare variable c_curr_status_str varchar(100);
+declare variable max_sum curr_type;
+declare variable repay_sum curr_type;
+begin
+   if (k_id = 101010018949500301) then exit;  -- на основе письма от Зары &quot;Re: Лояльный займ 1-8-183-129 Рашев Ринат&quot;
+   res_error_text = &#x27;&#x27;;
+   res_error_is_critical = 0;
+-- 5. Начиная с 1 ноября 2014г. статусные клиенты могут получить параллельный заем, при условии отсутсвтия просрочек гр. займа
+-- по истечении 65 дней с даты выдачи и двух платежей в соответсвии с графиком платежей
+   kf_id = null;
+   select k_from_kf_id,
+          k_disb_date,
+          k_kolich_client_approved,
+          k_percent,
+          k_kolich_repay,
+          k_amount_approved,
+          k_kredline_end
+   from kontract, product
+   where k_id = :k_id
+   and k_from_pr_id = pr_id
+   and pr_product_kind = 2 -- проверка только по параллельным кредитам
+   into kf_id,
+        kf_disb_date,
+        k_kolich_client_approved,
+        k_percent,
+        k_kolich_repay,
+        k_amount_approved,
+        k_kredline_end;
+   if (kf_id is null) then -- or (k_id in (101010014832100801, 101010011353100601))) then
+   begin
+     Exit;
+   end 
+-- Определяется основной групповой кредит
+   curr_k_id = null; -- ID основного контракта
+   select k_id,
+          k_kolich_repay,
+          ks_date_begin
+   from kontstate, kontract, product
+   where ks_ol_is_delete = 0
+   and ks_state = 1
+   and :kf_disb_date between ks_date_begin and ks_date_end
+   and ks_from_k_id = k_id
+   and k_from_kf_id = :kf_id
+   and k_from_pr_id = pr_id
+   and pr_product_kind &lt;&gt; 2
+   and (pr_code containing &#x27;family&#x27; or pr_code containing &#x27;barakat&#x27;)
+   order by ks_date_begin desc
+   rows 1
+   into curr_k_id,
+        curr_k_period,
+        curr_k_disb_date;
+   if (curr_k_id is null) then
+   begin
+     res_error_text = &#x27;У данного кредита не имеется активный основной заем на&#x27;;
+     res_error_is_critical = 2;
+     suspend;
+   end
+   if (curr_k_period &lt; 6) then
+   begin
+     res_error_text = &#x27;Срок основного кредита менее 6 месяцев!&#x27;;
+     res_error_is_critical = 2;
+     suspend;
+   end 
+   if (kf_disb_date - curr_k_disb_date &gt;= 65) then
+   begin
+     for
+     select ok_sh_id, sum(ok_os + ok_sh_os), sum(ok_perc + ok_sh_perc)
+     from operkred
+     where ok_ol_is_active = 1
+     and ok_from_k_id = :curr_k_id
+     and ok_ol_date &lt;= :kf_disb_date
+     and ok_from_c_id = 0
+     and ok_sh_date &lt;= :kf_disb_date
+     and ok_type &lt; 7
+     and ok_sh_id in (1,2)
+     group by ok_sh_id
+     into ok_sh_id, ok_os, ok_perc
+     do
+     begin
+       if (ok_sh_id in (1, 2) and ok_os + ok_perc &gt; 0) then
+       begin
+         res_error_text = &#x27;У основного кредита не произведены 2 успешных платежей!&#x27;;
+         res_error_is_critical = 2;
+         suspend;
+       end
+     end
+   end else
+   begin
+     res_error_text = &#x27;Со дня выдачи основного группового кредита еще не иcтекли 65 дней!&#x27;;
+     res_error_is_critical = 1;
+     suspend;
+   end 
+-- Проверка просрочки группового займа
+   if (curr_k_id is not null) then
+   begin
+     is_delinq = null;
+     select 1 from oksummary
+     where oks_from_k_id = :CURR_K_ID
+     and :kf_disb_date between oks_date_begin and oks_date_end
+     and :kf_disb_date &gt; oks_delinq_date
+     and oks_close_state = 0
+     into is_delinq;
+     if (is_delinq is null) then is_delinq = 0;
+     if (is_delinq = 1) then
+     begin
+       res_error_text = &#x27;Основной групповой займ Просрочен!&#x27;;
+       res_error_is_critical = 2;
+       suspend;
+     end else
+     begin
+--     имеется ли просроченные платежи
+       is_delinq = null;
+       select 1 from operkred
+       where ok_from_k_id = :CURR_K_ID
+       and ok_ol_is_active = 1
+       and ok_ol_date &lt;= :KF_DISB_DATE
+       and ok_type in (4,5)
+       and ok_ol_date &gt; ok_sh_date
+       and ok_os + ok_perc &lt; 0
+       and ok_from_c_id=0
+       rows 1
+       into is_delinq;
+       if (is_delinq is null) then is_delinq = 0;
+       if (is_delinq = 1) then
+       begin
+         res_error_text = &#x27;В основном групповом займе были просроченные платежи!&#x27;;
+         res_error_is_critical = 1;
+         if (k_id = 101010021243500301) then 
+         res_error_is_critical = 0;
+         suspend;
+       end else
+       begin
+--      Проверяется предыдущий цикл группового займа
+           LAST_K_ID = null; -- ID основного контракта
+           select k_id from kontstate, kontract, product
+           where ks_ol_is_delete = 0
+           and ks_state = 1
+           and ks_from_k_id = k_id
+           and k_from_kf_id = :kf_id
+           and k_from_pr_id = pr_id
+           and pr_product_kind &lt;&gt; 2
+           and ks_date_begin &lt;= :curr_k_disb_date
+           and ks_from_k_id &lt;&gt; :curr_k_id
+           order by ks_date_begin desc
+           rows 1
+           into LAST_K_ID;
+--         если предыдущий контракт существует то проверяет на просроченные платежы
+           if (LAST_K_ID is not null) then
+           begin
+               is_delinq = null;
+               select 1 from operkred
+               where ok_from_k_id = :LAST_K_ID
+               and ok_ol_is_active = 1
+               and ok_ol_date &lt;= :KF_DISB_DATE
+               and ok_type in (4,5)
+               and ok_ol_date &gt; ok_sh_date
+               and ok_os + ok_perc &lt; 0
+               and ok_from_c_id=0
+               rows 1
+               into is_delinq;
+               if (is_delinq is null) then is_delinq = 0;
+        
+               if (is_delinq = 1) then
+               begin
+                 res_error_text = &#x27;В предыдущем групповом займе были просроченные платежи!&#x27;;
+                 res_error_is_critical = 1;
+                 suspend;
+               end
+           end
+       end 
+     end
+   end
+  /* если не имеются предупреждении то проверяет следующее
+         Выстаскивает статус на начало основного кредита
+         Если в группе берут 2 и более участников параллельный кредит то проверяется статус на начало
+         А если один то статус данного клиента */
+--  if (res_error_text = &#x27;&#x27; or res_error_is_critical = 0) then
+--  begin
+--  вычисляем статус параллельного кредита
+    for 
+    select kc_from_c_id, kc_amount_approved
+    from knclient
+    where kc_from_k_id = :k_id
+    and kc_amount_approved &gt; 0
+    into c_id, kc_amount
+    do
+    begin
+--    у параллельного кредита сумма и срок зависит от своего статуска клиента а процент зависить от статуса основного кредита
+      select c_last_status, c_last_status_str
+      from hp_get_client_status_str(:c_id, :kf_disb_date)
+      into c_curr_status, c_curr_status_str;
+      if (c_curr_status &lt; 3) then
+      begin
+        res_error_text = &#x27;Статус клиента не позволяет брать параллельный заем. &#x27;||c_curr_status_str;
+        res_error_is_critical = 2;  
+        if(k_id = 101010028858300201) then
+        res_error_is_critical = 1;
+        suspend;
+      end
+      max_sum = case c_curr_status
+                  when 5 then 40000.0
+                  when 4 then 30000.0
+                  when 3 then 20000.0
+                  else 0
+                end;
+      if (kc_amount &gt; max_sum and max_sum &gt; 0) then
+      begin
+        res_error_text = &#x27;Статус клиента не позволяет брать сумму более &#x27;||round(max_sum,0)||&#x27;, &#x27;||c_curr_status_str;
+        res_error_is_critical = 2;
+        suspend;
+      end
+      repay_sum = null;
+      select max(sh_os + sh_perc) from schedule
+      where sh_from_k_id = :k_id
+      and sh_id &lt; :k_kolich_repay -- Не будем брать последний платеж
+      into repay_sum;
+      if (repay_sum is null) then repay_sum = 0;
+      if (repay_sum &lt; 1000.0) then
+      begin
+        res_error_text = &#x27;Ежемесячный платеж ОС+Проценты не должно быть менее 1000, платеж = &#x27;||round(repay_sum,0);
+        res_error_is_critical = 2;
+        suspend;
+      end else
+      if (repay_sum &gt; 6000.0) then
+      begin
+        res_error_text = &#x27;Ежемесячный платеж ОС+Проценты не должно быть более 6000, платеж = &#x27;||round(repay_sum,0);
+        res_error_is_critical = 2;
+        suspend;
+      end
+--    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

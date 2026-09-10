@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_GET_KONTRACT_PROCESS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_GET_KONTRACT_PROCESS: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_GET_KONTRACT_PROCESS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_actionlist_timeout.html"><div class="to">HP_ACTIONLIST_TIMEOUT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RESULT</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_GET_KONTRACT_PROCESS(
+    REP_K_ID ID_TYPE)
+RETURNS (
+    RESULT SMALLINT)
+AS
+declare variable kc_from_c_id id_type;
+declare variable delinq_day integer;
+declare variable kf_officer id_type;
+declare variable kc_amount_approved curr_type;
+declare variable las_k_id decimal(18,0);
+declare variable kf_id decimal(18,0);
+declare variable disb_date date;
+declare variable max_delinq_day integer;
+declare variable balance decimal(18,4);
+declare variable delinq_balance_30 decimal(18,4);
+declare variable par30 decimal(18,4);
+declare variable ps_date_begin date;
+declare variable kc_circle_fact integer;
+declare variable kc_amount_approved_max curr_type;
+declare variable ks_date_end date;
+declare variable pr_product_kind integer;
+declare variable k smallint;
+begin
+  result = 0;
+--  result_memo = &#x27;&#x27;;
+-- определяем цикл группы
+  kf_id = null;
+  select k_from_kf_id, k_disb_date
+  from kontract, product
+  where k_id = :rep_k_id and
+        k_from_pr_id = pr_id and
+        pr_product_kind &lt;&gt; 2 -- лояльный продукт не проверяем, если лояльный то не соответсвует к условиям
+  into kf_id, disb_date;
+
+  if (kf_id is null) then
+  begin
+--    result_memo = &#x27;kf_id is null&#x27;;
+    result = 0;
+    suspend;
+    exit;
+  end
+  /*
+-- находим предыдущий цикл контракта
+-- если клиенты собрались с разных групп то уже состав группы меняется
+-- а если все клиенты пришли из одной группы то не должны менять группу
+   las_k_id = null;
+   select k_id from kontract, kontstate, product
+   where ks_ol_is_delete = 0
+   and ks_state = 1
+   and ks_from_k_id = k_id
+   and k_from_kf_id = :kf_id
+   and k_id &lt;&gt; :rep_k_id
+   and ks_date_begin &lt; :disb_date
+   and k_from_pr_id = pr_id
+   and pr_product_kind &lt;&gt; 2 -- параллельных не будем смотреть
+   order by ks_date_begin desc
+   rows 1
+   into las_k_id;
+   las_k_id = coalesce(las_k_id, 0);
+
+   if (las_k_id = 0) then
+   begin
+--     result_memo = &#x27;Контракт новый&#x27;;
+     result = 0;
+     suspend;
+     exit;
+   end 
+   */
+-- вытаскиваем ID СВЗ
+  select kal_new_kf_officer
+  from knaktlist
+  where knaktlist.is_delete = 0 and
+        kal_from_kf_id = :kf_id and
+        current_date between kal_date and kal_date_end
+  into kf_officer;
+-- Стаж работы СВЗ в Компании 1 год и более;
+  ps_date_begin = null;
+  select min(ps_date_begin)
+  from hr_pstatus, joblist, jobkind
+  where ps_from_c_id = :kf_officer and
+        ps_status = 1 and
+        ps_from_jl_id = jl_id and
+        jl_kind = jk_id and
+        jk_system_code in (&#x27;JobSystem.LO_Standart&#x27;)
+  into ps_date_begin;
+  ps_date_begin = coalesce(ps_date_begin, current_date);
+
+  if (ps_date_begin &gt; dateadd(year, -1, current_date)) then
+  begin
+--     result_memo = &#x27;Стаж СВЗ меньше 1 года.&#x27;;
+    result = 0;
+    suspend;
+    exit;
+  end
+-- PAR СВЗ не превышает 7%
+-- вычисляем ПАР СВЗ
+  balance = null;
+  delinq_balance_30 = null;
+  select sum(oks_balance), sum(iif(current_date - oks_delinq_date &gt; 30, oks_balance, 0))
+  from oksummary
+  where oks_kc_id = :kf_officer and
+        current_date between oks_date_begin and oks_date_end and
+        current_date - oks_delinq_date &lt;= 360 -- не подключать просроченные более 360 дней
+        and
+        oks_balance &gt; 0 and
+        oks_close_state = 0 
+  into balance, delinq_balance_30;
+  balance = coalesce(balance, 0);
+  delinq_balance_30 = coalesce(delinq_balance_30, 0);
+  if (balance &gt; 0) then
+    par30 = cast(delinq_balance_30 as double precision) / balance * 100;
+  if (par30 &gt; 7.0) then
+  begin
+--     result_memo = &#x27;PAR7 СВЗ &gt; 7%&#x27;;
+    result = 0;
+    suspend;
+    exit;
+  end
+
+  for select kc_from_c_id, kc_amount_approved
+      from knclient
+      where kc_from_k_id = :rep_k_id and
+            kc_amount_approved &gt; 0
+      into kc_from_c_id, kc_amount_approved
+  do
+  begin
+--   определяем фактический цикл клиента
+    kc_circle_fact = null;
+    kc_amount_approved_max = null;
+
+    select sum(iif(pr_product_kind &lt;&gt; 2, 1, 0)), -- при расчете цикла не будем включать параллельных кредитов
+           max(kc_amount_approved)
+    from knclient, kontstate, kontract, product
+    where kc_from_c_id = :kc_from_c_id and
+          kc_amount_approved &gt; 0 and
+          kc_from_k_id = ks_from_k_id and
+          ks_ol_is_delete = 0 and
+          ks_state = 1 and
+          ks_date_begin &lt; current_date and
+          ks_from_k_id &lt;&gt; :rep_k_id and
+          ks_from_k_id = k_id and
+          k_from_pr_id = pr_id
+    into kc_circle_fact, kc_amount_approved_max;
+
+    kc_amount_approved_max = coalesce(kc_amount_approved_max, 0);
+    kc_circle_fact = coalesce(kc_circle_fact, 0);
+    kc_circle_fact = kc_circle_fact + 1;
+    if (kc_circle_fact = 1) then
+    begin
+--     Если в группе хотя бы один клиент на 1 цикле, вне зависимости от циклов других клиентов, заявка не подлежит автоматическому утверждению
+--       result_memo = &#x27;в группе имеется новый клиент&#x27;;
+      result = 0;
+      suspend;
+      exit;
+    end
+    /*
+     if (kc_circle_fact = 2) then
+     begin
+--     если хоть один клиент 2го цикла то работает пункт 2,1
+       is_punct_2_1 = 1;
+     end 
+
+     if (is_punct_2_1 = 1 and kc_amount_approved &gt; 30000.0) then
+     begin
+--     Имеется сумма &gt;30 тыс, для случаа если работать будет пункт 2,1
+--       result_memo = &#x27;Имеется сумма &gt;30 тыс, для случаа если работать будет пункт 2,1&#x27;;
+       result = 0;
+       suspend;
+       exit;
+     end
+     */
+    if (kc_amount_approved &gt; kc_amount_approved_max * 2) then
+    begin
+--     если текущая сумма превышает более 2 раза от максимальной суммы предыдущих циклов
+--       result_memo = &#x27;если текущая сумма превышает более 2 раза от максимальной суммы предыдущих циклов&#x27;;
+      result = 0;
+      suspend;
+      exit;
+    end
+
+--   вычисляем предыдущий цикл клиента
+    k = 1;
+    for select ks_from_k_id, ks_date_end, pr_product_kind
+        from knclient, kontstate, kontract, product
+        where kc_from_c_id = :kc_from_c_id and
+              kc_amount_approved &gt; 0 and
+              kc_from_k_id = ks_from_k_id and
+              ks_ol_is_delete = 0 and
+              ks_state = 1 and
+              ks_date_begin &lt; :disb_date and
+              ks_from_k_id = k_id and
+              k_from_pr_id = pr_id
+        order by ks_date_begin desc
+        rows 2
+        into las_k_id, ks_date_end, pr_product_kind
+    do
+    begin
+      if (k = 1) then
+      begin
+--     вычисляем макс. просроченный день
+        max_delinq_day = null;
+        select max(ok_ol_date - ok_sh_date)
+        from operkred
+        where ok_ol_is_active = 1 and
+              ok_from_k_id = :las_k_id and
+              ok_ol_date &lt;= current_date and
+              ok_ol_date &gt; ok_sh_date and
+              ok_os + ok_perc &lt; -100 and
+              ok_type in (4, 5, 9)
+        into max_delinq_day;
+        max_delinq_day = coalesce(max_delinq_day, 0);
+
+        if (max_delinq_day &lt;= 14 and
+            ks_date_end = &#x27;31.12.9999&#x27; -- если контракт активный
+            ) then
+        begin
+--   проверка на текущую просрочку
+          delinq_day = null;
+          select current_date - oks_delinq_date
+          from oksummary
+          where current_date between oks_date_begin and oks_date_end and
+                oks_from_k_id = :las_k_id and
+                current_date &gt; oks_delinq_date and
+                oks_close_state = 0 
+          into delinq_day;
+          delinq_day = coalesce(delinq_day, 0);
+          if (max_delinq_day &lt; delinq_day) then
+            max_delinq_day = delinq_day;
+        end
+
+        if (max_delinq_day &gt; 14) then
+        begin
+--         result_memo = &#x27;Имеются просроченные дни более 7 дней в предыдущем цикле.&#x27;;
+          result = 0;
+          suspend;
+          exit;
+        end
+      end
+      if (k = 1 and
+          pr_product_kind &lt;&gt; 2) then
+        k = 0;
+    end
+  end
+  /*
+-- проверка для пукнта 2,1 т.е. для второго цикла
+   if (is_punct_2_1 = 1) then
+   begin
+-- Не менялся состав группы
+       kc_from_c_id = null;
+       with tabl1 as (
+           select kc_from_c_id, 1 as tt
+           from knclient
+           where kc_from_k_id = :rep_k_id
+           and kc_amount_approved &gt; 0
+           union all
+           select kc_from_c_id, -1
+           from knclient
+           where kc_from_k_id = :las_k_id
+           and kc_amount_approved &gt; 0
+           )
+       select kc_from_c_id
+       from tabl1
+       group by kc_from_c_id
+       having sum(tt) &lt;&gt; 0
+       rows 1
+       into kc_from_c_id;
+       kc_from_c_id = coalesce(kc_from_c_id,0);
+-- если kc_from_c_id  &gt; 0 то состав группы поменялся
+       if (kc_from_c_id &gt; 0) then
+       begin
+--         result_memo = &#x27;поменялся состав группы.&#x27;;
+         result = 0;
+         suspend;
+         exit;
+       end
+-- если состав группы не менялся то достаточно проверить на просрочку предыдущий цикл группы а не каждого клиента отдельно
+-- просрочка проверяется только для пункта 2,1
+-- На предыдущем цикле не допускали непрерывные просрочки 7 и более дней
+       max_delinq_day = null;
+       select max(ok_ol_date - ok_sh_date) from operkred
+       where ok_ol_is_active = 1
+       and ok_from_k_id = :las_k_id
+       and ok_ol_date &lt;= current_date
+       and ok_ol_date &gt; ok_sh_date
+       and ok_os + ok_perc &lt; -100
+       and ok_type in (4,5,9)
+       into max_delinq_day;
+       max_delinq_day = coalesce(max_delinq_day,0);
+    
+       if (max_delinq_day &lt; 7) then
+       begin
+--   проверка на текущую просрочку
+         delinq_day = null;
+         select current_date - oks_delinq_date from oksummary
+         where current_date between oks_date_begin and oks_date_end
+         and oks_from_k_id = :las_k_id
+         and current_date &gt; oks_delinq_date
+         into delinq_day;
+         delinq_day = coalesce(delinq_day,0);
+         if (max_delinq_day &lt; delinq_day) then max_delinq_day = delinq_day;
+       end
+    
+       if (max_delinq_day &gt;= 7) then
+       begin
+--         result_memo = &#x27;Имеются просроченные дни более 7 дней в предыдущем цикле.&#x27;;
+         result = 0;
+         suspend;
+         exit;
+       end
+
+   end else
+   begin
+--   проверка для пункта 2,2
+     if (is_more_twice = 1) then
+     begin
+--     если текущая сумма превышает более 2 раза от максимальной суммы предыдущих циклов
+--       result_memo = &#x27;если текущая сумма превышает более 2 раза от максимальной суммы предыдущих циклов&#x27;;
+       result = 0;
+       suspend;
+       exit;
+     end
+   end
+   */
+
+-- нужно проверить каждого клиента на просрочку предыдущего цикла
+-- если предыдущий цикл параллельный то параллельный тоже нужно проверять
+
+--   result_memo = &#x27;Результат успешный&#x27;;
+  result = 1;
+  suspend;
+  exit;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

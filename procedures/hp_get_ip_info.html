@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_GET_IP_INFO — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_GET_IP_INFO: 1 входных, 5 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_GET_IP_INFO</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_login_action_validation.html"><div class="to">HP_LOGIN_ACTION_VALIDATION</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">IP_ADDRESS</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">IPR_IP_ADDRESS</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">IPR_COUNTRY</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">IPR_REGION</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">IPR_PLACE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">IPR_IS_LOCAL</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_GET_IP_INFO(
+    IP_ADDRESS D_STR_CODE)
+RETURNS (
+    IPR_IP_ADDRESS D_STR_CODE,
+    IPR_COUNTRY D_STR_CODE,
+    IPR_REGION D_STR_CODE,
+    IPR_PLACE D_STR_CODE,
+    IPR_IS_LOCAL D_BOOL)
+AS
+declare variable ip_addr_int d_id;
+declare variable t d_integer;
+declare variable tmp_str d_str_code;
+declare variable i d_integer;
+begin
+  -- Процедура возвращает информацию о стране/регионе/населенном пункте по ip
+  -- из таблицы iprange
+  -- IP_ADDRESS может быть как целочисленным, н-р: 1533531058,
+  -- так и в виде классической строки, н-р: 91.103.211.178
+
+  -- Если параметр строка вида ###.###.###.###, конвертируем в целое
+  -- В результате ip_addr_int будет содержать адрес в числовом виде (int)
+  ipr_ip_address = &#x27;&#x27;;
+  ip_addr_int = 0;
+  t = position(&#x27;.&#x27;, ip_address);
+  tmp_str = ip_address;
+  while (t &gt; 0) do
+  begin
+    ip_addr_int = ip_addr_int * 256 + cast(left(tmp_str, t - 1) as integer);
+    tmp_str = substring(tmp_str from t + 1);
+    t = position(&#x27;.&#x27;, tmp_str);
+  end
+  if (ip_addr_int &gt; 0) then
+  begin
+    ip_addr_int = ip_addr_int * 256 + cast(tmp_str as integer);
+    ipr_ip_address = ip_address; -- Адрес был текстовый, забираем в результат
+  end
+  else
+    ip_addr_int = ip_address;
+
+  -- Ищем нужный диапазон, для нахождения населенного пункта
+  ipr_country = &#x27;&lt;Страна неизвестна&gt;&#x27;;
+  ipr_region = &#x27;&lt;Регион неизвестен&gt;&#x27;;
+  ipr_place = &#x27;&lt;Населенный пункт неизвестен&gt;&#x27;;
+  ipr_is_local = 0; -- Если не нашли, страна не наша
+
+  select rd_name, ipr_region, ipr_place, ipr_is_local
+  from iprange
+  left join refdata on ipr_country = rd_id
+  where :ip_addr_int between ipr_range_begin and ipr_range_end
+  into ipr_country, ipr_region, ipr_place, ipr_is_local;
+
+  if (ipr_ip_address = &#x27;&#x27;) then
+  begin
+    -- Формируем ip-адрес в строковом виде
+    i = 3;
+    while (i &gt;= 0) do
+    begin
+      t = ip_addr_int / cast(power(256, i) as integer);
+      ipr_ip_address = ipr_ip_address || t || iif(i &gt; 0, &#x27;.&#x27;, &#x27;&#x27;);
+      ip_addr_int = mod(ip_addr_int, power(256, i));
+      i = i - 1;
+    end
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

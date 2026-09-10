@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_JIRA_STATIC_RECALC — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_JIRA_STATIC_RECALC: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_JIRA_STATIC_RECALC</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_jira_dev_stats.html"><div class="to">AAREP_JIRA_DEV_STATS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_JIRA_STATIC_RECALC
+AS
+declare variable dev_id d_id;
+declare variable period_id d_id;
+declare variable plan_finish d_date;
+declare variable dev_waiting d_integer;
+declare variable dev_working d_integer;
+declare variable dev_reworking d_integer;
+begin
+  delete from jira_period
+  where 1 = 1;
+
+  insert into jira_period (jrp_dev_id, jrp_period, jrp_level, jrp_tasks_closed, jrp_work_seconds,
+                           jrp_estimate_seconds)
+  select jri_dev_id, extract(year from jri_finished) * 100 + extract(month from jri_finished), jri_level,
+         count(*), sum(jri_worked_secs), sum(jri_estimate_secs)
+  from jira_issues, jira_states
+  where jri_dev_id &lt;&gt; 0 and
+        jri_state_id = jrs_id and
+        jrs_result &gt;= 0 and
+        jri_finished &gt;= cast(&#x27;01.01.2024&#x27; as timestamp)
+  group by 1, 2, 3;
+
+  period_id = ((extract(year from current_timestamp) * 100 +
+                extract(month from current_timestamp)) * 100 +
+                extract(day from current_timestamp)) * 10000;
+
+  for select jrd_id
+  from jira_dev
+  where jrd_id = 0 or
+        jrd_is_dev = 1
+  into dev_id
+  do
+  begin
+    select dev_estimate_busy, dev_waiting, dev_working, dev_reworking
+    from aarep_jira_dev_stats(:dev_id)
+    into :plan_finish, dev_waiting, dev_working, dev_reworking;
+
+    update or insert into jira_estimate (jre_id, jre_dev_id, jre_date, jre_plan_finish, jre_waiting, jre_working, jre_reworking)
+    values (:period_id + :dev_id, :dev_id, current_timestamp, :plan_finish, :dev_waiting, :dev_working, :dev_reworking)
+    matching (jre_id);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

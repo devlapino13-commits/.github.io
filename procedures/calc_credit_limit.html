@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CALC_CREDIT_LIMIT — процедура — схема БД</title>
+<meta name="description" content="Процедура CALC_CREDIT_LIMIT: 1 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CALC_CREDIT_LIMIT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CREDIT_LIMIT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CALC_CREDIT_LIMIT(
+    C_ID D_ID)
+RETURNS (
+    RES_TEXT D_STR_100,
+    CREDIT_LIMIT D_INTEGER)
+AS
+declare variable kbm_id d_id;
+declare variable age d_integer;
+declare variable gender d_bool;
+declare variable family_status d_bool;
+declare variable kib_mbf_delinq d_integer;
+declare variable max_mbf_kh_deliqdayscount d_integer;
+declare variable act_mbf_non_delinq d_integer;
+declare variable kib_nombf_non_delinq d_integer;
+declare variable kib_nombf_delinq d_integer;
+declare variable act_nombf_non_delinq d_integer;
+declare variable const d_float;
+declare variable score d_float;
+declare variable is_our d_bool;
+declare variable is_delinq d_bool;
+declare variable max_delinq d_integer;
+declare variable birthday d_date;
+declare variable creditstatus d_str_255;
+declare variable active_delinq d_integer;
+declare variable is_actual d_bool;
+begin
+  const = 0.0231272;
+  kib_mbf_delinq = 0;
+  max_mbf_kh_deliqdayscount = 0;
+  act_mbf_non_delinq = 0;
+  kib_nombf_non_delinq = 0;
+  kib_nombf_delinq = 0;
+  act_nombf_non_delinq = 0;
+  res_text = &#x27;&#x27;;
+
+  -- Берем последнюю кредитную историю клиента
+  select kbm.kbm_id,
+         iif(datediff(day, cast(kbm_checked_datetime as date), current_date) &gt; 45, 0, 1) -- Если запрос был более 45 дней назад, то данные неактуальны
+  from kibminiapp kbm
+  where kbm.kbm_from_c_id = :c_id and
+        kbm.kbm_is_checked = 1
+  order by kbm.kbm_checked_datetime desc
+  rows 1
+  into kbm_id,
+       is_actual;
+
+  if (is_actual = 0) then
+  begin
+    res_text = &#x27;Данные КИБ неактуальны, отправьте повторный запрос в КИБ&#x27;;
+    suspend;
+    exit;
+  end 
+
+  -- Если клиент не имеет кредитной истории, устанавливаем лимит в 15000
+  if (not exists(select *
+                 from kibhistory kh
+                 where kh.kh_from_kbm_id = :kbm_id)) then
+  begin
+    res_text = &#x27;У клиента нет кредитной истории&#x27;;
+    credit_limit = 15000;
+    suspend;
+    exit;
+  end
+  -- Если у клиента есть активная просрочка, кредитный лимит не устанавливается
+  if (exists(select *
+             from kibhistory kh
+             where kh.kh_from_kbm_id = :kbm_id and
+                   kh.kh_active_delinq_days_count &gt; 0)) then
+  begin
+    res_text = &#x27;У клиента имеется активная просрочка&#x27;;
+    credit_limit = null;
+    suspend;
+    exit;
+  end
+
+  select c.c_birth_date,
+         c.c_sex,
+         iif(rd.rd_code = &#x27;Family.unmarried&#x27;, 1, 0)
+  from clients c
+  inner join refdata rd on rd.rd_id = c.c_family
+  where c.c_id = :c_id
+  into :birthday,
+       :gender,
+       :family_status;
+
+  -- Возраст клиента (до месяца)
+  age = datediff(month, birthday, current_date) / 12;
+  -- Если день рождения клиента &lt; текушего дня отнимаем 1 год (расчитываем только полные года)
+  if (extract(month from birthday) = extract(month from current_date) and
+      extract(day from birthday) &lt; extract(day from current_date)) then
+    age = age - 1; -- Получаем возраст клиента (полные года до дня)
+
+  for select kh.kh_is_our,
+             kh.kh_max_delinq_days_count,
+             iif(kh.kh_deliqdayscount = 0, 0, 1),
+             kh.kh_creditstatus,
+             kh.kh_active_delinq_days_count
+      from kibhistory kh
+      where kh.kh_from_kbm_id = :kbm_id
+      into is_our,
+           max_delinq,
+           is_delinq,
+           creditstatus,
+           active_delinq
+  do
+  begin
+    if (is_our = 1) then
+    begin
+      -- Максимальная просрочка МБФ
+      if (max_mbf_kh_deliqdayscount &lt; max_delinq) then
+        max_mbf_kh_deliqdayscount = max_delinq;
+
+      -- Подсчёт активных кредитов без активной просрочки МБФ
+      if ((creditstatus in (&#x27;Выдан&#x27;, &#x27;Реструктуризирован&#x27;, &#x27;Своевременный платеж&#x27;, &#x27;Начисление процентов&#x27;, &#x27;Granted_And_Activated&#x27;, &#x27;Restructured&#x27;, &#x27;Open_Under_Legal_Proceedings&#x27;) or (creditstatus containing (&#x27;Просрочен&#x27;))) and
+          active_delinq = 0) then
+        act_mbf_non_delinq = act_mbf_non_delinq + 1;
+
+      -- Подсчёт кредитов с просрочкой МБФ
+      if (max_delinq &gt; 0) then
+        kib_mbf_delinq = kib_mbf_delinq + 1;
+    end
+    else
+    begin
+      -- Подсчёт активных кредитов без активной просрочки Др.ФКУ
+      if ((creditstatus in (&#x27;Выдан&#x27;, &#x27;Реструктуризирован&#x27;, &#x27;Своевременный платеж&#x27;, &#x27;Начисление процентов&#x27;, &#x27;Granted_And_Activated&#x27;, &#x27;Restructured&#x27;, &#x27;Open_Under_Legal_Proceedings&#x27;) or (creditstatus containing (&#x27;Просрочен&#x27;))) and
+          active_delinq = 0) then
+        act_nombf_non_delinq = act_nombf_non_delinq + 1;
+      -- Общее кол-во займов с просрочкой за всю КИ Др.ФКУ
+      if (max_delinq &gt; 0) then
+        kib_nombf_delinq = kib_nombf_delinq + 1;
+      -- Общее кол-во займов без просрочки за всю КИ Др.ФКУ
+      if (max_delinq = 0) then
+        kib_nombf_non_delinq = kib_nombf_non_delinq + 1;
+    end
+  end
+  -- Расчёт скор-балла
+  score = age * 0.0015496 + gender * 0.0091520 + family_status * 0.0156304 + kib_mbf_delinq * 0.1585543 + max_mbf_kh_deliqdayscount * 0.0016714 + act_mbf_non_delinq * 0.3228265 + kib_nombf_non_delinq * (-0.0081193) + kib_nombf_delinq * 0.0177375 + act_nombf_non_delinq * 0.0157984 + const;
+  -- Кредитный лимит
+  credit_limit = case
+                   when score &lt; 0.3 then 35000
+                   when score between 0.3 and 0.8 then 20000
+                   else 0
+                 end;
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

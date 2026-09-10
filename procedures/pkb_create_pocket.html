@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PKB_CREATE_POCKET — процедура — схема БД</title>
+<meta name="description" content="Процедура PKB_CREATE_POCKET: 3 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>PKB_CREATE_POCKET</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">POCKET_DATE</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KIB_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">POCKET_TYPE</div><div class="ptype">VARCHAR(1)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">POCKET_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">POCKET_NAME</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE PKB_CREATE_POCKET(
+    POCKET_DATE D_DATETIME,
+    KIB_NAME D_STR_100,
+    POCKET_TYPE VARCHAR(1) = null)
+RETURNS (
+    POCKET_ID D_INTEGER,
+    POCKET_NAME VARCHAR(50))
+AS
+declare variable pocket_date_begin d_date;
+declare variable pocket_date_end d_date;
+declare variable date_str d_str_100;
+declare variable cp_counter d_integer;
+declare variable cib_id d_integer;
+begin
+  pocket_type = coalesce(pocket_type, &#x27;&#x27;);
+  cib_id = case kib_name
+             when &#x27;GKB&#x27; then f_get_rd_id(&#x27;CIB.GKB&#x27;)
+             when &#x27;PKB&#x27; then f_get_rd_id(&#x27;CIB.PKB&#x27;)
+             else f_get_rd_id(&#x27;CIB.PKB&#x27;)
+           end;
+  if (pocket_type = &#x27;&#x27;) then
+  begin
+    /*--last_month_date = (datediff(day from pocket_date to dateadd(1 month to pocket_date)));
+-- проверяю последний ли это день месяца или нет. если последний  и тип пакета не указан, что  дневной, тогда формирую месячный пакет
+
+    if ((extract(month from pocket_date) &lt;&gt; (extract(month from dateadd(1 day to pocket_date))) and
+        (pocket_type &lt;&gt; &#x27;d&#x27;))) then
+      pocket_type = &#x27;m&#x27;;
+    else */
+    pocket_type = &#x27;d&#x27;;
+  end
+  pocket_date_end = cast(pocket_date as date);
+  date_str = cast(cast(pocket_date as date) as varchar(10));
+  if (pocket_type = &#x27;m&#x27;) then
+    pocket_date_begin = &#x27;01.&#x27; || substring(date_str from 6 for 2) || &#x27;.&#x27; || substring(date_str from 1 for 4);
+  else
+    pocket_date_begin = cast(pocket_date as date);
+
+  select max(cp.cp_counter)
+  from cib_pocket cp
+  where cp.cp_pocket_type = :pocket_type and
+        cp.cp_date_end = :pocket_date_end and
+        cp.cp_cib_id = :cib_id
+  into :cp_counter;
+
+  cp_counter = coalesce(cp_counter, 0) + 1;
+  date_str = left(replace(replace(replace(cast(:pocket_date as varchar(24)), &#x27;-&#x27;, &#x27;&#x27;), &#x27; &#x27;, &#x27;&#x27;), &#x27;:&#x27;, &#x27;&#x27;), 14);
+
+  --date_str = substring(date_str from 1 for 4) || substring(date_str from 6 for 2);
+  --pocket_id = cast((date_str||&#x27;99&#x27;||id_finish_side) as integer);
+  pocket_name = &#x27;mbulak_&#x27; || date_str;
+  pocket_name = upper(pocket_name);
+
+  insert into cib_pocket (cp_counter, cp_date_begin, cp_date_end, cp_pocket_name, cp_pocket_type, cp_pocket_status,
+                          cp_cib_id)
+  values (:cp_counter, :pocket_date_begin, :pocket_date_end, :pocket_name, :pocket_type, 0, :cib_id)
+  returning cp_id
+  into :pocket_id;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

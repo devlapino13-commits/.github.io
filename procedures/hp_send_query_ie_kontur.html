@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_SEND_QUERY_IE_KONTUR — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_SEND_QUERY_IE_KONTUR: 3 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_SEND_QUERY_IE_KONTUR</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_extinfo_insert_bki_cfg.html"><div class="to">HP_EXTINFO_INSERT_BKI_CFG</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_cmd.html"><div class="to">FM_REPORT_CMD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OBJ_KIND</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_SEND_QUERY_IE_KONTUR(
+    OBJ_KIND D_INTEGER,
+    OBJ_ID D_ID,
+    UN_ID D_ID)
+RETURNS (
+    RES_TEXT D_STR_255)
+AS
+declare variable c_id d_id;
+declare variable c_citizen d_integer;
+declare variable c_inn d_str_20;
+declare variable ma_date_oper d_date;
+begin
+    -- RFCRU-5314
+    -- Отправка запроса в контур, для того чтобы проверить статус ИП
+
+    if (f_objkind(:obj_kind, &#x27;code&#x27;) not in (&#x27;miniapp&#x27;)) then
+        exception e_default &#x27;object kind must be &quot;miniapp&quot;&#x27;;
+
+    select ma.ma_date_oper, mac.mac_from_c_id, c.c_citizen, c.c_inn
+    from miniapp ma
+    inner join miniappclient mac on mac.mac_from_ma_id = ma.ma_id
+        and mac.mac_amount &gt; 0
+    inner join clients c on mac.mac_from_c_id = c.c_id
+    where ma.ma_id = :obj_id
+        and ma.ma_is_active = 1
+        and ma.ma_date_end = &#x27;31.12.9999&#x27;
+    into :ma_date_oper, :c_id, :c_citizen, :c_inn;
+
+    if (coalesce(:c_id, 0) = 0) then
+    begin
+        -- Если не было найдено ни одной записи
+        res_text = &#x27;Вы пытаетесь отправить запрос по неактивной заявке&#x27;;
+        suspend;
+        exit;
+
+    end
+
+    if (coalesce(c_inn, &#x27;&#x27;) = &#x27;&#x27;) then
+    begin
+        -- Если есть какие-то проблемы с ИНН
+        res_text = &#x27;Не добавлен ИНН&#x27;;
+        suspend;
+        exit;
+
+    end
+
+    -- Если гражданин не РФ и нет документа ВНЖ или РВП тогда выводим ошибку
+    -- Если cds_verify_status = -3, тогда документ был добавлен через МП, иначе через КМП и документ прошёл через оцифровку
+    if (coalesce(f_get_rd_code(:c_citizen), &#x27;&#x27;) not in (&#x27;Citizen.RU&#x27;)
+        and not exists
+        (
+            select cds.cds_id
+            from clientdocs cds
+            where cds.cds_from_c_id = :c_id
+                and cds.cds_from_pk_id in (39, 46)
+                and dateadd(day, 30, :ma_date_oper) between cds.cds_doc_date_begin and cds.cds_doc_date_end
+                and cds.cds_is_delete = 0
+                and cds.cds_verify_status in (-3, 2)
+        )
+    ) then
+    begin
+        res_text = &#x27;Не добавлен РВП либо Вид на жительство&#x27;;
+        suspend;
+        exit;
+
+    end
+
+    -- Отправляем запрос на проверку ИП в контук
+    execute procedure hp_extinfo_insert_bki_cfg(&#x27;kontur_ip_base&#x27;, :c_id, :obj_kind, :obj_id, 0, :un_id);
+
+    res_text = &#x27;Запрос был отправлен&#x27;;
+    suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

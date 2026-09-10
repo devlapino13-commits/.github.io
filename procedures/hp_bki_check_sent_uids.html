@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_BKI_CHECK_SENT_UIDS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_BKI_CHECK_SENT_UIDS: 1 входных, 6 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_BKI_CHECK_SENT_UIDS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_NAME_FIO</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SIGN_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">BKK_NAME</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CUR_EVENT</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_BKI_CHECK_SENT_UIDS(
+    DATE_BEGIN D_DATE)
+RETURNS (
+    MA_ID D_ID,
+    C_NAME_FIO D_STR_255,
+    SIGN_DATE D_DATE,
+    BKK_NAME D_STR_CODE,
+    CUR_EVENT D_STR_CODE,
+    RES_TEXT D_STR_255)
+AS
+declare variable bkk_id d_id;
+  declare variable c_id d_id;
+  declare variable app_date d_date;
+  declare variable max_event d_integer;
+  declare variable max_event_date d_date;
+  declare variable uid_cnt d_integer;
+  declare variable ev_new_app d_integer;
+  declare variable ev_approve d_integer;
+  declare variable ev_conclud d_integer;
+  declare variable ev_annul d_integer;
+  declare variable ev_disb d_integer;
+  declare variable events d_str_255;
+begin
+  ev_new_app  = f_enum(&#x27;bki_event&#x27;, &#x27;1.1_new_app&#x27;,      &#x27;id&#x27;);
+  ev_approve  = f_enum(&#x27;bki_event&#x27;, &#x27;1.2_app_approved&#x27;, &#x27;id&#x27;);
+  ev_annul    = f_enum(&#x27;bki_event&#x27;, &#x27;1.3_app_annul&#x27;,    &#x27;id&#x27;);
+  ev_conclud  = f_enum(&#x27;bki_event&#x27;, &#x27;1.4_deal_concluded&#x27;, &#x27;id&#x27;);
+  ev_disb     = f_enum(&#x27;bki_event&#x27;, &#x27;2.2_disb&#x27;,         &#x27;id&#x27;);
+
+  for with t1(bkk_id, c_id, object_kind, object_id, event_id, event_date) as (
+    select distinct bkp_from_bkk_id, bkc_from_c_id, bkl_object_kind, bkl_object_id, bev_event_id, bev_event_date
+    from bki_events, bki_clients, bki_loans, bki_packet, bki_packet_type
+    where bkc_id = bev_from_bkc_id
+      and bkl_id = bkc_from_bkl_id
+      and bkp_id = bkl_from_bkp_id
+      and bkt_id = bkp_from_bkt_id
+      and bkt_format = 0
+      and bkp_date &gt;= :date_begin
+      and bev_event_date &gt;= :date_begin - 10
+      and bev_status &gt; 0
+      and bkp_status &gt; 0
+      and coalesce(bev_delete_bev_id, 0) = 0
+      and bev_event_id in (:ev_approve, :ev_annul, :ev_disb)
+  ), t2 as(
+    select bkk_id, c_id, object_id ma_id, event_id, event_date
+    from t1
+    where object_kind = 11
+    union 
+    select bkk_id, c_id, k_from_ma_app_id, event_id, event_date
+    from t1, kontract
+    where object_kind = 9
+      and k_id = object_id
+  )
+  select bkk_id, c_id, ma_id, max(event_id), max(event_date)
+  from t2
+  group by 1,2,3
+  into bkk_id, c_id, ma_id, max_event, max_event_date
+  do
+  begin
+    sign_date = null;
+    res_text = &#x27;&#x27;;
+
+    with t_objects(object_kind, object_id) as(
+      select 11, :ma_id
+      from rdb$database
+    union
+      select 9, k_id
+      from kontract k
+      where k_from_ma_app_id = :ma_id
+    )
+    select list(distinct &#x27;|&#x27; || bev_event_id || &#x27;|&#x27;), count(distinct bkc_uid_bkd_id)
+    from t_objects, bki_packet_type, bki_packet, bki_loans, bki_clients, bki_events
+    where bkp_from_bkt_id = bkt_id
+      and bkl_from_bkp_id = bkp_id
+      and bkc_from_bkl_id = bkl_id
+      and bev_from_bkc_id = bkc_id
+      and bkt_format = 0
+      and bev_status &gt; 0
+      and bkp_status &gt; 0
+      and bkp_from_bkk_id = :bkk_id
+      and coalesce(bev_delete_bev_id, 0) = 0
+      and bkl_object_kind = object_kind
+      and bkl_object_id = object_id
+      and bev_event_date &lt;= :max_event_date
+    into events, uid_cnt;
+
+    if (uid_cnt &gt; 1) then
+      res_text = res_text || &#x27;Отправлены различные UID.  &#x27;;
+
+    if (events not containing &#x27;|&#x27; || ev_new_app || &#x27;|&#x27;) then
+      res_text = res_text || &#x27;Событие 1.1 не найдено.  &#x27;;
+
+    if (max_event &gt;= ev_disb) then
+    begin
+      if (events not containing &#x27;|&#x27; || ev_approve || &#x27;|&#x27;) then
+        res_text = res_text || &#x27;Событие 1.2 не найдено.  &#x27;;
+
+      if (events not containing &#x27;|&#x27; || ev_conclud || &#x27;|&#x27;) then
+        res_text = res_text || &#x27;Событие 1.4 не найдено.  &#x27;;
+    end
+
+    if (res_text &lt;&gt; &#x27;&#x27;) then
+    begin
+      select min(eds_status_datetime)
+      from edoc_sign, edoc_list, edoc_blank edb
+      where eds_from_edl_id = edl_id
+        and edb_from_edl_id = edl_id
+        and edl_from_edc_id = f_edoc_kind(&#x27;loan.application&#x27;,&#x27;id&#x27;)
+        and edl_object_kind = 11
+        and edl_object_id = :ma_id
+        and eds_status = 1
+      into sign_date;
+
+      if (sign_date is null) then
+      begin
+        app_date = (select min(ma_date_app) from miniapp ma where ma.ma_id = :ma_id);
+        if (app_date &lt; &#x27;01.01.2021&#x27;) then
+          sign_date = app_date;
+      end 
+
+      if (sign_date is null) then
+        res_text = res_text || &#x27;Нет подписанной заявки.  &#x27;;
+
+      bkk_name = (select bkk_name from bki_kind where bkk_id = :bkk_id);
+      c_name_fio = (select c_name_fio from clients where c_id = :c_id);
+      cur_event = f_enum(&#x27;bki_event&#x27;, max_event, &#x27;code&#x27;);
+
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

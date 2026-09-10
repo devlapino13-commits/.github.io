@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_ANTIFRAUD_PRINT_RESULT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_ANTIFRAUD_PRINT_RESULT: 2 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_ANTIFRAUD_PRINT_RESULT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">3</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_print_biometry_afc_info.html"><div class="to">HP_PRINT_BIOMETRY_AFC_INFO</div></a><a class="ref-card" href="hp_print_biometry_afc_kdn_info.html"><div class="to">HP_PRINT_BIOMETRY_AFC_KDN_INFO</div></a><a class="ref-card" href="print_loan_suitability_assessment.html"><div class="to">PRINT_LOAN_SUITABILITY_ASSESSMENT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OBJECT_KIND</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJECT_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ANTIFRAUD_CHECK_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ANTIFRAUD_CHECK_RESULT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_ANTIFRAUD_PRINT_RESULT(
+    OBJECT_KIND D_INTEGER,
+    OBJECT_ID D_ID)
+RETURNS (
+    ANTIFRAUD_CHECK_DATE D_DATE,
+    ANTIFRAUD_CHECK_RESULT D_STR_100)
+AS
+declare variable client_found_antifraud d_bool;
+declare variable c_id d_id;
+declare variable c_inn d_str_20;
+declare variable ma_id d_id;
+begin
+    /*
+        Процедура выводит результат проверки по антифроду по конкретной заявке или конкретному контакту
+        Если нет привязки результата проверки к заявке или контракту, то берется последняя проверка по клиенту (через сервис АФЦ)
+        Если привязка есть, приоритет все равно отдается проверке через АФЦ
+    */
+
+    if (f_objkind(:object_kind, &#x27;name&#x27;) not in (&#x27;miniapp&#x27;, &#x27;kontract&#x27;)) then
+        exit;
+
+    if (object_kind = f_objkind(&#x27;miniapp&#x27;, &#x27;id&#x27;)) then
+    begin
+        select mac.mac_from_c_id
+        from miniappclient mac
+        where mac.mac_from_ma_id = :object_id and
+              mac.mac_amount &gt; 0
+        into :c_id;
+
+        ma_id = :object_id;
+    end
+    else
+    begin
+        select kc.kc_from_c_id, k.k_from_ma_app_id
+        from knclient kc
+        inner join kontract k on kc.kc_from_k_id = k.k_id
+        where kc.kc_from_k_id = :object_id and
+              kc.kc_amount_approved &gt; 0
+        into :c_id, :ma_id;
+    end
+
+    c_inn = (select c_inn from clients where c_id = :c_id);
+
+    -- Т.к. приоритетно мы должны брать проверку через сервис АФЦ, пытаемся получить именно ее
+    select first 1
+        afcl.afcl_check_result,
+        cast(afcl.afcl_datetime as date)
+    from antifraud_checks_link afcl
+    where afcl.afcl_from_c_id = :c_id and
+          afcl.afcl_object_kind = f_objkind(&#x27;miniapp&#x27;, &#x27;id&#x27;) and
+          afcl.afcl_object_id = :ma_id and
+          afcl.afcl_check_type = f_enum_id(&#x27;antifraud_check_type&#x27;, &#x27;afc_service&#x27;)
+    order by afcl.afcl_id desc -- Берем самую последнюю проверку
+    into
+        :client_found_antifraud,
+        :antifraud_check_date;
+
+    -- Если не удалось получить проверку через АФЦ, пытаемся получить любую проверку, привязанную к заявке или контракту
+    if (client_found_antifraud is null or antifraud_check_date is null) then
+    begin
+        select first 1
+            afcl.afcl_check_result,
+            cast(afcl.afcl_datetime as date)
+        from antifraud_checks_link afcl
+        where afcl.afcl_from_c_id = :c_id and
+              afcl.afcl_object_kind = :object_kind and
+              afcl.afcl_object_id = :object_id
+        order by afcl.afcl_id desc
+        into
+            :client_found_antifraud,
+            :antifraud_check_date;
+    end
+
+    -- Если не удалось получить результат по конкретной заявке или контракту, то берем последний результат по клиенту
+    if (client_found_antifraud is null or antifraud_check_date is null) then
+    begin
+        -- Получаем информацию о последней проверке антифрод по клиенту
+        select first 1
+            case f_enum(&#x27;antifraud_status&#x27;, ac.ac_status, &#x27;code&#x27;)
+                when &#x27;was_found&#x27; then 1
+                else 0
+            end,
+            f_datetostr(ac.ac_date)
+        from antifraud_check ac
+        where ac.ac_inn = :c_inn and
+              -- Интересуют только статусы &quot;Не найден&quot; или &quot;Найден&quot;, чтобы не вывести в документ некорретный результат
+              ac.ac_status in (f_enum_id(&#x27;antifraud_status&#x27;, &#x27;not_found&#x27;), f_enum_id(&#x27;antifraud_status&#x27;, &#x27;was_found&#x27;))
+        order by ac.ac_id desc
+        into
+            :client_found_antifraud,
+            :antifraud_check_date;
+    end
+
+    antifraud_check_result =
+        case :client_found_antifraud
+            when 0 then &#x27;информация отсутствует&#x27;
+            when 1 then &#x27;информация обнаружена&#x27;
+            else null
+        end;
+
+    suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_HTML_GRS_VERIFY_DETAILS — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_HTML_GRS_VERIFY_DETAILS: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_HTML_GRS_VERIFY_DETAILS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_check_pasport_actual_grs.html"><div class="to">HP_CHECK_PASPORT_ACTUAL_GRS</div></a><a class="ref-card" href="hp_gdfl_pass_check.html"><div class="to">HP_GDFL_PASS_CHECK</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_html_client_info.html"><div class="to">FM_HTML_CLIENT_INFO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_HTML_GRS_VERIFY_DETAILS(
+    C_ID DECIMAL(18,0),
+    UN_ID D_ID)
+RETURNS (
+    RES_TEXT BLOB SUB_TYPE TEXT SEGMENT SIZE 80)
+AS
+declare variable c_verify_status           integer;
+declare variable color_black               varchar(100);
+declare variable color_yellow              varchar(100);
+declare variable color_green               varchar(100);
+declare variable color_red                 varchar(100);
+declare variable res_color                 varchar(100);
+declare variable str_tmp                   varchar(512);
+declare variable db_id                     integer;
+declare variable acl_id                    decimal(18,0);
+declare variable rd_id                     integer;
+declare variable rd1_id                    d_integer;
+declare variable acm_memo                  varchar(4000);
+declare variable str_memo                  varchar(512);
+declare variable json_key                  varchar(255);
+declare variable json_value                varchar(255);
+declare variable need_passport_second_page integer;
+declare variable c_doc_type                integer;
+declare variable c_citizen                 integer;
+declare variable str_comment               varchar(255);
+declare variable str_tmp_1                 d_str_100;
+declare variable str_tmp_2                 d_str_100;
+declare variable acl_status                d_smallint;
+declare variable rd_id_ver                 d_integer;
+declare variable gc_status                 smallint;
+declare variable gc_status_datetime        timestamp;
+declare variable uri_text                  d_str_255;
+declare variable uri_description           d_str_255;
+declare variable gc_from_eil_id            d_id;
+declare variable res_text_tmp              d_str_255;
+declare variable state                     d_smallint;
+declare variable answer                    d_str_8100;
+declare variable lang                      d_str_lang;
+declare variable kib_name                  d_str_10;
+declare variable confirmations_status      d_smallint;
+declare variable gdfl_descr                d_str_255;
+begin
+  db_id = f_get_db_id();
+  kib_name = iif(db_id &lt;&gt; 39801, &#x27;ГРС&#x27;, &#x27;ГБД ФЛ&#x27;); -- RFCKG-4140
+  lang = f_get_lang_code(un_id, null);
+  rd_id = f_get_rd_id(&#x27;ActionGroup.Passport_Verify&#x27;);
+  rd1_id = f_get_rd_id(&#x27;ActionGroup.Passport_Verify_OiVO&#x27;);
+  uri_text = &#x27;&#x27;;
+  res_text = &#x27;&#x27;;
+
+  confirmations_status = f_confirmations_status(:c_id,  current_date);
+
+  if(db_id = 39801) then
+  begin
+    select description
+    from hp_gdfl_pass_check(:c_id)
+    rows 1
+    into gdfl_descr;
+  end
+
+  select gc.gc_status, gc.gc_status_datetime, gc.gc_from_eil_id
+  from grs_clients gc
+  where gc.gc_from_c_id = :c_id and
+        gc.gc_is_last = 1
+        rows 1
+  into gc_status, gc_status_datetime, gc_from_eil_id;
+
+  select coalesce(eir.eir_answer, &#x27;&#x27;)
+  from extinfoerr eir
+  where eir.eir_from_eil_id = :gc_from_eil_id rows 1
+  into answer;
+
+  if (gc_status is null) then
+    gc_status = 1;
+
+  color_black = &#x27;black&#x27;;
+  color_yellow = &#x27;#F08205&#x27;;
+  color_green = &#x27;#02B316&#x27;;
+  color_red = &#x27;red&#x27;;
+
+  res_color = color_black;
+  res_color = (case gc_status
+                 when -4 then color_red
+                 when -3 then color_red
+                 when -2 then color_red
+                 when -1 then color_red
+                 when 0 then color_black
+                 when 1 then color_yellow
+                 when 2 then color_green
+                 when 3 then color_green
+               end);
+
+  select res_text, state
+  from hp_check_pasport_actual_grs(:c_id)
+  into res_text_tmp, state;
+
+  res_text = BLOB_APPEND(res_text, f_format(&#x27;&lt;br&gt;%1:&lt;br&gt;&#x27;, &#x27;Проверка клиента в &#x27;|| :kib_name));
+
+  str_tmp = iif(answer starting 404, f_lang(lang, &#x27;В ходе верификации возникла ошибка, прошу проверить ИНН и номер паспорта и отправить ещё раз запрос в &#x27; || :kib_name), f_lang(lang,  f_enum_name(&#x27;grs_status&#x27;, gc_status)));
+  str_tmp = &#x27;&lt;font color=&quot;&#x27; || res_color || &#x27;&quot;&gt;&#x27; || trim(:str_tmp) || &#x27;&lt;/font&gt;&lt;br&gt;&#x27;;
+
+  if(db_id &lt;&gt; 39801) then
+    res_text = BLOB_APPEND(res_text, str_tmp);
+  else if (db_id = 39801 and state &lt;&gt; 0) then    -- RFCKG-4140
+  begin
+    res_text = BLOB_APPEND(res_text, str_tmp);
+    if (gdfl_descr &lt;&gt; &#x27;&#x27;) then
+      res_text = BLOB_APPEND(res_text, f_format(&#x27;&lt;div style=&quot;color: red&quot;&gt;&lt;b&gt;Статус уд. личности: &lt;/b&gt;%1&lt;/div&gt;&#x27;, gdfl_descr));
+  end
+
+  if (gc_status in (-2, -3)) then
+  begin
+    uri_description = f_lang(lang, &#x27;Подтверждаете отправку данные клиента повторно в &#x27; || :kib_name || &#x27;?&#x27;);
+    uri_text = f_lang(lang, &#x27;Отправить повторно&#x27;);
+  end
+  if (gc_status = 1) then
+  begin
+    uri_description = f_lang(lang, &#x27;Подтверждаете отправку данные клиента в &#x27; || :kib_name || &#x27;?&#x27;);
+    uri_text = f_lang(lang, &#x27;Отправить данные клиента для проверки в &#x27;|| :kib_name || &#x27;?&#x27;);
+  end
+
+  if (state = 0) then
+  begin
+    if (res_text_tmp &lt;&gt; &#x27;Информация с &#x27; || :kib_name || &#x27; просроченная&#x27;) then
+        res_text = BLOB_APPEND(res_text, :res_text_tmp || &#x27;&lt;br&gt;&#x27;);      
+    else
+    if (res_text_tmp &lt;&gt; &#x27;Запрос, в процессе обработки&#x27;) then
+    begin
+      res_color = iif(db_id = 39801, &#x27;red&#x27;, :res_color);
+      res_text = BLOB_APPEND(res_text,&#x27;&lt;font color=&quot;&#x27; || :res_color || &#x27;&quot;&gt;&#x27; || :res_text_tmp || &#x27;&lt;/font&gt;&lt;br&gt;&#x27; || &#x27;&lt;br&gt;&#x27;);
+      uri_description = f_lang(lang, &#x27;Подтверждаете отправку данные клиента в &#x27; || :kib_name || &#x27;?&#x27;);
+      uri_text = f_lang(lang, &#x27;Отправить данные клиента для проверки в &#x27; || :kib_name);
+
+      if (db_id = 39801) then
+      begin
+        if(confirmations_status = 1) then
+          res_text = BLOB_APPEND(res_text, f_uri_sql(:uri_text, &#x27;send_passport_grs&#x27;, &#x27;client&#x27;, :c_id, &#x27;none&#x27;, uri_description, &#x27;&#x27;, 0, 0, &#x27;&#x27;, &#x27;&#x27;, &#x27;dialog&#x27;, &#x27;&#x27;) || &#x27;&lt;br&gt;&#x27;);
+        else if (confirmations_status = 0) then
+          res_text = BLOB_APPEND(:res_text, &#x27;Ожидается ознакомление от клиента&lt;br&gt;&#x27;);
+        else
+        begin
+          res_text = BLOB_APPEND(:res_text, &#x27;Перед повторной проверкой необходимо ознакомление с согласиями от клиента&lt;br&gt;&#x27;);
+          res_text = BLOB_APPEND(res_text, f_uri_sql(&#x27;Отправить ознакомление с согласиями&#x27;, &#x27;send_confirmations&#x27;, &#x27;client&#x27;, :c_id, &#x27;none&#x27;, &#x27;Отправить ознакомление с согласиями?&#x27;, &#x27;&#x27;, 0, 0, &#x27;&#x27;, &#x27;&#x27;, &#x27;dialog&#x27;, &#x27;&#x27;));
+        end
+      end
+      else
+        res_text = BLOB_APPEND(res_text, f_uri_sql(:uri_text, &#x27;send_passport_grs&#x27;, &#x27;client&#x27;, :c_id, &#x27;none&#x27;, uri_description, &#x27;&#x27;, 0, 0, &#x27;&#x27;, &#x27;&#x27;, &#x27;dialog&#x27;, &#x27;&#x27;) || &#x27;&lt;br&gt;&#x27;);
+      suspend;
+      exit;
+    end
+  end
+
+  if (uri_text &lt;&gt; &#x27;&#x27;) then
+  begin
+    if (gc_status = -2 and
+        answer not starting 404) then
+    begin
+      if (not exists(select *
+                     from actionorder aco
+                     where aco.aco_from_rd_id in (:rd_id, :rd1_id) and
+                           aco.aco_object_kind = f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;) and
+                           aco.aco_object_id = :c_id)) then
+      begin
+        res_text = BLOB_APPEND(res_text, f_uri_sql(f_lang(lang, &#x27;Отправить запрос на верификацию&#x27;), &#x27;query_verify&#x27;, &#x27;Clients&#x27;, :c_id, &#x27;none&#x27;, f_lang(lang, &#x27;Подтверждаете?&#x27;), &#x27;&#x27;, 0, 0, &#x27;&#x27;, &#x27;&#x27;, &#x27;dialog&#x27;, &#x27;&#x27;) || &#x27;&lt;br&gt;&#x27;);
+      end
+      else
+      if (exists(select *
+                 from actionorder aco
+                 where aco.aco_from_rd_id in (:rd_id, :rd1_id) and
+                       aco.aco_object_kind = f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;) and
+                       aco.aco_object_id = :c_id)) then
+      begin
+        update grs_clients gc
+        set gc.gc_is_last = 0
+        where gc.gc_from_c_id = :c_id and
+              gc.gc_is_last = 1;
+
+        insert into grs_clients (gc_from_c_id, gc_from_eil_id, gc_status, gc_status_datetime, gc_is_last)
+        values (:c_id, :gc_from_eil_id, -3, current_timestamp, 1);
+      end
+    end
+    else
+    begin
+      if (db_id = 39801) then
+      begin
+        if(confirmations_status = 1) then
+          res_text = BLOB_APPEND(res_text, f_uri_sql(:uri_text, &#x27;send_passport_grs&#x27;, &#x27;client&#x27;, :c_id, &#x27;none&#x27;, uri_description, &#x27;&#x27;, 0, 0, &#x27;&#x27;, &#x27;&#x27;, &#x27;dialog&#x27;, &#x27;&#x27;) || &#x27;&lt;br&gt;&#x27;);
+        else if (confirmations_status = 0) then
+          res_text = BLOB_APPEND(:res_text, &#x27;Ожидается ознакомление от клиента&lt;br&gt;&#x27;);
+        else
+        begin
+          res_text = BLOB_APPEND(:res_text, &#x27;Перед повторной проверкой необходимо ознакомление с согласиями от клиента&lt;br&gt;&#x27;);
+          res_text = BLOB_APPEND(res_text, f_uri_sql(&#x27;Отправить ознакомление с согласиями&#x27;, &#x27;send_confirmations&#x27;, &#x27;client&#x27;, :c_id, &#x27;none&#x27;, &#x27;Отправить ознакомление с согласиями?&#x27;, &#x27;&#x27;, 0, 0, &#x27;&#x27;, &#x27;&#x27;, &#x27;dialog&#x27;, &#x27;&#x27;));
+        end
+      end
+      else
+        res_text = BLOB_APPEND(res_text, f_uri_sql(:uri_text, &#x27;send_passport_grs&#x27;, &#x27;client&#x27;, :c_id, &#x27;none&#x27;, uri_description, &#x27;&#x27;, 0, 0, &#x27;&#x27;, &#x27;&#x27;, &#x27;dialog&#x27;, &#x27;&#x27;) || &#x27;&lt;br&gt;&#x27;);
+    end
+
+  end
+  res_text = BLOB_APPEND(res_text, &#x27;&lt;br&gt;&#x27;);
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

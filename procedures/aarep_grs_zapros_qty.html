@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_GRS_ZAPROS_QTY — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_GRS_ZAPROS_QTY: 1 входных, 7 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_GRS_ZAPROS_QTY</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">7</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">7 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_MONTH</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KONT_QTY</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MAPP_QTY</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ZAPR_QTY</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">USPESH_ZAPR_QTY</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FAILED_ZAPR_QTY</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REPEAT_QTY</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_GRS_ZAPROS_QTY(
+    REP_DATE_END D_DATE)
+RETURNS (
+    REP_MONTH D_DATE,
+    KONT_QTY D_INTEGER,
+    MAPP_QTY D_INTEGER,
+    ZAPR_QTY D_INTEGER,
+    USPESH_ZAPR_QTY D_INTEGER,
+    FAILED_ZAPR_QTY D_INTEGER,
+    REPEAT_QTY D_INTEGER)
+AS
+declare variable rep_month_end d_date;
+
+begin
+  rep_month = cast(&#x27;01.01.&#x27; || extract(year from :rep_date_end) as date);
+  while (rep_month &lt;= :rep_date_end) do
+  begin
+    rep_month_end = dateadd(month, 1, :rep_month) - 1;
+
+    zapr_qty = 0;
+
+    kont_qty = 0;
+
+    select count(*)
+    from kontstate ks
+    where ks.ks_date_begin between :rep_month and iif(:rep_date_end between :rep_month and :rep_month_end, :rep_date_end, :rep_month_end) and
+          ks.ks_ol_is_delete = 0 and
+          ks.ks_state = 1
+    into :kont_qty;
+
+    kont_qty = coalesce(kont_qty, 0);
+
+    mapp_qty = 0;
+
+    select count(*)
+    from miniapp ma
+    where ma.ma_date_app between :rep_month and iif(:rep_date_end between :rep_month and :rep_month_end, :rep_date_end, :rep_month_end) and
+          ma.ma_is_active = 1 and
+          ma.ma_date_end = &#x27;31.12.9999&#x27;
+    into mapp_qty;
+
+    mapp_qty = coalesce(mapp_qty, 0);
+
+    uspesh_zapr_qty = 0;
+
+    select count(*)
+    from extinfolist eil
+    where eil.eil_from_eic_id = 2 and --Запрос ГРС
+          eil.eil_date between :rep_month and iif(:rep_date_end between :rep_month and :rep_month_end, :rep_date_end, :rep_month_end) and --Запросы внутри одного месяца
+          eil.eil_status = 2 --Успешные запросы
+    into :uspesh_zapr_qty;
+
+    failed_zapr_qty = 0;
+
+    select count(*)
+    from extinfolist eil
+    where eil.eil_from_eic_id = 2 and --Запрос ГРС
+          eil.eil_date between :rep_month and iif(:rep_date_end between :rep_month and :rep_month_end, :rep_date_end, :rep_month_end) and --Запросы внутри одного месяца
+          eil.eil_status &lt;&gt; 2 -- Неуспешные запросы
+    into :failed_zapr_qty;
+
+    zapr_qty = failed_zapr_qty + uspesh_zapr_qty;
+
+    repeat_qty = 0; --Дубль запросы
+
+    with tbl
+    as (select count(eil.eil_from_c_id) as qty
+        from extinfolist eil
+        where eil.eil_from_eic_id = 2 and --Запрос ГРС
+              eil.eil_date between :rep_month and iif(:rep_date_end between :rep_month and :rep_month_end, :rep_date_end, :rep_month_end) and
+              eil.eil_status = 2
+        group by eil.eil_from_c_id)
+    select count(qty)
+    from tbl as t
+    where t.qty &gt; 1
+    into repeat_qty;
+
+    suspend;
+    rep_month = dateadd(month, 1, rep_month);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

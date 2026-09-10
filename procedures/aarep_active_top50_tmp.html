@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_ACTIVE_TOP50_TMP — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_ACTIVE_TOP50_TMP: 1 входных, 6 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_ACTIVE_TOP50_TMP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_active_top50.html"><div class="to">AAREP_ACTIVE_TOP50</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">AC_K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AC_DISB</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AC_C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AC_C_BALANCE</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CL_DISB_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DISB_DD</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_ACTIVE_TOP50_TMP(
+    REP_DATE DATE)
+RETURNS (
+    AC_K_ID DECIMAL(18,0),
+    AC_DISB DECIMAL(18,4),
+    AC_C_ID DECIMAL(18,0),
+    AC_C_BALANCE DECIMAL(18,4),
+    CL_DISB_AMOUNT DECIMAL(18,4),
+    DISB_DD DATE)
+AS
+declare variable curr_code varchar(3);
+declare variable curr_rate decimal(18,4);
+declare variable k_curr_rate decimal(18,4);
+declare variable cm_def_curr varchar(3);
+declare variable pr_set_rate_in_kont integer;
+declare variable avg_amount decimal(18,4);
+declare variable ac_k_balance d_currency;
+begin
+  select cm_default_currency
+  from company
+  into cm_def_curr;
+
+  avg_amount = 100000;
+  if (cm_def_curr = &#x27;944&#x27;) then
+  avg_amount = 1000;
+  -- Один раз вычисляем курс доллара на дату
+  for select k_currency, k_amount_approved, ks_from_k_id, k_index_curr_rate, pr_set_rate_in_kont, ks_date_begin
+      from kontstate, kontract, product
+      where ks_date_begin &lt;= :rep_date and
+            ks_date_end &gt;= :rep_date and
+            ks_state = 1 and
+            ks_ol_is_delete = 0 and
+            k_id = ks_from_k_id and
+            pr_id = k_from_pr_id
+            and
+            cast((k_amount_approved * k_index_curr_rate) as double precision) / k_kolich_client_approved &gt;= :avg_amount
+      into :curr_code, :ac_disb, :ac_k_id, :k_curr_rate, :pr_set_rate_in_kont, :disb_dd
+  do
+  begin
+    ac_k_balance = 0;
+    select sum(ok_os)
+    from operkred
+    where ok_from_k_id = :ac_k_id and
+          ok_ol_is_active = 1 and
+          ok_ol_date between :disb_dd and :rep_date and
+          ok_type &lt;= 8 and
+          ok_type &gt;= 2 and
+          ok_from_c_id = 0
+    into :ac_k_balance;
+
+    if (ac_k_balance &gt; 0) then
+    begin
+      if (cm_def_curr &lt;&gt; curr_code) then
+      begin
+        select cr_rate
+        from opercurr
+        where cr_from_cu_id = :curr_code and
+              cr_date &lt;= :rep_date and
+              cr_date_end &gt;= :rep_date
+        into :curr_rate;
+        if (k_curr_rate &gt; curr_rate) then
+        begin
+          if (pr_set_rate_in_kont = 1) then
+            curr_rate = :k_curr_rate;
+        end
+        if (curr_rate is null) then
+          curr_rate = 1;
+        ac_k_balance = cast(:ac_k_balance * :curr_rate as decimal(15,2));
+        ac_disb = cast(:ac_disb * :curr_rate as decimal(15,2));
+      end
+      else
+        curr_rate = 1;
+    end
+
+    ac_c_balance = 0;
+    for select kc_from_c_id, kc_amount_approved
+        from knclient
+        where kc_from_k_id = :ac_k_id and
+              kc_amount_approved &lt;&gt; 0 and
+              kc_amount_approved is not null
+        into :ac_c_id, :cl_disb_amount
+    do
+    begin
+      cl_disb_amount = cast(cl_disb_amount * curr_rate as decimal(18,4));
+      ac_c_balance = round(cast (ac_k_balance as double precision) * cast( (cl_disb_amount / ac_disb) as double precision), 4);
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_CALC_VOC_DAYS — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_CALC_VOC_DAYS: 3 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_CALC_VOC_DAYS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_sa_tabel_one_voc.html"><div class="to">AAREP_SA_TABEL_ONE_VOC</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REPORT_CLIENT_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">KOL_DAYS</div><div class="ptype">DECIMAL(18,7)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_CALC_VOC_DAYS(
+    DATE_BEGIN DATE,
+    DATE_END DATE,
+    REPORT_CLIENT_ID DECIMAL(18,0))
+RETURNS (
+    KOL_DAYS DECIMAL(18,7))
+AS
+declare variable MONTH_BEGIN integer;
+declare variable MONTH_END integer;
+declare variable I integer;
+declare variable DAY_1 integer;
+declare variable DAY_2 integer;
+declare variable MONTH_KOEF decimal(18,7);
+declare variable REG_MOUNTAIN_KOEF decimal(18,4);
+declare variable DD date;
+declare variable MOUNT_KOEF_BEGIN decimal(18,4);
+declare variable MOUNT_KOEF_END decimal(18,4);
+declare variable LAST_DD date;
+declare variable MAX_DAY integer;
+declare variable REG_ID D_INTEGER;
+begin
+  kol_days = 0;
+  if (date_begin &lt;= date_end) then
+  begin
+    if ((extract(year from :date_end)) &lt;&gt; (extract(year from :date_begin))) then
+    begin
+      date_begin = &#x27;01.01.&#x27; || cast((extract(year from :date_end)) as varchar(4));
+    end
+    month_begin = extract(month from :date_begin);
+    month_end = extract(month from :date_end);
+    
+    select ps_from_reg_id
+    from hr_pstatus
+    where ps_from_c_id = :report_client_id and
+          ps_date_begin &lt;= :date_begin and
+          ps_date_end &gt;= :date_begin and
+          ps_status = 1
+    into :reg_id;
+    
+    -- RFCKG-4782
+    reg_mountain_koef = f_reg_mount_koef(:reg_id, :date_begin);
+    
+    if (report_client_id = 1010100001212 and date_end &lt;= &#x27;31.12.2020&#x27;) then
+      mount_koef_begin = 2.75;
+    else
+    begin
+      if (reg_mountain_koef = 1) then
+        mount_koef_begin = 2.33;
+      else
+        mount_koef_begin = 3.33;
+    end
+    
+    select ps_from_reg_id
+    from hr_pstatus
+    where ps_from_c_id = :report_client_id and
+          ps_date_begin &lt;= :date_end and
+          ps_date_end &gt;= :date_end and
+          ps_status = 1
+    into :reg_id;
+    
+    reg_mountain_koef = f_reg_mount_koef(:reg_id, :date_end);
+    
+    if (report_client_id = 1010100001212 and date_end &lt;= &#x27;31.12.2020&#x27;) then
+      mount_koef_end = 2.75;
+    else
+    begin
+      if (reg_mountain_koef = 1) then
+        mount_koef_end = 2.33;
+      else
+        mount_koef_end = 3.33;
+    end
+    
+    i = month_begin + 1;
+    while (i &lt; :month_end) do
+    begin
+      if (i &lt; 9) then
+        dd = cast(&#x27;01.0&#x27; || cast(:i + 1 as varchar(1)) || &#x27;.&#x27; || extract(year from :date_begin) as date) - 1;
+      else
+        dd = cast(&#x27;01.&#x27; || cast(:i + 1 as varchar(2)) || &#x27;.&#x27; || extract(year from :date_begin) as date) - 1;
+      
+      select ps_from_reg_id
+      from hr_pstatus
+      where ps_from_c_id = :report_client_id and
+            ps_date_begin &lt;= :dd and
+            ps_date_end &gt;= :dd and
+            ps_status = 1
+      into :reg_id;
+      
+      reg_mountain_koef = f_reg_mount_koef(:reg_id, :dd);
+      
+      if (report_client_id = 1010100001212) then
+        month_koef = 2.75;
+      else
+      begin
+        if (reg_mountain_koef = 1) then
+          month_koef = 2.33;
+        else
+          month_koef = 3.33;
+      end
+      kol_days = kol_days + :month_koef;
+      i = i + 1;
+    end
+    if (month_begin &lt; month_end) then
+    begin
+      last_dd = dateadd(1 month to :date_begin);
+      last_dd = cast(&#x27;01.&#x27; || extract(month from :last_dd) || &#x27;.&#x27; || extract(year from :last_dd) as date) - 1;
+      max_day = extract(day from :last_dd);
+      day_1 = extract(day from :date_begin);
+      day_1 = max_day - day_1 + 1;
+      if (max_day = 0) then
+        max_day = 30;
+      kol_days = kol_days + (mount_koef_begin / max_day * day_1);
+      
+      last_dd = dateadd(1 month to :date_end);
+      last_dd = cast(&#x27;01.&#x27; || extract(month from :last_dd) || &#x27;.&#x27; || extract(year from :last_dd) as date) - 1;
+      max_day = extract(day from :last_dd);
+      day_2 = extract(day from :date_end);
+      if (max_day = 0) then
+        max_day = 30;
+      kol_days = kol_days + (mount_koef_end / max_day * day_2);
+    end
+    if (month_begin = month_end) then
+    begin
+      day_1 = extract(day from :date_begin);
+      day_2 = extract(day from :date_end);
+      last_dd = dateadd(1 month to :date_end);
+      last_dd = cast(&#x27;01.&#x27; || extract(month from :last_dd) || &#x27;.&#x27; || extract(year from :last_dd) as date) - 1;
+      max_day = extract(day from :last_dd);
+      if (max_day = 0) then
+        max_day = 30;
+      if (day_2 &gt;= day_1) then
+        kol_days = kol_days + (mount_koef_end / max_day * (day_2 - day_1 + 1));
+    end
+    kol_days = cast(kol_days as decimal(15,2));
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

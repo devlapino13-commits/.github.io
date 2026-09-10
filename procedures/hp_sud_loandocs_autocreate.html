@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_SUD_LOANDOCS_AUTOCREATE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_SUD_LOANDOCS_AUTOCREATE: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_SUD_LOANDOCS_AUTOCREATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_sud_loanbls_add.html"><div class="to">HP_SUD_LOANBLS_ADD</div></a><a class="ref-card" href="hp_sud_loandocs_add.html"><div class="to">HP_SUD_LOANDOCS_ADD</div></a><a class="ref-card" href="hp_sud_send_receipt_req.html"><div class="to">HP_SUD_SEND_RECEIPT_REQ</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SMD_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_SUD_LOANDOCS_AUTOCREATE(
+    SMD_ID D_ID,
+    UN_ID D_ID)
+AS
+declare variable doc_kind d_integer;
+declare variable doc_code d_str_code;
+declare variable k_id d_id;
+declare variable disb_kind d_integer;
+declare variable obj_kind d_integer;
+declare variable obj_id d_id;
+declare variable edoc_obj_kind d_integer;
+declare variable edoc_kind d_integer;
+declare variable bls_id d_id;
+declare variable res_sld_id d_id;
+declare variable slc_id d_id;
+declare variable edoc_blank_code d_str_code;
+declare variable disb_date d_date;
+declare variable c_id d_id;
+declare variable bls_id_2 d_id;
+declare variable err_text d_str_255;
+begin
+  -- Процедура создает список необходимых документов по судебному делу
+
+  if (un_id is null) then
+    un_id = 1000000000000;
+
+  select smr_from_k_id, k_disb_date
+  from sud_mainreq, kontract
+  where smr_id = :smd_id and
+        smr_from_k_id = k_id
+  into k_id, disb_date;
+
+  select smd_disb_kind
+  from sud_maindocs
+  where smd_id = :smd_id
+  into disb_kind;
+
+  for select scd_id, scd_code
+  from sud_cfgdockind
+  where scd_on_request &gt; 0
+  order by  scd_sort, scd_id
+  into :doc_kind, :doc_code
+  do
+  begin
+    -- Если выдан не через кассу, кассовый ордер игнорируем
+    if (disb_kind &lt;&gt; 1 and doc_code = &#x27;cash_order&#x27;)  then
+      Continue;
+
+    -- Если выдан через кассу, квитанцию от Монеты игнорируем
+    if (disb_kind = 1 and doc_code = &#x27;transfer_receipt&#x27;)  then
+      Continue;
+
+    res_sld_id = null;
+    obj_id = null;
+    bls_id = null;
+    edoc_blank_code = &#x27;&#x27;;
+
+    -- договор займа
+    if (doc_code in (&#x27;kontract&#x27;, &#x27;payment_schedule&#x27;)) then
+    begin
+      if (doc_code = &#x27;kontract&#x27;) then
+        edoc_blank_code = &#x27;loan.agreement&#x27;;
+
+      if (doc_code = &#x27;payment_schedule&#x27;) then
+        edoc_blank_code = &#x27;loan.schedule&#x27;;
+
+      obj_kind = f_objkind(&#x27;edoc_blank&#x27;, &#x27;id&#x27;);
+
+      edoc_obj_kind = f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;);
+      edoc_kind = f_edoc_kind(&#x27;loan.agreement&#x27;, &#x27;id&#x27;);
+
+      select edb_id, coalesce(edb_scan_bls_id, edb_from_bls_id)
+      from edoc_blank edb, edoc_list edl, edoc_frx frx
+      where edb.edb_from_edl_id = edl_id and
+            edb.edb_from_edf_id = frx.edf_id and
+            edl.edl_object_kind = :edoc_obj_kind and
+            edl.edl_object_id = :k_id and
+            edl.edl_status = 1 and
+            edl.edl_blank_date &lt;= :disb_date and
+            coalesce(edl.edl_date_end, :disb_date) &gt;= :disb_date and
+            edl.edl_from_edc_id = :edoc_kind and
+            edb.edb_status &gt;= 1 and
+            frx.edf_add_code = :edoc_blank_code
+      into obj_id, bls_id;
+    end
+
+    if (doc_code = &#x27;transfer_receipt&#x27;) then
+    begin
+      -- Отправляем запрос на получение квитанции от Монеты
+      err_text = &#x27;&#x27;;
+
+      select error_text
+      from hp_sud_send_receipt_req(:k_id)
+      into err_text;
+    end
+
+    if (doc_code = &#x27;pretrial_claim&#x27;) then -- претензия досудебная (RFCRU-3114)
+    begin
+      obj_kind = f_objkind(&#x27;edoc_blank&#x27;, &#x27;id&#x27;);
+      edoc_obj_kind = f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;);
+      edoc_kind = f_edoc_kind(doc_code, &#x27;id&#x27;);
+
+      select edb_id, coalesce(edb_scan_bls_id, edb_from_bls_id)
+      from edoc_blank edb, edoc_list edl, edoc_frx frx
+      where edb.edb_from_edl_id = edl_id and
+            edb.edb_from_edf_id = frx.edf_id and
+            edl.edl_object_kind = :edoc_obj_kind and
+            edl.edl_object_id = :c_id and
+            edl.edl_status = 1 and
+            edl.edl_blank_date &lt;= :disb_date and
+            coalesce(edl.edl_date_end, :disb_date) &gt;= :disb_date and
+            edl.edl_from_edc_id = :edoc_kind and
+            edb.edb_status &gt;= 1
+      into obj_id, bls_id;
+    end
+
+    if (obj_id is not null and bls_id is not null) then
+    begin
+      select res_sld_id
+      from hp_sud_loanbls_add(:smd_id, null, :doc_kind, :obj_kind, :obj_id, :bls_id, :un_id)
+      into res_sld_id;
+    end else
+    begin
+      select res_sld_id
+      from hp_sud_loandocs_add(:smd_id, null, :doc_kind, :un_id)
+      into :res_sld_id;
+    end
+
+    if (res_sld_id is null) then
+      exception e_default &#x27;Sud_LoanBLS not added&#x27;;
+  end
+
+  for select scd_id, scd_code
+  from sud_cfgdockind
+  where scd_on_client &gt; 0
+  into :doc_kind, :doc_code
+  do
+  begin
+    -- Если выдан не через кассу, кассовый ордер игнорируем
+    if (disb_kind &lt;&gt; 1 and doc_code = &#x27;cash_order&#x27;)  then
+      Continue;
+
+    -- Если выдан через кассу, квитанцию от Монеты игнорируем
+    if (disb_kind = 1 and doc_code = &#x27;transfer_receipt&#x27;)  then
+      Continue;
+
+    for select slc_id, kc_from_c_id
+    from sud_loanclient, knclient
+    where slc_from_smr_id = :smd_id and
+          slc_from_kc_id = kc_id
+    into :slc_id, c_id
+    do
+    begin
+      res_sld_id = null;
+
+      obj_id = null;
+      bls_id = null;
+      bls_id_2 = null;
+      edoc_blank_code = &#x27;&#x27;;
+  
+      -- договор займа
+      if (doc_code = &#x27;asp_agreement&#x27;) then
+      begin
+        obj_kind = f_objkind(&#x27;edoc_blank&#x27;, &#x27;id&#x27;);
+  
+        edoc_obj_kind = f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;);
+        edoc_kind = f_edoc_kind(&#x27;asp.agreement&#x27;, &#x27;id&#x27;);
+  
+        select edb_id, coalesce(edb_scan_bls_id, edb_from_bls_id)
+        from edoc_blank edb, edoc_list edl, edoc_frx frx
+        where edb.edb_from_edl_id = edl_id and
+              edb.edb_from_edf_id = frx.edf_id and
+              edl.edl_object_kind = :edoc_obj_kind and
+              edl.edl_object_id = :c_id and
+              edl.edl_status = 1 and
+              edl.edl_blank_date &lt;= :disb_date and
+              coalesce(edl.edl_date_end, :disb_date) &gt;= :disb_date and
+              edl.edl_from_edc_id = :edoc_kind and
+              edb.edb_status &gt;= 1
+        order by edb_id desc
+        rows 1
+        into obj_id, bls_id;
+      end
+
+      if (doc_code = &#x27;passport&#x27;) then
+      begin
+        obj_kind = f_objkind(&#x27;clientdocs&#x27;, &#x27;id&#x27;);
+  
+        select cds_id, cds_doc_blob_1, cds_doc_blob_2
+        from clientdocs cds, passkind pk, passdoctype pdt
+        where pk_id = cds_from_pk_id and
+          pdt_id = pk_from_pdt_id and
+          cds_from_c_id = :c_id and
+          cds_doc_date_begin &lt;= :disb_date and -- выдан до даты выдачи
+          coalesce(cds_doc_date_end, &#x27;31.12.2999&#x27;) &gt;= :disb_date and -- со сроком действия после даты выдачи
+          cds_create_datetime &lt;= (:disb_date + 1) and -- Паспорт должен быть прикреплен до выдачи
+          cds_is_delete = 0 and -- до сих пор актуальный
+          cds_verify_status = 2 and -- подтврежленный
+          pdt.pdt_is_main_doc = 1 and
+          (cds_doc_blob_1 &gt; 0 or cds_doc_blob_2 &gt; 0)
+        order by cds_create_datetime desc
+        rows 1
+        into obj_id, bls_id, bls_id_2;
+      end
+
+      if (doc_code = &#x27;registration&#x27;) then
+      begin
+        obj_kind = f_objkind(&#x27;clientdocs&#x27;, &#x27;id&#x27;);
+
+        select cds_id, cds_doc_blob_1, cds_doc_blob_2
+        from clientdocs cds, passkind pk, passdoctype pdt
+        where pk_id = cds_from_pk_id and
+          pdt_id = pk_from_pdt_id and
+          cds_from_c_id = :c_id and
+          cds_doc_date_begin &lt;= :disb_date and -- выдан до даты выдачи
+          coalesce(cds_doc_date_end, &#x27;31.12.2999&#x27;) &gt;= :disb_date and -- со сроком действия после даты выдачи
+          cds_create_datetime &lt;= (:disb_date + 1) and -- Паспорт должен быть прикреплен до выдачи
+          coalesce(cds_delete_datetime, current_timestamp) &gt;= :disb_date and -- Не аннулирован до выдачи
+          cds_verify_status = 2 and -- подтврежленный
+          pdt.pdt_code in (&#x27;registration_permanent&#x27;, &#x27;registration_fiz&#x27;, &#x27;registration_yur&#x27;) and
+          (cds_doc_blob_1 &gt; 0 or cds_doc_blob_2 &gt; 0)
+        order by cds_create_datetime desc
+        rows 1
+        into obj_id, bls_id, bls_id_2;
+      end
+
+      if (obj_id is not null and bls_id is not null) then
+      begin
+        select res_slb_id
+        from hp_sud_loanbls_add(:smd_id, :slc_id, :doc_kind, :obj_kind, :obj_id, :bls_id, :un_id)
+        into res_sld_id;
+      end else
+      begin
+        select res_sld_id
+        from hp_sud_loandocs_add(:smd_id, :slc_id, :doc_kind, :un_id)
+        into :res_sld_id;
+      end
+
+      if (res_sld_id is null) then
+        exception e_default &#x27;Sud_LoanBLS not added&#x27;;
+
+      if (bls_id_2 is not null and bls_id_2 &lt;&gt; coalesce(bls_id, 0)) then
+      begin
+        select res_slb_id
+        from hp_sud_loanbls_add(:smd_id, :slc_id, :doc_kind, :obj_kind, :obj_id, :bls_id_2, :un_id)
+        into res_sld_id;
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

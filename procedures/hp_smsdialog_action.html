@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_SMSDIALOG_ACTION — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_SMSDIALOG_ACTION: 5 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_SMSDIALOG_ACTION</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_contdata_find_object.html"><div class="to">HP_CONTDATA_FIND_OBJECT</div></a><a class="ref-card" href="hp_smsdialog_action_balance.html"><div class="to">HP_SMSDIALOG_ACTION_BALANCE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SDR_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SDR_CELL_NO</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SDR_SYSTEM_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SDR_FROM_C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SDR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_SMSDIALOG_ACTION(
+    SDR_ID INTEGER,
+    SDR_CELL_NO VARCHAR(20),
+    SDR_SYSTEM_ID INTEGER,
+    SDR_FROM_C_ID DECIMAL(18,0),
+    SDR_TEXT VARCHAR(255))
+AS
+declare variable action_name varchar(100);
+declare variable sms_text varchar(255);
+declare variable client_fio varchar(100);
+declare variable rand_n integer;
+declare variable next_n decimal(18,0);
+declare variable curr_n decimal(18,0);
+declare variable new_code varchar(10);
+declare variable need_fio integer;
+declare variable tmp_text varchar(255);
+declare variable command_len integer;
+declare variable tmp_cell_no varchar(255);
+declare variable i integer;
+declare variable cha varchar(255);
+declare variable reg_address varchar(255);
+declare variable reg_phone varchar(100);
+declare variable reg_id integer;
+declare variable sms_text_add varchar(1024);
+declare variable c_id decimal(18,0);
+declare variable sdr_cell_no2 varchar(20);
+declare variable cm_name d_str_100;
+begin
+-- Выполняет действия в соответствии с системной командой
+  sms_text_add = &#x27;&#x27;;
+  sdr_cell_no2 = &#x27;&#x27;;
+  need_fio = 0;
+  sms_text = &#x27;&#x27;;
+  client_fio = &#x27;&#x27;;
+  cm_name = iif(f_get_db_id() = 81001, &#x27;М Булак&#x27;, &#x27;М Булак&#x27;);
+
+  for select sdsw_action, char_length(sdsw_command_names)
+      from smsdialogsyswords
+      where sdsw_id = :sdr_system_id and
+            sdsw_is_active = 1 and
+            sdsw_action &lt;&gt; &#x27;sms_pin&#x27;
+      into :action_name, :command_len
+  do
+  begin
+    client_fio = &#x27;&#x27;;
+    if (sdr_from_c_id is not null) then
+    begin
+      select c_name_fio
+      from clients
+      where c_id = :sdr_from_c_id
+      into :client_fio;
+    end
+    if (action_name = &#x27;Loan_balance&#x27;) then -- отправка баланса клиента
+    begin
+      need_fio = 0;
+      select sms_text
+      from hp_smsdialog_action_balance(:sdr_from_c_id)
+      into :sms_text;
+    end
+    if (action_name = &#x27;Client_Account&#x27;) then -- лицевой счет КИВИ
+    begin
+      sms_text = &#x27;Лицевой счет еще не создан.&#x27;;
+      need_fio = 1;
+    end
+    if (action_name = &#x27;Marketing_register&#x27;) then -- отправка баланса клиента
+    begin
+      sms_text = &#x27;Salam! &#x27;;
+      rand_n = round((rand() * 9), 0);
+      sms_text = sms_text || rand_n;
+      rand_n = round((rand() * 9), 0);
+      sms_text = sms_text || rand_n;
+      rand_n = round((rand() * 9), 0);
+      sms_text = sms_text || rand_n;
+      rand_n = round((rand() * 9), 0);
+      sms_text = sms_text || rand_n;
+      need_fio = 1;
+    end
+    if (action_name = &#x27;Agent_register&#x27;) then -- регистрация агента
+    begin
+      if (not(exists(select *
+                     from hr_pstatus
+                     where ps_from_c_id = :sdr_from_c_id and
+                           ps_date_begin &lt;= current_date and
+                           ps_date_end &gt;= &#x27;31.12.2999&#x27; and
+                           ps_status = 1 and
+                           ps_is_working = 1 and
+                           ps_from_reg_id &lt;&gt; 1010100))) then
+      begin
+        need_fio = 0;
+        if (client_fio &lt;&gt; &#x27;&#x27;) then
+        begin
+          sms_text = &#x27;Поздравляем! Вы стали агентом &#x27;||cm_name||&#x27;. Ваш код: &#x27;;
+          curr_n = 0;
+          select count(*)
+          from smsdialogsend
+          where sds_action = &#x27;Agent_register&#x27;
+          into :curr_n;
+          if (curr_n is null) then
+            curr_n = 0;
+          next_n = curr_n + 1;
+          next_n = next_n * 1046527;
+          new_code = right(next_n, 6);
+          new_code = left(new_code, 3) || &#x27;-&#x27; || right(new_code, 3);
+          sms_text = sms_text || new_code;
+
+          sms_text_add = cm_name||&#x27;: Для активации скидки отправьте СМС на 8(903)76-76-000 со словом «Скидка»&#x27; || &#x27; и тел. номер знакомого. Пример: Скидка 79007654321. СМС нужно отправить с номера, &#x27; || &#x27;который зарегистрирован в &#x27;||cm_name;
+          sdr_cell_no2 = sdr_cell_no;
+        end
+        else
+          sms_text = &#x27;Ошибка! В базе нет клиента с таким номером.&#x27;;
+      end
+      else
+      begin
+        sms_text = &#x27;Сотрудники офисов не могут работать как агент и активировать скидки&#x27;;
+      end
+    end
+    if (action_name = &#x27;Kupon_register&#x27;) then -- регистрация агента
+    begin
+      sms_text = &#x27;&#x27;;
+      need_fio = 0;
+
+      if (exists(select *
+                 from smsdialogreciever
+                 where sdr_from_c_id = :sdr_from_c_id and
+                       sdr_action = &#x27;Agent_register&#x27;)) then
+      begin
+        if (exists(select *
+                   from hr_pstatus
+                   where ps_from_c_id = :sdr_from_c_id and
+                         ps_date_begin &lt;= current_date and
+                         ps_date_end &gt;= &#x27;31.12.2999&#x27; and
+                         ps_status = 1 and
+                         ps_is_working = 1 and
+                         ps_from_reg_id &lt;&gt; 1010100)) then
+        begin
+          sms_text = &#x27;Сотрудники офисов не могут работать как агент и активировать скидки&#x27;;
+        end
+        else
+        begin
+          tmp_text = substring(sdr_text from (:command_len + 1) for 255);
+          tmp_cell_no = &#x27;&#x27;;
+          i = 1;
+          while (i &lt;= char_length(tmp_text)) do
+          begin
+            cha = substring(tmp_text from i for 1);
+            if ((cha = &#x27;0&#x27;) or (cha = &#x27;1&#x27;) or (cha = &#x27;2&#x27;) or (cha = &#x27;3&#x27;) or (cha = &#x27;4&#x27;) or (cha = &#x27;5&#x27;) or (cha = &#x27;6&#x27;) or (cha = &#x27;7&#x27;) or (cha = &#x27;8&#x27;) or (cha = &#x27;9&#x27;)) then
+            begin
+              tmp_cell_no = tmp_cell_no || cha;
+            end
+            i = i + 1;
+          end
+          if ((char_length(tmp_cell_no) = 11) and
+              (left(tmp_cell_no, 1) = &#x27;8&#x27;)) then
+          begin
+            tmp_cell_no = &#x27;7&#x27; || substring(tmp_cell_no from 2 for 10);
+          end
+          if (((char_length(tmp_cell_no) = 11) and
+              (left(tmp_cell_no, 1) = &#x27;7&#x27;)) or ((char_length(tmp_cell_no) = 12) and
+              (left(tmp_cell_no, 1) = &#x27;9&#x27;))) then
+          begin
+            for select distinct res_object_id
+                from hp_contdata_find_object(:tmp_cell_no, &#x27;cell&#x27;)
+                where res_object_kind = 0
+                into :c_id
+            do
+            begin
+              if (exists(select *
+                         from knclient, kontstate
+                         where kc_from_c_id = :c_id and
+                               kc_from_k_id = ks_from_k_id and
+                               kc_amount_approved &gt; 0 and
+                               ks_state = 1 and
+                               ks_date_end &gt;= (current_date - 180) and
+                               ks_ol_is_delete = 0 and
+                               ks_date_begin &lt;= ks_date_end)) then
+              begin
+                sms_text = &#x27;Клиент &#x27; || tmp_cell_no || &#x27; уже является клиентом компании&#x27;;
+              end
+
+              if (c_id = sdr_from_c_id) then
+              begin
+                sms_text = &#x27;Агент не может активировать скидку для себя&#x27;;
+              end
+            end
+            if (sms_text = &#x27;&#x27;) then
+            begin
+              if (exists(select *
+                         from smsdialogsend
+                         where sds_action = &#x27;Kupon_register&#x27; and
+                               sds_cell_no = :tmp_cell_no and
+                               (sds_text like &#x27;Ваш купон активирован%&#x27; or
+                               sds_text like &#x27;Поздравляем! Вы%&#x27;))) then
+              begin
+                sms_text = &#x27;Клиенту &#x27; || tmp_cell_no || &#x27; ранее уже предоставлена скидка другим агентом&#x27;;
+              end
+              else
+              begin
+                sms_text_add = &#x27;Скидка для &#x27; || :tmp_cell_no || &#x27; успешно активирована&#x27;;
+                sdr_cell_no2 = sdr_cell_no;
+
+                sms_text = &#x27;Поздравляем! Вы получили скидку в 200 руб. в &#x27;||cm_name||&#x27;! 88005557171&#x27;;
+                sdr_cell_no = tmp_cell_no;
+              end
+            end
+          end
+          if (sms_text = &#x27;&#x27;) then
+          begin
+            sms_text = &#x27;Номер должен быть в международном формате: &#x27; || tmp_text;
+          end
+        end
+      end
+      else
+      begin
+        sms_text = &#x27;Вы не являетесь зарегистрированным агентом.&#x27;;
+      end
+    end
+
+    if (action_name = &#x27;Client_from_marketing&#x27;) then -- регистрация агента
+    begin
+      sms_text = &#x27;&#x27;;
+      need_fio = 0;
+      reg_phone = &#x27;&#x27;;
+      reg_address = &#x27;&#x27;;
+      reg_id = null;
+      select reg_unicode
+      from hr_pstatus, region, joblist, jobkind
+      where ps_from_c_id = :sdr_from_c_id and
+            ps_status = 1 and
+            ps_is_working = 1 and
+            ps_date_begin &lt;= current_date and
+            ps_date_end &gt;= current_date and
+            ps_from_reg_id = reg_unicode and
+            ps_from_jl_id = jl_id
+--      and ps_from_c_id in (1000000000001, 1010100000004, 1010100189147, 1010100002561)
+            and
+            jl_kind = jk_id and
+            jk_system_code = &#x27;JobSystem.Specialist_Promoter&#x27; -- Промоутер
+            rows 1
+      into :reg_id;
+      if (reg_id is not null) then
+      begin
+        select reg_phone, adl_address_str
+        from region, addrlist
+        where reg_unicode = :reg_id and
+              reg_address_fact = adl_id
+        into :reg_phone, :reg_address;
+
+        if (reg_phone is null) then
+          reg_phone = &#x27;&#x27;;
+        if (reg_address is null) then
+          reg_address = &#x27;&#x27;;
+
+        if (reg_address &lt;&gt; &#x27;&#x27;) then
+        begin
+          cha = substring(reg_address from 1 for 1);
+          if ((cha = &#x27;0&#x27;) or (cha = &#x27;1&#x27;) or (cha = &#x27;2&#x27;) or (cha = &#x27;3&#x27;) or (cha = &#x27;4&#x27;) or (cha = &#x27;5&#x27;) or (cha = &#x27;6&#x27;) or (cha = &#x27;7&#x27;) or (cha = &#x27;8&#x27;) or (cha = &#x27;9&#x27;)) then
+          begin
+            reg_address = substring(reg_address from 9 for 255);
+          end
+          tmp_text = substring(sdr_text from (:command_len + 1) for 255);
+          tmp_cell_no = &#x27;&#x27;;
+          i = 1;
+          while (i &lt;= char_length(tmp_text)) do
+          begin
+            cha = substring(tmp_text from i for 1);
+            if ((cha = &#x27;0&#x27;) or (cha = &#x27;1&#x27;) or (cha = &#x27;2&#x27;) or (cha = &#x27;3&#x27;) or (cha = &#x27;4&#x27;) or (cha = &#x27;5&#x27;) or (cha = &#x27;6&#x27;) or (cha = &#x27;7&#x27;) or (cha = &#x27;8&#x27;) or (cha = &#x27;9&#x27;)) then
+            begin
+              tmp_cell_no = tmp_cell_no || cha;
+            end
+            i = i + 1;
+          end
+          if ((char_length(tmp_cell_no) = 11) and
+              (left(tmp_cell_no, 1) = &#x27;8&#x27;)) then
+          begin
+            tmp_cell_no = &#x27;7&#x27; || substring(tmp_cell_no from 2 for 10);
+          end
+          if ((char_length(tmp_cell_no) = 11) and
+              (left(tmp_cell_no, 1) = &#x27;7&#x27;)) then
+          begin
+            if (reg_phone &lt;&gt; &#x27;&#x27;) then
+              sms_text = &#x27;Займы от &#x27;||cm_name||&#x27;, адрес: &#x27; || :reg_address || &#x27; Тел. &#x27; || :reg_phone;
+            else
+              sms_text = &#x27;Займы от &#x27;||cm_name||&#x27;, адрес: &#x27; || :reg_address;
+            sdr_cell_no = tmp_cell_no;
+          end
+          else
+          begin
+            if ((char_length(tmp_cell_no) = 12) and
+                (left(tmp_cell_no, 1) = &#x27;9&#x27;)) then
+            begin
+              if (reg_phone &lt;&gt; &#x27;&#x27;) then
+                sms_text = &#x27;Займы от &#x27;||cm_name||&#x27;, адрес: &#x27; || :reg_address || &#x27; Тел. &#x27; || :reg_phone;
+              else
+                sms_text = &#x27;Займы от &#x27;||cm_name||&#x27;, адрес: &#x27; || :reg_address;
+              sdr_cell_no = tmp_cell_no;
+            end
+          end
+          if (sms_text = &#x27;&#x27;) then
+          begin
+            sms_text = &#x27;Номер должен быть в международном формате: &#x27; || tmp_text;
+          end
+        end
+      end
+      else
+      begin
+        sms_text = &#x27;Вы не являетесь действующим промоутером.&#x27;;
+      end
+    end
+  end
+
+  if (sms_text &lt;&gt; &#x27;&#x27;) then
+  begin
+    if ((client_fio &lt;&gt; &#x27;&#x27;) and
+        (need_fio = 1)) then
+      sms_text = client_fio || &#x27;: &#x27; || sms_text;
+
+    insert into smsdialogsend (sds_id, sds_cell_no, sds_text, sds_system_id, sds_from_c_id, sds_status, sds_service_id,
+                               sds_sender_sdr_id, sds_reciever_sdr_id)
+    values (-1, :sdr_cell_no, :sms_text, :sdr_system_id, :sdr_from_c_id, 0, null, :sdr_id, null);
+
+    if ((sms_text_add &lt;&gt; &#x27;&#x27;) and
+        (sdr_cell_no2 &lt;&gt; &#x27;&#x27;)) then
+    begin
+      insert into smsdialogsend (sds_id, sds_cell_no, sds_text, sds_system_id, sds_from_c_id, sds_status,
+                                 sds_service_id, sds_sender_sdr_id, sds_reciever_sdr_id)
+      values (-1, :sdr_cell_no2, :sms_text_add, :sdr_system_id, :sdr_from_c_id, 0, null, :sdr_id, null);
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

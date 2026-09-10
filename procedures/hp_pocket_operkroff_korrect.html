@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_POCKET_OPERKROFF_KORRECT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_POCKET_OPERKROFF_KORRECT: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_POCKET_OPERKROFF_KORRECT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_POCKET_OPERKROFF_KORRECT(
+    REP_DATE DATE)
+AS
+declare variable ol_id id_type;
+declare variable oko_id integer;
+declare variable k_id id_type;
+declare variable sh_os decimal(18,4);
+declare variable sh_perc decimal(18,4);
+declare variable oko_from_c_id id_type;
+declare variable k_id_old id_type;
+declare variable k_amount_approved decimal(18,4);
+declare variable k_kolich_client_approved integer;
+declare variable i integer;
+declare variable os_new_sum decimal(15,2);
+declare variable perc_new_sum decimal(15,2);
+declare variable c_id id_type;
+declare variable cl_amount_approved decimal(18,4);
+declare variable perc_prop decimal(18,7);
+declare variable os_new decimal(15,2);
+declare variable perc_new decimal(15,2);
+declare variable new_oko_id integer;
+begin
+  k_id_old = 0;
+
+  for select okf.oko_from_ol_id, okf.oko_id, okf.oko_from_k_id, okf.oko_sh_os, okf.oko_sh_perc, okf.oko_from_c_id
+      from operkroff okf
+      where okf.oko_from_ol_id in (select ol.ol_id
+                                   from operlist ol
+                                   where ol.ol_memo = &#x27;Пакетное списание платежей с просрочкой 3 года и более.&#x27; and
+                                         ol.is_delete = 0 and
+                                         ol.ol_date = :rep_date)
+      order by okf.oko_from_ol_id, okf.oko_id, okf.oko_from_k_id
+      into :ol_id, :oko_id, :k_id, :sh_os, :sh_perc, :oko_from_c_id
+  do
+  begin
+    if (k_id &lt;&gt; k_id_old) then
+    begin
+      select kont.k_amount_approved, kont.k_kolich_client_approved
+      from kontract kont
+      where kont.k_id = :k_id
+      into :k_amount_approved, :k_kolich_client_approved;
+
+      k_id_old = k_id;
+    end
+
+    i = 0;
+
+    os_new_sum = 0;
+    perc_new_sum = 0;
+
+    if (k_kolich_client_approved &gt; 1) then
+    begin
+      for select kncl.kc_from_c_id, kncl.kc_amount_approved
+          from knclient kncl
+          where kncl.kc_from_k_id = :k_id and
+                kncl.kc_amount_approved &gt; 0
+          into :c_id, :cl_amount_approved
+      do
+      begin
+        i = i + 1;
+
+        perc_prop = cl_amount_approved * 100 / k_amount_approved;
+
+        if (i &lt;&gt; k_kolich_client_approved) then
+        begin
+          os_new = sh_os * perc_prop / 100;
+          perc_new = sh_perc * perc_prop / 100;
+
+          os_new_sum = os_new_sum + os_new;
+          perc_new_sum = perc_new_sum + perc_new;
+        end
+        else
+        begin
+          os_new = sh_os - os_new_sum;
+          perc_new = sh_perc - perc_new_sum;
+        end
+
+        if (oko_from_c_id = c_id) then
+        begin
+          update operkroff okf
+          set okf.oko_sh_os = :os_new,
+              okf.oko_sh_perc = :perc_new
+          where okf.oko_from_ol_id = :ol_id and
+                okf.oko_id = :oko_id;
+        end
+        else
+        begin
+          select max(okf.oko_id)
+          from operkroff okf
+          where okf.oko_from_ol_id = :ol_id
+          into :new_oko_id;
+
+          new_oko_id = new_oko_id + 1;
+
+          insert into operkroff (oko_from_ol_id, oko_id, oko_from_k_id, oko_from_c_id, oko_type, oko_os, oko_perc,
+                                 oko_other, oko_sh_os, oko_sh_perc, oko_sh_other)
+          values (:ol_id, :new_oko_id, :k_id, :c_id, 1, 0, 0, 0, :os_new, :perc_new, 0);
+        end
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_GET_HTML_BANK_ACCOUNT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_GET_HTML_BANK_ACCOUNT: 3 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_GET_HTML_BANK_ACCOUNT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_html_get_loan_status.html"><div class="to">HP_HTML_GET_LOAN_STATUS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OBJ_KIND</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_HTML</div><div class="ptype">VARCHAR(4096)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_GET_HTML_BANK_ACCOUNT(
+    OBJ_KIND D_INTEGER,
+    OBJ_ID D_ID,
+    UN_ID D_ID)
+RETURNS (
+    RES_HTML D_STR_4096)
+AS
+declare variable res_link d_str_long;
+declare variable c_id d_id;
+declare variable c_name_fio d_str_255;
+declare variable b_id d_str_10;
+declare variable bc_account_no d_str_255;
+begin
+    -- RFCRU-5314
+    -- Процедура отображает окно в МП по добавлению/изменению банковского счёта для ИП
+    -- Сам шаблон окна был собран напрямую в приложении через Оксану.
+    -- Окно вернёт два поля для ввода (БИК и Расчетный Счет), которые попадут далее в процедуру fm_save_ie_bank_details
+
+    res_html = &#x27;&#x27;;
+    res_link = &#x27;&#x27;;
+
+    if (f_objkind(:obj_kind, &#x27;code&#x27;) = &#x27;kontract&#x27;) then
+        select kc.kc_from_c_id
+        from knclient kc
+        where kc.kc_from_k_id = :obj_id
+            and kc.kc_amount_approved &gt; 0
+        into :c_id;
+
+    else if (f_objkind(:obj_kind, &#x27;code&#x27;) = &#x27;miniapp&#x27;) then
+        select mac.mac_from_c_id
+        from miniappclient mac
+        where mac.mac_from_ma_id = :obj_id
+            and mac.mac_amount &gt; 0
+        into :c_id;
+
+    select c.c_name_fio
+    from clients c
+    where c.c_id = :c_id
+    into :c_name_fio;
+
+    select b.b_id, f_mask_text(bc.bc_account_no, 8, 4)
+    from bankclient bc
+    inner join banks b on bc.bc_from_b_id = b.b_id
+        and b.is_delete = 0
+        and b.b_corr_acc is not null
+    where bc.bc_from_c_id = :c_id
+        and bc.bc_is_main = 1
+        and bc.bc_is_active = 1
+    into :b_id, :bc_account_no;
+
+
+    -- Если счёт (bc_account_no) не был найден, то он просто не отобразиться и будет красоваца ссылка (Внести реквизиты)
+    -- Иначе будет номер счёта и ссылка (Изменить)
+    res_link = f_uri_open(iif(b_id is not null, &#x27;Изменить&#x27;, &#x27;Внести реквизиты&#x27;), &#x27;save_ie_bank_details&#x27;, &#x27;clients&#x27;, :c_id, &#x27;Банковские реквизиты&#x27;, f_format(&#x27;fio=%1&amp;hint=40802810&#x27;, :c_name_fio), :un_id);
+    res_html = iif
+        (
+            b_id is not null, 
+            blob_append(res_html, f_html_table_row(c_name_fio, f_format(&#x27;Счёт ИП: %1, %2&#x27;, :bc_account_no, :res_link), &#x27;&#x27;, &#x27;&#x27;, -1, -1, -1, -1, 2, &#x27;&#x27;)),
+            blob_append(res_html, f_html_table_row(c_name_fio, :res_link, &#x27;&#x27;, &#x27;&#x27;, -1, -1, -1, -1, 2, &#x27;&#x27;))
+        );
+
+    suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

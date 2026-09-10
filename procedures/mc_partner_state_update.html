@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MC_PARTNER_STATE_UPDATE — процедура — схема БД</title>
+<meta name="description" content="Процедура MC_PARTNER_STATE_UPDATE: 2 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>MC_PARTNER_STATE_UPDATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MCL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEW_STATE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_CODE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE MC_PARTNER_STATE_UPDATE(
+    MCL_ID D_ID,
+    NEW_STATE D_STR_CODE)
+RETURNS (
+    RES_TEXT D_STR_255,
+    RES_CODE D_BOOL)
+AS
+declare variable ag_id d_integer;
+declare variable date_end d_date;
+declare variable c_id d_id;
+declare variable rd_id d_integer;
+declare variable ae_is_exchange d_bool;
+declare variable new_is_exchange d_integer;
+begin
+  /* Процедура обновляет обменять баллы или копить баллы*/
+  date_end = current_date;
+  if (coalesce(mcl_id, 0) &lt;= 0) then
+    exception e_default &#x27;parametr &quot;mcl_id&quot; has invalid value&#x27;;
+
+  if (coalesce(new_state,&#x27;&#x27;) not in (&#x27;save_up&#x27;,&#x27;exchange&#x27;)) then
+    exception e_default &#x27;parametr &quot;new_state&quot; has invalid value&#x27;;
+
+  select mcl.mcl_from_c_id
+  from mc_login mcl
+  where mcl.mcl_id = :mcl_id
+  into :c_id;
+
+  select rd_id from refdata
+  where rd_code = &#x27;AgreementKinds.loyal_agreement&#x27;
+  into rd_id;
+
+  ag_id = null;
+  select ag_id from agreements -- в этом отрезке нужно добавить дополнительное условие на mcl_id
+  where ag_object_kind = 0
+  and ag_object_id = :c_id
+  and ag_status = 1
+  and ag_from_rd_id = :rd_id
+  and :date_end between ag_date_begin and coalesce(ag_date_end, &#x27;31.12.9999&#x27;)
+  order by ag_id desc
+  rows 1
+  into ag_id;
+
+  ae_is_exchange = 0;
+  select ae_is_exchange from agreement_exchange
+  where ae_from_ag_id = :ag_id
+  into ae_is_exchange;
+  ae_is_exchange = coalesce(ae_is_exchange,0);
+
+  new_is_exchange = 0;
+  if (new_state = &#x27;exchange&#x27;) then new_is_exchange = 1;
+
+  res_text = &#x27;Статус не изменен!&#x27;;
+  res_code = 0;
+  if (new_is_exchange &lt;&gt; ae_is_exchange) then
+  begin
+    update or insert into agreement_exchange (ae_from_ag_id, ae_is_exchange)
+    values (:ag_id, :new_is_exchange)
+    matching (ae_from_ag_id);
+    res_text = &#x27;Статус успешно изменен!&#x27;;
+
+    if (new_state = &#x27;save_up&#x27;) then
+      res_text = &#x27;Благодарим за выбор. Не забывайте соблюдать условия для сохранения статуса Партнера.&#x27;;
+    else if (new_state = &#x27;exchange&#x27;) then
+      res_text = &#x27;Благодарим за выбор. Деньги в обмен на бонусы вам будут переведены 17-19 числа. Пожалуйста, до 15 числа актуализируйте ваши документы через КМП или через вашего Специалиста.&#x27;;
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

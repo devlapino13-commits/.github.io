@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CC_FILL_DEBT_LIST — процедура — схема БД</title>
+<meta name="description" content="Процедура CC_FILL_DEBT_LIST: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CC_FILL_DEBT_LIST</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_deliq_debtors_list.html"><div class="to">AAREP_DELIQ_DEBTORS_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CC_FILL_DEBT_LIST(
+    REP_DATE_END DATE)
+AS
+declare variable k_id decimal(18,0);
+declare variable k_kontract_no varchar(255);
+declare variable k_disb_date date;
+declare variable k_amount_approved decimal(18,4);
+declare variable reg_name varchar(255);
+declare variable deliq_os decimal(18,4);
+declare variable deliq_perc decimal(18,4);
+declare variable deliq_days integer;
+declare variable kal_new_kf_officer decimal(18,0);
+declare variable ok_sh_date_min date;
+declare variable k_kont_balance decimal(18,4);
+declare variable debtor_id decimal(18,0);
+declare variable contact_id decimal(18,0);
+declare variable kf_branch_id integer;
+declare variable ccdl_id decimal(18,0);
+declare variable ccdr_result integer;
+declare variable ccdr_pay_date date;
+declare variable call_datetime_first timestamp;
+declare variable call_datetime_last timestamp;
+declare variable is_auto integer;
+declare variable rep_date_end_str varchar(255);
+declare variable call_datetime_temp date;
+declare variable calls_count integer;
+declare variable timeout_date date;
+declare variable exclude_ccdl_id decimal(18,0);
+begin
+  /*
+    CREATED BY: IGUSEV 06.06.2012
+
+    PURPOSE: Процедура осуществляет insert, update таблицы callcenter_debtors_list.
+             Разаработана для проекта &quot;Обзвон должников (Колл-Центр)&quot;
+    
+    LOGIC :  1. На основе данных из процедуры  aarep_deliq_debtors_list формируется список контактных лиц относящихся к клиентам - должникам.
+             Осуществляется поиск записей  в таблице callcenter_debtors_list по ряду полей,
+             с целью:
+             1) В случае если задолжность новая производится Insert в таблицу  callcenter_debtors_list
+             2) произвести update таких полей как: кол-во дней просрочки, задолжность по ОС, задолжность по %.  если задолжность уже зафиксирована в таблице callcenter_debtors_list
+             3) формирую автоматически записи в таблице callcenter_debtors_result, если клиент обязался погасить задолжность но не погасил.
+
+             2. Если в таблице callcenter_debtors_list запись имеется, а в результате процедуры aarep_deliq_debtors_list подобной записи нет,
+             тогда считаю, что задолжность погашена и производится update по полю CCDL_DELIQ_CLOSED_DATE
+    
+        
+    MEMO:    В таблицу callcenter_debtors_list insert и  update осуществляется как для клиентов - должников, так и для контактных лиц
+
+    CHANGED BY IGUSEV  25.07.2012
+    была изменена логика для респондентов (клиенты + конт. лица) которым звонили на протяжении 3 дней
+
+    CHANGED BY IGUSEV  07.08.2012
+
+
+  */
+
+  /* 1.=========================================================================
+  /* Вытаскиваю список всех задолжников*/
+
+  rep_date_end_str = cast(rep_date_end as varchar(255));
+
+  for select k_id, k_kontract_no, k_disb_date, k_amount_approved, kf_branch_id, deliq_os, deliq_perc, deliq_days,
+             kal_new_kf_officer, ok_sh_date_min, debtor_id
+      from aarep_deliq_debtors_list(:rep_date_end) addl
+      order by addl.deliq_days, addl.k_id
+      into :k_id, :k_kontract_no, :k_disb_date, :k_amount_approved, :kf_branch_id, :deliq_os, :deliq_perc, :deliq_days,
+           :kal_new_kf_officer, :ok_sh_date_min, :debtor_id
+  do
+  begin
+    /* ==================Работа с клиентами - должниками =====================&gt;&gt;
+    /*Если запись о просроченном кредите уже имеется тогда произвожу update записи*/
+    ccdl_id = 0;
+    timeout_date = null;
+
+    /* Проверяю был ли контакт убран оператором */
+    exclude_ccdl_id = null;
+
+    select cdl.ccdl_id
+    from callcenter_debtors_list cdl
+    where cdl.ccdl_from_k_id = :k_id and
+          cdl.ccdl_from_c_id = :debtor_id and
+          cdl.ccdl_from_contacts_id is null /* говорит что это клиент а не контактное лицо*/
+          and
+          cdl.ccdl_exclude_date is not null
+    into :exclude_ccdl_id;
+
+    /* если должник не был убран оператором в разрезе контракта, тогда */
+    if (exclude_ccdl_id is null) then
+    begin
+      select cdl.ccdl_id, ccdl_timeout_date
+      from callcenter_debtors_list cdl
+      where ccdl_from_k_id = :k_id and
+            cdl.ccdl_from_c_id = :debtor_id and
+            cdl.ccdl_deliq_start_date = :ok_sh_date_min /* даты начала просрочек должны совпадать*/
+            and
+            cdl.ccdl_from_contacts_id is null /* говорит что это клиент а не контактное лицо*/
+            rows 1
+      into :ccdl_id, :timeout_date;
+
+      if ((ccdl_id &lt;&gt; 0) and
+          (ccdl_id is not null)) then
+      begin
+        if (timeout_date is null) then
+        begin
+          /* произвожу update по ряду полей: число дней просрочки, задолжность ОС, %, дата последнего обновления записи*/
+          update callcenter_debtors_list cdl
+          set ccdl_deliq_days = :deliq_days,
+              ccdl_deliq_os = :deliq_os,
+              ccdl_deliq_perc = :deliq_perc,
+              ccdl_update_date = :rep_date_end,
+              cdl.ccdl_officer_id = :kal_new_kf_officer,
+              cdl.ccdl_kf_branch_id = :kf_branch_id
+          where cdl.ccdl_id = :ccdl_id;
+
+          /*&gt;&gt; формирую автоматически записи в таблице callcenter_debtors_result, если клиент обязался погасить задолжность но не погасил. */
+          ccdr_result = null;
+          ccdr_pay_date = null;
+          call_datetime_first = null;
+          call_datetime_last = null;
+
+          /* вытаскиваю последний результат (звонок) по должнику*/
+          select cdr.ccdr_result, cdr.ccdr_pay_date, ccdr_call_datetime, cdr.ccdr_is_auto
+          from callcenter_debtors_result cdr
+          where cdr.ccdr_from_ccdl_id = :ccdl_id
+          order by cdr.ccdr_call_datetime desc
+          rows 1
+          into :ccdr_result, :ccdr_pay_date, :call_datetime_last, :is_auto;
+          if (ccdr_result is not null) then
+          begin
+            if ((ccdr_result = 1) and
+                (rep_date_end &gt; ccdr_pay_date)) then
+            /* ccdr_result = 1 - пообещал, что погасит кредит, ccdr_pay_date - дата когда он обязался погасить кредить*/
+            begin
+              insert into callcenter_debtors_result (ccdr_from_ccdl_id, ccdr_call_datetime, ccdr_oper_fio, ccdr_result,
+                                                     ccdr_pay_date, ccdr_comments, ccdr_is_auto)
+              values (:ccdl_id, :rep_date_end, &#x27;Automatic System_1&#x27;, 0, null,
+                      &#x27;AS: Клиент обещал, но не погасил задолженность. Обещал на дату: &#x27; || cast(:ccdr_pay_date as varchar(255)),
+                      1);
+
+              update callcenter_debtors_list /* произвожу update таблицы CALLCENTER_DEBTORS_LIST с целью исчезновения этой записи из списка текущих клиентов на обзвон*/
+              set ccdl_locked_operator = null,
+                  ccdl_timeout_date = null
+              where (ccdl_id = :ccdl_id);
+
+            end
+
+            /*&lt;&lt;-----------------------------------------------*/
+
+            /*&gt;&gt; Вытаскиваю первую дату звонка. И в случае, если клиенту звонят уже на протяжении 3 дней, тогда я убирю его из списка на 4-ый день.  */
+            /*call_datetime_first = null;
+        
+                    select cdr.ccdr_call_datetime
+                    from  CALLCENTER_DEBTORS_RESULT  cdr
+                    where cdr.ccdr_from_ccdl_id = :ccdl_id
+                    order by  cdr.ccdr_call_datetime
+                    rows 1
+                    into :call_datetime_first;   */
+
+            /* if ((rep_date_end &gt;  (call_datetime_first + 3)) and (call_datetime_first is not null))  then  */ /* если дата в процедуре (текущая дата) превышает дату первого звонка клиенту более чем на 3 дня*/
+            /* begin
+                        if ((is_auto = 0) and (ccdr_result in (-1,0))) then */ /* если последняя запись о звонке клиента была создана операторм и статус записи (не дозвонлся или отрицательный ответ)*/
+
+            /*     insert into CALLCENTER_DEBTORS_RESULT (CCDR_FROM_CCDL_ID, CCDR_CALL_DATETIME,
+                                                           CCDR_OPER_FIO, CCDR_RESULT, CCDR_COMMENTS, CCDR_IS_AUTO)
+                        values (:CCDL_ID, :REP_DATE_END, &#x27;Automatic System_2&#x27;, 0, &#x27;AS: Клиент был убран из списка текукщих, т.к. ему звонили на протяжении 3 дней. Дата первого звонка - &#x27;||cast(:call_datetime_first as varchar(255)),  1);
+        
+                        update CALLCENTER_DEBTORS_LIST */ /* произвожу update таблицы CALLCENTER_DEBTORS_LIST с целью исчезновения этой записи из списка текущих клиентов на обзвон*/
+            /*     set CCDL_LOCKED_OPERATOR = null,
+                            CCDL_TIMEOUT_DATE = :REP_DATE_END
+                        where (CCDL_ID = :CCDL_ID);
+                    end  */
+
+            /*Отказался от описанной выше логики так как клиенту на самом деле могли и не звоонить
+                    в течении трех дней каждый день, по разным причинам */
+            /* новая логика позвляет однозначно определить, что клиенту звонили на протяжении 3 дней */
+            calls_count = 0;
+            for select cast(cdr.ccdr_call_datetime as date)
+                from callcenter_debtors_result cdr
+                where cdr.ccdr_from_ccdl_id = :ccdl_id and
+                      cdr.ccdr_is_auto = 0 /*обработал именно оператор*/
+                order by cdr.ccdr_call_datetime
+                into :call_datetime_temp
+            do
+            begin
+              calls_count = calls_count + 1;
+            end
+
+            if (calls_count &gt;= 3) then
+            begin
+              if ((is_auto = 0) and
+                  (ccdr_result in (-1, 0))) then
+              begin
+                insert into callcenter_debtors_result (ccdr_from_ccdl_id, ccdr_call_datetime, ccdr_oper_fio,
+                                                       ccdr_result, ccdr_comments, ccdr_is_auto)
+                values (:ccdl_id, :rep_date_end, &#x27;Automatic System_2&#x27;, 0,
+                        &#x27;AS: Клиент был убран из списка текукщих, т.к. ему звонили на протяжении 3 дней. Дата первого звонка - &#x27; || cast(:call_datetime_first as varchar(255)),
+                        1);
+
+                update callcenter_debtors_list /* произвожу update таблицы CALLCENTER_DEBTORS_LIST с целью исчезновения этой записи из списка текущих клиентов на обзвон*/
+                set ccdl_locked_operator = null,
+                    ccdl_timeout_date = :rep_date_end
+                where (ccdl_id = :ccdl_id);
+              end
+            end
+
+            /*&lt;&lt;-------------------------------------------------*/
+          end
+        end
+      end
+      else
+      /*Если записи о просроченном кредите нет, тогда осуществляю Insert */
+      begin
+        insert into callcenter_debtors_list (ccdl_from_k_id, ccdl_from_c_id, ccdl_from_contacts_id, ccdl_deliq_days,
+                                             ccdl_deliq_os, ccdl_deliq_perc, ccdl_disbdate, ccdl_deliq_start_date,
+                                             ccdl_update_date, ccdl_kf_branch_id, ccdl_officer_id)
+        values (:k_id, :debtor_id, null, :deliq_days, :deliq_os, :deliq_perc, :k_disb_date, :ok_sh_date_min,
+                :rep_date_end, :kf_branch_id, :kal_new_kf_officer);
+      end
+    end
+    /*======================================================================&lt;&lt;*/
+    /*======= Работа с контактными лицами клиентов =========================&gt;&gt;*/
+    for select cc_id
+        from contacts cont
+        where cont.cc_from_c_id = :debtor_id
+        into :contact_id
+    do
+    begin
+      /* Проверяю был ли контакт убран оператором */
+      exclude_ccdl_id = null;
+
+      select cdl.ccdl_id
+      from callcenter_debtors_list cdl
+      where cdl.ccdl_from_k_id = :k_id and
+            cdl.ccdl_from_c_id = :debtor_id and
+            cdl.ccdl_from_contacts_id = :contact_id and
+            cdl.ccdl_exclude_date is not null
+      into :exclude_ccdl_id;
+
+      if (exclude_ccdl_id is null) then
+      /* если контакт был убран оператором в разрезе кредита*/
+      begin
+        /*Если запись о просроченном кредите уже имеется тогда произвожу update записи*/
+        ccdl_id = 0;
+
+        timeout_date = null;
+
+        select cdl.ccdl_id, cdl.ccdl_timeout_date
+        from callcenter_debtors_list cdl
+        where ccdl_from_k_id = :k_id and
+              cdl.ccdl_from_c_id = :debtor_id and
+              cdl.ccdl_from_contacts_id = :contact_id and
+              cdl.ccdl_deliq_start_date = :ok_sh_date_min rows 1
+        into :ccdl_id, :timeout_date;
+
+        if ((ccdl_id &lt;&gt; 0) and
+            (ccdl_id is not null)) then
+        begin
+          if (timeout_date is null) then
+          begin
+            update callcenter_debtors_list cdl
+            set ccdl_deliq_days = :deliq_days,
+                ccdl_deliq_os = :deliq_os,
+                ccdl_deliq_perc = :deliq_perc,
+                ccdl_update_date = :rep_date_end,
+                cdl.ccdl_officer_id = :kal_new_kf_officer,
+                cdl.ccdl_kf_branch_id = :kf_branch_id
+            where ccdl_id = :ccdl_id;
+
+            ccdr_result = 0;
+            ccdr_pay_date = null;
+            call_datetime_first = null;
+            call_datetime_last = null;
+
+            /* вытаскиваю последний результат звонка конт. лицу*/
+            select cdr.ccdr_result, cdr.ccdr_pay_date, ccdr_call_datetime, cdr.ccdr_is_auto
+            from callcenter_debtors_result cdr
+            where cdr.ccdr_from_ccdl_id = :ccdl_id
+            order by cdr.ccdr_call_datetime desc
+            rows 1
+            into :ccdr_result, :ccdr_pay_date, :call_datetime_last, :is_auto;
+
+            /* Для конт лиц я убираю логику связанную с датой когда клиент обещает погасить кредит, т.к. кон лицо не может за него обещать когда он его погасит */
+
+            /*&lt;&lt;-----------------------------------------------*/
+            /*&gt;&gt; Вытаскиваю первую дату звонка. И в случае, если клиенту звонят уже на протяжении 3 дней, тогда я убирю его из списка на 4-ый день.  */
+            /*
+                select cdr.ccdr_call_datetime
+                from  CALLCENTER_DEBTORS_RESULT  cdr
+                where cdr.ccdr_from_ccdl_id = :ccdl_id
+                order by  cdr.ccdr_call_datetime
+                rows 1
+                into :call_datetime_first;
+                */
+
+            /* if (rep_date_end &gt;  (call_datetime_first + 3)) then */ /* если дата в процедуре (текущая дата) превышает дату первого звонка клиенту более чем на 3 дня*/
+            /* begin
+                    if ((is_auto = 0) and (ccdr_result in (-1,0))) then */ /* если последняя запись о звонке клиента была создана операторм и статус записи (не дозвонлся или отрицательный ответ)*/
+
+            /*   insert into CALLCENTER_DEBTORS_RESULT (CCDR_FROM_CCDL_ID, CCDR_CALL_DATETIME,
+                                                           CCDR_OPER_FIO, CCDR_RESULT, CCDR_COMMENTS, CCDR_IS_AUTO)
+                    values (:CCDL_ID, :REP_DATE_END, &#x27;Automatic System_3&#x27;, 0, &#x27;AS: Респондент был убран из списка текукщих, т.к. ему звонили на протяжении 3 дней. Дата первого звонка - &#x27;||cast(:call_datetime_first as varchar(255)),  1);
+    
+                    update CALLCENTER_DEBTORS_LIST */ /* произвожу update таблицы CALLCENTER_DEBTORS_LIST с целью исчезновения этой записи из списка текущих клиентов на обзвон*/
+            /*    set CCDL_LOCKED_OPERATOR = null,
+                        CCDL_TIMEOUT_DATE = :REP_DATE_END
+                    where (CCDL_ID = :CCDL_ID);
+                end  */
+
+            /*Отказался от описанной выше логики так как клиенту на самом деле могли и не звоонить
+                в течении трех дней каждый день, по разным причинам */
+            /* новая логика позвляет однозначно определить, что клиенту звонили на протяжении 3 дней */
+            calls_count = 0;
+            for select cast(cdr.ccdr_call_datetime as date)
+                from callcenter_debtors_result cdr
+                where cdr.ccdr_from_ccdl_id = :ccdl_id and
+                      cdr.ccdr_is_auto = 0 /*обработал именно оператор*/
+                order by cdr.ccdr_call_datetime
+                into :call_datetime_temp
+            do
+            begin
+              calls_count = calls_count + 1;
+            end
+
+            if (calls_count &gt;= 3) then
+            begin
+              if ((is_auto = 0) and
+                  (ccdr_result in (-1, 0))) then
+              begin
+                insert into callcenter_debtors_result (ccdr_from_ccdl_id, ccdr_call_datetime, ccdr_oper_fio,
+                                                       ccdr_result, ccdr_comments, ccdr_is_auto)
+                values (:ccdl_id, :rep_date_end, &#x27;Automatic System_3&#x27;, 0,
+                        &#x27;AS: Респондент был убран из списка текукщих, т.к. ему звонили на протяжении 3 дней.&#x27;,
+                        1);
+
+                update callcenter_debtors_list /* произвожу update таблицы CALLCENTER_DEBTORS_LIST с целью исчезновения этой записи из списка текущих клиентов на обзвон*/
+                set ccdl_locked_operator = null,
+                    ccdl_timeout_date = :rep_date_end
+                where (ccdl_id = :ccdl_id);
+              end
+            end
+
+            /*&lt;&lt;-------------------------------------------------*/
+          end
+        end
+        else
+        /*Если записи о просроченном кредите нет, тогда осуществляю Insert*/
+        begin
+          insert into callcenter_debtors_list (ccdl_from_k_id, ccdl_from_c_id, ccdl_from_contacts_id, ccdl_deliq_days,
+                                               ccdl_deliq_os, ccdl_deliq_perc, ccdl_disbdate, ccdl_deliq_start_date,
+                                               ccdl_update_date, ccdl_kf_branch_id, ccdl_officer_id)
+          values (:k_id, :debtor_id, :contact_id, :deliq_days, :deliq_os, :deliq_perc, :k_disb_date, :ok_sh_date_min,
+                  :rep_date_end, :kf_branch_id, :kal_new_kf_officer);
+        end
+      end
+    end
+    /*======================================================================&lt;&lt;*/
+
+  end
+
+  /* 2.=======================================================================*/
+  for select ccdl_id
+      from callcenter_debtors_list cdl
+      where (ccdl_update_date &lt;&gt; :rep_date_end) and
+            ccdl_deliq_closed_date is null and
+            cdl.ccdl_timeout_date is null and
+            cdl.ccdl_exclude_date is null
+      into :ccdl_id
+  do
+  begin
+    update callcenter_debtors_list cdl
+    set ccdl_deliq_closed_date = :rep_date_end,
+        cdl.ccdl_update_date = :rep_date_end
+    where ccdl_id = :ccdl_id;
+
+    insert into callcenter_debtors_result (ccdr_from_ccdl_id, ccdr_call_datetime, ccdr_oper_fio, ccdr_result,
+                                           ccdr_comments, ccdr_is_auto)
+    values (:ccdl_id, :rep_date_end, &#x27;Automatic System_4&#x27;, 0,
+            &#x27;Был исключен из списка, т.к. задолженность была погашена (Дата исключения - &#x27; || :rep_date_end_str || &#x27;)&#x27;,
+            1);
+  end
+
+  /*==========================================================================*/
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_MINIAPP_TIMEOUT_REJECT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_MINIAPP_TIMEOUT_REJECT: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_MINIAPP_TIMEOUT_REJECT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_miniapp_status_change.html"><div class="to">HP_MINIAPP_STATUS_CHANGE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_MINIAPP_TIMEOUT_REJECT
+AS
+declare variable MA_ID D_INTEGER;
+declare variable DB_ID D_INTEGER;
+declare variable K_ID D_ID;
+declare variable EDL_ID D_ID;
+declare variable C_ID D_ID;
+declare variable IS_CONTINUE D_BOOL;
+declare variable MILITARY_STATUS D_SMALLINT;
+declare variable HAS_NEGATIV_HIS D_SMALLINT;
+begin
+  -- Заявка живет до 22:00 текущего дня
+  -- Данный робот будет оформлять отказ с причиной &quot;Отказ по инициативе клиента&quot; всем заявкам не в статусе &quot;Договор Активный&quot; у которых срок действия подошел к концу.
+  -- Также, после отказа необходимо обновить информацию по заявке в ПКБ.
+  db_id = f_get_db_id();
+
+  if (db_id &lt;&gt; 39801) then
+    exit;
+  military_status = 0;
+  has_negativ_his = 0;
+
+  for select ma.ma_id
+      from miniapp ma
+      inner join product pr on ma.ma_from_pr_id = pr.pr_id
+      where ma.ma_is_active = 1 and
+            ma.ma_date_end &gt;= &#x27;31.12.2999&#x27; and
+            cast(ma.ma_date_save as d_date) = current_date -- Робот начнет работать с 00:00 т.е нам нужны заявки за вчера
+      into :ma_id
+  do
+  begin
+    is_continue = 0;
+
+    -- проверяем наличие записей, говорящих о том, что контракт уже был выдан/закрыт
+    if (exists(select *
+               from kontract k
+               inner join kontstate ks on k.k_id = ks.ks_from_k_id
+               where k.k_from_ma_app_id = :ma_id and
+                     ks.ks_state in (1, 2) and
+                     current_date between ks.ks_date_begin and ks.ks_date_end and
+                     ks.ks_ol_is_delete = 0)) then
+      continue;
+
+    select k.k_id
+    from kontract k
+    where k.k_from_ma_app_id = :ma_id
+    rows 1
+    into k_id;
+
+    if (coalesce(:k_id, 0) &lt;&gt; 0) then
+    begin
+
+      for select kc.kc_from_c_id
+      from knclient kc
+      where kc.kc_from_k_id = :k_id and
+            kc.kc_amount_approved &gt; 0
+      into c_id
+      do
+      begin
+        if (exists (select *
+                    from cnp_payment_requests cpr
+                    where cpr.cpr_from_k_id = :k_id and
+                          cpr.cpr_from_c_id = :c_id and
+                          cpr.cpr_status &gt;= 0)) then
+          is_continue = 1;
+      end
+
+      if (is_continue = 1) then
+        continue;
+
+      if (exists(select *
+                 from freeze_main
+                 where fzm_from_k_id = :k_id)) then
+        continue;
+
+      select edl.edl_id               -- Если подписан &quot;Кредитный договор&quot;
+      from edoc_list edl
+      inner join edoc_cfg edc on edc.edc_id = edl.edl_from_edc_id
+      where edl.edl_object_kind = f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;) and
+            edl.edl_object_id = :k_id and
+            edc.edc_code = &#x27;loan.agreement&#x27; and
+            edl.edl_status in (0,1)
+      rows 1
+      into edl_id;
+      
+      update edoc_list                -- то аннулируем его
+      set edl_status = -1
+      where edl_id = :edl_id;
+      
+      update kontract
+      set k_status = -1
+      where k_id = :k_id;
+    end
+
+    select mac.mac_from_c_id
+    from miniappclient mac
+    where mac.mac_from_ma_id = :ma_id and
+          mac.mac_amount &gt; 0
+    rows 1
+    into :c_id;
+
+    select coalesce(mcq.mcq_status, 0)
+    from military_check_query mcq
+    where mcq.mcq_from_c_id = :c_id
+    order by mcq.mcq_status_datetime desc
+    rows 1
+    into military_status;
+    
+    select iif
+           (coalesce(nkh.nkh_is_gambler, 0) = 1
+           or coalesce(nkh.nkh_is_overdue_90, 0) = 1
+           or coalesce(nkh.nkh_is_bankrot, 0) = 1,
+                    1, 0) as has_negativ_his
+    from negativ_kib_history nkh
+    where nkh.nkh_from_c_id = :c_id
+        and nkh.nkh_last = 1
+    order by nkh.nkh_from_eil_id desc
+    rows 1
+    into :has_negativ_his;
+
+    if (military_status = 1
+        or has_negativ_his = 1) then
+    begin
+      -- kr_id = 6 - Отказ по Стоп-факторам    RFCKZ-220
+      insert into kontreslist (krl_from_kr_id, krl_from_un_id, krl_from_k_id, krl_ma_reg_id, krl_ma_id,
+                               krl_datetime, krl_date_old, krl_date_new, krl_from_fs)
+      values (6, 1000000000000, null, 0, :ma_id, current_timestamp, current_date, current_date, 0);
+    end 
+    else
+    begin
+      -- kr_id = 1 - Отказ по инициативе клиента/группы
+      insert into kontreslist (krl_from_kr_id, krl_from_un_id, krl_from_k_id, krl_ma_reg_id, krl_ma_id,
+                               krl_datetime, krl_date_old, krl_date_new, krl_from_fs)
+      values (1, 1000000000000, null, 0, :ma_id, current_timestamp, current_date, current_date, 0);
+    end
+
+    execute procedure hp_miniapp_status_change(:ma_id, 1000000000000, -1);
+  end
+
+  for select ks_from_k_id
+      from kontstate
+      inner join kontract on k_id = ks_from_k_id
+      where current_date between ks_date_begin and ks_date_end and
+            ks_ol_is_delete = 0 and
+            ks_state = 0 and
+            k_status = 1
+      into k_id
+  do
+  begin
+    if (exists(select *
+               from freeze_main
+               where fzm_from_k_id = :k_id and
+                     fzm_edoc_send = 0)) then
+      continue;
+
+    select k_from_ma_app_id
+    from kontract
+    where k_id = :k_id
+    into ma_id;
+
+    select edl.edl_id
+    from edoc_list edl
+    inner join edoc_cfg edc on edc.edc_id = edl.edl_from_edc_id
+    where edl.edl_object_kind = f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;) and
+          edl.edl_object_id = :k_id and
+          edc.edc_code = &#x27;loan_disb_consent&#x27; and
+          edl.edl_status in (0, 1) rows 1
+    into edl_id;
+
+    update kontract
+    set k_status = -1
+    where k_id = :k_id;
+
+    update edoc_list
+    set edl_status = -1
+    where edl_id = :edl_id;
+
+    delete from freeze_main
+    where fzm_from_k_id = :k_id;
+
+    select mac.mac_from_c_id
+    from miniappclient mac
+    where mac.mac_from_ma_id = :ma_id and
+          mac.mac_amount &gt; 0
+    rows 1
+    into :c_id;
+
+    select coalesce(mcq.mcq_status, 0)
+    from military_check_query mcq
+    where mcq.mcq_from_c_id = :c_id
+    order by mcq.mcq_status_datetime desc
+    rows 1
+    into military_status;
+    
+    select iif
+           (coalesce(nkh.nkh_is_gambler, 0) = 1
+           or coalesce(nkh.nkh_is_overdue_90, 0) = 1
+           or coalesce(nkh.nkh_is_bankrot, 0) = 1,
+                    1, 0) as has_negativ_his
+    from negativ_kib_history nkh
+    where nkh.nkh_from_c_id = :c_id
+        and nkh.nkh_last = 1
+    order by nkh.nkh_from_eil_id desc
+    rows 1
+    into :has_negativ_his;
+
+    if (military_status = 1
+        or has_negativ_his = 1) then
+    begin
+      -- kr_id = 6 - Отказ по Стоп-факторам    RFCKZ-220
+      insert into kontreslist (krl_from_kr_id, krl_from_un_id, krl_from_k_id, krl_ma_reg_id, krl_ma_id,
+                               krl_datetime, krl_date_old, krl_date_new, krl_from_fs)
+      values (6, 1000000000000, null, 0, :ma_id, current_timestamp, current_date, current_date, 0);
+    end 
+    else
+    begin
+      insert into kontreslist (krl_from_kr_id, krl_from_un_id, krl_from_k_id, krl_ma_reg_id, krl_ma_id, krl_datetime,
+                               krl_date_old, krl_date_new, krl_from_fs)
+      values (1, 1000000000000, null, 0, :ma_id, current_timestamp, current_date, current_date, 0);
+    end
+    execute procedure hp_miniapp_status_change(:ma_id, 1000000000000, -1);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

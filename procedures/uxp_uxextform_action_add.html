@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$UXEXTFORM_ACTION_ADD — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$UXEXTFORM_ACTION_ADD: 4 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$UXEXTFORM_ACTION_ADD</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EXT_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">EXT_COMPONENT</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">EXT_DATASET</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UXA_FCODE</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EFM_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UA_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">EFM_UUID_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UA_UUID_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$UXEXTFORM_ACTION_ADD(
+    EXT_CODE D_STR_CODE,
+    EXT_COMPONENT D_STR_CODE,
+    EXT_DATASET D_STR_CODE,
+    UXA_FCODE D_STR_100)
+RETURNS (
+    EFM_UUID D_UUID,
+    UA_UUID D_UUID,
+    EFM_UUID_CODE D_STR_CODE,
+    UA_UUID_CODE D_STR_CODE)
+AS
+declare variable uxa_uuid d_uuid;
+begin
+  select uxa_uuid
+  from ux$alias
+  where uxa_fcode = :uxa_fcode
+  into uxa_uuid;
+
+  if (uxa_uuid is null) then
+    exception e_message &#x27;Алиас не найден: &#x27; || coalesce(uxa_fcode, &#x27;&lt;Null&gt;&#x27;);
+
+  select efm_uuid
+  from ux$extform
+  where efm_code = :ext_code
+  into efm_uuid;
+
+  if (efm_uuid is null) then
+  begin
+    insert into ux$extform (efm_code)
+    values (:ext_code)
+    returning efm_uuid
+    into :efm_uuid;
+  end else
+  begin
+    if (exists(select * from ux$action
+    where ua_owner = :efm_uuid and
+          ua_uxa_uuid = :uxa_uuid)) then
+      exception e_message &#x27;Данное действие в форме уже существует&#x27;;
+  end
+
+  if (exists(select * from ux$action
+  where ua_owner = :efm_uuid and
+        ua_ext_component = :ext_component)) then
+    exception e_message &#x27;У данного объекта уже имеется переопределенное действие&#x27;;
+
+  insert into ux$action (ua_owner, ua_uxa_uuid, ua_ext_component, ua_ext_dataset)
+  values (:efm_uuid, :uxa_uuid, :ext_component, :ext_dataset)
+  returning ua_uuid
+  into :ua_uuid;
+
+  efm_uuid_code = uuid_to_char(efm_uuid);
+  ua_uuid_code = uuid_to_char(ua_uuid);
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

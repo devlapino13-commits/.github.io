@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_FREEZE_SEND_DOC — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_FREEZE_SEND_DOC: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_FREEZE_SEND_DOC</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">7</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">7 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_antifraud_checks_link_insert.html"><div class="to">HP_ANTIFRAUD_CHECKS_LINK_INSERT</div></a><a class="ref-card" href="hp_check_client_fio_ft.html"><div class="to">HP_CHECK_CLIENT_FIO_FT</div></a><a class="ref-card" href="hp_edoc_ins.html"><div class="to">HP_EDOC_INS</div></a><a class="ref-card" href="hp_extinfo_insert.html"><div class="to">HP_EXTINFO_INSERT</div></a><a class="ref-card" href="hp_send_message.html"><div class="to">HP_SEND_MESSAGE</div></a><a class="ref-card" href="hp_stop_credit_query_status.html"><div class="to">HP_STOP_CREDIT_QUERY_STATUS</div></a><a class="ref-card" href="mc_send_push.html"><div class="to">MC_SEND_PUSH</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_FREEZE_SEND_DOC
+AS
+declare variable K_ID ID_TYPE;
+declare variable EDL_ID D_ID;
+declare variable RES_TEXT STR_255;
+declare variable C_ID ID_TYPE;
+declare variable OBJ_KIND D_INTEGER;
+declare variable HAS_STOP_CREDIT D_SMALLINT;
+declare variable STOP_CREDIT_ANSWER_DATE D_DATE;
+declare variable client_was_found_antifraud d_smallint;
+declare variable afcl_id d_id;
+begin
+  for select fzm_from_k_id
+      from freeze_main
+      where fzm_datetime_end &lt;= current_timestamp and
+            fzm_edoc_send = 0
+      into k_id
+  do
+  begin
+    obj_kind = f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;);
+    has_stop_credit = 0;
+
+    if (f_is_stopcred_doc_loaded(:obj_kind, :k_id) &lt;&gt; 1) then -- проверка на прикрепление документа
+    begin
+      -- читаем статус запроса
+      select status, answer_date
+      from hp_stop_credit_query_status(:obj_kind, :k_id)
+      into :has_stop_credit, :stop_credit_answer_date;
+
+      -- если запрос неактуален - делаем запрос
+      if (f_is_stopcred_actual(:stop_credit_answer_date) &lt;&gt; 1) then
+      begin
+        execute procedure hp_extinfo_insert(&#x27;stop_credit&#x27;, :obj_kind, :k_id, 0);
+        continue;
+      end
+
+      if (:has_stop_credit not in (0,1)) then
+        continue;
+    end
+
+    -- RFCKZ-192
+    for select kc_from_c_id
+        from knclient
+        where kc_from_k_id = :k_id and
+              kc_amount_approved &gt; 0
+        into c_id
+    do
+    begin
+        client_was_found_antifraud = iif (
+            exists (select c_name_fio
+                    from hp_check_client_fio_ft(:c_id, 1)
+                   ), 1, 0);        
+
+        select afcl_id from hp_antifraud_checks_link_insert(:c_id, f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;), :k_id, f_enum_id(&#x27;antifraud_check_type&#x27;, &#x27;internal&#x27;),
+                                                            f_enum_id(&#x27;antifraud_check_stage&#x27;, &#x27;freeze_send_doc&#x27;), :client_was_found_antifraud)
+        into :afcl_id;
+
+        if (client_was_found_antifraud = 1 or has_stop_credit = 1) then
+        begin
+           delete from freeze_main fzm
+           where fzm.fzm_from_k_id = :k_id;
+
+           rdb$set_context(&#x27;USER_TRANSACTION&#x27;, &#x27;FREEZE_APPROVE_CANCEL_K_ID&#x27;, :k_id);
+
+           update kontract k
+           set k.k_status = -1 -- Отказ
+           where k.k_id = :k_id;
+
+           if (has_stop_credit = 1) then
+             -- если по стоп-кредиту отказ, то причина &quot;Стоп-кредит&quot; (krl = 4)
+             insert into kontreslist (krl_from_kr_id, krl_from_un_id, krl_from_k_id, krl_ma_reg_id, krl_ma_id,
+                                      krl_datetime, krl_date_old, krl_date_new, krl_from_fs)
+             values (4, 1000000000000, :k_id, 0, null, current_timestamp, current_date, current_date, 0);
+          exit;
+        end 
+    end
+
+    select edl_id, res_text
+    from hp_edoc_ins(&#x27;loan_disb_consent&#x27;, &#x27;kontract&#x27;, :k_id, 1000000000000)
+    into edl_id, res_text;
+
+    if (edl_id is not null and
+        coalesce(res_text, &#x27;&#x27;) = &#x27;&#x27;) then
+    begin
+      update freeze_main
+      set fzm_edoc_send = 1
+      where (fzm_from_k_id = :k_id);
+
+      for select kc_from_c_id
+          from knclient
+          where kc_from_k_id = :k_id and
+                kc_amount_approved &gt; 0
+          into c_id
+      do
+      begin
+        execute procedure mc_send_push(&#x27;clients&#x27;, c_id, &#x27;Уважаемый клиент!&#x27;,
+            &#x27;Пожалуйста, подпишите согласие на получение микрокредита.&#x27;,
+            7);
+
+        execute procedure hp_send_message(&#x27;sms&#x27;, c_id, f_cont_info(&#x27;clients&#x27;, c_id, &#x27;cell_main&#x27;, &#x27;ok&#x27;),
+            &#x27;hp_freeze_send_doc&#x27;,
+            &#x27;Период охлаждения завершён. Пожалуйста, подпишите согласие на получение микрокредита для продолжения оформления в КМП.&#x27;,
+            &#x27;&#x27;, 7, 1000000000000);
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

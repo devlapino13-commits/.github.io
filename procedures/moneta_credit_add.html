@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MONETA_CREDIT_ADD — процедура — схема БД</title>
+<meta name="description" content="Процедура MONETA_CREDIT_ADD: 4 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>MONETA_CREDIT_ADD</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ESM_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FULL_SOURCE</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ANSWER</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ERROR_CODE</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE MONETA_CREDIT_ADD(
+    ESM_ID ID_TYPE,
+    FULL_SOURCE D_BLOB_TEXT,
+    ANSWER D_BLOB_TEXT,
+    ERROR_CODE D_BLOB_TEXT)
+AS
+declare variable k_id d_id;
+declare variable esm_date d_date;
+declare variable edoc_pmt_project_disb d_str_255;
+begin
+  -- Процедура производит сохранение результата выдачи на карту/СБП/счет
+  -- Вызывается из сервиса выдач по Монете.
+
+  error_code = coalesce(error_code, &#x27;&#x27;);
+  answer = coalesce(answer, &#x27;&#x27;);
+  full_source = coalesce(full_source, &#x27;&#x27;);
+
+  if (esm_id is null) then
+    exception e_default &#x27;ESM_ID is null&#x27;;
+
+  select esm_from_k_id, esm_date, esm_project
+  from extsysmain
+  where esm_id = :esm_id
+  and esm_project in (&#x27;moneta_disb&#x27;, &#x27;wirebank_disb&#x27;)
+  and esm_action in (&#x27;CardDisb&#x27;, &#x27;PhoneDisb&#x27;, &#x27;AccDisb&#x27;)
+  into k_id, esm_date, edoc_pmt_project_disb;
+
+  -- исхожу из того, что не может быть такого, чтобы  у extsysmain не был
+  -- заполнен esm_date
+  if (esm_date is null) then
+    exception e_default &#x27;ESM_DATE is not set for esm_id: &#x27; || coalesce(esm_id, &#x27;NULL&#x27;);
+
+  delete from extsysanswer
+  where esa_from_esm_id = :esm_id;
+
+  if (error_code &lt;&gt; &#x27;&#x27;) then
+  begin
+    insert into extsysanswer (esa_from_esm_id, esa_message)
+    values (:esm_id, &#x27;error: &#x27; || :error_code);
+  end
+  if (answer &lt;&gt; &#x27;&#x27;) then
+  begin
+    insert into extsysanswer (esa_from_esm_id, esa_message)
+    values (:esm_id, &#x27;answer: &#x27; || :answer);
+  end
+
+  update extsysmain
+  set esm_status = iif(:error_code = &#x27;&#x27;, 1, -1),
+      esm_full_source = iif(:full_source &lt;&gt; &#x27;&#x27;, :full_source, esm_full_source)
+  where esm_id = :esm_id;
+
+  if (error_code = &#x27;&#x27;) then -- если нет ошибки, тогда формирую задачу на создание проводки - комиссия за перевод денежных стредств
+  begin
+    -- Важно! В качестве object_kind, object_id указываю extsysmain записи, на основании которой был осуществлен перевод денег чз Монету клиенту
+    insert into extsysmain (esm_project, esm_action, esm_date, esm_object_kind, esm_object_id, esm_status,
+                            esm_full_source, esm_amount, esm_from_k_id, esm_account)
+    values (:edoc_pmt_project_disb, &#x27;OperbookCreate&#x27;, :esm_date, f_objkind(&#x27;extsysmain&#x27;, &#x27;id&#x27;), :esm_id, 0, &#x27;&#x27;, 0, :k_id, &#x27;&#x27;);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

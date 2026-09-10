@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OKT_NEXT_CALL_CHECK — процедура — схема БД</title>
+<meta name="description" content="Процедура OKT_NEXT_CALL_CHECK: 6 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>OKT_NEXT_CALL_CHECK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_KIND</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEXT_CALL</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ASKED_CALLBACK</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_ERROR</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_NEXT_CALL</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE OKT_NEXT_CALL_CHECK(
+    K_ID ID_TYPE,
+    OBJ_KIND STR_100,
+    OBJ_ID ID_TYPE,
+    NEXT_CALL TIMESTAMP,
+    ASKED_CALLBACK SMALLINT,
+    REP_DATE DATE)
+RETURNS (
+    RES_ERROR STR_255,
+    RES_NEXT_CALL DATE)
+AS
+declare variable c_id id_type;
+declare variable poruch_id id_type;
+declare variable cc_id id_type;
+declare variable rep_date_begin date;
+declare variable first_called_date date;
+declare variable res_next_call_str varchar(10);
+declare variable db_id integer;
+declare variable k_fact_disb_date date;
+begin
+  c_id = null;
+  poruch_id = null;
+  cc_id = null;
+
+  res_error = &#x27;&#x27;;
+  asked_callback = coalesce(asked_callback, 0);
+
+  if (asked_callback = 1) then
+  begin
+    suspend;
+    exit;
+  end
+
+  :db_id = f_get_db_id();
+  if (:db_id &lt;&gt; 81001) then
+  begin
+    suspend;
+    exit;
+  end
+
+  select kont.k_fact_disb_date
+  from kontract kont
+  where kont.k_id = :k_id
+  into :k_fact_disb_date;
+
+  if (k_fact_disb_date &gt; &#x27;05.12.2016&#x27;) then
+  begin
+    suspend;
+    exit;
+  end
+
+  rep_date = coalesce(rep_date, current_date);
+  rep_date_begin = rep_date - 6;
+
+  if (obj_kind = &#x27;Clients&#x27;) then
+  begin
+-- если не найден среди участников группы, значит это поручитель
+    if (exists(select *
+               from knclient kncl
+               where kncl.kc_from_k_id = :k_id and
+                     kncl.kc_from_c_id = :obj_id and
+                     kncl.kc_amount_approved &gt; 0)) then
+      c_id = :obj_id;
+    else
+      poruch_id = :obj_id;
+  end
+  else
+  if (obj_kind = &#x27;Contacts&#x27;) then
+    cc_id = :obj_id;
+
+  if (c_id is not null) then
+  begin
+-- получаю первый успешный звонок за последние 7 дней
+    select pcl.pcl_called_date
+    from pantera_clients pcl
+    inner join refdata rd on rd.rd_id = pcl.pcl_rd_res
+    where pcl.pcl_called_date between :rep_date_begin and :rep_date and
+          pcl.pcl_from_c_id = :c_id and
+          rd.rd_tag &gt; 0 -- только успешные звонки
+    order by pcl_called_datetime
+    rows 1
+    into :first_called_date;
+  end
+
+  if (poruch_id is not null) then
+  begin
+-- звонки поручителям
+    select pcon.pcon_called_date
+    from pantera_contacts pcon
+    inner join refdata rd on rd.rd_id = pcon.pcon_rd_res
+    where pcon.pcon_called_date between :rep_date_begin and :rep_date and
+          pcon.pcon_from_poruch_id = :poruch_id and
+          rd.rd_tag &gt; 0 -- только успешные звонки
+    order by pcon_called_datetime
+    rows 1
+    into :first_called_date;
+  end
+
+  if (cc_id is not null) then
+  begin
+-- звонки контактным лицам
+    select pcon.pcon_called_date
+    from pantera_contacts pcon
+    inner join refdata rd on rd.rd_id = pcon.pcon_rd_res
+    where pcon.pcon_called_date between :rep_date_begin and :rep_date and
+          pcon.pcon_from_cc_id = :cc_id and
+          rd.rd_tag &gt; 0 -- только успешные звонки
+    order by pcon_called_datetime
+    rows 1
+    into :first_called_date;
+  end
+
+  if (first_called_date is null) then -- если это первый успешный звонок за 7 дней
+    res_next_call = rep_date + 1;
+  else -- если это второй успешный звонок за 7 дней
+    res_next_call = first_called_date + 7;
+
+  if (cast(next_call as date) &lt; res_next_call) then
+  begin
+    res_next_call_str = replace(iif(extract(day from res_next_call) &lt; 10, &#x27;0&#x27;, &#x27;&#x27;) || extract(day from res_next_call) || &#x27;.&#x27; || iif(extract(month from res_next_call) &lt; 10, &#x27;0&#x27;, &#x27;&#x27;) || extract(month from res_next_call) || &#x27;.&#x27; || extract(year from res_next_call), &#x27; &#x27;, &#x27;&#x27;);
+
+    res_error = &#x27;Ближайший звонок не может быть совершен раньше &#x27; || res_next_call_str;
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

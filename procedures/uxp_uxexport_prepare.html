@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$UXEXPORT_PREPARE — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$UXEXPORT_PREPARE: 4 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$UXEXPORT_PREPARE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UFM_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UA_LIST</div><div class="ptype">VARCHAR(8000)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">INCLUDE_SOURCE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">EXISTING_EXP_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EXP_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$UXEXPORT_PREPARE(
+    UFM_UUID D_UUID,
+    UA_LIST VARCHAR(8000) CHARACTER SET WIN1251,
+    INCLUDE_SOURCE D_BOOL,
+    EXISTING_EXP_ID D_INTEGER)
+RETURNS (
+    EXP_ID D_INTEGER)
+AS
+declare variable exi_uuid d_uuid;
+declare variable tmp_uuid d_uuid;
+declare variable last_index d_integer;
+declare variable exp_index d_integer;
+declare variable use_own_uuid d_bool;
+declare variable ugr_uuid d_uuid;
+declare variable is_search d_bool;
+begin
+  if (include_source is null) then
+    include_source = 0;
+
+  if (coalesce(existing_exp_id, 0) = 0) then
+  begin
+    insert into ux$export (exp_ufm_uuid)
+    values (:ufm_uuid)
+    returning exp_id, exp_index
+    into :exp_id, :exp_index;
+  end else
+  begin
+    insert into ux$export (exp_id, exp_ufm_uuid)
+    values (:existing_exp_id, :ufm_uuid)
+    returning exp_index
+    into :exp_index;
+
+    exp_id = existing_exp_id;
+  end
+
+  if (include_source = 1) then
+    execute procedure uxp$uxexport_src_prepare(:ufm_uuid, :exp_id, :exp_index);
+
+  execute procedure uxp$uxexpoitem_add(:exp_id, :exp_index, :ufm_uuid);
+
+  use_own_uuid = 0;
+  if (include_source = 0) then
+  begin
+    if (exists(select * from ux$expoform
+    where exf_ufm_uuid = :ufm_uuid and
+          exf_new_kind = 1 and
+          exf_parent_id is null)) then
+      use_own_uuid = 1;
+  end
+
+  for select uxa_uuid
+  from ux$form, ux$alias
+  where ufm_uuid = :ufm_uuid and
+        uxa_owner = ufm_ux_uuid
+  into exi_uuid
+  do
+    execute procedure uxp$uxexpoitem_add(:exp_id, :exp_index, :exi_uuid, :use_own_uuid);
+
+  for select ua_uuid
+  from ux$action
+  where ua_owner = :ufm_uuid
+  into exi_uuid
+  do
+  begin
+    if (ua_list = &#x27;all&#x27; or position(uuid_to_char(exi_uuid), ua_list) &gt; 0) then
+      execute procedure uxp$uxexpoitem_add(:exp_id, :exp_index, :exi_uuid);
+  end
+
+  for select fr_uuid
+  from uxp$uxframe_tree(:ufm_uuid)
+  into :exi_uuid
+  do
+    execute procedure uxp$uxexpoitem_add(:exp_id, :exp_index, :exi_uuid);
+
+  for select ufi_uuid
+  from uxp$uxfritem_export_tree(:ufm_uuid, null)
+  into :exi_uuid
+  do
+    execute procedure uxp$uxexpoitem_add(:exp_id, :exp_index, :exi_uuid);
+
+  for select fr_uuid
+  from uxp$uxframe_tree(:ufm_uuid)
+  into :tmp_uuid
+  do
+  begin
+    for select ufp_uuid
+    from ux$frparam
+    where ufp_ufr_uuid = :tmp_uuid and
+          ufp_uuid is distinct from ufp_uf_uuid and
+          ufp_parent is null
+    into exi_uuid
+    do
+      execute procedure uxp$uxexpoitem_add(:exp_id, :exp_index, :exi_uuid);
+
+    for select ufp_uuid
+    from ux$frparam
+    where ufp_ufr_uuid = :tmp_uuid and
+          ufp_uuid is distinct from ufp_uf_uuid and
+          ufp_parent is not null
+    into exi_uuid
+    do
+      execute procedure uxp$uxexpoitem_add(:exp_id, :exp_index, :exi_uuid);
+
+    for select ugr_uuid
+    from ux$grid
+    where ugr_ufr_uuid = :tmp_uuid
+    into ugr_uuid
+    do
+    begin
+      execute procedure uxp$uxexpoitem_add(:exp_id, :exp_index, :ugr_uuid);
+
+      for select ugi_uuid
+      from ux$gritem
+      where ugi_ugr_uuid = :ugr_uuid
+      into :exi_uuid
+      do
+        execute procedure uxp$uxexpoitem_add(:exp_id, :exp_index, :exi_uuid);
+    end
+
+    for select ufi_uuid
+    from uxp$uxfritem_export_tree(:tmp_uuid, null)
+    into :exi_uuid
+    do
+      execute procedure uxp$uxexpoitem_add(:exp_id, :exp_index, :exi_uuid);
+
+    for select ua_uuid, iif(coalesce(ua_usr_id_field, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;, 1, 0)
+    from ux$action
+    where ua_owner = :tmp_uuid
+    into exi_uuid, is_search
+    do
+    begin
+      if (ua_list = &#x27;all&#x27; or is_search = 1 or position(uuid_to_char(exi_uuid), ua_list) &gt; 0) then
+        execute procedure uxp$uxexpoitem_add(:exp_id, :exp_index, :exi_uuid);
+    end
+  end
+
+  select max(exi_index)
+  from ux$expoitem
+  where exi_exp_id = :exp_id
+  into last_index;
+
+  if (last_index &gt; 0) then
+  begin
+    for select exi_ux_uuid
+    from ux$expoitem
+    where exi_exp_id = :exp_id and
+          exi_index &lt;= :last_index
+    into :tmp_uuid
+    do
+    begin
+      for select evt_uuid
+      from ux$event
+      where evt_sender_uuid = :tmp_uuid
+      into :exi_uuid
+      do
+        execute procedure uxp$uxexpoitem_add(:exp_id, :exp_index, :exi_uuid);
+
+      for select evt_uuid
+      from ux$event
+      where evt_target_uuid = :tmp_uuid
+      into :exi_uuid
+      do
+        execute procedure uxp$uxexpoitem_add(:exp_id, :exp_index, :exi_uuid);
+    end
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_BKI_PREPARE_PACKET5 — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_BKI_PREPARE_PACKET5: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_BKI_PREPARE_PACKET5</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">4 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_bki_calculate_loan5.html"><div class="to">HP_BKI_CALCULATE_LOAN5</div></a><a class="ref-card" href="hp_bki_corr_prepare_packet.html"><div class="to">HP_BKI_CORR_PREPARE_PACKET</div></a><a class="ref-card" href="hp_bki_json_get_list.html"><div class="to">HP_BKI_JSON_GET_LIST</div></a><a class="ref-card" href="hp_edoc_client_sign.html"><div class="to">HP_EDOC_CLIENT_SIGN</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">DEBUG_MODE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">BKT_FORMAT</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_BKI_PREPARE_PACKET5(
+    DEBUG_MODE D_BOOL = 0,
+    BKT_FORMAT D_SMALLINT = null)
+AS
+declare variable packet_id d_id;
+declare variable event_date d_date;
+declare variable object_kind d_integer;
+declare variable object_id d_id;
+declare variable bkk_id d_id;
+declare variable k_id d_id;
+declare variable ma_id d_id;
+declare variable bkc_id d_id;
+declare variable bkl_id d_id;
+declare variable bev_id d_id;
+declare variable next_status_date d_date;
+declare variable packet_date d_date;
+declare variable tag d_integer;
+declare variable bkt_action_code d_str_code;
+declare variable c_id d_id;
+declare variable time_start d_datetime;
+declare variable cnt d_integer;
+declare variable start_date d_date;
+declare variable op_next_payout_date d_date;
+declare variable op_next_payout_date_tmp d_date;
+declare variable debt_calc_date d_date;
+declare variable loan_is_close boolean;
+declare variable jso d_integer;
+declare variable jsa d_integer;
+declare variable jso_clients d_integer;
+declare variable xml_version_id d_integer;
+declare variable bkc_add d_str_long;
+declare variable need_find_next_event boolean;
+declare variable i d_smallint;
+begin
+  time_start = current_timestamp;
+  xml_version_id = null;
+
+  if (bkt_format is null) then  -- enum  bki_packet_format
+    bkt_format = 0;
+
+  select bxv_id
+  from bki_xml_version
+  where bxv_date_begin &lt;= current_date
+  order by bxv_date_begin desc
+  rows 1
+  into xml_version_id;
+
+  if (xml_version_id is null) then
+    exception e_default &#x27;Not found xml_version_id&#x27;;
+
+  if (bkt_format = 0) then
+    execute procedure hp_bki_corr_prepare_packet(1, null);
+
+  for select bkp_id, bkk_id, bkp_date, f_enum(&#x27;bki_packet_action&#x27;, bkt_action, &#x27;code&#x27;)
+  from bki_packet, bki_kind, bki_packet_type
+  where bkp_status = 0
+    and bkk_id = bkp_from_bkk_id
+    and bkt_id = bkp_from_bkt_id
+    and bkt_format = :bkt_format
+  into packet_id, bkk_id, packet_date, bkt_action_code
+  do
+  begin
+    for select distinct bkl_id, bkl_object_id, bkl_object_kind
+    from bki_loans, bki_clients, bki_events
+    where bkl_from_bkp_id = :packet_id
+      and bkc_from_bkl_id = bkl_id
+      and bev_from_bkc_id = bkc_id
+      and bev_status = 0
+      and bev_event_id is null
+    order by bkl_object_id
+    into bkl_id, object_id, object_kind
+    do
+    in autonomous transaction do
+    begin
+      jso_clients = json.obj_create();
+
+      while (true)
+      do
+      begin
+        select bev_event_date, bev_tag, bev_id, bkc_from_c_id, bkc_id, bkc_add
+        from bki_clients, bki_events
+        where bkc_from_bkl_id = :bkl_id
+          and bev_from_bkc_id = bkc_id
+          and bev_status = 0
+          and bev_event_id is null
+        order by bev_event_date
+        rows 1
+        into event_date, tag, bev_id, c_id, bkc_id, bkc_add;
+    
+        if (row_count = 0) then
+           leave;              -- выход из цикла
+
+        -- уберем дубли (могут возникнуть при очистке пакета, либо при ручной вставке и т.д.)
+        delete from bki_events
+        where bev_from_bkc_id = :bkc_id
+          and bev_status = 0
+          and bev_event_id is null
+          and bev_event_date = :event_date
+          and bev_id &lt;&gt; :bev_id;
+
+        k_id = null;
+        ma_id = null;
+        next_status_date = null;
+
+        if (object_kind = f_objkind(&#x27;miniapp&#x27;, &#x27;id&#x27;)) then
+        begin
+          ma_id = object_id;
+      
+          select k_id
+          from kontract k
+          where k.k_from_ma_app_id = :ma_id
+            and k.k_status &gt;= 0
+          order by 1 desc
+          rows 1
+          into k_id;
+
+          if (k_id is not null) then
+          begin
+            object_kind = f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;);
+            object_id = k_id;
+          end
+        end
+        else if (object_kind = f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;)) then
+        begin
+          k_id = object_id;
+      
+          select k.k_from_ma_app_id
+          from kontract k
+          where k.k_id = :k_id
+          into ma_id;
+        end
+  
+        if (object_kind = 9
+            and bkt_format = 0
+            and exists(select bsl_id from bki_stoplist_loans where bsl_from_k_id = :object_id) -- если контракт в стоплисте
+            and (bkt_action_code &lt;&gt; &#x27;delete&#x27;) -- и это не удаление (из стоплиста позволяем только удалять)
+        ) then
+        begin
+          update bki_events
+          set bev_status = -3
+          where bev_id = :bev_id;
+
+          continue;
+        end
+
+        -- если переотправка, то данные &quot;ручного&quot; Блока 23 надо отправить тоже
+        if (bkt_format = 0 and bkt_action_code in (&#x27;recreate&#x27;, &#x27;reset&#x27;)) then
+        begin
+          start_date = iif(bkt_action_code = &#x27;reset&#x27;, json.obj_get_val(json.parse(bkc_add), &#x27;start_date&#x27;, &#x27;01.01.1900&#x27;), &#x27;01.01.1900&#x27;);
+
+          update bki_once_data
+          set bod_from_bkc_id = null
+          where bod_kind = 3
+            and bod_object_kind = 9
+            and bod_object_id = :k_id
+            and bod_add is not null
+            and json.obj_get_val(json.parse(bod_add), &#x27;applyDate&#x27;, &#x27;01.01.1900&#x27;) &gt;= :start_date;
+        end
+
+        jsa = json.arr_create();
+
+        execute procedure hp_bki_calculate_loan5(:jsa, :jso_clients, :xml_version_id, :bev_id);
+
+        -- если строка не была обработана то поставим статус &quot;пустая строка&quot;
+        update bki_events
+        set bev_status = -3
+        where bev_id = :bev_id
+          and bev_status = 0;
+
+        need_find_next_event = (bkt_format = 0);
+
+        if (need_find_next_event and bkt_action_code = &#x27;delete&#x27;) then
+          need_find_next_event = false;
+
+        if (need_find_next_event and tag in (8,9,30,55)) then
+          need_find_next_event = false;
+
+        if (need_find_next_event and tag = 22) then -- банкротство
+        begin
+          -- если не было других событий в этот день
+          if ((select bev_event_id = f_enum(&#x27;bki_event&#x27;, &#x27;1.12_change_bankruptcy&#x27;, &#x27;id&#x27;)
+              from bki_events
+              where bev_id = :bev_id))
+          then
+            need_find_next_event = false;
+        end 
+
+        if (need_find_next_event) then
+        begin
+          -- поиск следующего события
+          loan_is_close = false;
+          op_next_payout_date = null;
+          debt_calc_date = null;
+
+          for select jso
+          from hp_bki_json_get_list(:jsa, 1)
+          where json.obj_get_val(jso, &#x27;is_poruch&#x27;, &#x27;0&#x27;) = &#x27;0&#x27;
+          into jso
+          do
+          begin
+            if (json.obj_get_val(jso, &#x27;status&#x27;) = &#x27;close&#x27;) then
+              loan_is_close = true;
+            else
+            begin
+              op_next_payout_date_tmp = json.obj_get_val(jso, &#x27;op_next_payout_date&#x27;);
+  
+              if (op_next_payout_date_tmp &lt; coalesce(op_next_payout_date, &#x27;31.12.9999&#x27;)
+                and json.obj_get_val(jso, &#x27;is_poruch&#x27;, &#x27;0&#x27;) = &#x27;0&#x27;)
+              then
+                op_next_payout_date = op_next_payout_date_tmp;
+  
+              if (debt_calc_date is null) then
+                debt_calc_date = json.obj_get_val(:jso, &#x27;debt_calc_date&#x27;);
+            end
+          end
+
+          if (not loan_is_close) then
+          begin
+            select min(ma_date_app)
+            from miniapp
+            where ma_id = :ma_id
+              and ma_date_app &gt; :event_date
+            into next_status_date;
+
+            select eds_status_datetime
+            from hp_edoc_client_sign(:c_id)
+            where eds_status = 1
+              and edl_from_edc_id = f_edoc_kind(&#x27;loan.application&#x27;,&#x27;id&#x27;)
+              and edl_object_kind = 11
+              and edl_object_id = :ma_id
+              and cast(eds_status_datetime as date) between :event_date + 1 and coalesce(:next_status_date - 1, &#x27;31.12.9999&#x27;)
+            order by 1
+            rows 1
+            into next_status_date;
+
+            select msg_datetime
+            from edoc_sign, edoc_list, edoc_msg, fsrobot_msgbox, kontract
+            where eds_from_edl_id = edl_id
+              and edm_from_eds_id = eds_id
+              and msg_id = edm_from_msg_id
+              and edl_object_id = k_id
+              and edl_from_edc_id = f_edoc_kind(&#x27;loan.agreement&#x27;,&#x27;id&#x27;)
+              and edl_object_kind = 9
+              and k_id = :k_id
+              and cast(msg_datetime as date) between :event_date + 1 and coalesce(:next_status_date - 1, &#x27;31.12.9999&#x27;)
+              order by 1
+              rows 1
+            into next_status_date;
+
+            select ks_date_begin
+            from kontstate ks
+            where ks_from_k_id = :k_id
+              and ks_ol_is_delete = 0
+              and ks_date_begin between :event_date + 1 and coalesce(:next_status_date - 1, &#x27;31.12.9999&#x27;)
+            order by 1
+            rows 1
+            into next_status_date;
+            if (event_date = op_next_payout_date) then -- если следующий платеж сегодня, то значит его сегодня не было, надо отправить на завтра образование просрочки
+              next_status_date = event_date + 1;
+            else
+            begin
+              if (op_next_payout_date between event_date + 1 and coalesce(:next_status_date - 1, &#x27;31.12.9999&#x27;)) then
+                next_status_date = op_next_payout_date;
+
+              if (coalesce(next_status_date, &#x27;31.12.9999&#x27;) &gt; debt_calc_date + iif(xml_version_id &lt; 2, 30, 31)) then --через 30 дней после даты расчета задолженности
+                next_status_date = debt_calc_date + iif(xml_version_id &lt; 2, 30, 31);
+        
+              select ok_ol_date
+              from operkred ok
+              where ok_ol_is_active = 1
+                and ok_from_k_id = :k_id
+                and ok_ol_date between :event_date + 1 and coalesce(:next_status_date - 1, &#x27;31.12.9999&#x27;)
+              order by 1
+              rows 1
+              into next_status_date;
+
+              select ok_sh_date
+              from operkred ok
+              where ok_ol_is_active = 1
+                and ok_type in (1,2,3,4,6)
+                and ok_from_k_id = :k_id
+                and ok_sh_date between :event_date + 1 and coalesce(:next_status_date - 1, &#x27;31.12.9999&#x27;)
+              order by 1
+              rows 1
+              into next_status_date;
+
+              select oko_ol_date
+              from operkroff
+              where oko_ol_is_active = 1
+                and oko_from_k_id = :k_id
+                and oko_ol_date between :event_date + 1 and coalesce(:next_status_date - 1, &#x27;31.12.9999&#x27;)
+              order by 1
+              rows 1
+              into next_status_date;
+
+              select lam_date_begin
+              from lawkredit, lawmain
+              where lak_from_lam_id = lam_id
+                and lak_from_k_id = :k_id
+                and lam_is_active = 1
+                and lam_date_begin is not null
+                and lam_date_begin between :event_date + 1 and coalesce(:next_status_date - 1, &#x27;31.12.9999&#x27;)
+              order by 1
+              rows 1
+              into next_status_date;
+
+              select ker_date
+              from konteffrate ker
+              where ker.ker_from_k_id = :k_id
+                and ker.ker_date between :event_date + 1 and coalesce(:next_status_date - 1, &#x27;31.12.9999&#x27;)
+                and ker.ker_state = 0
+              order by 1
+              rows 1
+              into next_status_date;
+
+              select kd_ol_date
+              from kontdata kd
+              where kd_ol_is_delete = 0
+                and kd_from_k_id = :k_id
+                and kd_ol_date between :event_date + 1 and coalesce(:next_status_date - 1, &#x27;31.12.9999&#x27;)
+              order by 1
+              rows 1
+              into next_status_date;
+
+              select ol_date
+              from kontpsk, operlist
+              where kps_from_k_id = :k_id
+                and ol_id = kps_from_ol_id
+                and is_delete = 0
+                and ol_date between :event_date + 1 and coalesce(:next_status_date - 1, &#x27;31.12.9999&#x27;)
+              order by 1
+              rows 1
+              into next_status_date;
+
+              select z_date_begin
+              from zalog
+              where z_from_k_id = :k_id
+                and z_date_begin between :event_date + 1 and coalesce(:next_status_date - 1, &#x27;31.12.9999&#x27;)
+              order by 1
+              rows 1
+              into next_status_date;
+
+              select zap_date
+              from zalogautoprof
+              inner join zalogauto on zap_from_za_id = za_id
+              where za_from_k_id = :k_id
+              and zap_date between :event_date + 1 and coalesce(:next_status_date - 1, &#x27;31.12.9999&#x27;)
+              order by 1
+              rows 1
+              into next_status_date;
+
+              select cast(f_json_str_get_value(bod_add, &#x27;applyDate&#x27;, null) as date)
+              from bki_once_data bod
+              where bod_kind = 3
+                and bod_object_kind = 9
+                and bod_object_id = :k_id
+                and bod_from_bkc_id is null
+                and bod_add is not null
+                and cast(f_json_str_get_value(bod_add, &#x27;applyDate&#x27;, null) as date) between :event_date + 1 and coalesce(:next_status_date - 1, &#x27;31.12.9999&#x27;)
+              order by 1
+              rows 1
+              into next_status_date;
+
+              select bbt_date
+              from bki_bankrupt
+              where bbt_from_k_id = :k_id
+                and bbt_date between :event_date + 1 and coalesce(:next_status_date - 1, &#x27;31.12.9999&#x27;)
+              order by 1
+              rows 1
+              into next_status_date;
+
+              select brt_date_fact
+              from bankrupt
+              where brt_from_c_id = :c_id
+              and brt_date_fact between :event_date + 1 and coalesce(:next_status_date - 1, &#x27;31.12.9999&#x27;)
+              order by 1
+              rows 1
+              into next_status_date;
+
+              select bbt_date
+              from kontract, bki_bankrupt
+              where bbt_from_k_id = k_id
+                and k_base_k_id = :k_id
+                and bbt_date between :event_date + 1 and coalesce(:next_status_date - 1, &#x27;31.12.9999&#x27;)
+              order by 1
+              rows 1
+              into next_status_date;
+
+              select k_stop_perc
+              from kontract
+              where k_id = :k_id
+                and k_stop_perc between :event_date + 1 and coalesce(:next_status_date - 1, &#x27;31.12.9999&#x27;)
+              order by 1
+              rows 1
+              into next_status_date;
+           end
+          end
+          else if (json.obj_get_val(jso, &#x27;is_poruch&#x27;, &#x27;0&#x27;) = &#x27;0&#x27;) then
+            delete from bki_buffer
+            where bkb_from_bkk_id = :bkk_id
+              and bkb_object_kind = 9
+              and bkb_object_id = :k_id
+              and bkb_date &gt;= :event_date
+              and bkb_type = 0;
+
+          if (next_status_date &lt; packet_date) then
+          begin
+            if (not exists (select 1 from bki_loans, bki_clients, bki_events
+                            where bkl_from_bkp_id = :packet_id
+                              and bkc_from_bkl_id = bkl_id
+                              and bev_from_bkc_id = bkc_id
+                              and bev_event_date = :next_status_date
+                              and bkl_object_kind = :object_kind
+                              and bkl_object_id = :object_id))
+            then
+              insert into bki_events (bev_from_bkc_id, bev_event_date, bev_tag)
+              values (:bkc_id, :next_status_date, 11);
+          end
+          else if (next_status_date is not null) then
+            update or insert into bki_buffer (bkb_from_bkk_id, bkb_object_kind, bkb_object_id, bkb_date, bkb_tag, bkb_type)
+            values(:bkk_id, :object_kind, :object_id, :next_status_date, 11, 0)
+            matching(bkb_from_bkk_id, bkb_object_kind, bkb_object_id, bkb_type, bkb_date);
+        end
+
+        -- что бы не тормозить весь пакет, запишем ошибку, если возникнет
+        when any do
+        begin
+          if (coalesce(debug_mode, 0) &lt;&gt; 0) then
+            exception;
+  
+          update bki_events
+          set bev_status = -1
+          where bev_id = :bev_id;
+    
+          insert into bki_errors (bke_from_bev_id, bke_date, bke_error_code, bke_error_id)
+          values (:bev_id, current_date, &#x27;DB&#x27;, f_memo_id(&#x27;DB&#x27;));
+        end
+      end
+
+--      if (datediff(minute, time_start, cast(&#x27;now&#x27; as timestamp)) &gt; 27) then
+--      begin
+--        i = (select coalesce(max(tol_object_kind), 0) from temp_objlist where tol_kind = &#x27;skv_proc_time_100726&#x27; and tol_object_id = :packet_id);
+--      
+--        insert into temp_objlist (tol_kind, tol_object_kind, tol_object_id, tol_add_info_1, tol_add_info_2)
+--        values (&#x27;skv_proc_time_100726&#x27;, :i + 1, :packet_id, &#x27;HP_BKI_PREPARE_PACKET5&#x27;, datediff(second, :time_start, cast(&#x27;now&#x27; as timestamp)));
+--
+--        exit;
+--      end
+    end
+
+    in autonomous transaction do
+    begin
+      -- пакет подготовлен
+      select count(bkc_id)
+      from bki_loans, bki_clients, bki_events
+      where bkc_from_bkl_id = bkl_id
+        and bev_from_bkc_id = bkc_id
+        and bkl_from_bkp_id = :packet_id
+        and bev_status = 1
+      into cnt;
+
+      update bki_packet
+      set bkp_status = iif(:cnt &gt; 0, 1, -1),
+          bkp_result_status = iif(:cnt &gt; 0, &#x27;Prepared&#x27;, &#x27;EmptyPacket&#x27;)
+      where bkp_id = :packet_id;
+    end
+  end
+
+  i = (select coalesce(max(tol_object_kind), 0) from temp_objlist where tol_kind = &#x27;skv_proc_time_100726&#x27; and tol_object_id = :packet_id);
+
+  if (packet_id is not null) then
+    insert into temp_objlist (tol_kind, tol_object_kind, tol_object_id, tol_add_info_1, tol_add_info_2, tol_add_info_3)
+    values (&#x27;skv_proc_time_100726&#x27;, :i + 1, :packet_id, &#x27;HP_BKI_PREPARE_PACKET5&#x27;, datediff(second, :time_start, cast(&#x27;now&#x27; as timestamp)), f_datetimetostr(:time_start));
+
+  if (bkt_format = 0 and packet_id is not null and coalesce(debug_mode, 0) = 0) then
+    insert into fsrobot_msgbox (msg_type, msg_mail_to, msg_subject, msg_body, msg_lifetime_days, msg_from_un_id, msg_command_kind)
+    values (0, &#x27;s.kravtsov@mbfplanet.com&#x27;, &#x27;БКИ. Подготовка пакетов&#x27;, &#x27;Обработка завершена.&#x27;, 1, 1000000000001, &#x27;&#x27;);
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

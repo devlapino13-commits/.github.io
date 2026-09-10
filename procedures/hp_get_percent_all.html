@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_GET_PERCENT_ALL — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_GET_PERCENT_ALL: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_GET_PERCENT_ALL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">3</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_percent_one.html"><div class="to">HP_GET_PERCENT_ONE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_centerbank_report_kc_2022.html"><div class="to">AAREP_CENTERBANK_REPORT_KC_2022</div></a><a class="ref-card" href="aarep_centerbank_report_kc_2025.html"><div class="to">AAREP_CENTERBANK_REPORT_KC_2025</div></a><a class="ref-card" href="aarep_report_for_tsb_3_eps_new.html"><div class="to">AAREP_REPORT_FOR_TSB_3_EPS_NEW</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PERC_STR</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_GET_PERCENT_ALL(
+    K_ID D_ID)
+RETURNS (
+    PERC_STR D_STR_CODE)
+AS
+declare variable K_DISB_DATE D_DATE;
+declare variable PERC_DAY PERC_TYPE;
+declare variable YEAR_DAY D_SMALLINT;
+declare variable K_PERCENT_PER_DAY D_PERCENT;
+declare variable K_FROM_PR_ID D_INTEGER;
+declare variable K_LEVEL D_SMALLINT;
+begin
+  perc_str = &#x27;&#x27;;
+  
+  select k_disb_date,
+         k_percent_per_day,
+         k_from_pr_id
+  from kontract
+  where k_id = :k_id
+  into k_disb_date,
+       k_percent_per_day,
+       k_from_pr_id;
+
+  if (k_disb_date &gt;= cast(&#x27;22.01.2016&#x27; as date)) then year_day = 365;
+  else year_day = 360;
+
+  perc_day = null;
+  if (k_disb_date &gt;= &#x27;08.09.2021&#x27;) then
+  begin
+    select kd_percent_per_day from kontdata
+    where kd_from_k_id = :k_id
+    and :k_disb_date + 1 between kd_ol_date and kd_date_end
+    and kd_ol_is_delete = 0
+    into perc_day;
+  end
+  if (perc_day is null) then perc_day = k_percent_per_day;
+
+  perc_str = round((perc_day * year_day),3)||&#x27;%&#x27;;
+
+  k_level = 0;
+  while (k_level &lt;3) do
+  begin
+    k_level = k_level + 1;
+    select :perc_str||coalesce((&#x27;; &#x27;||round((cast(new_kd_percent as double precision) / 30 * :year_day),3)||&#x27;%&#x27;),&#x27;&#x27;)
+    from hp_get_percent_one(:k_id, :k_level,:k_disb_date, :k_percent_per_day, :k_from_pr_id)
+    into perc_str;
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_KKT_INSERT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_KKT_INSERT: 3 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_KKT_INSERT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">TAG</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_KKT_INSERT(
+    OL_ID D_ID,
+    K_ID D_ID,
+    TAG D_STR_CODE)
+AS
+declare variable kkm_id d_id;
+declare variable old_kkm_id d_id;
+declare variable annul_kkm_id d_id;
+declare variable temp_annul_kkm_id d_id;
+declare variable amount d_currency;
+declare variable old_amount d_currency;
+declare variable kkm_is_return d_bool;
+declare variable ol_date d_date;
+declare variable kkt_kind d_smallint;
+declare variable kki_type d_smallint;
+declare variable corr_ol_id d_id;
+declare variable ol_parent_id d_id;
+declare variable acc_kind d_smallint;
+declare variable kkm_status d_smallint;
+declare variable project_start_date d_date;
+declare variable ol_is_delete d_bool;
+declare variable corr_reg_id d_integer;
+declare variable ol_from_reg_id d_integer;
+declare variable kki_types d_str_255;
+declare variable old_kki_types d_str_255;
+begin
+  if (f_get_db_id() &lt;&gt; 81001) then
+    exit;
+
+  if (f_get_const(&#x27;kkt&#x27;) &lt;&gt; 1) then
+    exit;
+
+  if (exists(select bsl_id from bki_stoplist_loans bsl where bsl.bsl_from_k_id = :k_id))
+  then
+    exit;
+
+  project_start_date = &#x27;04.09.2023&#x27;; -- дата старта передачи чеков.
+  kki_type = case tag
+               when &#x27;operkred&#x27;  then 1
+               when &#x27;operkroff&#x27; then 2
+             end;
+
+  select coalesce(ol_parent_id, ol_id), is_delete, ol_date, ol_from_reg_id
+  from operlist
+  where ol_id = :ol_id
+  into ol_parent_id, ol_is_delete, ol_date, ol_from_reg_id;
+
+  -- если продан по цессии, то чеки не формируем
+  if (exists(select 1 from sud_cession_packet, sud_cession_loans
+            where scl_from_scp_id = scp_id
+              and scl_from_k_id = :k_id
+              and scp_status &gt; 0
+              and scp_date &lt;= :ol_date))
+  then
+    exit;
+
+  -- Чеки генерируются только по операциям с даты старта проекта
+  if (ol_date &lt; project_start_date) then
+    exit;
+
+  select kkm_id, kkm_status, sum(kki_amount)
+  from kkt_main kkm
+  left join kkt_items on kki_from_kkm_id = kkm_id
+                       and kki_type = :kki_type
+  where kkm_from_ol_id = :ol_parent_id
+    and kkm_status &gt;= 0   -- ошибочные игнорируем
+    and kkm_duplicated_kkm_id is null      -- дубли игнорируем
+    and kkm_ol_is_delete = :ol_is_delete
+  group by kkm_id, kkm_status
+  order by kkm_status desc, kkm_id desc -- возможно ручное формирование чеков, тогда записей может быть больше одной, тогда берем последний
+  rows 1
+  into kkm_id, kkm_status, old_amount;
+
+  if (coalesce(kkm_status, 0) &gt; 0) then -- если есть отправленный чек, то выход
+    exit;
+
+  if (tag = &#x27;operkred&#x27;) then
+    select -sum(ok_perc)
+    from operkred
+    where ok_from_ol_id = :ol_id
+      and ok_from_k_id = :k_id
+      and ok_type = 4
+    into amount;
+  else if (tag = &#x27;operkroff&#x27;) then
+    select -sum(oko_perc)
+    from operkroff
+    where oko_from_ol_id = :ol_id
+      and oko_from_k_id = :k_id
+      and oko_type = 4
+    into amount;
+  else
+    exception e_default &#x27;unknown tag: &#x27; || coalesce(tag, &#x27;&lt;NULL&gt;&#x27;);
+
+  if (coalesce(amount, 0) = 0) then
+    exit;
+
+  if (ol_is_delete = 1) then
+    amount = -amount;
+
+  kkm_is_return = 0;
+
+  if (amount &lt; 0) then
+  begin
+    kkm_is_return = 1;
+    amount = -amount;
+  end
+
+  if (amount = coalesce(old_amount, 0)) then
+    exit;
+
+  if (kkm_id is null) then
+  begin
+    corr_ol_id = null;
+    corr_reg_id = null;
+
+    select opl_acc_kind
+    from operloan
+    where opl_from_ol_id = :ol_parent_id
+    into acc_kind;
+
+    -- определить коррекцию
+    if (ol_is_delete = 1) then
+      corr_ol_id = ol_parent_id;
+    else
+    begin
+      select odl_main_ol_id
+      from operdellist
+      where odl_new_ol_id = :ol_parent_id
+      order by odl_id desc
+      rows 1
+      into corr_ol_id;
+
+      if (corr_ol_id is null) then
+        select coalesce(ol_parent_id, ol_id)
+        from reversallist, operlist
+        where rl_new_ol_id = :ol_id
+          and ol_id = rl_old_ol_id
+        rows 1
+        into corr_ol_id;
+
+      if (corr_ol_id is null) then
+      begin
+        if (ol_date &lt; current_date and acc_kind &lt;&gt; 2) then -- если дата операции не сегодня и это не банковская выписка, то это коррекция
+          corr_ol_id = ol_parent_id;
+      end
+    end
+
+    if (corr_ol_id is not null) then
+    begin
+      select kkd_from_reg_id, kkm_id
+      from kkt_main, kkt_fn, kkt_devices
+      where kkf_id = kkm_from_kkf_id
+        and kkd_id = kkf_from_kkd_id
+        and kkm_from_ol_id = :corr_ol_id
+        and kkm_ol_is_delete = 0
+        and kkm_duplicated_kkm_id is null
+      rows 1
+      into corr_reg_id, old_kkm_id;
+
+      if (ol_is_delete = 0 or corr_reg_id is null) then -- если аннулирование то используем регион первоначального чека, иначе, либо если чек не найден, используем регион операции
+        corr_reg_id = ol_from_reg_id;
+    end
+
+    kkt_kind = iif(acc_kind = 1,
+                    f_enum(&#x27;kkt_kind&#x27;, &#x27;atoll&#x27;, &#x27;id&#x27;),
+                    f_enum(&#x27;kkt_kind&#x27;, &#x27;1ofd_cloud&#x27;, &#x27;id&#x27;));
+
+    insert into kkt_main (kkm_from_ol_id, kkm_from_k_id, kkm_kkt_kind, kkm_is_return, kkm_corr_ol_id, kkm_ol_is_delete, kkm_corr_reg_id)
+    values (:ol_parent_id, :k_id, :kkt_kind, :kkm_is_return, :corr_ol_id, :ol_is_delete, :corr_reg_id)
+    returning kkm_id
+    into :kkm_id;
+
+    if (ol_is_delete = 1) then
+      if (old_kkm_id is not null) then
+        insert into kkt_items (kki_from_kkm_id, kki_position, kki_type, kki_amount)
+        select :kkm_id, kki_position, kki_type, kki_amount
+        from kkt_items
+        where kki_from_kkm_id = :old_kkm_id;
+      else
+        update or insert into kkt_items (kki_from_kkm_id, kki_type, kki_amount)
+        values (:kkm_id, :kki_type, :amount)
+        matching (kki_from_kkm_id, kki_type);
+  end
+
+  if (ol_is_delete = 0) then
+    update or insert into kkt_items (kki_from_kkm_id, kki_type, kki_amount)
+    values (:kkm_id, :kki_type, :amount)
+    matching (kki_from_kkm_id, kki_type);
+
+  -- RFCRU-761 Если после аннулирования чек такой же, коррекции не нужно
+  if (ol_is_delete = 0) then
+  begin
+    corr_ol_id = null;
+    old_kkm_id = null;
+    annul_kkm_id = null;
+    temp_annul_kkm_id = null;
+
+    select kkm_corr_ol_id, kkm_kkt_kind, kkm_is_return
+    from kkt_main
+    where kkm_id = :kkm_id
+    into corr_ol_id, kkt_kind, kkm_is_return;
+
+    if (corr_ol_id is not null) then
+    begin
+      -- сравним данные нового и старого чеков
+      select kkm_id, sum(kki_amount), list(kki_type)
+      from kkt_main, kkt_items
+      where kki_from_kkm_id = kkm_id
+        and kkm_from_ol_id = :corr_ol_id
+        and kkm_from_k_id = :k_id
+        and kkm_ol_is_delete = 0
+        and kkm_duplicated_kkm_id is null
+        and kkm_is_return = :kkm_is_return
+        and kkm_kkt_kind = :kkt_kind
+      group by 1
+      order by 1
+      rows 1
+      into old_kkm_id, old_amount, old_kki_types;
+  
+      if (old_kkm_id is not null) then
+      begin
+        select sum(kki_amount), list(kki_type)
+        from kkt_main, kkt_items
+        where kki_from_kkm_id = kkm_id
+          and kki_from_kkm_id = :kkm_id
+        into amount, kki_types;
+
+        if (amount is distinct from old_amount
+            or kki_types is distinct from old_kki_types)
+        then
+          exit;
+  
+        -- найдем чек, который аннулировал старый
+        select kkm_id
+        from kkt_main kkm
+        where kkm_from_ol_id = :corr_ol_id
+          and kkm_status = 0
+          and kkm_ol_is_delete = 1
+          and kkm_corr_ol_id = :corr_ol_id
+          and kkm_duplicated_kkm_id is null
+        group by kkm_id, kkm_status
+        order by kkm_status desc, kkm_id desc
+        rows 1
+        into annul_kkm_id;
+  
+        if (annul_kkm_id is not null) then
+        begin
+          -- удостоверимся что за пределами нашей транзакции нет аннулировающего чека, иначе есть опасность что его уже могли забрать на отправку
+          in autonomous transaction do
+            select kkm_id
+            from kkt_main kkm
+            where kkm_from_ol_id = :corr_ol_id
+              and kkm_status = 0
+              and kkm_duplicated_kkm_id is null
+              and kkm_ol_is_delete = 1
+              and kkm_corr_ol_id = :corr_ol_id
+            group by kkm_id, kkm_status
+            order by kkm_status desc, kkm_id desc
+            rows 1
+            into temp_annul_kkm_id;
+
+          if (temp_annul_kkm_id is null) then
+          begin
+            -- удалим чек аннулирования и текущий чек коррекции
+            delete from kkt_main
+            where kkm_id in (:annul_kkm_id, :kkm_id);
+
+            -- прикрепим первоначальный чек к новой операции
+            update kkt_main
+            set kkm_from_ol_id = :ol_parent_id
+            where kkm_id = :old_kkm_id;
+          end
+        end 
+      end
+    end
+  end 
+  ---------- RFCRU-761
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

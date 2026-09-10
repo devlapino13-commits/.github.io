@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MONETA_RUB_CALC — процедура — схема БД</title>
+<meta name="description" content="Процедура MONETA_RUB_CALC: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>MONETA_RUB_CALC</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="moneta_get_params.html"><div class="to">MONETA_GET_PARAMS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="moneta_check_amount.html"><div class="to">MONETA_CHECK_AMOUNT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">AMOUNT_KGS</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">AMOUNT_RUB</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE MONETA_RUB_CALC(
+    AMOUNT_KGS D_CURRENCY,
+    REP_DATE D_DATE = current_date)
+RETURNS (
+    AMOUNT_RUB D_CURRENCY)
+AS
+declare variable error_txt d_str_100;
+declare variable moneta_commission d_currency;
+declare variable rub_course d_currency;
+declare variable rub d_currency;
+declare variable rub_moneta d_currency;
+begin
+  amount_rub = 0;
+  moneta_commission = 0;
+  rub_course = 0;
+  rub = 0;
+
+  if (amount_kgs &lt; 1) then
+  begin
+     exception e_message &#x27;Минимальная сумма погашения 1 сом&#x27;;
+     exit;
+  end
+
+  select error_txt,
+         moneta_commission,
+         rub_course
+  from moneta_get_params(:rep_date)
+  into error_txt, -- текст ошибки
+       moneta_commission, -- процент комиссии Монеты
+       rub_course; -- курс рубля
+  
+  if (coalesce(error_txt, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+  begin
+     exception e_message error_txt;
+     exit;
+  end
+
+  if (rub_course = 0) then
+  begin
+    exception e_message &#x27;Курс рубля не может быть равен нулю&#x27;;
+    exit;
+  end
+
+  -- сумма погашения в рублях после округления
+  rub = round_currency_up(amount_kgs / rub_course);
+
+  -- сумма комиссии Монеты в рублях после округления
+  rub_moneta = round_currency_up(rub * moneta_commission / 100);
+
+  -- полная сумма оплаты в рублях (сумма отправки в сервис Монеты)
+  amount_rub = rub + rub_moneta;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

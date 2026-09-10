@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EXPRESSAPP_FILL_ONE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EXPRESSAPP_FILL_ONE: 4 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EXPRESSAPP_FILL_ONE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="perc_amount_interval_by_point.html"><div class="to">PERC_AMOUNT_INTERVAL_BY_POINT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_expressapp_fill_all.html"><div class="to">HP_EXPRESSAPP_FILL_ALL</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEED_INSERT</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CLI_ACTIVE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EXPRESSAPP_FILL_ONE(
+    C_ID ID_TYPE,
+    REP_DATE D_DATE,
+    NEED_INSERT D_SMALLINT = 0,
+    CLI_ACTIVE D_INTEGER = -1)
+RETURNS (
+    RES D_SMALLINT,
+    RES_TEXT STR_100)
+AS
+declare variable K_ID ID_TYPE;
+declare variable ASP_STATUS D_STR_CODE;
+declare variable IS_FIRST D_SMALLINT;
+declare variable BASE_K_ID ID_TYPE;
+declare variable LGC_CALC D_INTEGER;
+declare variable PR_ID D_INTEGER;
+declare variable EXA_AMOUNT CURR_TYPE;
+declare variable EXA_PERIOD D_INTEGER;
+declare variable EXA_LO_ID ID_TYPE;
+declare variable EXA_FROM_REG_ID integer;
+declare variable EXA_PERCENT D_PERCENT;
+declare variable EXA_REPAY_DAY D_SMALLINT; /* погашение по 25м числам */
+declare variable EXA_FROM_UN_ID ID_TYPE;
+declare variable LOANDISBDATE D_DATE;
+declare variable C_CURR_BALL D_INTEGER;
+declare variable K_DISB_DATE D_DATE;
+declare variable CLI_BALANCE CURR_TYPE;
+declare variable DELINQ_DAY D_INTEGER;
+declare variable MAX_DELINQ_DAY D_INTEGER;
+declare variable POINT D_INTEGER;
+declare variable MAX_BALANCE CURR_TYPE;
+begin
+  if (rep_date is null) then rep_date = current_date;
+  res  = 1;
+  res_text = &#x27;&#x27;;
+
+  -- исключаем из ЧС
+  if (exists(select * from moratory
+  where m_from_c_id = :c_id
+  and m_is_active = 1
+  and m_is_black = 2)) then
+  begin
+    res_text = &#x27;Клиент в стоп листе.&#x27;;
+  end
+
+-- если клиенту отказали
+  if (res_text = &#x27;&#x27;) then
+  begin
+    if (exists(select * from kontreslist, knclient
+      where krl_datetime between :rep_date - 30 and :rep_date
+      and krl_from_k_id = kc_from_k_id
+      and kc_amount_approved &gt; 0
+      and kc_from_c_id = :c_id)) then
+    begin
+      res_text = &#x27;Ранее клиенту отказали на уровне контракта.&#x27;;
+    end
+  end 
+
+  if (res_text = &#x27;&#x27;) then
+  begin
+    if (exists(select * from kontreslist, miniappclient
+      where krl_datetime between :rep_date - 30 and :rep_date
+      and krl_ma_id = mac_from_ma_id
+      and mac_amount &gt; 0
+      and mac_from_c_id = :c_id)) then
+    begin
+      res_text = &#x27;Ранее клиенту отказали на уровен заявки.&#x27;;
+    end
+  end 
+
+  if (res_text = &#x27;&#x27;) then
+  begin
+    if (exists(select *
+      from actionlist, refdata, knclient
+      where acl_from_rd_id = rd_id and
+            acl_date between :rep_date - 30 and :rep_date and
+            rd_main_code = &#x27;actiongroup&#x27; and
+            rd_str_id = &#x27;underwriter&#x27; and
+            acl_dont_show_in_order = 0 and
+            acl_object_kind = 9 and
+            acl_status = -2 and
+            acl_object_id = kc_from_k_id and
+            kc_amount_approved &gt; 0 and
+            acl_dont_show_in_order = 0 and
+            kc_from_c_id = :c_id)) then
+    begin
+      res_text = &#x27;Ранее клиенту отказали(андерайтеры)&#x27;;
+    end
+  end
+
+  -- сотрудников исключаем
+  if (res_text = &#x27;&#x27; and
+  exists(select * from hr_pstatus
+  where ps_from_c_id = :c_id
+  and :rep_date between ps_date_begin and ps_date_end
+  and ps_status = 1
+  and ps_is_working = 1)) then
+  begin
+    res_text = &#x27;Клиент сотрудник&#x27;;
+  end
+
+  -- проверка на действующего договора АСП
+  if (res_text = &#x27;&#x27;) then
+  begin
+    asp_status = f_edoc_status(&#x27;asp.agreement&#x27;, :c_id, :rep_date);
+    if (asp_status &lt;&gt; &#x27;signed&#x27;) then
+    begin
+      res_text = &#x27;нет действующего АСП&#x27;;
+    end
+  end
+
+  -- проверка имеется ли МП у клиента
+  if (res_text = &#x27;&#x27; and f_fsm_client_status(c_id) = 0) then
+  begin
+    res_text = &#x27;У клиента не имеются КМП&#x27;;
+  end 
+
+  if (res_text = &#x27;&#x27;) then
+  begin
+    if (cli_active = -1 or cli_active is null) then
+    begin
+      if (exists(select * from kontstate, knclient
+      where ks_ol_is_delete = 0
+      and ks_state = 1
+      and :rep_date between ks_date_begin and ks_date_end
+      and ks_from_k_id = kc_from_k_id
+      and kc_amount_approved &gt; 0
+      and kc_from_c_id = :c_id)) then cli_active = 1;
+      else cli_active = 0;
+    end
+    -- вычисляем основной контракт
+    if (cli_active = 1) then
+    begin
+      select ks_from_k_id from kontstate, knclient
+      where ks_ol_is_delete = 0
+      and ks_state = 1
+      and :rep_date between ks_date_begin and ks_date_end
+      and ks_from_k_id = kc_from_k_id
+      and kc_amount_approved &gt; 0
+      and kc_from_c_id = :c_id
+      order by ks_date_begin desc
+      rows 1
+      into base_k_id;
+    end else
+    begin
+      select ks_from_k_id from kontstate, knclient
+      where ks_ol_is_delete = 0
+      and ks_state = 1
+      and ks_from_k_id = kc_from_k_id
+      and kc_amount_approved &gt; 0
+      and kc_from_c_id = :c_id
+      order by ks_date_begin desc
+      rows 1
+      into base_k_id;
+    end 
+  end
+
+  cli_balance = null;
+  delinq_day = null;
+  lgc_calc = null;
+  max_delinq_day = null;
+  point = null;
+  max_balance = null;
+
+  if (res_text = &#x27;&#x27; and cli_active = 1) then
+  begin
+    --  проверка на просрочку
+    select sum(oks_balance),
+           max(:rep_date - oks_delinq_date)
+    from knclient, oksummary
+    where kc_from_c_id = :c_id
+    and kc_amount_approved &gt; 0
+    and kc_from_k_id = oks_from_k_id
+    and :rep_date between oks_date_begin and oks_date_end
+    and oks_close_state = 0
+    into cli_balance, delinq_day;
+
+    cli_balance = coalesce(cli_balance, 0);
+    delinq_day = coalesce(delinq_day,0);
+    if (delinq_day &lt; 0) then delinq_day = 0;
+
+    if (delinq_day &gt; 0 ) then -- если имеется просрочка то исключаем
+    begin
+      res_text = &#x27;Имеется активная просрочка&#x27;;
+    end 
+
+    if (res_text = &#x27;&#x27;) then
+    begin
+      lgc_calc = null;
+      select sum(lgc_calc)
+      from legitimcalc
+      where lgc_from_c_id = :c_id and
+            lgc_from_k_id = :base_k_id and
+            lgc_date &lt;= :rep_date
+      into lgc_calc;
+      lgc_calc = coalesce(lgc_calc,0);
+      if (lgc_calc &lt; 2) then
+      begin
+        res_text = &#x27;Не имеются легитимных платежей&#x27;;
+      end
+   end
+
+    if (res_text = &#x27;&#x27;) then
+    begin
+      point = f_point(c_id, rep_date);
+
+      max_balance = case
+                      when point &gt;= 24 then 150000
+                      when point &gt;= 18 then 120000
+                      when point &gt;= 15 then 100000
+                      when point &gt;= 12 then 80000
+                      when point &gt;= 9 then 60000
+                      when point &gt;= 6 then 50000
+                      when point &gt;= 3 then 40000
+                      else 35000
+                    end;
+      if (max_balance - cli_balance &lt; 35000) then
+      begin
+        res_text = &#x27;Не соответсвует сумма по баллам&#x27;;
+      end
+    end
+  end
+
+  if (res_text = &#x27;&#x27; and cli_active = 0) then
+  begin
+    -- если клиент не активный то по последннему циклу проверяем максимальныеп просроченные дни
+    -- если превышает 30ти дней то исключаем
+    max_delinq_day = null;
+    select max(ok_ol_date - ok_sh_date) from operkred
+    where ok_from_k_id = :base_k_id
+    and ok_ol_is_active = 1
+    and ok_ol_date - ok_sh_date &gt; 0
+    and ok_type in (4,5)
+    and ok_os + ok_perc &lt; 0
+    into max_delinq_day;
+    max_delinq_day = coalesce(max_delinq_day, 0);
+    if (max_delinq_day &gt; 30) then
+    begin
+      res_text = &#x27;Последний контракт закрылся с просрочкой более 30 дней&#x27;;
+    end 
+  end
+
+
+  if (res_text = &#x27;&#x27;) then
+  begin
+    -- вычисляем ВИПС и регион
+    select kal_new_kf_officer, kal_new_reg_id, k_repay_day, k_disb_date
+    from kontract, knaktlist
+    where k_id = :base_k_id
+    and k_from_kf_id = kal_from_kf_id
+    and knaktlist.is_delete = 0
+    and current_date between kal_date and kal_date_end
+    into exa_lo_id, exa_from_reg_id, exa_repay_day, k_disb_date;
+    
+    exa_repay_day = coalesce(exa_repay_day, 0);
+    if (exa_repay_day = 0) then exa_repay_day = extract(day from k_disb_date);
+
+    if (exa_repay_day &gt;= 25)
+    then exa_repay_day = 1;
+    else exa_repay_day = exa_repay_day + 2;
+
+    if (exa_lo_id &lt;= 1000000000004 and
+        cli_active = 0 and
+        max_delinq_day &gt; 7) then  -- если находится на Виртуальном сотруднике то проверяем на просрочку более 7ми дней
+    begin
+      res_text = &#x27;Папка на виртуальном сотруднике и имеет просрочку более 7ми дней&#x27;;
+    end
+  end
+
+  if (res_text = &#x27;&#x27; and need_insert = 1) then
+  begin
+    loandisbdate = current_date;
+    pr_id = 146; -- продукт доверие
+    exa_period = 12; -- период
+--    exa_repay_day = 25; -- погашение по 25м числам
+    exa_from_un_id = 1000000000000; -- FINSTART_ROBOT
+
+    c_curr_ball = null;
+    c_curr_ball = f_point(:c_id, :loandisbdate);
+    if (c_curr_ball is null) then
+      c_curr_ball = 0;
+    exa_percent = 8; -- процентная ставка
+    exa_amount = 35000; -- сумма выдачи
+    select percent, amount_max
+    from perc_amount_interval_by_point(:pr_id, :c_curr_ball)
+    into exa_percent, exa_amount;
+
+    insert into expressapp (exa_id, exa_date, exa_from_c_id, exa_base_k_id, exa_from_exc_id, exa_final_status,
+                            exa_wait_status, exa_from_ma_id, exa_from_k_id, exa_from_edl_id, exa_disb_date, exa_from_pr_id,
+                            exa_amount, exa_period, exa_percent, exa_repay_day, exa_lo_id, exa_from_reg_id, exa_try_count,
+                            exa_from_un_id, exa_datetime, exa_from_exp_id, exa_group_id)
+    values (null, current_date, :c_id, :base_k_id, 10, 0, 0,
+            null, null, null, :loandisbdate, :pr_id, :exa_amount, :exa_period,
+            :exa_percent, :exa_repay_day, :exa_lo_id, :exa_from_reg_id, 0, :exa_from_un_id, current_timestamp, 2, 5);
+  end
+
+  if (res_text &lt;&gt; &#x27;&#x27;) then res = 0;
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

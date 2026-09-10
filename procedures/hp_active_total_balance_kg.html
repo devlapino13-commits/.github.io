@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_ACTIVE_TOTAL_BALANCE_KG — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_ACTIVE_TOTAL_BALANCE_KG: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_ACTIVE_TOTAL_BALANCE_KG</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_make_zad_list.html"><div class="to">AAREP_MAKE_ZAD_LIST</div></a><a class="ref-card" href="hp_client_relation_tmp.html"><div class="to">HP_CLIENT_RELATION_TMP</div></a><a class="ref-card" href="hp_kibminiapp_last.html"><div class="to">HP_KIBMINIAPP_LAST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ACTIVE_TOTAL_BALANCE</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_ACTIVE_TOTAL_BALANCE_KG(
+    K_ID D_ID,
+    C_ID D_ID)
+RETURNS (
+    ACTIVE_TOTAL_BALANCE D_CURRENCY)
+AS
+declare variable ma_id d_integer;
+declare variable k_disb_date d_date;
+declare variable k_id_active d_id;
+declare variable crel_other_c_id d_id;
+declare variable oc_rate d_currency;
+declare variable cur varchar(3);
+declare variable mbf_dept d_currency;
+declare variable mbf_dept_tmp d_currency;
+declare variable kh_unpaidamount_all_tmp d_currency;
+declare variable kh_currency d_str_code;
+declare variable kh_unpaidamount_all d_currency;
+declare variable kh_unpaidamount_suprug_tmp d_currency;
+declare variable kh_unpaidamount_suprug d_currency;
+declare variable mbf_dept_suprug_tmp d_currency;
+declare variable mbf_dept_suprug d_currency;
+begin
+  -- возвращает активный совокупный долг клиента и супруга/супруги по КИБу и МБФ
+
+  if (f_get_db_id() not in (39801, 41701)) then
+    exception e_message &#x27;Ошибка: hp_active_total_balance_kg используется только в KG&#x27;;
+
+  select k_from_ma_app_id,
+         k_disb_date
+  from kontract
+  where k_id = :k_id
+  into ma_id,
+       k_disb_date;
+
+  active_total_balance = 0;
+  kh_unpaidamount_all = 0;
+
+  for select sum(coalesce(kh_unpaidamount, 0) + coalesce(kh_unpaidpercenamount, 0)) kh_unpaidamount_all,
+             kh_currency
+      from hp_kibminiapp_last(:c_id, :ma_id)
+      inner join kibhistory on kh_from_kbm_id = kbm_id
+      where kh_creditstatus not like &#x27;%Отказано%&#x27; and
+            kh_creditstatus not like &#x27;%Рассмотрение заявки%&#x27; and
+            kh_creditstatus not like &#x27;Погашен%&#x27; and
+            kh_creditstatus not like &#x27;FULLY_PAID%&#x27; and
+            :k_disb_date between kh_dateaward and kh_datestop and -- нельзя учитывать сумму кредита, отраженную в отчете КИБ, но закрытого у нас на момент утверждения кредита
+            kh_is_debtor = 1 and -- не поручитель
+            kh_is_our = 0 -- не МБФ
+      group by kh_currency
+      into kh_unpaidamount_all_tmp, -- сумма долга в других ФКУ
+           kh_currency
+  do
+  begin
+    oc_rate = 1;
+    cur = &#x27;417&#x27;;
+
+    if (kh_currency in (&#x27;EUR&#x27;, &#x27;Евро&#x27;)) then
+      cur = &#x27;978&#x27;;
+    else if (kh_currency in (&#x27;RUB&#x27;, &#x27;Российский рубль&#x27;)) then
+      cur = &#x27;810&#x27;;
+    else if (kh_currency in (&#x27;USD&#x27;, &#x27;Доллар США&#x27;)) then
+      cur = &#x27;840&#x27;;
+
+    if (cur &lt;&gt; 417) then -- если не  Сомы, тогда получаем курс и умножаем на него
+    begin
+      select cr_rate
+      from opercurr
+      where current_date between cr_date and cr_date_end and
+            cr_from_cu_id = :cur
+      into oc_rate;
+      kh_unpaidamount_all_tmp = kh_unpaidamount_all_tmp * oc_rate;
+    end
+    kh_unpaidamount_all = kh_unpaidamount_all + kh_unpaidamount_all_tmp;
+  end
+
+  -- получаю активный долг в МБФ
+  mbf_dept = 0;
+  k_id_active = null;
+
+  for select ks.ks_from_k_id
+      from kontstate ks
+      inner join knclient kncl on ks.ks_from_k_id = kncl.kc_from_k_id
+      where ks.ks_state = 1 and
+            :k_disb_date between ks.ks_date_begin and ks.ks_date_end and
+            ks.ks_ol_is_delete = 0 and
+            kncl.kc_from_c_id = :c_id and
+            kncl.kc_amount_approved &gt; 0 and
+            ks.ks_from_k_id &lt;&gt; :k_id
+      into :k_id_active
+  do
+  begin
+    mbf_dept_tmp = 0;
+    select sum(zad_os + sh_calc_perc)
+    from aarep_make_zad_list(:k_id_active, :k_disb_date, 1)
+    into mbf_dept_tmp;
+    mbf_dept_tmp = coalesce(mbf_dept_tmp, 0);
+    mbf_dept = mbf_dept + mbf_dept_tmp;
+  end
+
+  -- вычисляю сумму долга по кибу + в мбф по супругу клиента
+  crel_other_c_id = null;
+  select rel_other_c_id
+  from hp_client_relation_tmp(:c_id, 1)
+  where rel_code in (trim(&#x27;1&#x27;), trim(&#x27;2&#x27;)) and
+        rel_is_active = 1
+  into crel_other_c_id;
+
+  if (crel_other_c_id is not null) then
+  begin
+    kh_unpaidamount_suprug = 0;
+    for select sum(coalesce(kh_unpaidamount, 0) + coalesce(kh_unpaidpercenamount, 0)) kh_unpaidamount_all,
+               kh_currency
+        from hp_kibminiapp_last(:crel_other_c_id, :ma_id)
+        inner join kibhistory on kh_from_kbm_id = kbm_id
+        where kh_creditstatus not like &#x27;%Отказано%&#x27; and
+              kh_creditstatus not like &#x27;%Рассмотрение заявки%&#x27; and
+              kh_creditstatus not like &#x27;Погашен%&#x27; and
+              kh_creditstatus not like &#x27;FULLY_PAID%&#x27; and
+              :k_disb_date between kh_dateaward and kh_datestop and -- нельзя учитывать сумму кредита, отраженную в отчете КИБ, но закрытого у нас на момент утверждения кредита
+              kh_is_debtor = 1 and -- заёмщик (не поручитель)
+              kh_is_our = 0 -- не МБФ
+        group by kh_currency
+        into kh_unpaidamount_suprug_tmp, -- сумма долга в других ФКУ
+             kh_currency
+    do
+    begin
+      kh_unpaidamount_suprug_tmp = coalesce(kh_unpaidamount_suprug_tmp, 0);
+      oc_rate = 1;
+      cur = &#x27;417&#x27;;
+
+      if (kh_currency in (&#x27;EUR&#x27;, &#x27;Евро&#x27;)) then
+        cur = &#x27;978&#x27;;
+      else if (kh_currency in (&#x27;RUB&#x27;, &#x27;Российский рубль&#x27;)) then
+        cur = &#x27;810&#x27;;
+      else if (kh_currency in (&#x27;USD&#x27;, &#x27;Доллар США&#x27;)) then
+        cur = &#x27;840&#x27;;
+
+      if (cur &lt;&gt; 417) then -- если не  Сомы, тогда получаем курс и умножаем на него
+      begin
+        select oc.cr_rate
+        from opercurr oc
+        where current_date between oc.cr_date and oc.cr_date_end and
+              oc.cr_from_cu_id = :cur
+        into :oc_rate;
+        kh_unpaidamount_suprug_tmp = kh_unpaidamount_suprug_tmp * oc_rate;
+      end
+      kh_unpaidamount_suprug = kh_unpaidamount_suprug + kh_unpaidamount_suprug_tmp;
+    end
+
+    -- получаю активный долг в МБФ
+    mbf_dept_suprug = 0;
+    k_id_active = null;
+    for select ks.ks_from_k_id
+        from kontstate ks
+        inner join knclient kncl on ks.ks_from_k_id = kncl.kc_from_k_id
+        where ks.ks_state = 1 and
+              :k_disb_date between ks.ks_date_begin and ks.ks_date_end and
+              ks.ks_ol_is_delete = 0 and
+              kncl.kc_from_c_id = :crel_other_c_id and
+              ks.ks_from_k_id &lt;&gt; :k_id
+        into :k_id_active
+    do
+    begin
+      mbf_dept_suprug_tmp = 0;
+      select sum(zad_os + sh_calc_perc)
+      from aarep_make_zad_list(:k_id_active, :k_disb_date, 1)
+      into :mbf_dept_suprug_tmp;
+      mbf_dept_suprug_tmp = coalesce(mbf_dept_suprug_tmp, 0);
+      mbf_dept_suprug = mbf_dept_suprug + mbf_dept_suprug_tmp;
+    end
+  end
+  kh_unpaidamount_suprug = coalesce(kh_unpaidamount_suprug, 0);
+  mbf_dept_suprug = coalesce(mbf_dept_suprug, 0);
+
+  -- итого активный совокупный баланс (сумма с другими ФКУ + сумма МБФ)
+  active_total_balance = kh_unpaidamount_all + kh_unpaidamount_suprug + mbf_dept + mbf_dept_suprug;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

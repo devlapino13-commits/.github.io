@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_HTML_DO_SURVEY — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_HTML_DO_SURVEY: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_HTML_DO_SURVEY</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_html_main.html"><div class="to">FM_REPORT_HTML_MAIN</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_HTML</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_HTML_DO_SURVEY(
+    UN_ID DECIMAL(18,0))
+RETURNS (
+    RES_HTML BLOB SUB_TYPE TEXT SEGMENT SIZE 80)
+AS
+declare variable svq_id integer;
+declare variable svq_caption varchar(255);
+declare variable svq_memo varchar(255);
+declare variable c_id decimal(18,0);
+declare variable selected_sva_id integer;
+declare variable sva_codes varchar(255);
+declare variable sva_caption varchar(255);
+declare variable sva_id integer;
+declare variable res_link varchar(4096);
+declare variable kol integer;
+begin
+  select un_from_c_id
+  from username
+  where un_id = :un_id
+  into :c_id;
+
+  res_html = (select res_style from fm_html_styles) ||
+    &#x27;&lt;body&gt;&lt;h1 class=&quot;green_text&quot;&gt;Онлайн голосование.&lt;/h1&gt;&#x27;;
+
+  kol = 0;
+  for select svq_id, svq_caption, svq_memo
+      from survey_ques
+      where svq_time_start &lt;= current_timestamp and
+            (svq_time_finish &gt;= current_timestamp or
+            svq_time_finish is null)
+      into :svq_id, :svq_caption, :svq_memo
+  do
+  begin
+    kol = kol + 1;
+    res_html = BLOB_APPEND(res_html,
+      &#x27;&lt;hr width=&quot;100%&quot;&gt;&lt;h2 class=&quot;green_text&quot;&gt;&#x27; || :svq_caption || &#x27;&lt;/h2&gt;&#x27;);
+    if (coalesce(svq_memo, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+      res_html = BLOB_APPEND(res_html, svq_memo || &#x27;&lt;br&gt;&lt;br&gt;&#x27;);
+
+    selected_sva_id = null;
+    select svr_from_sva_id
+    from survey_result
+    where svr_source_kind = 0 and
+          svr_source_id = :c_id and
+          svr_from_svq_id = :svq_id rows 1
+    into :selected_sva_id;
+    if (selected_sva_id is null) then
+      selected_sva_id = 0;
+
+    if (selected_sva_id = 0) then
+      res_html = BLOB_APPEND(res_html, &#x27;Выберите один из ответов:&#x27; || &#x27;&lt;br&gt;&#x27;);
+    else
+      res_html = BLOB_APPEND(res_html, &#x27;Ваш ответ зафиксирован.&#x27; || &#x27;&lt;br&gt;&#x27;);
+
+    for select sva_id, sva_codes, sva_caption
+        from survey_answer
+        where sva_from_svq_id = :svq_id
+        order by sva_codes
+        into :sva_id, :sva_codes, sva_caption
+    do
+    begin
+      sva_codes = replace(sva_codes, &#x27;~&#x27;, &#x27;&#x27;);
+      res_link = sva_codes || &#x27;. &#x27; || sva_caption;
+
+      if (selected_sva_id = 0) then
+      begin
+        res_link = f_uri_sql(res_link, &#x27;set_survey_answer&#x27;, &#x27;0&#x27;, :c_id,
+          &#x27;none&#x27;, :sva_caption || &#x27;&lt;br&gt;&lt;br&gt;Хотите зафиксировать этот ответ?&#x27;,
+          &#x27;&#x27;, 4, 355, &#x27;&#x27;, &#x27;&#x27;, &#x27;dialog&#x27;, :sva_id);
+      end
+
+      if (sva_id = selected_sva_id) then
+        res_html = BLOB_APPEND(res_html, &#x27;&lt;br&gt;&lt;b&gt;&#x27; || res_link || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;);
+      else
+        res_html = BLOB_APPEND(res_html, &#x27;&lt;br&gt;&#x27; || res_link || &#x27;&lt;br&gt;&#x27;);
+    end
+  end
+  if (kol = 0) then
+    res_html = BLOB_APPEND(res_html,
+      &#x27;&lt;hr width=&quot;100%&quot;&gt;В настоящий момент нет открытого голосования.&#x27;);
+  res_html = BLOB_APPEND(res_html, &#x27;&lt;/body&gt;&#x27;);
+  suspend;
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

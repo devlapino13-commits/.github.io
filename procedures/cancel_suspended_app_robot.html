@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CANCEL_SUSPENDED_APP_ROBOT — процедура — схема БД</title>
+<meta name="description" content="Процедура CANCEL_SUSPENDED_APP_ROBOT: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CANCEL_SUSPENDED_APP_ROBOT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CANCEL_SUSPENDED_APP_ROBOT
+AS
+declare variable ma_id d_id;
+declare variable days_inactive d_integer;
+declare variable pr_id d_integer;
+declare variable kf_id d_id;
+declare variable pr_code d_str_100;
+declare variable kal_new_officer_code varchar(20);
+declare variable ma_is_active d_integer;
+declare variable k_status d_integer;
+declare variable ks_state d_integer;
+declare variable fact_disb_date d_date;
+declare variable k_disb_date d_date;
+declare variable date_save d_datetime;
+declare variable k_id d_id;
+declare variable ma_number d_integer;
+begin
+  for select ma.ma_id, ma.ma_from_kf_id, pr.pr_code, datediff(day, ma.ma_date_oper, current_date), ma.ma_number
+      from miniapp ma
+      inner join product pr on ma.ma_from_pr_id = pr.pr_id
+      where ma.ma_is_active = 1 and
+            ma.ma_date_end = cast(&#x27;31.12.9999&#x27; as date) and
+            ma.ma_date_oper &lt;= current_date - 8
+      into :ma_id, :kf_id, :pr_code, :days_inactive, :ma_number
+  do
+  begin
+    -- проверяем наличие записей, говорящих о том, что контракт уже был выдан/закрыт
+    if (exists(select *
+               from kontract k
+               inner join kontstate ks on k.k_id = ks.ks_from_k_id
+               where k.k_from_ma_app_id = :ma_id and
+                     ks.ks_state in (1, 2) and
+                     current_date between ks.ks_date_begin and ks.ks_date_end and
+                     ks.ks_ol_is_delete = 0)) then
+      continue;
+
+    -- ищем код отдела
+    kal_new_officer_code = &#x27;&#x27;;
+    select kal.kal_new_officer_code
+    from knaktlist kal
+    where kal.kal_from_kf_id = :kf_id and
+          kal.is_delete = 0 and
+          current_date between kal.kal_date and kal.kal_date_end
+    into :kal_new_officer_code;
+
+    if (:kal_new_officer_code = &#x27;18-3-86&#x27;) then   --код операционистов, их заявки/договора не трогаем
+      continue;
+
+    -- проверяем, если заявка не перешла договор в процессе (не утвержденный/утвержденный), тогда переходим в заявки
+    if (not exists(select *
+                   from kontract k
+                   inner join kontstate ks on k.k_id = ks.ks_from_k_id
+                   where k.k_from_ma_app_id = :ma_id and
+                         ks.ks_state = 0 and
+                         ks.ks_ol_is_delete = 0 and
+                         current_date between ks.ks_date_begin and ks.ks_date_end and
+                         k.k_status in (0, 1))) then
+    begin
+      -- заявки по продуктам &quot;Иджара&quot; или &quot;Истисна&quot;, которые не редактировались больше 31 дня и не закреплены за оперотделом (код 18-3-86)
+      if ((:pr_code containing &#x27;.IDJARA.&#x27; or :pr_code containing &#x27;.ISTISNAA.&#x27;) and
+          :days_inactive &gt; 31) then
+      begin
+        insert into miniapp (ma_id, ma_number, ma_date_app, ma_date_oper, ma_from_kf_id, ma_from_pr_id, ma_kolich_repay,
+                             ma_percent, ma_kolich_client, ma_memo, ma_is_active, ma_is_auto, ma_summa_minus,
+                             ma_date_save, ma_from_un_id, ma_office_id, ma_currency_id, ma_no, ma_percent_category,
+                             ma_date_end, ma_manager_id, ma_plan_disb_time, ma_expert_id, ma_repay_day,
+                             ma_source_system, ma_kommis_perc, ma_refund, ma_add_info)
+        select ma_id, -1, ma_date_app, ma_date_oper, ma_from_kf_id, ma_from_pr_id, ma_kolich_repay, ma_percent,
+               ma_kolich_client, ma_memo, 0, ma_is_auto, ma_summa_minus, ma_date_save, 1000000000000, ma_office_id,
+               ma_currency_id, ma_no, ma_percent_category, &#x27;31.12.9999&#x27;, ma_manager_id, ma_plan_disb_time, ma_expert_id,
+               ma_repay_day, ma_source_system, ma_kommis_perc, ma_refund, ma_add_info
+        from miniapp
+        where ma_id = :ma_id and
+              ma_number = :ma_number;
+        insert into kontreslist (krl_id, krl_from_kr_id, krl_from_un_id, krl_from_k_id, krl_ma_reg_id, krl_ma_id,
+                             krl_datetime, krl_date_old, krl_date_new, krl_from_fs)
+        values (-1, 91, 1000000000000, null, 0, :ma_id, current_timestamp, current_date, current_date, 0); --krl_from_kr_id = 91 означает аннулирование роботом
+      end
+      else
+      if (:days_inactive &gt; 7 and (not(:pr_code containing &#x27;.IDJARA.&#x27; or :pr_code containing &#x27;.ISTISNAA.&#x27;))) then
+      begin
+        insert into miniapp (ma_id, ma_number, ma_date_app, ma_date_oper, ma_from_kf_id, ma_from_pr_id, ma_kolich_repay,
+                             ma_percent, ma_kolich_client, ma_memo, ma_is_active, ma_is_auto, ma_summa_minus,
+                             ma_date_save, ma_from_un_id, ma_office_id, ma_currency_id, ma_no, ma_percent_category,
+                             ma_date_end, ma_manager_id, ma_plan_disb_time, ma_expert_id, ma_repay_day,
+                             ma_source_system, ma_kommis_perc, ma_refund, ma_add_info)
+        select ma_id, -1, ma_date_app, ma_date_oper, ma_from_kf_id, ma_from_pr_id, ma_kolich_repay, ma_percent,
+               ma_kolich_client, ma_memo, 0, ma_is_auto, ma_summa_minus, ma_date_save, 1000000000000, ma_office_id,
+               ma_currency_id, ma_no, ma_percent_category, &#x27;31.12.9999&#x27;, ma_manager_id, ma_plan_disb_time, ma_expert_id,
+               ma_repay_day, ma_source_system, ma_kommis_perc, ma_refund, ma_add_info
+        from miniapp
+        where ma_id = :ma_id and
+              ma_number = :ma_number;
+
+        insert into kontreslist (krl_id, krl_from_kr_id, krl_from_un_id, krl_from_k_id, krl_ma_reg_id, krl_ma_id,
+                             krl_datetime, krl_date_old, krl_date_new, krl_from_fs)
+        values (-1, 91, 1000000000000, null, 0, :ma_id, current_timestamp, current_date, current_date, 0); --krl_from_kr_id = 91 означает аннулирование роботом
+      end
+    end
+    else -- заходим в договора в процессе
+    begin
+      k_status = null;
+      ks_state = null;
+      k_disb_date = null;
+      fact_disb_date = null;
+      k_id = null;
+
+      -- получаем только договора в процессе (утвержденные/не утвержденные)
+      select k.k_status, ks.ks_state, k.k_disb_date, k.k_fact_disb_date, k.k_id
+      from kontract k
+      inner join kontstate ks on k.k_id = ks.ks_from_k_id
+      where k.k_from_ma_app_id = :ma_id and
+            ks.ks_state = 0 and
+            k.k_status in (0, 1) and
+            ks.ks_ol_is_delete = 0 and
+            current_date between ks.ks_date_begin and ks.ks_date_end
+      into :k_status, :ks_state, :k_disb_date, :fact_disb_date, :k_id;
+
+      -- договора в процессе, кроме продуктов &quot;Иджара&quot; или &quot;Истисна&quot;, которые висят больше 7 дней
+      if (current_date - :k_disb_date &gt; 7 and
+          :fact_disb_date is null) then
+      begin
+        if (not(:pr_code containing &#x27;.IDJARA.&#x27; or :pr_code containing &#x27;.ISTISNAA.&#x27;)) then
+        begin
+          update kontract k
+          set k.k_status = -2
+          where k.k_id = :k_id;
+        end
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0088_SQL — процедура — схема БД</title>
+<meta name="description" content="Акция по удержанию клиентов КАЗАНЬ">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0088_SQL</code></h1>
+<p class="desc">Акция по удержанию клиентов КАЗАНЬ</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_last_circle.html"><div class="to">HP_GET_LAST_CIRCLE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0088_SQL(
+    MA_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare kc_amount curr_type;
+declare kf_disb_date d_date;
+declare variable ma_from_kf_id id_type;
+declare variable reg_id integer;
+declare variable re_k_id id_type;
+declare variable c_id id_type;
+declare variable re_kc_amount curr_type;
+declare variable kc_from_k_id_prior id_type;
+declare variable kc_from_k_id id_type;
+declare variable re_pr_code varchar(100);
+declare variable max_delinq_day integer;
+begin
+  for
+  select ma_from_kf_id,
+         ma_date_oper
+  from product, miniapp
+  where ma_id = :ma_id
+  and ma_from_pr_id = pr_id
+  and pr_code containing &#x27;.KAZAN.&#x27;
+  and ma_date_end = &#x27;31.12.9999&#x27;
+  rows 1
+  into ma_from_kf_id,
+       kf_disb_date
+  do
+  begin
+--  Вычисляем офис папки, на дату выдачи
+    select kal_new_reg_id from knaktlist
+    where kal_from_kf_id = :ma_from_kf_id
+    and knaktlist.is_delete = 0
+    and :kf_disb_date between kal_date and kal_date_end
+    into reg_id;
+    if (reg_id &lt;&gt; 1280100) then
+    begin
+      res_error_text = &#x27;Выбранный продукт акция действует только для офиса Казань&#x27;;
+      res_error_is_critical = 2;
+      suspend;
+      exit;
+    end
+--  вычисляем предыдущий цикл
+    re_k_id = null;
+--    select re_k_id from hp_get_last_circle(0,:ma_id,0,null)
+--    into re_k_id;
+    select k_id from kontstate, kontract
+    where ks_ol_is_delete = 0
+    and ks_state = 1
+    and ks_from_k_id = k_id
+    and k_from_kf_id = :ma_from_kf_id
+    and ks_date_begin &lt; :kf_disb_date
+    order by ks_date_begin desc
+    rows 1
+    into re_k_id;
+    re_k_id = coalesce(re_k_id,0);
+    if (re_k_id &gt; 0) then
+    begin
+--    проверка на просроченные дни
+      if (exists(select * from oksummary
+      where oks_from_k_id = :re_k_id
+      and current_date between oks_date_begin and oks_date_end
+      and oks_close_state = 0
+      and current_date &gt; oks_delinq_date)) then
+      begin
+         res_error_text = &#x27;Имеется текущая просроченная задолженность. Акция не действует&#x27;;
+         res_error_is_critical = 2;
+         suspend;
+         exit;
+      end
+--    если предыдущий цикл брал по акции то проверяются на след. условии
+      select pr_code from kontract, product
+      where k_id = :re_k_id
+      and k_from_pr_id = pr_id
+      into re_pr_code;
+      if (re_pr_code containing &#x27;.KAZAN.&#x27;) then
+      begin
+--      вычисляем максимальный просроченный день
+        max_delinq_day = null;
+        select max(ok_ol_date - ok_sh_date) from operkred
+        where ok_ol_is_active = 1
+        and ok_from_k_id = :re_k_id
+        and ok_type in (4,5)
+        and ok_ol_date &gt; ok_sh_date
+        into max_delinq_day;
+        max_delinq_day = coalesce(max_delinq_day,0);
+        if (max_delinq_day &gt; 7) then
+        begin
+          res_error_text = &#x27;В предыдущем цикле были просрочки более 7ми дней, не могут брать по данному продукту&#x27;;
+          res_error_is_critical = 2;
+          suspend;
+        end
+      end
+      if (kf_disb_date &gt; &#x27;31.03.2017&#x27;
+          and re_pr_code not containing &#x27;.KAZAN.&#x27;) then
+      begin
+        res_error_text = &#x27;Выбранный продукт не активен, выберите другой продукт.&#x27;;
+        res_error_is_critical = 2;
+        suspend;
+      end
+    end
+--  проверка каждого клиента
+    kc_from_k_id_prior = 0;
+    for
+    select mac_from_c_id,
+           mac_amount
+    from miniappclient
+    where mac_from_ma_id = :ma_id
+    and mac_amount &gt; 0 -- проверяем у кого свыше 25тыс. так как миниму могут получить 15тыс и +10тыс то новый
+--  клиент может брать 25тыс.
+    into c_id,
+         kc_amount
+    do
+    begin
+--    сумма предыдущего цикла
+      re_kc_amount = null;
+      /*
+      select kc_amount_approved
+      from knclient
+      where kc_from_c_id = :c_id
+      and kc_from_k_id = :re_k_id
+      and kc_amount_approved &gt; 0
+      into re_kc_amount;
+      */
+      kc_from_k_id = null;
+      select kc_amount_approved,
+             kc_from_k_id
+      from kontstate, knclient, kontract, product
+      where ks_ol_is_delete = 0
+      and ks_state = 1
+      and ks_date_begin &lt; :kf_disb_date
+      and ks_from_k_id = kc_from_k_id
+      and kc_amount_approved &gt; 0
+      and kc_from_c_id = :c_id
+      and ks_from_k_id = k_id
+      and k_from_pr_id = pr_id
+      and pr_product_kind &lt;&gt; 2
+      order by ks_date_begin desc
+      rows 1
+      into re_kc_amount, kc_from_k_id;
+      re_kc_amount = coalesce(re_kc_amount, 15000);
+      if (kc_amount &gt; re_kc_amount + 10000) then
+      begin
+        res_error_text = &#x27;Сумма не должно превышать более чем 10тыс. от предыдущего цикла&#x27;;
+        res_error_is_critical = 2;
+        suspend;
+      end 
+--    проверяем на просрочку предыдущий цикл клиента,
+--    если в клиенте предыдущий цикл не совпадает с группой предыдущего цикла
+      /*
+      kc_from_k_id = null;
+      select kc_from_k_id
+      from kontstate, knclient
+      where ks_ol_is_delete = 0
+      and ks_state = 1
+      and ks_date_begin &lt; :kf_disb_date
+      and ks_from_k_id = kc_from_k_id
+      and kc_from_c_id = :c_id
+      order by ks_date_begin desc
+      rows 1
+      into kc_from_k_id;
+      */
+      if (kc_from_k_id is not null
+          and kc_from_k_id &lt;&gt; re_k_id
+          and coalesce(kc_from_k_id_prior, 0) &lt;&gt; kc_from_k_id
+          ) then
+      begin
+--      проверка на просрочку
+        if (exists(select * from oksummary
+        where oks_from_k_id = :kc_from_k_id
+        and current_date between oks_date_begin and oks_date_end
+        and oks_close_state = 0
+        and current_date &gt; oks_delinq_date)) then
+        begin
+           res_error_text = &#x27;Имеется текущая просроченная задолженность. Акция не действует&#x27;;
+           res_error_is_critical = 2;
+           suspend;
+        end
+      end 
+      kc_from_k_id_prior = kc_from_k_id;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

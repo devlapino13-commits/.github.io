@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_FIND_KONTRACT — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_FIND_KONTRACT: 2 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_FIND_KONTRACT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="findkontract.html"><div class="to">FINDKONTRACT</div></a><a class="ref-card" href="user_reg_list.html"><div class="to">USER_REG_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">USER_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SEARCH_TEXT</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_KONTRACT_NO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KAL_NEW_KF_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_DISB_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_FIND_KONTRACT(
+    USER_ID DECIMAL(18,0),
+    SEARCH_TEXT VARCHAR(20))
+RETURNS (
+    K_ID DECIMAL(18,0),
+    K_KONTRACT_NO VARCHAR(100),
+    KAL_NEW_KF_NAME VARCHAR(100),
+    K_DISB_DATE DATE)
+AS
+begin
+-- Получаем список кредитов
+--  1. Активных или в процессе
+--  2. С даты выдачи которых прошло не более недели
+  for with kont
+      as (select k_id, k_kontract_no, k_disb_date, kal_new_kf_name, kal_new_reg_id
+          from findkontract(&#x27;&#x27;, :search_text, &#x27;&#x27;, 0, 0, 0, 0) -- по № группы
+          where ks_state &lt;&gt; 2 and
+                k_disb_date &gt; current_date - 7
+          union
+          select k_id, k_kontract_no, k_disb_date, kal_new_kf_name, kal_new_reg_id
+          from findkontract(:search_text, &#x27;&#x27;, &#x27;&#x27;, 0, 0, 0, 0) -- по № контракта
+          where ks_state &lt;&gt; 2 and
+                k_disb_date &gt; current_date - 7),
+      reg
+      as (select r_list
+          from user_reg_list(:user_id))
+      select k_id, k_kontract_no, k_disb_date, kal_new_kf_name
+      from kont, reg
+      where r_list = kal_new_reg_id rows 20
+      into k_id, k_kontract_no, k_disb_date, kal_new_kf_name
+  do
+  begin
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

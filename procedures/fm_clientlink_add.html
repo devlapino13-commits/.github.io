@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_CLIENTLINK_ADD — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_CLIENTLINK_ADD: 5 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_CLIENTLINK_ADD</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_find_client_by_continfo.html"><div class="to">HP_FIND_CLIENT_BY_CONTINFO</div></a><a class="ref-card" href="hp_send_push_to_staff.html"><div class="to">HP_SEND_PUSH_TO_STAFF</div></a><a class="ref-card" href="hp_test_un_id.html"><div class="to">HP_TEST_UN_ID</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_extminiweb_ins.html"><div class="to">HP_EXTMINIWEB_INS</div></a><a class="ref-card" href="mc_clientlink_add.html"><div class="to">MC_CLIENTLINK_ADD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PHONE_NO</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MCL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEED_REFRESH</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_CLIENTLINK_ADD(
+    UN_ID D_ID,
+    C_ID D_ID,
+    NAME D_STR_100,
+    PHONE_NO D_STR_CODE,
+    MCL_ID D_ID = 0)
+RETURNS (
+    RES_TEXT D_STR_255,
+    NEED_REFRESH D_INTEGER)
+AS
+declare variable found_c_id d_id;
+declare variable date_end d_date;
+declare variable ovs_datetime d_datetime;
+declare variable clt_id d_integer;
+declare variable is_new_contdata d_smallint;
+declare variable clk_from_un_id d_id;
+declare variable clk_id d_id;
+declare variable lo_id_partner id_type;
+declare variable partner_fio str_100;
+declare variable send_text str_255;
+begin
+  need_refresh = 0;
+
+  un_id = (select un_id
+           from hp_test_un_id(:un_id));
+
+  is_new_contdata = f_get_const(&#x27;new_contdata&#x27;);
+  is_new_contdata = 1; -- процедуру переводим на новый механизм, Sanjari, 21.12.2019
+
+  select clk_from_c_id, clk_from_un_id, clk_id
+  from clientlink
+  where clk_link_cell_no = :phone_no
+  rows 1
+  into found_c_id, clk_from_un_id, clk_id;
+
+  -- если ранее добавлен с самим партнером то меняем un_id,
+  --  если un_id Випса то Випс берет на доработку а если FINSTART_ROBOT то кидается на общий очередь
+  if (clk_from_un_id = 0 and un_id &lt;&gt; 0) then
+  begin
+    update clientlink set clk_from_un_id = :un_id
+    where clk_id = :clk_id;
+  end 
+
+  if (found_c_id is not null) then
+  begin
+    if (found_c_id = c_id) then
+      res_text = &#x27;Номер уже существует в списке друзей этого клиента&#x27;;
+    else
+      res_text = &#x27;Номер уже существует в списке друзей другого клиента&#x27;;
+
+    Suspend;
+    exit;
+  end
+
+  for select c_id
+  from hp_find_client_by_continfo(0, :phone_no)
+  into :found_c_id
+  do
+  begin
+    date_end = null;
+    res_text = &#x27;&#x27;;
+    ovs_datetime = null;
+
+    if (is_new_contdata = 0) then
+    begin
+      select ovs_datetime
+      from objectprops, objectvalues, refdata
+      where opr_id = ovs_from_opr_id and
+            opr_actual_ovs_id = ovs_id and
+            opr_object_kind = 0 and
+            opr_object_id = :found_c_id and
+            opr_subject_kind = -1 and
+            opr_subject_id = rd_id and
+            ovs_value = :phone_no and
+            hash(lower(ovs_value)) = hash(lower(:phone_no)) and
+            rd_main_code = &#x27;ContactInfo&#x27; and
+            rd_main_code &lt;&gt; rd_code
+      order by ovs_datetime desc
+      rows 1
+      into ovs_datetime;
+    end else
+    begin
+      clt_id = f_cont_id(phone_no, &#x27;null&#x27;);
+      if (clt_id is not null) then
+      begin
+        select cda_date
+        from contdata
+        where cda_from_c_id = :found_c_id and
+              cda_from_clt_id = :clt_id and
+              cda_is_delete = 0
+        order by cda_id
+        rows 1
+        into ovs_datetime;
+      end
+    end
+
+    if (ovs_datetime is not null) then
+    begin
+      if (datediff(day, cast(ovs_datetime as date), current_date) &lt;= 30) then
+        res_text = &#x27;Номер принадлежит существующему клиенту&#x27;;
+    end
+
+    if (res_text = &#x27;&#x27;) then
+    begin
+      select ks_date_end
+      from kontstate, knclient
+      where kc_from_c_id = :found_c_id and
+            kc_amount_approved &gt; 0 and
+            kc_from_k_id = ks_from_k_id and
+            ks_state = 1 and
+            ks_ol_is_delete = 0
+      order by ks_date_end desc, ks_state desc, ks_ol_is_delete desc
+      rows 1
+      into date_end;
+  
+      if (date_end &gt;= cast(&#x27;31.12.2999&#x27; as date)) then
+        res_text = &#x27;Номер принадлежит активному клиенту&#x27;;
+      else
+      if (date_end &gt;= dateadd(month, -6, current_date)) then
+        res_text = &#x27;Клиент с таким номером недавно обслуживался в компании&#x27;;
+    end
+
+    if (res_text &lt;&gt; &#x27;&#x27;) then
+    begin
+      Suspend;
+      exit;
+    end
+  end
+
+  if (coalesce(mcl_id, 0) &gt; 0) then
+  begin
+    select mcl.mcl_from_c_id
+    from mc_login mcl
+    where mcl.mcl_id = :mcl_id
+    into :c_id;
+  end 
+
+  insert into clientlink (clk_from_c_id, clk_link_name, clk_link_cell_no, clk_comment, clk_status, clk_from_un_id, clk_from_mcl_id)
+  values (:c_id, :name, :phone_no, &#x27;&#x27;, 0, :un_id, :mcl_id);
+
+  if (mcl_id &lt;&gt; 0) then
+  begin
+    select kal_new_kf_officer
+    from knclient, kontstate, kontract, knaktlist
+    where kc_from_c_id = :c_id and
+          kc_amount_approved &gt; 0 and
+          kc_from_k_id = ks_from_k_id and
+          ks_ol_is_delete = 0 and
+          ks_state = 1 and
+          ks_from_k_id = k_id and
+          k_from_kf_id = kal_from_kf_id and
+          knaktlist.is_delete = 0 and
+          current_date between kal_date and kal_date_end
+    order by kc_id desc rows 1
+    into lo_id_partner;
+
+    select c_name_fio
+    from clients
+    where c_id = :c_id
+    into partner_fio;
+
+    send_text = &#x27;Ваш Партнер &#x27; || partner_fio || &#x27; добавил друга&#x27;;
+    execute procedure hp_send_push_to_staff(:lo_id_partner, &#x27;Партнер добавил Друга&#x27;, :send_text, 1000000000000, &#x27;msg_to_staff&#x27;, 7);
+  end
+
+  res_text = &#x27;Успешно добавлен&#x27;;
+  need_refresh = 1;
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

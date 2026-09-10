@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EXTINFO_ANTIFRAUD_PROCESS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EXTINFO_ANTIFRAUD_PROCESS: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EXTINFO_ANTIFRAUD_PROCESS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_blobex_blob.html"><div class="to">HP_GET_BLOBEX_BLOB</div></a><a class="ref-card" href="hp_send_message.html"><div class="to">HP_SEND_MESSAGE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_extinfotask_process.html"><div class="to">HP_EXTINFOTASK_PROCESS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EIL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EXTINFO_ANTIFRAUD_PROCESS(
+    EIL_ID D_ID)
+AS
+declare variable EIL_OBJECT_ID D_ID;
+declare variable EIL_FROM_BLS_ID D_ID;
+declare variable EIL_STATUS D_INTEGER;
+declare variable JSON_INFO D_BLOB_TEXT;
+declare variable TOTAL D_INTEGER;
+declare variable MSG_TITLE D_STR_255;
+declare variable MSG_BODY D_STR_2048;
+declare variable INN D_STR_20;
+declare variable C_ID D_ID;
+declare variable C_PASS_NO D_STR_64;
+declare variable C_PASS_WHO D_STR_255;
+declare variable C_PASS_DATE D_DATE;
+declare variable C_BIRTH_DATE D_DATE;
+declare variable C_NAME_FIO D_STR_255;
+declare variable CATEGORIES D_STR_255;
+declare variable categories_count d_smallint;
+declare variable i d_smallint;
+declare variable temp_object d_str_long;
+declare variable temp_category d_str_100;
+begin
+    select
+        eil.eil_object_id,
+        eil.eil_from_bls_id,
+        eil.eil_status
+    from extinfolist eil
+    inner join extinfocfg eic on eil.eil_from_eic_id = eic.eic_id
+        and eic.eic_code = &#x27;antifraud_client_check&#x27;
+    where eil.eil_id = :eil_id
+        and eil.eil_status in (2, -1, -2)
+    into
+        :eil_object_id,
+        :eil_from_bls_id,
+        :eil_status;
+
+    if (:eil_status = 2) then
+    begin
+        :json_info = coalesce((select blx_blob from hp_get_blobex_blob(:eil_from_bls_id)), &#x27;{}&#x27;);
+        :total = coalesce(f_json_blob_get_value(:json_info, &#x27;total&#x27;, null), -3);
+
+        -- Если json был как-то изменён сервисом Антирод-Центр, тогда возвращаем -1
+        -- чтобы уведомить клиента, об ошибке
+        :total =
+        case
+            when :total &lt; 0 then -3
+            when :total = 0 then 1
+            when :total &gt; 0 then 2
+        end;
+
+        update antifraud_check ac
+        set ac.ac_status = :total
+        where ac.ac_id = :eil_object_id;
+
+        if (:total = 2) then  -- RFCKZ-448
+        begin
+          select ac.ac_inn
+          from antifraud_check ac
+          where ac.ac_id = :eil_object_id
+          into :inn;
+
+          i = 0;
+          categories = &#x27;&#x27;;
+          categories_count = f_json_str_get_count(:json_info, &#x27;items[0].categories&#x27;);
+
+          if (categories_count &gt; 0) then
+          begin
+            while (i &lt; categories_count) do
+            begin
+              temp_object = f_json_blob_get_value(:json_info, f_format(&#x27;items[0].categories[%1]&#x27;, :i), &#x27;&#x27;);
+
+              if (coalesce(temp_object, &#x27;&#x27;) &lt;&gt; &#x27;&#x27; and trim(temp_object) starting &#x27;{&#x27; and right(trim(temp_object), 1) = &#x27;}&#x27;) then
+                temp_category = left(f_json_str_get_value(temp_object, &#x27;category&#x27;, &#x27;&#x27;), 100);
+
+              if (coalesce(temp_category, &#x27;&#x27;) = &#x27;&#x27;) then
+                temp_category = left(temp_object, 100);
+
+              categories = categories || coalesce(temp_category, &#x27;&#x27;) || &#x27; &#x27;;
+              i = i + 1;
+            end
+          end
+          else
+            categories = &#x27;Нет данных&#x27;;
+
+          -- отправляем письмо Азамату
+          :msg_title = &#x27;Найдено совпадение со списком Антифрод центра.&#x27;;
+          :msg_body =
+              &#x27;Дата и время события: &#x27; || cast(current_timestamp as d_str_64) ||
+              &#x27;&lt;br&gt; Категория: &#x27; || :categories ||
+              &#x27;&lt;br&gt; ИИН: &#x27; || :inn;
+
+          select cl.c_id, cl.c_pass_no, cl.c_pass_who,
+                 cl.c_pass_date, cl.c_birth_date, cl.c_name_fio
+          from clients cl
+          where cl.c_inn = :inn
+          into :c_id, c_pass_no, c_pass_who,
+                c_pass_date, c_birth_date, c_name_fio;
+
+          if (:c_id is not null) then -- если клиент уже есть в бд, то добавляем инцормацию о клиенте
+          begin
+            :msg_body = :msg_body ||
+                &#x27;&lt;br&gt; ФИО: &#x27; || :c_name_fio ||
+                &#x27;&lt;br&gt; Паспортные данные: &#x27; || &#x27;номер паспорта: &#x27; || coalesce(:c_pass_no, &#x27;Нет данных&#x27;) ||
+                                              &#x27;, кем выдан: &#x27; || coalesce(:c_pass_who, &#x27;Нет данных&#x27;) ||
+                                              &#x27;, дата выдачи: &#x27; || coalesce(cast(:c_pass_date as str_10), &#x27;Нет данных&#x27;) ||
+                &#x27;&lt;br&gt; Дата рождения: &#x27; || coalesce(cast(:c_birth_date as d_str_10), &#x27;Нет данных&#x27;);
+
+          end
+
+          -- RFCKZ-576
+          execute procedure hp_send_message(&#x27;email&#x27;, 1010100002016, &#x27;antifraud_found@mbulak.kz&#x27;, :msg_title, :msg_body, &#x27;&#x27;, 1, 1000000000000);
+        end 
+
+    end
+    else if (:eil_status &lt; 0) then
+    begin
+        -- отправляем письмо Азамату
+        :msg_title = &#x27;Сбой сервиса Антифрод РК&#x27;;
+        :msg_body =
+            &#x27;Сообщаем, что в работе сервиса Антифрод РК зафиксирован технический сбой.&lt;br&gt;&#x27;||
+            &#x27;Для корректного продолжения проверки необходимо:&lt;br&gt;&#x27;||
+            &#x27;  1.Загрузить актуальный список АЦ в Базу.&lt;br&gt;&#x27;||
+            &#x27;  2.Переключить проверку на режим работы по Базе.&#x27;;
+
+        -- RFCKZ-576
+        execute procedure hp_send_message(&#x27;email&#x27;, 1010100002016, &#x27;antifraud_found@mbulak.kz&#x27;, :msg_title, :msg_body, &#x27;&#x27;, 1, 1000000000000);
+
+        update antifraud_check ac
+        set ac.ac_status = :eil_status
+        where ac.ac_id = :eil_object_id;
+
+        if (:eil_status = -2) then
+        begin
+          insert into antifraud_error_log(ael_from_eil_id)
+          values (:eil_id);
+        end
+    end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CONTVERI_SIGN_SYNC — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CONTVERI_SIGN_SYNC: 4 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CONTVERI_SIGN_SYNC</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">4</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">4 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_contveri_sign.html"><div class="to">HP_CONTVERI_SIGN</div></a><a class="ref-card" href="hp_edoc_after_sign_action.html"><div class="to">HP_EDOC_AFTER_SIGN_ACTION</div></a><a class="ref-card" href="hp_edoc_web_blank_sign.html"><div class="to">HP_EDOC_WEB_BLANK_SIGN</div></a><a class="ref-card" href="hp_edoc_web_sign.html"><div class="to">HP_EDOC_WEB_SIGN</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OBJ_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MSG_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SIGN_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CONTVERI_SIGN_SYNC(
+    OBJ_CODE D_STR_CODE,
+    OBJ_ID D_ID,
+    MSG_ID D_INTEGER = null,
+    SIGN_KIND D_STR_CODE = &#x27;online&#x27;)
+AS
+declare variable cont_kind d_str_code;
+declare variable cont_value d_str_100;
+declare variable cont_c_id d_id;
+declare variable cont_is_main d_smallint;
+declare variable cont_clt_id d_integer;
+declare variable cont_cda_id d_id;
+declare variable cont_rd_id d_integer;
+declare variable rd_code d_str_code;
+declare variable un_id d_id;
+declare variable create_datetime d_datetime;
+declare variable sign_datetime d_datetime;
+declare variable uuid_str d_str_code;
+declare variable code d_str_100; /* Пин-код */
+begin
+  cont_kind = &#x27;&#x27;;
+  cont_value = &#x27;&#x27;;
+  cont_c_id = null;
+  cont_is_main = 0;
+  cont_cda_id = null;
+  cont_rd_id = null;
+
+  if (code is null) then code = &#x27;&#x27;;
+  if (sign_kind is null) then
+    sign_kind = &#x27;online&#x27;;
+
+  if (obj_code = &#x27;edoc_sign&#x27;) then
+  begin
+    -- Если подписан ASP.Agreement, то заносим записи подтвреждения номера в ContVeri и ContVerify
+
+    select cda_from_c_id, cda_cont_kind, cda_is_main, cda_id,
+           f_cont_code(cda_from_clt_id),
+           edl_create_un_id, edl_create_datetime, eds_status_datetime
+    from edoc_msg, contdata, edoc_sign, edoc_list, edoc_cfg
+    where edm_from_eds_id = :obj_id and
+          edm_from_msg_id = :msg_id and
+          edm_from_cda_id = cda_id and
+          edm_from_eds_id = eds_id and
+          eds_from_edl_id = edl_id and
+          edl_from_edc_id = edc_id and
+          cda_status = 0 and
+          edc_code in (&#x27;asp.agreement&#x27;, &#x27;cell.application&#x27;, &#x27;asp.agreement_employee&#x27;) and
+          edc_state in (2, 3) -- только в боевом режиме и режиме теста с регионам
+    into cont_c_id, cont_kind, cont_is_main, cont_cda_id, cont_value,
+         un_id, create_datetime, sign_datetime;
+
+    if (cont_c_id is not null) then
+    begin
+      rd_code = f_enum(&#x27;cont_kind&#x27;, cont_kind, &#x27;code&#x27;);
+      if (rd_code = &#x27;cell&#x27;) then
+      begin
+        if (cont_is_main = 1)
+        then rd_code = &#x27;cell_main&#x27;;
+        else rd_code = &#x27;cell_add&#x27;;
+      end
+      cont_rd_id = f_get_rd_id(&#x27;ContactInfo.&#x27; || rd_code);
+
+      uuid_str = f_uuid(&#x27;edoc_sign&#x27;, :obj_id);
+
+      insert into contverify (cv_object_kind, cv_object_id, cv_from_rd_id, cv_contact_value, cv_password, cv_status,
+                              cv_from_un_id, cv_datetime, cv_verify_un_id, cv_verify_datetime)
+      values (f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;), :cont_c_id, :cont_rd_id, :cont_value, :uuid_str, 3,
+              :un_id, :create_datetime, 1000000000000, :sign_datetime);
+
+      insert into contveri (cvr_from_cda_id, cvr_hash_pin, cvr_status, cvr_sign_kind, cvr_from_un_id, cvr_datetime)
+      values (:cont_cda_id, :uuid_str, 1, f_enum(&#x27;edoc_sign_kind&#x27;, &#x27;edoc&#x27;, &#x27;id&#x27;), :un_id, :sign_datetime);
+    end
+  end
+
+  if (obj_code = &#x27;contveri&#x27;) then
+  begin
+    select cda_from_c_id, f_enum(&#x27;cont_kind&#x27;, cda_cont_kind, &#x27;code&#x27;), cda_is_main, f_cont_code(cda_from_clt_id), cvr_hash_pin
+    from contdata, contveri
+    where cvr_id = :obj_id and
+          cda_id = cvr_from_cda_id
+    into cont_c_id, cont_kind, cont_is_main, cont_value, code;
+
+    if (cont_kind = &#x27;cell&#x27;) then
+    begin
+      if (cont_is_main = 1)
+      then cont_kind = &#x27;cell_main&#x27;;
+      else cont_kind = &#x27;cell_add&#x27;;
+    end
+    cont_rd_id = f_get_rd_id(&#x27;ContactInfo.&#x27; || cont_kind);
+
+    update contverify
+    set cv_status = 3
+    where cv_object_kind = f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;) and
+          cv_object_id = :cont_c_id and
+          trim(cv_contact_value) = :cont_value and
+          cv_from_rd_id = :cont_rd_id and
+          cv_password = :code;
+  end
+
+  if (obj_code = &#x27;contverify&#x27;) then
+  begin
+    -- тут проверка правиильности подписи из ContVerify
+    select trim(cv_contact_value), cv_object_id, f_get_rd_code(cv_from_rd_id), cv_password
+    from contverify
+    where cv_id = :obj_id
+    into cont_value, cont_c_id, cont_kind, code;
+
+    cont_kind = replace(cont_kind, &#x27;ContactInfo.&#x27;, &#x27;&#x27;);
+    if (cont_kind = &#x27;cell_main&#x27;) then
+    begin
+      cont_kind = &#x27;cell&#x27;;
+      cont_is_main = 1;
+    end else
+    if (cont_kind = &#x27;cell_add&#x27;) then
+    begin
+      cont_kind = &#x27;cell&#x27;;
+      cont_is_main = 0;
+    end
+
+    cont_clt_id = f_cont_id(cont_value, null);
+
+    if (cont_clt_id is not null) then
+    begin
+      select cda_id
+      from contdata
+      where cda_from_c_id = :cont_c_id and
+            cda_from_clt_id = :cont_clt_id and
+            cda_cont_kind = f_enum(&#x27;cont_kind&#x27;, :cont_kind, &#x27;id&#x27;) and
+            cda_is_main = :cont_is_main
+      into cont_cda_id;
+
+      if (cont_cda_id is not null) then
+      begin
+        update contveri
+        set cvr_status = 1,
+            cvr_sign_kind = f_enum(&#x27;edoc_sign_kind&#x27;, :sign_kind, &#x27;id&#x27;)
+        where cvr_from_cda_id = :cont_cda_id and
+              cvr_hash_pin = :code;
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

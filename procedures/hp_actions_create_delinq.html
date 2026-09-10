@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_ACTIONS_CREATE_DELINQ — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_ACTIONS_CREATE_DELINQ: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_ACTIONS_CREATE_DELINQ</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_objectprops_set.html"><div class="to">HP_OBJECTPROPS_SET</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_ACTIONS_CREATE_DELINQ
+AS
+declare variable kf_id d_id;
+declare variable reg_id d_integer;
+declare variable lo_id d_id;
+declare variable k_id d_id;
+declare variable rd_id d_integer;
+declare variable rep_date d_date;
+declare variable object_id d_id;
+declare variable daysleft d_integer;
+declare variable rd_code d_str_255;
+declare variable ovs_date_begin d_date;
+declare variable rd_anketa d_integer;
+declare variable delinq_day d_integer;
+declare variable acl_id d_id;
+declare variable delinq_days_qty d_integer;
+declare variable create_action d_smallint;
+declare variable db_id d_integer;
+declare variable object_kind d_integer;
+declare variable obj_kind1 d_integer;
+declare variable obj_kind2 d_integer;
+declare variable delq_date d_date;
+declare variable un_id d_id;
+declare variable k_disb_date d_date;
+declare variable datex d_date;
+begin
+  -- процедура должна запускаться каждый вечер и создавать задачи на заполнение анкеты по однодневным просрочкам.
+  -- Процедура должна запускаться после 21:30
+  -- Проверяем наличие такой анкеты
+  rd_anketa = f_get_rd_id(&#x27;Anketa.Delinq.1&#x27;);
+  if (rd_anketa is null) then
+    exit;
+
+  db_id = f_get_db_id();
+  un_id = 1000000000001;
+  rep_date = current_date;
+  datex = &#x27;03.03.2022&#x27;;
+  obj_kind1 = f_objkind(&#x27;Clients&#x27;, &#x27;id&#x27;);
+  obj_kind2 = f_objkind(&#x27;KnClient&#x27;, &#x27;id&#x27;);
+
+  for select aco_id, aco_object_kind, aco_object_id
+      from actionorder
+      where aco_from_rd_id = :rd_anketa and
+            aco_object_kind in (:obj_kind1, :obj_kind2)
+      into :acl_id, :object_kind, :object_id
+  do
+  begin
+    -- Просрочки нету, закрываем анкету на просрочку
+    if (not exists(select *
+                   from knclient
+                   inner join oksummary on oks_from_k_id = kc_from_k_id and
+                         :rep_date between oks_date_begin and oks_date_end and
+                         oks_delinq_date &lt;= :rep_date and
+                         oks_kc_id &gt; 1000000000004 and
+                         oks_balance &gt; 0 and
+                         oks_close_state = 0
+                   where ((:object_kind = :obj_kind1 and
+                         kc_from_c_id = :object_id) or
+                         (:object_kind = :obj_kind2 and
+                         kc_id = :object_id)) and
+                         kc_amount_approved &gt; 0)) then
+    begin
+      update actionlist
+      set acl_status = 2,
+          acl_from_un_id = :un_id
+      where acl_id = :acl_id;
+    end
+
+    -- Если просрочка более 360 дней, закрываю анкету по просрочке
+    if (db_id = 81001) then
+    begin
+      for select :rep_date - oks_delinq_date
+          from knclient
+          inner join oksummary on oks_from_k_id = kc_from_k_id and
+                :rep_date between oks_date_begin and oks_date_end and
+                oks_kc_id &gt; 1000000000004 and
+                oks_balance &gt; 0 and
+                oks_close_state = 0
+          where kc_from_c_id = :object_id and
+                kc_amount_approved &gt; 0
+          order by 1
+          into :delinq_days_qty
+      do
+      begin
+        if (delinq_days_qty &lt;= 360) then
+          leave;
+        else
+          update actionlist
+          set acl_status = -3,
+              acl_from_un_id = :un_id
+          where acl_id = :acl_id;
+      end
+    end
+  end
+
+  -- Получаем список вчерашних просрочек
+  delinq_day = 1;
+  if (db_id in (39801, 41701)) then
+    delinq_day = 15;
+  delq_date = rep_date - delinq_day;
+  for select k_id, k_disb_date, k_from_kf_id
+      from oksummary
+      inner join kontract on k_id = oks_from_k_id
+      where :rep_date between oks_date_begin and oks_date_end and
+            oks_delinq_date = :delq_date and
+            oks_balance &gt; 0 and
+            oks_kc_id &gt; 1000000000004 and
+            oks_close_state = 0
+      into :k_id, :k_disb_date, :kf_id
+  do
+  begin
+    select kal_new_reg_id, kal_new_kf_officer
+    from knaktlist
+    where kal_from_kf_id = :kf_id and
+          :rep_date between kal_date and kal_date_end and
+          is_delete = 0
+    into :reg_id, :lo_id;
+
+    -- Создаем задачу завтрашним днем
+    insert into actionlist (acl_date, acl_from_reg_id, acl_object_kind, acl_object_id, acl_from_rd_id, acl_status,
+                            acl_respons_c_id, acl_from_un_id)
+    select :rep_date + 1, :reg_id, iif(:db_id in (39801, 41701) and :k_disb_date &gt;= :datex, :obj_kind2, :obj_kind1),
+           iif(:db_id in (39801, 41701) and :k_disb_date &gt;= :datex, kc_id, kc_from_c_id), :rd_anketa, 0, :lo_id, :un_id
+    from knclient
+    where kc_from_k_id = :k_id and
+          kc_amount_approved &gt; 0;
+  end
+
+  -- Ищем предыдущие напоминалки
+  rd_id = f_get_rd_id(&#x27;AnketaQuestions.Reminder.Delinq&#x27;);
+  if (rd_id is null) then
+    exit;
+  for select opr_object_kind, opr_object_id, rd_code, ovs_date_begin
+      from objectprops
+      inner join objectvalues on ovs_from_opr_id = opr_id and
+            ovs_id = opr_actual_ovs_id
+      inner join objectvalres on ovr_from_opr_id = opr_id and
+            ovr_from_ovs_id = ovs_id
+      inner join refdata on rd_id = ovr_result_rd_id and
+            rd_code in (&#x27;Results.AfterDays.1&#x27;, &#x27;Results.AfterDays.2&#x27;, &#x27;Results.AfterDays.3&#x27;, &#x27;Results.AfterDays.4&#x27;, &#x27;Results.AfterDays.5&#x27;)
+      where opr_object_kind in (:obj_kind1, :obj_kind2) and
+            opr_subject_kind = -1 and
+            opr_subject_id = :rd_id and
+            ovs_date_begin &gt;= (:rep_date - 5)
+      into :object_kind, :object_id, :rd_code, :ovs_date_begin
+  do
+  begin
+    -- Если день напоминания наступил, проверяем есть ли просрочка
+    daysleft = cast(replace(rd_code, &#x27;Results.AfterDays.&#x27;, &#x27;&#x27;) as integer);
+    if (dateadd(day, daysleft, ovs_date_begin) = (:rep_date + 1)) then
+    begin
+      reg_id = null;
+      lo_id = null;
+      delinq_days_qty = 0;
+
+      select oks_region_id, oks_kc_id, :rep_date - oks_delinq_date
+      from knclient
+      inner join oksummary on oks_from_k_id = kc_from_k_id and
+            :rep_date between oks_date_begin and oks_date_end and
+            oks_delinq_date &lt; :rep_date and
+            oks_kc_id &gt; 1000000000004 and
+            oks_balance &gt; 0 and
+            oks_close_state = 0
+      where ((:object_kind = :obj_kind1 and
+            kc_from_c_id = :object_id) or
+            (:object_kind = :obj_kind2 and
+            kc_id = :object_id)) and
+            kc_amount_approved &gt; 0 rows 1
+      into :reg_id, :lo_id, :delinq_days_qty;
+
+      if (reg_id is not null) then
+      begin
+        create_action = 1;
+        if ((db_id = 81001) and
+            (delinq_days_qty &gt;= 360)) then
+          create_action = 0;
+
+        -- Просрочка есть, создаем задачу
+        if (create_action = 1) then
+          insert into actionlist (acl_date, acl_from_reg_id, acl_object_kind, acl_object_id, acl_from_rd_id, acl_status,
+                                  acl_respons_c_id, acl_from_un_id)
+          values (:rep_date + 1, :reg_id, :object_kind, :object_id, :rd_anketa, 0, :lo_id, :un_id);
+
+        execute procedure hp_objectprops_set(:object_kind, :object_id, -1, :rd_id, :rep_date, &#x27;&#x27;, 0, :un_id);
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_FPS_BANKS_UPDATE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_FPS_BANKS_UPDATE: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_FPS_BANKS_UPDATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">BANKS_LIST</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PMT_PROJECT</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_FPS_BANKS_UPDATE(
+    BANKS_LIST D_BLOB_TEXT,
+    PMT_PROJECT D_STR_CODE = &#x27;moneta&#x27;)
+AS
+declare variable bank_count d_integer;
+declare variable i d_integer;
+declare variable fpb_code d_str_255;
+declare variable fpb_name d_str_code;
+declare variable jso_bank d_str_long;
+declare variable fpb_status d_smallint;
+begin
+  -- Процедура обновляет список банков Системы Быстрых Платежей
+  -- Вызывается через сервис выдач
+
+  -- Сделано для переходного периода, далее можно удалить эту строку
+  pmt_project = coalesce(pmt_project, &#x27;moneta&#x27;);
+
+  if (coalesce(banks_list, &#x27;&#x27;) = &#x27;&#x27;) then
+    exception e_default &#x27;Empty banks_list!&#x27;;
+
+  if (pmt_project not in (&#x27;moneta&#x27;, &#x27;wirebank&#x27;)) then
+    exception e_default &#x27;Unknown project:&#x27; || coalesce(pmt_project, &#x27;NULL&#x27;);
+
+  -- Переводим всех действующих в кандидаты на удаление
+  if (pmt_project = &#x27;moneta&#x27;) then
+  begin
+    update fps_banks
+    set fpb_status_moneta = -999
+    where fpb_status_moneta = 1;
+  end
+  if (pmt_project = &#x27;wirebank&#x27;) then
+  begin
+    update fps_banks
+    set fpb_status_wirebank = -999
+    where fpb_status_wirebank = 1;
+  end
+
+  -- Восстанавливаем тех, которые есть в json. При необходимости, создаем
+  bank_count = f_json_blob_get_count(banks_list, &#x27;banks&#x27;);
+  i = 0;
+  while (i &lt; bank_count) do
+  begin
+    jso_bank = f_json_blob_get_value(banks_list, f_format(&#x27;banks[%1]&#x27;, i), null);
+    fpb_code = f_json_str_get_value(jso_bank, &#x27;id&#x27;, null);
+    fpb_name = f_json_str_get_value(jso_bank, &#x27;value&#x27;, null);
+    if (fpb_code is not null and fpb_name is not null) then
+    begin
+      fpb_status = null;
+      select fpb_status from fps_banks
+      where fpb_code = :fpb_code
+      into fpb_status;
+
+      if (fpb_status &lt;&gt; -1) then
+      begin
+        -- Если есть в списке, но не в статусе Отключено, восстанавливаем
+        update fps_banks
+        set
+          fpb_status_moneta = iif(:pmt_project=&#x27;moneta&#x27;, 1, fpb_status_moneta),
+          fpb_status_wirebank = iif(:pmt_project=&#x27;wirebank&#x27;, 1, fpb_status_wirebank)
+        where fpb_code = :fpb_code;
+      end
+      else if (fpb_status is null) then
+      begin
+        -- Добавляем новые
+        insert into fps_banks (fpb_code,  fpb_name, fpb_status, fpb_status_moneta, fpb_status_wirebank)
+        values (:fpb_code, :fpb_name, 0, iif(:pmt_project=&#x27;moneta&#x27;, 1, 0), iif(:pmt_project=&#x27;wirebank&#x27;, 1, 0));
+      end
+    end
+    i = i + 1;
+  end
+
+  -- Если не обновили в цикле, значит отсутствует в списке, удаляем
+  update fps_banks
+  set fpb_status_moneta = 0
+  where fpb_status_moneta = -999;
+
+  update fps_banks
+  set fpb_status_wirebank = 0
+  where fpb_status_wirebank = -999;
+
+  -- Считаем удаленным (отключенным), если банк отсутствует в одной из систем
+  update fps_banks
+  set fpb_status = minvalue(fpb_status_moneta, fpb_status_wirebank)
+  where fpb_status &gt; -1;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

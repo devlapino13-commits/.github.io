@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CC_DEBT_STATIST_T — процедура — схема БД</title>
+<meta name="description" content="Процедура CC_DEBT_STATIST_T: 2 входных, 9 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CC_DEBT_STATIST_T</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">9</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">DATE_BEGIN</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DATE_END</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">9 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">NEGATIVE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">POSITIVE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NOTCALLED</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">TOTAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KONTRACTS_COUNT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CONTACTS_COUNT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEGATIVE_P</div><div class="ptype">DECIMAL(18,2)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">POSITIVE_P</div><div class="ptype">DECIMAL(18,2)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NOTCALLED_P</div><div class="ptype">DECIMAL(18,2)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CC_DEBT_STATIST_T(
+    DATE_BEGIN TIMESTAMP,
+    DATE_END TIMESTAMP)
+RETURNS (
+    NEGATIVE INTEGER,
+    POSITIVE INTEGER,
+    NOTCALLED INTEGER,
+    TOTAL INTEGER,
+    KONTRACTS_COUNT INTEGER,
+    CONTACTS_COUNT INTEGER,
+    NEGATIVE_P DECIMAL(18,2),
+    POSITIVE_P DECIMAL(18,2),
+    NOTCALLED_P DECIMAL(18,2))
+AS
+declare variable d1 date;
+declare variable d2 date;
+declare variable ccdr_result smallint;
+declare variable k_id decimal(18,0);
+declare variable contacts_count_k integer;
+declare variable kontracts_count_k integer;
+begin
+  /*
+    CREATED BY: IGUSEV 29.06.2012
+
+    PURPOSE: Итоговая статистика по обзвону клиентов - должников
+
+    24.07.2012 CHANGED BY IGUSEV
+    CAHNGES:   Оптимизирована выборка данных, реализована привязка к kontstate 
+
+    7.08.2012 CHANGED BY IGUSEV
+    CAHNGES: Добавлено условие    and ((cdbl.ccdl_exclude_date &lt;=  :d2 + 1) or (cdbl.ccdl_exclude_date is null))  - дата когда оператор исключил контакт из списка текущих
+
+  */
+  d1 = cast(date_begin as date);
+  d2 = cast(date_end as date);
+
+  negative = 0;
+  positive = 0;
+  notcalled = 0;
+  total = 0;
+
+  for select cdr.ccdr_result
+      from callcenter_debtors_result cdr
+      where cdr.ccdr_call_datetime &gt;= :d1 and
+            cdr.ccdr_call_datetime &lt; :d2 + 1 and
+            cdr.ccdr_is_auto = 0
+      order by cdr.ccdr_result
+      into :ccdr_result
+  do
+  begin
+    if (ccdr_result = 0) then
+      negative = negative + 1;
+    if (ccdr_result = 1) then
+      positive = positive + 1;
+    if (ccdr_result = -1) then
+      notcalled = notcalled + 1;
+    total = total + 1;
+  end
+
+  if (total &gt; 0) then
+  begin
+    negative_p = negative * 100 / total;
+    positive_p = positive * 100 / total;
+    notcalled_p = notcalled * 100 / total;
+  end
+  else
+  begin
+    negative_p = 0;
+    positive_p = 0;
+    notcalled_p = 0;
+  end
+
+  if (ccdr_result is null) then
+    ccdr_result = 0;
+
+  kontracts_count = 0;
+  contacts_count = 0;
+
+  for select distinct cdbl.ccdl_from_k_id as k_id
+      from callcenter_debtors_list cdbl
+      inner join kontstate ks on ccdl_from_k_id = ks_from_k_id
+      where ((cdbl.ccdl_deliq_closed_date is null) or
+            (cdbl.ccdl_deliq_closed_date &lt; :d2)) /* не погашенные*/
+            and
+            ((cdbl.ccdl_timeout_date is null) or
+            (cdbl.ccdl_timeout_date &lt; :d2)) /* только должники/конт. лица которые не исчесчезли по timeout-у*/
+            and
+            ks_ol_is_delete = 0 and
+            ((cdbl.ccdl_exclude_date &lt;= :d2 + 1) or
+            (cdbl.ccdl_exclude_date is null)) /* дата когда оператор исключил контакт из списка текущих */
+            and
+            ks_state = 1 /*только активные*/
+            and
+            :date_end between ks_date_begin and ks_date_end
+      into :k_id
+  do
+  begin
+    kontracts_count = kontracts_count + 1;
+  end
+
+  select count(cdbl.ccdl_from_c_id)
+  from callcenter_debtors_list cdbl
+  inner join kontstate ks on ccdl_from_k_id = ks_from_k_id
+  where ((cdbl.ccdl_deliq_closed_date is null) or
+        (cdbl.ccdl_deliq_closed_date &lt; :d2)) /* не погашенные*/
+        and
+        ((cdbl.ccdl_timeout_date is null) or
+        (cdbl.ccdl_timeout_date &lt; :d2)) /* только должники/конт. лица которые не исчесчезли по timeout-у т.к. им звонили на протяжении 3 дней*/
+        and
+        ks_ol_is_delete = 0 and
+        ((cdbl.ccdl_exclude_date &lt;= :d2 + 1) or
+        (cdbl.ccdl_exclude_date is null)) /* дата когда оператор исключил контакт из списка текущих */
+        and
+        ks_state = 1 /*только активные*/
+        and
+        :date_end between ks_date_begin and ks_date_end
+  into :contacts_count;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

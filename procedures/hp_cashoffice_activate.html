@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CASHOFFICE_ACTIVATE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CASHOFFICE_ACTIVATE: 2 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CASHOFFICE_ACTIVATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OFFICE_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_IS_ERROR</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CASHOFFICE_ACTIVATE(
+    OFFICE_ID D_INTEGER,
+    REP_DATE D_DATE)
+RETURNS (
+    RES_IS_ERROR D_BOOL,
+    RES_TEXT D_STR_255)
+AS
+declare variable oper_kind d_integer;
+declare variable ol_id d_id;
+declare variable cash_id d_integer;
+declare variable c_id d_id;
+declare variable csp_cashier_id d_id;
+begin
+  res_is_error = 1;
+  res_text = &#x27;&#x27;;
+
+  oper_kind = f_enum_id(&#x27;cashoperkind&#x27;, &#x27;check.close&#x27;);
+
+  /*
+  if (exists(select * from opercash
+             where opc_date = :rep_date and
+                   opc_office_id = :office_id and
+                   opc_oper_kind &lt;&gt; :oper_kind)) then
+    res_text = &#x27;В офисе на указанную дату уже существуют кассовые операции&#x27;;
+
+  if (res_text &lt;&gt; &#x27;&#x27;) then
+  begin
+    suspend;
+    exit;
+  end
+  */
+
+  res_is_error = 0;
+
+  c_id = uxf$usr_cid();
+
+  insert into operlist (ol_from_reg_id, ol_oper_type, ol_date, ol_doc_no, ol_doc_no_str, ol_doc_kind, ol_memo, ol_oper_subtype)
+  values (:office_id, 2, :rep_date - 1, 0, &#x27;0&#x27;, 1, &#x27;Остатки перед активацией РМК&#x27;, 1)
+  returning ol_id
+  into :ol_id;
+
+  for select csp_id, csp_cashier_id
+  from cashplace
+  where csp_office_id = :office_id
+  into :cash_id, csp_cashier_id
+  do
+  begin
+    if (csp_cashier_id is null) then
+      csp_cashier_id = c_id;
+
+    insert into opercash (opc_date, opc_office_id, opc_from_csp_id, opc_oper_kind, opc_sign, opc_status, opc_is_signed,
+                          opc_from_ol_id, opc_cashier_id, opc_memo)
+    values (:rep_date - 1, :office_id, :cash_id, :oper_kind, 0, 1, 1,
+            :ol_id, :csp_cashier_id, &#x27;Остатки перед активацией РМК&#x27;);
+
+    insert into cashtotal (ctt_from_csp_id, ctt_date, ctt_cashier_id, ctt_need_recalc)
+    values (:cash_id, :rep_date - 1, :csp_cashier_id, 1);
+  end
+
+  update cashoffice
+  set cso_is_active = 1,
+      cso_activate_date = :rep_date
+  where cso_office_id = :office_id and
+        (cso_is_active = 0 or cso_activate_date is distinct from :rep_date);
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

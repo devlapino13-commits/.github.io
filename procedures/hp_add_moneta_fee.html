@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_ADD_MONETA_FEE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_ADD_MONETA_FEE: 2 входных, 5 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_ADD_MONETA_FEE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_kn_operbook_ins_simple.html"><div class="to">HP_DO_KN_OPERBOOK_INS_SIMPLE</div></a><a class="ref-card" href="hp_extsys_parcer.html"><div class="to">HP_EXTSYS_PARCER</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ESM_PROJECT</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MSG_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ESM_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KOMMIS_OL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_KONTRACT_NO</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KOMMIS_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_ADD_MONETA_FEE(
+    REP_DATE D_DATE,
+    ESM_PROJECT D_STR_CODE)
+RETURNS (
+    MSG_TEXT D_STR_255,
+    ESM_ID D_ID,
+    KOMMIS_OL_ID D_ID,
+    K_KONTRACT_NO D_STR_CODE,
+    KOMMIS_AMOUNT D_CURRENCY)
+AS
+declare variable ESM_DATE date;
+declare variable OL_ID D_ID;
+declare variable ESM_OBJECT_ID decimal(18,0);
+declare variable ESM_K_ID decimal(18,0);
+declare variable ESM_DOC_NO_STR varchar(20);
+declare variable HEAD_OFFICE_ID integer;
+declare variable REPAY_DT_ACCOUNT_NO D_STR_20;
+declare variable DB_ID integer;
+declare variable MONETA_ACC_ID D_ID;
+declare variable KOMMIS_ACC_ID D_ID;
+declare variable KOMMIS_AL_ID D_STR_CODE;
+declare variable OL_MEMO D_STR_LONG;
+declare variable ESM_FULL_SOURCE blob sub_type 1 segment size 80;
+declare variable KOMMIS_AMOUNT_ALL D_CURRENCY;
+begin
+  -- общие настройки, зависящие от страны
+  db_id = f_get_db_id();
+  head_office_id = f_hq_id(db_id);
+  kommis_amount_all = 0;
+
+  repay_dt_account_no = &#x27;&#x27;;
+  select esp_account_no
+  from extsyspro
+  where esp_project_kind = &#x27;payment&#x27; and -- только платежные сстемы
+        esp_project = :esm_project and
+        esp_status = 1 -- только действующие
+  into repay_dt_account_no; -- бухгалтерский счет, куда будет посажено погашение
+
+  if (esm_project in (&#x27;moneta&#x27;, &#x27;qiwi&#x27;, &#x27;tinkoff&#x27;, &#x27;wirebank&#x27;)) then
+  begin
+    kommis_al_id = &#x27;010181091-02000003&#x27;;
+
+    select al_from_acc_id
+    from acc_list
+    where al_id = :repay_dt_account_no
+    into moneta_acc_id;
+
+    kommis_acc_id =
+      case esm_project
+        when &#x27;moneta&#x27; then  f_get_acc_id(&#x27;71702810005310310101&#x27;)
+        when &#x27;wirebank&#x27; then  f_get_acc_id(&#x27;71702810005310310101&#x27;)
+        when &#x27;tinkoff&#x27; then f_get_acc_id(&#x27;71702810005310350101&#x27;)
+        when &#x27;qiwi&#x27; then    f_get_acc_id(&#x27;71702810005310340101&#x27;)
+      end;
+  end
+
+  for select esm_id, esm_date, esm_trans_id, esm_object_id, esm_from_k_id, esm_project,
+             esm_object_id, esm_full_source, eso_from_ol_id, k_kontract_no
+      from extsysmain
+        left join extsysoper on esm_id = eso_from_esm_id
+        left join kontract on esm_from_k_id = k_id
+      where esm_date = :rep_date
+      and esm_project = :esm_project
+      and esm_action = &#x27;pay&#x27;
+      and esm_status = 1
+      into esm_id, esm_date, esm_doc_no_str, esm_object_id, esm_k_id, esm_project,
+           esm_object_id, esm_full_source, ol_id, k_kontract_no
+  do
+  begin
+    msg_text = &#x27;&#x27;;
+
+    -- Проверяем, что комиссия на месте
+    if (exists(
+    select * from operlist
+    where ol_parent_id = :ol_id and ol_oper_subtype = 36)) then
+      continue;
+
+    kommis_amount = 0;
+    if (esm_project in (&#x27;moneta&#x27;, &#x27;tinkoff&#x27;, &#x27;wirebank&#x27;)) then
+    begin
+      select iif(field_value = &#x27;&#x27;, 0, field_value)
+      from hp_extsys_parcer(:esm_full_source, &#x27;MNT_FEE&#x27;)
+      into kommis_amount;
+      kommis_amount = -kommis_amount;
+    end
+
+    if (kommis_amount &lt;&gt; 0) then
+    begin
+      ol_memo = &#x27;&#x27;;
+      select iif(:db_id &lt;&gt; 94401, &#x27;договор займа &#x27; || k_kontract_no || &#x27; от &#x27; || f_datetostr(k_disb_date), k_kontract_no || &#x27; nomreli &#x27; || f_datetostr(k_disb_date) || &#x27; tarixli muqavile&#x27;)
+      from kontract
+      where k_id = :esm_k_id
+      into ol_memo;
+      if (ol_memo is null) then
+        ol_memo = &#x27;&#x27;;
+      ol_memo = iif(:db_id &lt;&gt; 94401, &#x27;Комиссия за погашение через &#x27; || :esm_project || &#x27;. &#x27; || ol_memo, :esm_project || &#x27; vasitəsi ilə ödəniş haqqı. &#x27; || ol_memo);
+  
+      insert into operlist (ol_from_reg_id, ol_oper_type, ol_date, ol_doc_no_str, ol_doc_kind, ol_memo,
+                            ol_user_id, ol_document_client, ol_oper_subtype, ol_parent_id)
+      values (:head_office_id, 2, :esm_date, :esm_doc_no_str, 9, :ol_memo, 1000000000001, :esm_object_id, 36,
+              :ol_id)
+      returning ol_id
+      into kommis_ol_id;
+  
+      update or insert into operloan (opl_from_ol_id, opl_acc_kind, opl_from_al_id, opl_from_acc_id)
+      values (:kommis_ol_id, 2, :kommis_al_id, :kommis_acc_id)
+      matching (opl_from_ol_id);
+  
+      insert into operbook (ob_from_ol_id, ob_currency, ob_curr_rate, ob_client_dt, ob_account_dt, ob_summa_val,
+                            ob_summa, ob_account_kt, ob_detail, ob_ol_date, ob_ol_is_active, ob_ol_reg_id)
+      values (:kommis_ol_id, &#x27;810&#x27;, 1, :esm_object_id, :kommis_al_id, :kommis_amount, :kommis_amount,
+              :repay_dt_account_no, &#x27;Комиссия за погашение через &#x27; || :esm_project,
+              :esm_date, 1, :head_office_id);
+  
+      execute procedure hp_do_kn_operbook_ins_simple(null, :kommis_ol_id, null, :kommis_acc_id, :moneta_acc_id,
+          :kommis_amount, 0, :esm_date, :head_office_id, 1,
+          &#x27;Комиссия за погашение через &#x27; || :esm_project, :esm_object_id, null, &#x27;810&#x27;, 1);
+      kommis_amount_all = kommis_amount_all - kommis_amount;
+      msg_text = &#x27;esm_id:&#x27; || esm_id || &#x27;, ol_id:&#x27; || ol_id;
+      suspend;
+    end
+  end
+  msg_text = &#x27;kommis:&#x27; || kommis_amount_all;
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MC_ONLINE_LOAN_EDOC_LIST — процедура — схема БД</title>
+<meta name="description" content="Процедура MC_ONLINE_LOAN_EDOC_LIST: 2 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>MC_ONLINE_LOAN_EDOC_LIST</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MCL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ONLINE_APP_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EDS_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">EDC_NAME</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE MC_ONLINE_LOAN_EDOC_LIST(
+    MCL_ID D_ID,
+    ONLINE_APP_ID D_INTEGER)
+RETURNS (
+    EDS_ID D_ID,
+    EDC_NAME D_STR_255)
+AS
+declare variable c_id d_id;
+declare variable exa_id d_id;
+declare variable ma_id d_id;
+declare variable k_id d_id;
+declare variable miniapp_obj_kind d_integer;
+declare variable kontract_obj_kind d_integer;
+declare variable miniapp_edoc_kind d_integer;
+declare variable kontract_edoc_kind d_integer;
+begin
+  /*
+  Необходимо реализовать процедуру на базе MC_EDOC_LIST только чтобы она возращала электроныне документы по онлайн займу
+  Ожидается что будут видны документы: заявка, кредитный договор
+  */
+  select mcl_from_c_id
+  from mc_login
+  where mcl_id = :mcl_id
+  into c_id;
+
+  if (c_id is null) then
+    exit;
+
+  select oa.oa_from_exa_id
+  from online_app oa
+  where oa.oa_id = :online_app_id
+  into exa_id;
+
+  select exa.exa_from_ma_id, exa.exa_from_k_id
+  from expressapp exa
+  where exa.exa_id = :exa_id
+  into ma_id, k_id;
+
+  miniapp_obj_kind = f_objkind(&#x27;miniapp&#x27;, &#x27;id&#x27;);
+  kontract_obj_kind = f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;);
+  miniapp_edoc_kind = f_edoc_kind(&#x27;loan.application&#x27;, &#x27;id&#x27;);
+  kontract_edoc_kind = f_edoc_kind(&#x27;loan.agreement&#x27;, &#x27;id&#x27;);
+
+  for with table1
+      as (
+      --Заявки
+      select edl.edl_id as edl_id, edl.edl_from_edc_id as edc_id
+      from edoc_list edl
+      where edl.edl_object_kind = :miniapp_obj_kind and
+            edl.edl_object_id = :ma_id and
+            edl.edl_status &gt;= 0 and
+            edl.edl_from_edc_id = :miniapp_edoc_kind
+      union
+      --Кредитные договора
+      select edl.edl_id as edl_id, edl.edl_from_edc_id as edc_id
+      from edoc_list edl
+      where edl.edl_object_kind = :kontract_obj_kind and
+            edl.edl_object_id = :k_id and
+            edl.edl_status &gt;= 0 and
+            edl.edl_from_edc_id = :kontract_edoc_kind)
+      select eds.eds_id, edc.edc_name
+      from table1 t1
+      inner join edoc_sign eds on eds.eds_from_edl_id = t1.edl_id and
+            eds.eds_from_c_id = :c_id --Показываем только документы клиента
+      inner join edoc_cfg edc on edc.edc_id = t1.edc_id
+      into eds_id, edc_name
+  do
+    suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

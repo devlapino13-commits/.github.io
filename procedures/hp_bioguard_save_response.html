@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_BIOGUARD_SAVE_RESPONSE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_BIOGUARD_SAVE_RESPONSE: 3 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_BIOGUARD_SAVE_RESPONSE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_extinfo_set_blob.html"><div class="to">HP_EXTINFO_SET_BLOB</div></a><a class="ref-card" href="hp_extinfo_set_result.html"><div class="to">HP_EXTINFO_SET_RESULT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="mc_bioguard_save_data.html"><div class="to">MC_BIOGUARD_SAVE_DATA</div></a><a class="ref-card" href="mc_bioguard_save_error.html"><div class="to">MC_BIOGUARD_SAVE_ERROR</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SESSION_ID</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">JSON_INFO</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">IMG_FILE</div><div class="ptype">BLOB SUB_TYPE BINARY SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EIL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">BR_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CLIENT_PHOTO_BLS_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_BIOGUARD_SAVE_RESPONSE(
+    SESSION_ID D_STR_100 NOT NULL,
+    JSON_INFO D_BLOB_TEXT NOT NULL,
+    IMG_FILE D_BLOB_BINARY NOT NULL)
+RETURNS (
+    EIL_ID D_ID,
+    BR_ID D_ID,
+    CLIENT_PHOTO_BLS_ID D_ID)
+AS
+declare variable BIOGUARD_EIC_ID D_ID;
+begin
+    select eic.eic_id
+    from extinfocfg eic
+    where eic.eic_code = &#x27;bioguard_info&#x27;
+    into :bioguard_eic_id;
+
+    if (bioguard_eic_id is null) then
+        exception e_default &#x27;Extinfocfg &quot;bioguard_info&quot; does not exists&#x27;;
+
+    -- Сохраняем результат полученный от сервиса Bio-Guard
+    insert into bioguard_results (br_session_id, br_datetime, br_status)
+    values (:session_id, current_timestamp, f_get_rd_id(&#x27;BioguardStatus.IN_PROCESS&#x27;))
+    returning br_id into :br_id;
+    
+    insert into extinfolist (eil_from_eic_id, eil_status, eil_is_json, eil_ext_id)
+    values (:bioguard_eic_id,  0, 1, :session_id)
+    returning eil_id into :eil_id;
+
+    execute procedure hp_extinfo_set_result(:eil_id, :json_info);
+
+    if (coalesce(img_file, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+    begin
+        execute procedure hp_extinfo_set_blob(:eil_id, &#x27;bioguard_client_photo&#x27;, :img_file);
+
+        select eib.eib_from_bls_id
+        from extinfolistbls eib
+        where eib.eib_from_eil_id = :eil_id
+        into :client_photo_bls_id;
+    end
+
+    suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

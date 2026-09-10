@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CARDAKTMAIN_SIGNB — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CARDAKTMAIN_SIGNB: 2 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CARDAKTMAIN_SIGNB</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_cardaktmain_transactionb.html"><div class="to">HP_CARDAKTMAIN_TRANSACTIONB</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CAM_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ERR_CODE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ERR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CARDAKTMAIN_SIGNB(
+    CAM_ID D_INTEGER,
+    UN_ID D_ID)
+RETURNS (
+    ERR_CODE D_INTEGER,
+    ERR_TEXT D_STR_255)
+AS
+declare variable cem_id d_integer;
+declare variable err_head d_str_100;
+declare variable cam_status d_smallint;
+declare variable c_id d_id;
+declare variable c_name_fio d_str_100;
+declare variable ol_id d_id;
+declare variable ol_datetime d_datetime;
+declare variable cpl_id d_integer;
+begin
+  err_code = 0;
+  err_text = &#x27;&#x27;;
+  err_head = &#x27;Акт приема-передачи № &#x27; || cam_id;
+
+  select
+    cam_status,
+    c_id,
+    c_name_fio
+  from cardaktmain
+    inner join cardplace
+      on cpl_id = cam_src_cpl_id
+    inner join clients
+      on c_id = cpl_from_c_id
+  where cam_id = :cam_id
+    and cam_dst_cpl_id = 0
+  into
+    :cam_status,
+    :c_id,
+    :c_name_fio;
+
+  if (err_code = 0 and cam_status &lt;&gt; 0) then
+  begin
+    err_code = 1;
+    err_text = err_head || &#x27; не может быть подписан.&#x27;;
+  end
+
+  if (err_code = 0 and not exists(
+    select * from username where un_id = :un_id and un_from_c_id = :c_id)) then
+  begin
+    err_code = 2;
+    err_text = err_head || &#x27;, может подписать только &#x27; || c_name_fio || &#x27;.&#x27;;
+  end
+
+  -- бух.проводка
+  if (err_code = 0) then
+  begin
+    select
+      ol_id,
+      err_code,
+      err_text
+    from hp_cardaktmain_transactionb (:cam_id)
+    into
+      :ol_id,
+      :err_code,
+      :err_text;
+    ol_datetime = (select ol_datetime from operlist where ol_id = :ol_id);
+  end
+
+  -- меняем статус заявки на &quot;Заготовки переданы&quot;
+  if (err_code = 0) then
+  begin
+    select
+      cem_id
+    from cardembomain
+      inner join cardkind
+        on ckd_id = cem_from_ckd_id
+          and cem_from_ces_id = 3
+    where cem_from_camb_id = :cam_id
+    into
+      :cem_id;
+
+    if (cem_id is null) then
+    begin
+      err_code = 1;
+      err_text = err_head || &#x27; не может быть подписан(несоответствие статуса заявки).&#x27;;
+    end else
+    begin
+      update cardembomain set
+        cem_from_ces_id = 4,
+        cem_from_un_id = :un_id
+      where cem_id = :cem_id;
+    end
+  end
+
+  if (err_code = 0) then
+  begin
+    update cardaktmain set
+      cam_status = 1,
+      cam_from_ol_id = :ol_id,
+      cam_ol_datetime = :ol_datetime
+    where cam_id = :cam_id;
+    err_text = err_head || &#x27; успешно подписан.&#x27;;
+  end
+
+  suspend;
+  if (err_code = 1) then exception e_message err_text;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

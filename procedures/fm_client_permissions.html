@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_CLIENT_PERMISSIONS — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_CLIENT_PERMISSIONS: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_CLIENT_PERMISSIONS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">4 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_client_status.html"><div class="to">FM_CLIENT_STATUS</div></a><a class="ref-card" href="hp_is_client_delinqed.html"><div class="to">HP_IS_CLIENT_DELINQED</div></a><a class="ref-card" href="hp_permission_access_check.html"><div class="to">HP_PERMISSION_ACCESS_CHECK</div></a><a class="ref-card" href="hp_test_un_id.html"><div class="to">HP_TEST_UN_ID</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_DATA</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_CLIENT_PERMISSIONS(
+    C_ID D_ID,
+    UN_ID D_ID)
+RETURNS (
+    RES_DATA D_STR_8100)
+AS
+declare variable ACCESS_LEVEL D_SMALLINT;
+declare variable LANG D_STR_LANG;
+declare variable CLIENT_NAME D_STR_100;
+declare variable PHOTO_CAN_LOAD D_SMALLINT;
+declare variable PHOTO_ENABLED D_SMALLINT;
+declare variable DOCUMENTS_ENABLED D_SMALLINT;
+declare variable DOCUMENTS_CAN_EDIT D_SMALLINT;
+declare variable CONNECTIONS_ENABLED D_SMALLINT;
+declare variable CONTACTS_ENABLED D_SMALLINT;
+declare variable ADDRESSES_ENABLED D_SMALLINT;
+declare variable MENU_ENABLED D_SMALLINT;
+declare variable DB_ID D_ID;
+declare variable PHOTO_HINT D_STR_255;
+declare variable CITIZEN_CODE D_STR_CODE;
+declare variable PHONECALL_ENABLED D_SMALLINT;
+begin
+  -- Процедура, возвращающая права доступа пользователя к элементам окна клиента
+  lang = f_get_lang_code(un_id, null);
+
+  db_id = f_get_db_id();
+
+  un_id = (select un_id
+           from hp_test_un_id(:un_id));
+
+  select c_name_fio
+  from clients
+  where c_id = :c_id
+  into client_name;
+  if (client_name is null) then
+    client_name = f_lang(lang, &#x27;Клиент не найден&#x27;);
+
+  select access_lev
+  from fm_client_status(:un_id, :c_id)
+  into access_level;
+
+  -- Разрешение на закрепление фото клиента из галереи
+  photo_can_load = 0;
+  -- Кнопка Фото
+  photo_enabled = 0;
+  -- Кнопка Документы
+  documents_enabled = 0;
+  -- Кнопка Связь
+  connections_enabled = 0;
+  -- Кнопка Контакты
+  contacts_enabled = 0;
+  -- Кнопка Адреса
+  addresses_enabled = 0;
+  -- Кнопка Меню (правый верний угол)
+  menu_enabled = 0;
+  -- Разрешение на добавление документов в окне документов
+  documents_can_edit = 0;
+  -- Сообщение об ошибке, когда фотографирование запрещено, если не пустое - блок
+  photo_hint = &#x27;&#x27;;
+  -- Звонки контактным лицам клиента через ip-телефонию (Asterisk, пока только РФ и только НЕ просрочникам)
+  phonecall_enabled = 0;
+
+  --  if (access_level = -1) then
+  --  begin
+  --    -- Усиленные ограничения. Меню не активно, панель не активна, информация минимальная
+  --    -- Для сотрудников, их родственников и не своих активных клиентов
+  --  end
+
+  if (access_level = 0) then
+  begin
+    -- Ограниченный. Меню активно, панель не активна, полная информация
+    -- Доступ для менеджеров или аудиторов. Если есть доступ к данному офису
+    menu_enabled = 1;
+    documents_enabled = 1;
+  end
+
+  if (access_level = 2) then
+  begin
+    -- Ограниченный. Меню не активно, информация сокращенная, на панели активна только &quot;Связь&quot;
+    -- Обычно это старые клиенты не обязательно свои
+    connections_enabled = 1;
+  end
+
+  if (access_level = 1) then
+  begin
+    -- Полный доступ. Меню доступно, панель активна, полная информация
+    -- Свой активный клиент или сотрудник (если есть права)
+
+    photo_enabled = 1;
+    documents_enabled = 1;
+    connections_enabled = 1;
+    contacts_enabled = 1;
+    addresses_enabled = 1;
+    menu_enabled = 1;
+    documents_can_edit = 1;
+
+    --Для повторных клиентов разрешаем загрузку фото из гелереи  RFCRU-221
+    if (db_id = 81001) then
+    begin
+      if (exists(select *
+                 from kontstate ks
+                 inner join knclient kc on kc.kc_from_k_id = ks.ks_from_k_id
+                 where kc.kc_from_c_id = :c_id and
+                       kc.kc_amount_approved &gt; 0 and
+                       ks.ks_state = 1 and
+                       ks.ks_date_begin &lt;= current_date and
+                       ks.ks_ol_is_delete = 0)) then
+        photo_can_load = 1;
+    end
+
+    if (exists(select *
+           from hp_permission_access_check(:un_id, &#x27;PermActions&#x27;, 0, &#x27;FsMobile.ViewAccessOriv&#x27;)
+           where has_access = 1)) then
+    begin
+      photo_can_load = 0;
+      photo_enabled = 0;
+      connections_enabled = 0;
+      documents_can_edit = 0;
+      addresses_enabled = 0;
+    end
+  end
+
+  if (db_id in (39801, 41701, 94401)) then
+  begin
+  select rd_code
+  from clients, refdata
+  where c_id = :c_id
+    and c_citizen = rd_id
+  into citizen_code;
+
+  end
+    if (((db_id = 41701 and citizen_code = &#x27;Citizen.KG&#x27;) or
+        (db_id = 39801 and citizen_code = &#x27;Citizen.KZ&#x27;) or
+        (db_id = 94401 and citizen_code = &#x27;Citizen.AZ&#x27;)) and
+        not exists(select *
+                   from grs_clients gc
+                   inner join enum_list on el_id = gc_status and el_kind = &#x27;grs_status&#x27;
+                   where gc_from_c_id = :c_id and
+                         gc_is_last = 1 and
+                         el_code in (&#x27;successful&#x27;, &#x27;successful_adr_empty&#x27;, &#x27;manual_check&#x27;)))
+    then
+      photo_hint = f_lang(lang, f_format(&#x27;Сначала надо отправить запрос в %1, а после сфотографировать клиента&#x27;, iif(db_id = 94401, &#x27;Asan&#x27;, &#x27;ГРС&#x27;)));
+
+  if (contacts_enabled = 1 and f_get_const(&#x27;fsm_phonecall_enabled&#x27;) = 1) then
+  begin
+    select 1 - is_delinq
+    from hp_is_client_delinqed(:c_id)
+    into phonecall_enabled;
+  end
+
+  res_data = &#x27;{&#x27; ||
+    f_json_make_pair(&#x27;client_name&#x27;, client_name, &#x27;str&#x27;) || &#x27;,&#x27; ||
+    f_json_make_pair(&#x27;photo_can_load&#x27;, photo_can_load, &#x27;str&#x27;) || &#x27;,&#x27; ||
+    f_json_make_pair(&#x27;photo_enabled&#x27;, photo_enabled, &#x27;str&#x27;) || &#x27;,&#x27; ||
+    f_json_make_pair(&#x27;phonecall_enabled&#x27;, phonecall_enabled, &#x27;str&#x27;) || &#x27;,&#x27; ||
+    f_json_make_pair(&#x27;photo_hint&#x27;, photo_hint, &#x27;str&#x27;) || &#x27;,&#x27; ||
+    f_json_make_pair(&#x27;documents_enabled&#x27;, documents_enabled, &#x27;str&#x27;) || &#x27;,&#x27; ||
+    f_json_make_pair(&#x27;documents_can_edit&#x27;, documents_can_edit, &#x27;str&#x27;) || &#x27;,&#x27; ||
+    f_json_make_pair(&#x27;connections_enabled&#x27;, connections_enabled, &#x27;str&#x27;) || &#x27;,&#x27; ||
+    f_json_make_pair(&#x27;contacts_enabled&#x27;, contacts_enabled, &#x27;str&#x27;) || &#x27;,&#x27; ||
+    f_json_make_pair(&#x27;addresses_enabled&#x27;, addresses_enabled, &#x27;str&#x27;) || &#x27;,&#x27; ||
+    f_json_make_pair(&#x27;menu_enabled&#x27;, menu_enabled, &#x27;str&#x27;) ||
+    &#x27;}&#x27;;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

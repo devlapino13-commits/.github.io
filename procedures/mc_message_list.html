@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MC_MESSAGE_LIST — процедура — схема БД</title>
+<meta name="description" content="Процедура MC_MESSAGE_LIST: 2 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>MC_MESSAGE_LIST</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_fcm_user_topics.html"><div class="to">HP_FCM_USER_TOPICS</div></a><a class="ref-card" href="mc_edoc_sign_status.html"><div class="to">MC_EDOC_SIGN_STATUS</div></a><a class="ref-card" href="mc_last_read_update.html"><div class="to">MC_LAST_READ_UPDATE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MCL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LAST_READ_UPDATE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MSG_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MSG_DATETIME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MSG_BODY</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE MC_MESSAGE_LIST(
+    MCL_ID D_ID,
+    LAST_READ_UPDATE D_SMALLINT = 1)
+RETURNS (
+    MSG_ID D_ID,
+    MSG_DATETIME STR_100,
+    MSG_BODY D_BLOB_TEXT)
+AS
+declare variable c_id d_id;
+declare variable eds_id d_id;
+declare variable edl_id d_id;
+declare variable is_show d_bool;
+declare variable date_begin d_date;
+declare variable mcl_project d_smallint;
+declare variable db_id d_integer;
+declare variable mcl_login d_str_code;
+declare variable penult_mcl_id d_id;
+begin
+  db_id = f_get_db_id();
+
+  select
+    ml.mcl_from_c_id,
+    ml.mcl_project,
+    ml.mcl_login
+  from mc_login ml
+  where ml.mcl_id = :mcl_id
+  into
+    c_id,
+    mcl_project,
+    mcl_login;
+
+  select first 1 mcl.mcl_id
+  from mc_login mcl
+  where mcl.mcl_from_c_id = :c_id and
+        mcl.mcl_login starting :mcl_login and
+        mcl.mcl_is_delete = 1 and
+        mcl.mcl_project = :mcl_project
+  order by mcl.mcl_id desc
+  into :penult_mcl_id;
+
+  date_begin = current_date - 30;
+
+  for with
+    user_topics as (
+      select &#x27;/topics/&#x27; || topic_name as topic_name
+      from hp_fcm_user_topics(null, :mcl_id)
+    ),
+    msg as (
+      -- RFCRU-3766
+      -- Уведомления пользователю через mcl_id
+      select msg_id, msg_body, msg_datetime
+      from fsrobot_msgbox
+      where msg_object_kind = f_objkind(&#x27;mc_login&#x27;, &#x27;id&#x27;) and
+            msg_object_id in (:mcl_id, :penult_mcl_id) and
+            msg_type = 2 and
+            msg_status &gt;= 0 and
+            msg_datetime &gt;= :date_begin
+      union
+      -- Уведомления пользователю через c_id
+      select msg_id, msg_body, msg_datetime
+      from fsrobot_msgbox
+      where msg_object_kind = f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;) and
+            msg_object_id = :c_id and
+            msg_type = 2 and
+            msg_status &gt;= 0 and
+            msg_datetime &gt;= :date_begin
+      union
+      -- Уведомления пользователю через kc_id
+      select msg_id, msg_body, msg_datetime
+      from knclient, kontract, product, fsrobot_msgbox
+      where kc_from_c_id = :c_id and
+            msg_object_kind = f_objkind(&#x27;knclient&#x27;, &#x27;id&#x27;) and
+            msg_object_id = kc_id and
+            msg_type = 2 and
+            msg_status &gt;= 0 and
+            msg_datetime &gt;= :date_begin and
+            kc_from_k_id = k_id and
+            k_from_pr_id = pr_id and
+            iif(:mcl_project = 1,pr_code not containing &#x27;.oivo_pack.&#x27;, pr_code containing &#x27;.oivo_pack.&#x27;)
+      union
+      -- Уведомления через топики (группы рассылок), пользователь должен быть подписан
+      select msg_id, msg_body, msg_datetime
+      from fsrobot_msgbox, user_topics
+      where msg_object_kind = f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;) and
+            msg_object_id = 1000000000000 and
+            msg_mail_to = topic_name and
+            msg_type = 2 and
+            msg_status &gt;= 0 and
+            msg_datetime &gt;= :date_begin
+      union
+      -- RFCKZ-894
+      select msg_id, msg_body, msg_datetime
+      from (
+        select
+            msg_id,
+            msg_body,
+            msg_datetime,
+            row_number() over (order by msg_datetime desc) as rn
+        from fsrobot_msgbox, mc_login
+        where :db_id = 39801
+          and mcl_from_c_id = :c_id
+          and mcl_project = :mcl_project
+          and msg_object_kind = f_objkind(&#x27;mc_login&#x27;, &#x27;id&#x27;)
+          and msg_object_id = mcl_id
+          and msg_type = 2
+          and msg_status &gt;= 0
+          and msg_datetime &gt;= :date_begin
+          and msg_subject containing &#x27;Ознакомление с согласиями&#x27;
+      ) t
+      where :db_id = 39801
+        and rn = 1
+    )
+    select  msg_id,
+            &#x27;{&#x27; || msg_body || &#x27;}&#x27;,
+            f_datetimetostr(msg_datetime)
+    from msg
+    order by msg_datetime desc
+    into msg_id, msg_body, msg_datetime
+  do
+  begin
+    is_show = 1; -- по умолчанию уведомления показывать
+    eds_id = cast(f_json_str_get_value(msg_body, &#x27;data.eds_id&#x27;, &#x27;0&#x27;) as bigint);
+
+    if (eds_id &gt; 0) then
+    begin
+      select eds_from_edl_id
+      from edoc_sign
+      where eds_id = :eds_id
+      into edl_id;
+
+      select is_show
+      from mc_edoc_sign_status(:edl_id, :c_id)
+      into is_show;
+    end
+
+    if (is_show = 1) then
+      suspend;
+  end
+
+  if (last_read_update = 1) then
+    execute procedure mc_last_read_update(:mcl_id);
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

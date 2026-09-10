@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UPDATE_INSURANCE_AMOUNT — процедура — схема БД</title>
+<meta name="description" content="Процедура UPDATE_INSURANCE_AMOUNT: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UPDATE_INSURANCE_AMOUNT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UPDATE_INSURANCE_AMOUNT(
+    K_ID D_ID)
+AS
+declare variable K_AMOUNT_APPROVED D_CURRENCY;
+declare variable K_DISB_DATE D_DATE;
+declare variable K_KREDLINE_END D_DATE;
+declare variable N_VALUE D_INTEGER;
+declare variable PR_CODE D_STR_100;
+declare variable TARIF PERC_TYPE;
+declare variable TEMP_RES D_CURRENCY;
+declare variable AG_COMMIS_CARDS_OTHER D_CURRENCY;
+declare variable COMMISSION_AMOUNT D_CURRENCY;
+declare variable MBULAK_SHARE D_CURRENCY;
+declare variable POLICY_COMPANY_SHARE D_CURRENCY;
+declare variable TAX D_CURRENCY;
+declare variable K_SCORE D_INTEGER;
+declare variable AG_ID D_ID;
+declare variable C_ID D_ID;
+declare variable PTS_DATE_BEGIN D_DATE;
+declare variable PTS_DATE_END D_DATE;
+declare variable MBULAK_BASE D_CURRENCY;
+begin
+    select
+        k.k_amount_approved, -- сумма страхования (в контексте страхования конечно же)
+        k.k_kredline_end - k.k_disb_date,
+        pr.pr_code,
+        k.k_disb_date,
+        k.k_kredline_end
+    from kontract k
+    inner join product pr on pr.pr_id = k.k_from_pr_id
+    where k.k_id = :k_id
+    into
+        :k_amount_approved,
+        :n_value,
+        :pr_code,
+        :k_disb_date,
+        :k_kredline_end;
+
+    if (pr_code containing &#x27;.ignore_insurance.&#x27;) then
+      exit;
+
+    /*
+    Тариф был очень маленьким (0.00005479452), и при умножении на большие суммы возникало переполнение (Integer overflow).
+    Чтобы избежать ошибки и сохранить точность, тариф увеличили на 100000,
+    а в формуле расчёта комиссии добавили деление на 100000 для восстановления исходного масштаба.
+    */
+    --tarif = iif(f_get_const(&#x27;new_loan_conditions&#x27;) = 1, 0.0000548, 0.00005);
+    tarif = iif(f_get_const(&#x27;new_loan_conditions&#x27;) = 1, 5.479452, 5);
+
+    if (n_value &lt;= 365) then
+        n_value = 365;
+
+    select kc.kc_from_c_id
+    from knclient kc
+    where kc.kc_from_k_id = :k_id
+      and kc.kc_amount_approved &gt; 0
+    rows 1
+    into :c_id;
+
+    k_score = coalesce(f_point(:c_id, :k_disb_date, iif(:pr_code containing &#x27;.ipf.&#x27;, 2, 0)), 0);
+
+    if (:k_disb_date &gt;= &#x27;12.03.2026&#x27;) then
+    begin
+        if (pr_code containing &#x27;.sputnik.&#x27; or
+            pr_code containing &#x27;.insur_base.&#x27;) then
+        begin
+            tarif = case
+                      when :k_score between 0 and 19 then 13.699000  -- 5%
+                      when :k_score between 20 and 41 then 12.329000  -- 4.5%
+                      else 10.958904                                 -- 4%
+                    end;
+        end
+        else if (pr_code not containing &#x27;.consultation.&#x27;
+                 and pr_code not containing &#x27;.ipf.&#x27;
+                 and pr_code containing &#x27;.standart.&#x27;
+                 and pr_code containing &#x27;.ind.&#x27;) then
+        begin
+            tarif = case
+                      when :k_score between 0 and 41 then 16.438000  -- 6%
+                      else 13.699000                                 -- 5%
+                    end;
+        end
+        else if (pr_code containing &#x27;.ipf.&#x27;) then -- RFCKG-5348
+        begin
+            tarif = case
+                      when :k_score between 0 and 19 then 19.178082 -- 7%
+
+                      when :k_score between 20 and 30 and
+                           :k_kredline_end &lt;= dateadd(month, 6, :k_disb_date) then 10.958904 -- 4%
+
+                      when :k_score between 20 and 30 then 16.438356 -- 6%
+
+                      when :k_kredline_end &lt;= dateadd(month, 6, :k_disb_date) then 8.219178 -- 3%
+
+                      else 13.698630 -- 5%
+                    end;
+        end
+        if (pr_code containing &#x27;.standart.&#x27; and
+            pr_code containing &#x27;.point_ignore.&#x27; and
+            pr_code containing &#x27;.insurance.&#x27;) then
+        begin
+            tarif = 6.849315; -- 2.5%
+            n_value = 730;
+        end
+    end
+    else
+    if (:k_disb_date &gt;= &#x27;17.11.2025&#x27; and    -- RFCKG-5080
+        :k_disb_date &lt;= &#x27;12.03.2026&#x27;) then
+    begin
+        if (:pr_code containing &#x27;.sputnik.&#x27;) then
+        begin
+            :tarif = case
+                        when :k_score between 0 and 19 then 13.699000 -- 0.05
+                        else 10.958904 -- 0.04
+                     end;
+        end
+
+        else if (:pr_code not containing &#x27;.consultation.&#x27;
+                 and :pr_code not containing &#x27;.ipf.&#x27;
+                 and :pr_code containing &#x27;.standart.&#x27;
+                 and :pr_code containing &#x27;.ind.&#x27;
+        ) then
+        begin
+            :tarif = case
+                        when :k_score between 0 and 12 then 16.438000 -- 0.06
+                        else 13.699000 -- 0.05
+                     end;
+        end
+    end
+
+    select
+        pts_date_begin,
+        pts_date_end
+    from pointsaldo
+    where pts_from_c_id = :c_id
+      and pts_type = iif(:pr_code containing &#x27;.ipf.&#x27;, 2, 0)
+      and pts_date_begin &lt;= :k_disb_date
+    order by pts_from_c_id desc, pts_date_begin desc
+    rows 1
+    into :pts_date_begin, :pts_date_end;
+
+    -- сумму комиссии
+    --commission_amount = (k_amount_approved * tarif * n_value) * 1.02;
+    temp_res = k_amount_approved * tarif;
+    temp_res = temp_res * n_value;
+
+    if (pr_code containing &#x27;.ipf.&#x27;) then -- RFCKG-5348
+    begin
+        temp_res = round(temp_res / 100000, 2);
+
+        -- НСП
+        tax = round(temp_res * 0.02, 2);
+
+        commission_amount = temp_res + tax;
+    end
+    else
+    begin
+        temp_res = temp_res * 1.02 / 100000;
+        commission_amount = temp_res;
+
+        -- НСП
+        tax = commission_amount / 102 * 2;
+    end
+
+    select ag.ag_commis_cards_other, ag.ag_id
+    from agreements ag
+    inner join insurance_kontract ik on ik.ik_from_ag_id = ag.ag_id
+    where ik.ik_from_k_id = :k_id
+    rows  1
+    into ag_commis_cards_other, ag_id;
+
+    -- RFCKG-5348
+    if (pr_code containing &#x27;.ipf.&#x27;) then
+      ag_commis_cards_other = case
+                                when tarif &lt;= 13.698630 then 90
+                                when tarif &lt;= 16.438356 then 92
+                                else 93
+                              end;
+    else
+    if (ag_id = 7414) then  -- ЗАО Страховая компания &quot;Кыргызстан&quot;
+      ag_commis_cards_other = case when tarif &lt;= 13.699000 then 90   -- RFCKG-4937
+                                   when tarif &lt;= 16.438356 then 92
+                                   when tarif &gt; 16.438356 then 93
+                                   else 93
+                                   end;
+    else if (ag_id = 7130) then  -- ЗАО СК &quot;Арсеналъ-Кыргызстан&quot;
+    begin
+      ag_commis_cards_other = case
+        when tarif &lt;= 0.821918  then 30
+        when tarif &lt;= 1.095890  then 40
+        when tarif &lt;= 1.369863  then 50
+        when tarif &lt;= 1.643836  then 55
+        when tarif &lt;= 1.917808  then 60
+        when tarif &lt;= 2.191781  then 70
+        when tarif &lt;= 2.465753  then 75
+        when tarif &lt;= 13.424657 then 92
+        else 93
+      end;
+    end
+
+    -- доля Мбулак
+    -- RFCKG-5348
+    if (pr_code containing &#x27;.ipf.&#x27;) then
+        mbulak_base = (commission_amount - tax) * 0.90;
+    else
+        mbulak_base = commission_amount - tax;
+
+    mbulak_share = mbulak_base * (ag_commis_cards_other / 100);     -- RFCKG-4803
+
+    -- доля сраховой компании
+    policy_company_share = commission_amount - mbulak_share;
+
+    insert into insur_logs (
+        il_from_k_id,
+        il_tarif,
+        il_k_score,
+        il_pts_date_begin,
+        il_pts_date_end,
+        il_create_datetime
+    )
+    values (
+        :k_id,
+        :tarif,
+        :k_score,
+        :pts_date_begin,
+        :pts_date_end,
+        current_timestamp
+    );
+
+    update insurance_kontract ik
+    set ik.ik_commission = :commission_amount,
+        ik.ik_mbulak_share = :mbulak_share,
+        ik.ik_policy_company_share = :policy_company_share,
+        ik.ik_tax = :tax,
+        ik.ik_is_checked = 1
+    where ik.ik_from_k_id = :k_id;
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

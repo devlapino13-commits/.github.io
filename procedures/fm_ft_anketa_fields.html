@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_FT_ANKETA_FIELDS — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_FT_ANKETA_FIELDS: 3 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_FT_ANKETA_FIELDS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_check_oivo_assignment.html"><div class="to">HP_CHECK_OIVO_ASSIGNMENT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FAK_CODE</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_DATA</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_CHANGE_CONFIRMATION</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_SAVE_CONFIRMATION</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_FT_ANKETA_FIELDS(
+    C_ID D_ID,
+    UN_ID D_ID,
+    FAK_CODE D_STR_20 = &#x27;client&#x27;)
+RETURNS (
+    RES_TEXT D_STR_255,
+    RES_DATA D_STR_8100,
+    RES_CHANGE_CONFIRMATION D_STR_255,
+    RES_SAVE_CONFIRMATION D_STR_255)
+AS
+declare variable LANG D_STR_LANG;
+declare variable JSON_ITEM D_STR_2048;
+declare variable COMPANY_NAME D_STR_255;
+declare variable FAK_ID D_INTEGER;
+declare variable NEED_SHOW_FT D_SMALLINT;
+declare variable SELFEMPLOYED_START_DATE D_DATE;
+begin
+  -- Процедура проверяет, что для клиента можно создавать анкету ФТ
+  -- Если создание разрешено, возвращает поля анкеты
+  if ((:fak_code is null) or (coalesce (:fak_code, &#x27;&#x27;) = &#x27;&#x27;)) then
+    fak_code = &#x27;client&#x27;;
+  lang = f_get_lang_code(un_id, null);
+  res_text = &#x27;&#x27;;
+  res_data = &#x27;&#x27;;
+  res_change_confirmation = &#x27;Вы уверены, что хотите изменить ответ?&#x27;;
+  res_save_confirmation = &#x27;Есть нестандартные ответы. Анкета будет отправлена на проверку. Подтверждаете?&#x27;;
+
+  company_name = f_company_name(&#x27;short&#x27;, &#x27;local&#x27;);
+  --RFCRU-2543
+  selfemployed_start_date = cast(f_get_const(&#x27;selfemployed_start_date&#x27;) as date);
+  need_show_ft = 0;
+
+  if (selfemployed_start_date &lt;&gt; &#x27;31.12.9999&#x27; and
+      exists(select *
+             from miniappclient mac
+             inner join miniapp ma on ma.ma_id = mac.mac_from_ma_id and
+                    ma.ma_is_active = 1 and
+                    ma.ma_date_end &gt;= &#x27;31.12.9999&#x27;
+             inner join product pr on pr.pr_id = ma.ma_from_pr_id and
+                    pr.pr_code containing &#x27;.selfemployed.&#x27;
+             where mac.mac_from_c_id = :c_id and
+                   not exists(select *
+                              from kontract kt
+                              inner join kontstate ks on ks.ks_from_k_id = kt.k_id and
+                                    ks.ks_state = 1 and
+                                    ks.ks_ol_is_delete = 0 and
+                                    ks.ks_date_begin &lt;= current_date
+                              where kt.k_from_ma_app_id = ma.ma_id))) then
+    need_show_ft = 1;
+
+  if (f_tmp_const(&#x27;use_perstemp&#x27;) = 1) then
+    need_show_ft = 0;
+
+  if (f_meet_valid(c_id, 120) = 0 and (select is_oivo from hp_check_oivo_assignment(:c_id, :un_id)) &lt;&gt; 1) then
+    res_text = f_lang(lang, &#x27;Требуется верификация клиента по QR-коду.&#x27;);
+  else if (f_asp_valid(c_id, current_date) = 0) then
+    res_text =  f_lang(lang, &#x27;Требуется подписание договора АСП с клиентом.&#x27;);
+  else if (f_ft_valid(c_id, current_date) = 1 and need_show_ft = 0) then
+    res_text =  f_lang(lang, &#x27;Создание Анкеты-опросника не требуется&#x27;);
+
+
+  select fak.fak_id
+  from ft_anketa_kind fak
+  where fak.fak_code = :fak_code
+  into :fak_id;
+
+  if (res_text = &#x27;&#x27;) then
+  begin
+    for select &#x27;{&#x27; ||
+      f_json_make_pair(&#x27;id&#x27;, faf_id, &#x27;str&#x27;) || &#x27;,&#x27; ||
+      f_json_make_pair(&#x27;que&#x27;, trim(replace(faf_short_caption, &#x27;[company_name]&#x27;, :company_name)), &#x27;str&#x27;) || &#x27;,&#x27; ||
+      f_json_make_pair(&#x27;ans_0&#x27;, trim(faf_false_caption), &#x27;str&#x27;) || &#x27;,&#x27; ||
+      f_json_make_pair(&#x27;ans_1&#x27;, trim(faf_true_caption), &#x27;str&#x27;) || &#x27;,&#x27; ||
+      f_json_make_pair(&#x27;ans_def&#x27;, faf_default_value, &#x27;str&#x27;) || &#x27;,&#x27; ||
+      f_json_make_pair(&#x27;has_text&#x27;, faf_need_comment, &#x27;str&#x27;) || &#x27;}&#x27;
+    from ft_anketa_field
+    where faf_inactive = 0 and
+    faf_from_fak_id = :fak_id
+    order by faf_position
+    into json_item
+    do
+      res_data = res_data || iif(res_data = &#x27;&#x27;, &#x27;[&#x27;, &#x27;,&#x27;) || json_item;
+    res_data = res_data || &#x27;]&#x27;;
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0209_SQL — процедура — схема БД</title>
+<meta name="description" content="Процедура CM_RU_0209_SQL: 3 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0209_SQL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0209_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable pr_code d_str_100;
+declare variable c_id d_id;
+declare variable disb_date d_date;
+declare variable active_loan_cnt d_integer;
+declare variable tmp_k_id d_id;
+declare variable delinq_days d_integer;
+declare variable k_kontract_no d_str_code;
+declare variable loan_is_closed d_bool;
+declare variable active_loan_balance d_currency;
+declare variable is_refund d_bool;
+declare variable client_points d_integer;
+declare variable client_allowed_amount d_currency;
+declare variable pr_name d_str_100;
+declare variable kc_amount_approved d_currency;
+declare variable delinq_day d_integer;
+begin
+  -- Проверка договоров по продукту Лето Плюс
+
+  select pr_code, k_disb_date, k_refund, pr_name
+  from kontract, product
+  where k_id = :k_id
+  and k_from_pr_id = pr_id
+  into pr_code, disb_date, is_refund, pr_name;
+
+  if (is_refund = 1 and
+      (disb_date not between &#x27;01.08.2022&#x27; and &#x27;23.08.2022&#x27; and
+       disb_date not between &#x27;18.10.2022&#x27; and &#x27;31.10.2022&#x27; and
+       disb_date not between &#x27;02.12.2022&#x27; and &#x27;30.12.2022&#x27; and
+       disb_date not between &#x27;15.05.2023&#x27; and &#x27;31.05.2023&#x27;
+       )) then
+  begin
+--    res_error_text = &#x27;Рефинансирование запрещается!&#x27;;
+--    res_error_is_critical = 2;
+--    suspend;
+  end 
+
+  -- Проверяем только Лето Плюс
+  if (pr_code not containing &#x27;.summer_plus.&#x27; and pr_code not containing &#x27;.comfortable.&#x27;) then
+    exit;
+
+  -- Проверка даты выдачи
+  if (pr_code containing &#x27;.summer_plus.&#x27; and disb_date not between &#x27;01.08.2022&#x27; and &#x27;23.08.2022&#x27;) then
+  begin
+    res_error_text = &#x27;Продукт Лето Плюс действует только с 01.08.2022 по 23.08.2022&#x27;;
+    res_error_is_critical = 2;
+    suspend;
+  end
+--  if (pr_code containing &#x27;.comfortable.&#x27; and
+--      disb_date not between &#x27;19.10.2022&#x27; and &#x27;31.10.2022&#x27; and
+--      disb_date not between &#x27;02.12.2022&#x27; and &#x27;30.12.2022&#x27; and
+--      disb_date not between &#x27;15.05.2023&#x27; and &#x27;31.05.2023&#x27;
+--      ) then
+--  begin
+--    res_error_text = &#x27;Продукт Удобный действует только с 19.10.2022 по 31.10.2022&#x27;;
+--    res_error_is_critical = 2;
+--    suspend;
+--  end
+
+  -- Проверки уровня клиента
+  for select kc_from_c_id, c_name_fio, kc_amount_approved
+  from knclient, clients
+  where kc_from_k_id = :k_id
+    and kc_amount_approved &gt; 0
+    and kc_from_c_id = c_id
+  into c_id, res_info_text, kc_amount_approved
+  do
+  begin
+
+    -- Клиент может получить заем только один раз по продукту Лето Плюс
+    if (exists(
+        select * from kontract, knclient, product
+        where kc_from_c_id = :c_id
+          and kc_from_k_id = k_id
+          and kc_amount_approved &gt; 0
+          and k_from_pr_id = pr_id
+          and pr_code containing &#x27;.summer_plus.&#x27;
+          and k_status &gt; 0
+          and k_id &lt;&gt; :k_id
+          ) and pr_code containing &#x27;.summer_plus.&#x27;
+          ) then
+    begin
+      res_error_text = &#x27;По продукту Лето Плюс разрешена выдача только одного займа&#x27;;
+      res_error_is_critical = 2;
+      suspend;
+    end
+    /*
+    if (exists(
+        select * from kontract, knclient, product
+        where kc_from_c_id = :c_id
+          and kc_from_k_id = k_id
+          and kc_amount_approved &gt; 0
+          and k_from_pr_id = pr_id
+          and pr_code containing &#x27;.comfortable.&#x27;
+          and k_status &gt; 0
+          and k_id &lt;&gt; :k_id
+          and k_disb_date &gt;= &#x27;02.12.2022&#x27;
+          )and pr_code containing &#x27;.comfortable.&#x27;) then
+    begin
+      res_error_text = &#x27;По продукту &quot;Удобный&quot; разрешена выдача только одного займа&#x27;;
+      res_error_is_critical = 2;
+      suspend;
+    end
+    */
+    /*if (exists(
+        select * from kontract, knclient, product, kontstate
+        where kc_from_c_id = :c_id
+          and kc_from_k_id = k_id
+          and kc_amount_approved &gt; 0
+          and k_from_pr_id = pr_id
+          and pr_code containing &#x27;.comfortable.&#x27;
+          and k_status &gt; 0
+          and k_id &lt;&gt; :k_id
+          and k_id = ks_from_k_id
+          and ks_ol_is_delete = 0
+          and ks_state = 1
+          and :disb_date between ks_date_begin and ks_date_end
+          ) and
+          pr_code containing &#x27;.comfortable.&#x27; and
+          is_refund = 0
+          ) then
+    begin
+      res_error_text = &#x27;Повторный &quot;Удоабный&quot; необходимо рефинансировать.&#x27;;
+      res_error_is_critical = 2;
+      suspend;
+    end*/
+
+    active_loan_cnt = 0;
+    -- Проверка просрочки разрешено не более 30 дней по активным займам
+    -- Если нет активных, проверяем последний закрытый
+    for with
+      -- Берем все активные займы клиента
+      active_loans as (
+        select kc_from_k_id as tmp_k_id, 0 as is_closed, (:disb_date - oks_delinq_date) as delinq_day
+        from knclient, oksummary
+        where kc_from_c_id = :c_id
+        and kc_amount_approved &gt; 0
+        and oks_from_k_id = kc_from_k_id
+        and :disb_date between oks_date_begin and oks_date_end
+        and oks_close_state = 0
+      ),
+      -- Берем последний закрытый займ клиента
+      closed_loans as (
+        select ks_from_k_id as tmp_k_id, 1 as is_closed, 0 delinq_day
+        from kontstate,  knclient
+        where kc_from_c_id = :c_id
+          and kc_from_k_id = ks_from_k_id
+          and kc_amount_approved &gt; 0
+          and ks_ol_is_delete = 0
+          and ks_state = 2
+          and ks_date_begin &lt;= :disb_date
+        order by ks_date_begin desc
+        rows 1
+      ),
+      all_loans as (
+        select tmp_k_id, is_closed, delinq_day from active_loans
+        union
+        select tmp_k_id, is_closed, delinq_day from closed_loans
+      )
+    select tmp_k_id, is_closed, k_kontract_no, delinq_day
+    from all_loans, kontract
+    where tmp_k_id = k_id
+    order by is_closed -- Сначала активные, потом закрытый
+    into tmp_k_id, loan_is_closed, k_kontract_no, delinq_day do
+    begin
+      if (delinq_day &lt; 0) then delinq_day = 0;
+      if (loan_is_closed = 0) then
+        active_loan_cnt = active_loan_cnt + 1;
+
+      -- Закрытый займ проверяем только если нет активных
+      if (loan_is_closed = 1 and active_loan_cnt &gt; 0) then
+        break;
+
+      select max(ok_ol_date - ok_sh_date)
+      from operkred
+      where ok_ol_is_active = 1
+      and ok_from_k_id = :tmp_k_id
+      and ok_os + ok_perc &lt; 0
+      and ok_type in (4,5)
+      and ok_ol_date &lt;= :disb_date
+      into delinq_days;
+
+      if (delinq_days &gt; 30 and pr_code not containing &#x27;.comfortable.&#x27;) then
+      begin
+        res_error_text = f_format(&#x27;Есть просрочка по договору %1 более 30 дней (%2).&#x27;, k_kontract_no, delinq_days);
+        res_error_is_critical = 2;
+        suspend;
+      end
+
+      if (delinq_day &gt; 0) then
+      begin
+        res_error_text = f_format(&#x27;Есть активная просрочка по договору %1, (%2).&#x27;, k_kontract_no, delinq_day);
+        res_error_is_critical = 2;
+        suspend;
+      end
+    end
+
+    if (active_loan_cnt &gt; 2 and pr_code not containing &#x27;.comfortable.&#x27;) then
+    begin
+      res_error_text = f_format(&#x27;У клиента больше двух активных займов (%1), нельзя выдавать продукт %2.&#x27;, active_loan_cnt, pr_name);
+      res_error_is_critical = 2;
+      suspend;
+    end
+
+    -- Проверка баллов на момент получения займа
+    -- Если рефинансирование, мы не проверяем. Т.к. будет неясно
+    if (is_refund = 0 and active_loan_cnt &gt; 0) then
+    begin
+      active_loan_balance = 0;
+      select sum(oks_balance)
+      from oksummary, knclient
+      where kc_from_c_id = :c_id
+      and kc_amount_approved &gt; 0
+      and oks_from_k_id = kc_from_k_id
+      and :disb_date between oks_date_begin and oks_date_end
+      and oks_from_k_id &lt;&gt; :k_id
+      and oks_close_state = 0
+      into active_loan_balance;
+
+      client_points = f_point_get(9, k_id, c_id, disb_date);
+      if (pr_code containing &#x27;.summer_plus.&#x27;) then
+      begin
+        client_allowed_amount =
+          case
+            when client_points &lt;= 6 then 50000
+            when client_points &lt;= 11 then 100000
+            else 150000
+          end;
+      end else
+      if (pr_code containing &#x27;.comfortable.&#x27;) then
+      begin
+        client_allowed_amount =
+        case
+          when client_points &lt;= 6 then 100000
+          when client_points &lt;= 11 then 160000
+          else 200000
+        end;
+      end 
+
+      if (client_allowed_amount &lt; active_loan_balance + kc_amount_approved) then
+      begin
+        res_error_text = f_format(&#x27;Превышена макс. допустимая сумма продукта %3, тек. баланс: %1, балл: %2.&#x27;, f_numtostr(active_loan_balance, 0), client_points, pr_name);
+        res_error_is_critical = 2;
+        suspend;
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,3796 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$UI_UXFORM_JSON — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$UI_UXFORM_JSON: 3 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$UI_UXFORM_JSON</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UA_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">VER_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ROW_JSON</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UFM_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UFM_UPDATED</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">USER_ACCESS</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$UI_UXFORM_JSON(
+    UA_UUID D_UUID,
+    VER_KIND D_STR_CODE,
+    UN_ID D_ID)
+RETURNS (
+    ROW_JSON D_BLOB_TEXT,
+    UFM_UUID D_UUID,
+    UFM_UPDATED D_DATETIME,
+    USER_ACCESS D_SMALLINT)
+AS
+declare variable tmp_values d_str_8100;
+declare variable form_ver_kind d_str_64;
+declare variable v_ux_split d_boolean;
+declare variable fr_uuid d_uuid;
+declare variable grid_uuid d_uuid;
+declare variable ufp d_uuid;
+declare variable first_frame d_boolean;
+declare variable first_menu d_boolean;
+declare variable first_fri d_boolean;
+declare variable first_grid d_boolean;
+declare variable first_band d_boolean;
+declare variable first_gf d_boolean;
+declare variable first_combo d_boolean;
+declare variable first_evt d_boolean;
+declare variable first_cfg d_boolean;
+declare variable first_key d_boolean;
+declare variable got_action d_boolean;
+declare variable got_ud d_boolean;
+declare variable json_8100 d_str_8100;
+begin
+  tmp_values = &#x27;&#x27;;
+  json_8100 = &#x27;&#x27;;
+  ufm_uuid = null;
+  ufm_updated = null;
+  user_access = null;
+  v_ux_split = false;
+  got_action = false;
+  row_json = &#x27;&#x27;;
+
+  select first 1 v.ufm_uuid, v.ufm_updated, v.user_access
+  from uxp$ui_ux_versions(:ua_uuid, :ver_kind, :un_id) v
+  into :ufm_uuid, :ufm_updated, :user_access;
+
+  if (ufm_uuid is null) then
+    exception e_message &#x27;uxp$ui_ux_versions вернул пустой набор данных&#x27;;
+
+  /* --- только meta при отказе в доступе (как в pascal) --- */
+  if (coalesce(user_access, 0) &lt;&gt; 1) then
+  begin
+    tmp_values = &#x27;{&#x27;;
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+
+    tmp_values = &#x27;&quot;meta&quot;:{&#x27;;
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+
+    tmp_values = &#x27;&quot;ua_uuid&quot;:&#x27; || uxf$fn_json_uuid(:ua_uuid);
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+
+    tmp_values = &#x27;,&quot;ver_kind&quot;:&#x27; || uxf$fn_json_str(:ver_kind);
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+
+    tmp_values = &#x27;,&quot;ufm_uuid&quot;:&#x27; || uxf$fn_json_uuid(:ufm_uuid);
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+
+    tmp_values = &#x27;,&quot;ufm_updated&quot;:&#x27; || uxf$fn_json_dt(:ufm_updated);
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+
+    tmp_values = &#x27;,&quot;user_access&quot;:false&#x27;;
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+
+    tmp_values = &#x27;}}&#x27;;
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+  end
+  else
+  begin
+    form_ver_kind = uuid_to_char(cast(:ufm_uuid as d_uuid));
+
+    tmp_values = &#x27;{&#x27;;
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+
+    tmp_values = &#x27;&quot;meta&quot;:{&#x27;;
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+
+    tmp_values = &#x27;&quot;ua_uuid&quot;:&#x27; || uxf$fn_json_uuid(:ua_uuid);
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+
+    tmp_values = &#x27;,&quot;ver_kind&quot;:&#x27; || uxf$fn_json_str(:ver_kind);
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+
+    tmp_values = &#x27;,&quot;ufm_uuid&quot;:&#x27; || uxf$fn_json_uuid(:ufm_uuid);
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+
+    tmp_values = &#x27;,&quot;ufm_updated&quot;:&#x27; || uxf$fn_json_dt(:ufm_updated);
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+
+    tmp_values = &#x27;,&quot;user_access&quot;:true&#x27;;
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+
+    tmp_values = &#x27;}&#x27;;
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+
+    tmp_values = &#x27;,&quot;uxaction&quot;:&#x27;;
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+
+    /* --- uxaction: одна строка (пустой объект {}, если нет строки) --- */
+    for select *
+        from uxp$ui_uxaction(:ua_uuid, :form_ver_kind) as cursor cur
+    do
+    begin
+      got_action = true;
+      tmp_values = &#x27;{&#x27;;
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;&quot;ua_action_kind&quot;:&#x27; || uxf$fn_json_str(cur.ua_action_kind);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ua_disable_on_edit&quot;:&#x27; || uxf$fn_json_bool(cur.ua_disable_on_edit);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ua_readonly&quot;:&#x27; || uxf$fn_json_bool(cur.ua_readonly);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;uxa_uuid&quot;:&#x27; || uxf$fn_json_uuid(cur.uxa_uuid);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;uxa_code&quot;:&#x27; || uxf$fn_json_str(cur.uxa_code);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ux_caption&quot;:&#x27; || uxf$fn_json_str(cur.ux_caption);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ux_kind&quot;:&#x27; || uxf$fn_json_int(cast(cur.ux_kind as d_id));
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ux_width&quot;:&#x27; || uxf$fn_json_int(cast(cur.ux_width as d_id));
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ux_height&quot;:&#x27; || uxf$fn_json_int(cast(cur.ux_height as d_id));
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ux_dialogedit_ua_uuid&quot;:&#x27; || uxf$fn_json_uuid(cur.ux_dialogedit_ua_uuid);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ux_dialogedit_field&quot;:&#x27; || uxf$fn_json_str(cur.ux_dialogedit_field);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ux_dialogedit_is_param&quot;:&#x27; || uxf$fn_json_bool(cur.ux_dialogedit_is_param);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ux_dialogedit_find_field&quot;:&#x27; || uxf$fn_json_str(cur.ux_dialogedit_find_field);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ux_source_rows&quot;:&#x27; || uxf$fn_json_int(cast(cur.ux_source_rows as d_id));
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ux_source_refresh&quot;:&#x27; || uxf$fn_json_bool(cur.ux_source_refresh);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ux_source_locate_fields&quot;:&#x27; || uxf$fn_json_str(cur.ux_source_locate_fields);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ux_form_invisible&quot;:&#x27; || uxf$fn_json_bool(cur.ux_form_invisible);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ux_split_params&quot;:&#x27; || uxf$fn_json_bool(cur.ux_split_params);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ux_ver_kind&quot;:&#x27; || uxf$fn_json_str(cur.ux_ver_kind);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ux_public_param_sql&quot;:&#x27; || uxf$fn_json_str(cur.ux_public_param_sql);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ux_report_kind&quot;:&#x27; || uxf$fn_json_str(cur.ux_report_kind);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ux_split_param_width&quot;:&#x27; || uxf$fn_json_int(cast(cur.ux_split_param_width as d_id));
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;us_async_mode&quot;:&#x27; || uxf$fn_json_bool(cur.us_async_mode);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ux_report_import_kind&quot;:&#x27; || uxf$fn_json_int(cast(cur.ux_report_import_kind as d_id));
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ux_report_import_id&quot;:&#x27; || uxf$fn_json_int(cast(cur.ux_report_import_id as d_id));
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;us_use_report_db&quot;:&#x27; || uxf$fn_json_bool(cur.us_use_report_db);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;us_allow_switch_db&quot;:&#x27; || uxf$fn_json_bool(cur.us_allow_switch_db);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ufm_web_help&quot;:&#x27; || uxf$fn_json_str(cur.ufm_web_help);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ux_dialogedit_multi_delimiter&quot;:&#x27; || uxf$fn_json_str(cur.ux_dialogedit_multi_delimiter);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;uxa_menu_kind&quot;:&#x27; || uxf$fn_json_int(cast(cur.uxa_menu_kind as d_id));
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ux_commit_dialog&quot;:&#x27; || uxf$fn_json_bool(cur.ux_commit_dialog);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ufm_dont_prepare_on_show&quot;:&#x27; || uxf$fn_json_bool(cur.ufm_dont_prepare_on_show);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ufm_updates_kind&quot;:&#x27; || uxf$fn_json_int(cast(cur.ufm_updates_kind as d_id));
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ua_auto_refresh_seconds&quot;:&#x27; || uxf$fn_json_int(cast(cur.ua_auto_refresh_seconds as d_id));
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ux_lifetime_secs&quot;:&#x27; || uxf$fn_json_int(cast(cur.ux_lifetime_secs as d_id));
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ua_has_outputs&quot;:&#x27; || uxf$fn_json_bool(cur.ua_has_outputs);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ua_orig_readonly&quot;:&#x27; || uxf$fn_json_bool(cur.ua_orig_readonly);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ux_close_on_save&quot;:&#x27; || uxf$fn_json_bool(cur.ux_close_on_save);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ux_is_preblanks&quot;:&#x27; || uxf$fn_json_bool(cur.ux_is_preblanks);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ua_trigger_code&quot;:&#x27; || uxf$fn_json_str(cur.ua_trigger_code);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ua_preblank_save&quot;:&#x27; || uxf$fn_json_str(cur.ua_preblank_save);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ux_is_doc&quot;:&#x27; || uxf$fn_json_bool(cur.ux_is_doc);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ux_repost_ua_uuid&quot;:&#x27; || uxf$fn_json_uuid(cur.ux_repost_ua_uuid);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;ux_doc_frame_uuid&quot;:&#x27; || uxf$fn_json_uuid(cur.ux_doc_frame_uuid);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      if (cur.ufm_excel is null) then
+      begin
+        tmp_values = &#x27;,&quot;ufm_excel&quot;:&quot;&quot;&#x27;;
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+      end
+      else
+      begin
+        if (json_8100 &lt;&gt; &#x27;&#x27;) then
+          row_json = blob_append(row_json, json_8100);
+        row_json = blob_append(row_json, &#x27;,&quot;ufm_excel&quot;:&quot;&#x27; || coalesce(base64_encode(cur.ufm_excel), &#x27;&#x27;) || &#x27;&quot;&#x27;);
+        json_8100 = &#x27;&#x27;;
+      end
+      tmp_values = &#x27;}&#x27;;
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      v_ux_split = coalesce(cur.ux_split_params, 0) = 1;
+      leave;
+    end
+
+    if (not got_action) then
+    begin
+      tmp_values = &#x27;{}&#x27;;
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+    end
+
+    tmp_values = &#x27;,&quot;uxframes&quot;:[&#x27;;
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+
+    first_frame = true;
+    for select *
+        from uxp$ui_uxframes(:ua_uuid, :form_ver_kind) as cursor fr
+    do
+    begin
+      if (not first_frame) then
+      begin
+        tmp_values = &#x27;,&#x27;;
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+      end
+      first_frame = false;
+
+      tmp_values = &#x27;{&#x27;;
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;&quot;fr_code&quot;:&#x27; || uxf$fn_json_str(fr.fr_code), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;fr_caption&quot;:&#x27; || uxf$fn_json_str(fr.fr_caption), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;fr_uuid&quot;:&#x27; || uxf$fn_json_uuid(fr.fr_uuid), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_can_update&quot;:&#x27; || uxf$fn_json_bool(fr.ufr_can_update), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_can_insert&quot;:&#x27; || uxf$fn_json_bool(fr.ufr_can_insert), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_can_delete&quot;:&#x27; || uxf$fn_json_bool(fr.ufr_can_delete), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_key_fields&quot;:&#x27; || uxf$fn_json_str(fr.ufr_key_fields), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_param_sql&quot;:&#x27; || uxf$fn_json_str(fr.ufr_param_sql), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_select_sql&quot;:&#x27; || uxf$fn_json_str(fr.ufr_select_sql), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_update_sql&quot;:&#x27; || uxf$fn_json_str(fr.ufr_update_sql), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_insert_sql&quot;:&#x27; || uxf$fn_json_str(fr.ufr_insert_sql), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_delete_sql&quot;:&#x27; || uxf$fn_json_str(fr.ufr_delete_sql), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_master_fr_uuid&quot;:&#x27; || uxf$fn_json_uuid(fr.ufr_master_fr_uuid), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_master_fr_code&quot;:&#x27; || uxf$fn_json_str(fr.ufr_master_fr_code), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_master_field&quot;:&#x27; || uxf$fn_json_str(fr.ufr_master_field), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_detail_field&quot;:&#x27; || uxf$fn_json_str(fr.ufr_detail_field), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_is_main&quot;:&#x27; || uxf$fn_json_bool(fr.ufr_is_main), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_has_exec_proc&quot;:&#x27; || uxf$fn_json_bool(fr.ufr_has_exec_proc), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_is_grid&quot;:&#x27; || uxf$fn_json_bool(fr.ufr_is_grid), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_select_is_exec&quot;:&#x27; || uxf$fn_json_bool(fr.ufr_select_is_exec), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_autoincfield&quot;:&#x27; || uxf$fn_json_str(fr.ufr_autoincfield), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_access_update&quot;:&#x27; || uxf$fn_json_bool(fr.ufr_access_update), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_access_insert&quot;:&#x27; || uxf$fn_json_bool(fr.ufr_access_insert), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_access_delete&quot;:&#x27; || uxf$fn_json_bool(fr.ufr_access_delete), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_default_ua_uuid&quot;:&#x27; || uxf$fn_json_uuid(fr.ufr_default_ua_uuid), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_inplace_uuid&quot;:&#x27; || uxf$fn_json_uuid(fr.ufr_inplace_uuid), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_append_field&quot;:&#x27; || uxf$fn_json_str(fr.ufr_append_field), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_clone_uuid&quot;:&#x27; || uxf$fn_json_uuid(fr.ufr_clone_uuid), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_clone_kind&quot;:&#x27; || uxf$fn_json_str(fr.ufr_clone_kind), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_tree_parent_field&quot;:&#x27; || uxf$fn_json_str(fr.ufr_tree_parent_field), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_tree_image_field&quot;:&#x27; || uxf$fn_json_str(fr.ufr_tree_image_field), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_refresh_params&quot;:&#x27; || uxf$fn_json_str(fr.ufr_refresh_params), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_tree_move_sql&quot;:&#x27; || uxf$fn_json_str(fr.ufr_tree_move_sql), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_tree_position_field&quot;:&#x27; || uxf$fn_json_str(fr.ufr_tree_position_field), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_tree_can_drag_field&quot;:&#x27; || uxf$fn_json_str(fr.ufr_tree_can_drag_field), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufr_tree_can_drop_field&quot;:&#x27; || uxf$fn_json_str(fr.ufr_tree_can_drop_field), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;menu_actions&quot;:[&#x27;;
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      fr_uuid = fr.fr_uuid;
+      first_menu = true;
+      for select *
+          from uxp$ui_uxmenuactions(:ua_uuid, :fr_uuid) as cursor mn
+      do
+      begin
+        if (not first_menu) then
+        begin
+          tmp_values = &#x27;,&#x27;;
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+        end
+        first_menu = false;
+        tmp_values = &#x27;{&#x27;;
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;&quot;res_code&quot;:&#x27; || uxf$fn_json_str(mn.res_code), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;res_parent_code&quot;:&#x27; || uxf$fn_json_str(mn.res_parent_code), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;res_caption&quot;:&#x27; || uxf$fn_json_str(mn.res_caption), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;res_hint&quot;:&#x27; || uxf$fn_json_str(mn.res_hint), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;res_ua_uuid&quot;:&#x27; || uxf$fn_json_uuid(mn.res_ua_uuid), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;res_jsondoc_field&quot;:&#x27; || uxf$fn_json_str(mn.res_jsondoc_field), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;res_img_uuid_code&quot;:&#x27; || uxf$fn_json_str(mn.res_img_uuid_code), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;res_inactive&quot;:&#x27; || uxf$fn_json_bool(mn.res_inactive), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;res_disable_on_edit&quot;:&#x27; || uxf$fn_json_bool(mn.res_disable_on_edit), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;res_is_frame&quot;:&#x27; || uxf$fn_json_bool(mn.res_is_frame), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;res_is_report&quot;:&#x27; || uxf$fn_json_bool(mn.res_is_report), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;res_is_command&quot;:&#x27; || uxf$fn_json_bool(mn.res_is_command), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;res_uxa_owner&quot;:&#x27; || uxf$fn_json_uuid(mn.res_uxa_owner), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;res_data_linked&quot;:&#x27; || uxf$fn_json_bool(mn.res_data_linked), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;res_soft_linked&quot;:&#x27; || uxf$fn_json_bool(mn.res_soft_linked), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;res_hotkey&quot;:&#x27; || uxf$fn_json_str(mn.res_hotkey), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;res_add_delimiter&quot;:&#x27; || uxf$fn_json_int(cast(mn.res_add_delimiter as d_id)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;res_expr_uuid&quot;:&#x27; || uxf$fn_json_uuid(mn.res_expr_uuid), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;res_is_group&quot;:&#x27; || uxf$fn_json_bool(mn.res_is_group), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;res_alias_group&quot;:&#x27; || uxf$fn_json_str(mn.res_alias_group), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;res_group_expr_uuid&quot;:&#x27; || uxf$fn_json_uuid(mn.res_group_expr_uuid), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;res_uxa_fcode&quot;:&#x27; || uxf$fn_json_str(mn.res_uxa_fcode), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;res_linked_frames&quot;:&#x27; || uxf$fn_json_str(mn.res_linked_frames), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;res_trigger_code&quot;:&#x27; || uxf$fn_json_str(mn.res_trigger_code), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;res_is_blank&quot;:&#x27; || uxf$fn_json_bool(mn.res_is_blank), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;res_hide_menu&quot;:&#x27; || uxf$fn_json_bool(mn.res_hide_menu), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;res_is_insert&quot;:&#x27; || uxf$fn_json_bool(mn.res_is_insert), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = &#x27;}&#x27;;
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+      end
+
+      tmp_values = &#x27;]}&#x27;;
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+    end
+
+    tmp_values = &#x27;]&#x27;;
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+
+    /* --- uxfritems --- */
+    tmp_values = &#x27;,&quot;uxfritems&quot;:[&#x27;;
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+
+    first_fri = true;
+    for select *
+        from uxp$ui_uxfritems(:ua_uuid, &#x27;&#x27;, :form_ver_kind, null) as cursor fi
+    do
+    begin
+      if (not first_fri) then
+      begin
+        tmp_values = &#x27;,&#x27;;
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+      end
+      first_fri = false;
+      tmp_values = &#x27;{&#x27;;
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;&quot;ufi_uuid&quot;:&#x27; || uxf$fn_json_uuid(fi.ufi_uuid), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_code&quot;:&#x27; || uxf$fn_json_str(fi.ufi_code), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_parent_uuid&quot;:&#x27; || uxf$fn_json_uuid(fi.ufi_parent_uuid), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_parent_code&quot;:&#x27; || uxf$fn_json_str(fi.ufi_parent_code), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_kind&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_kind as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_control&quot;:&#x27; || uxf$fn_json_str(fi.ufi_control), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_position&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_position as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_name&quot;:&#x27; || uxf$fn_json_str(fi.ufi_name), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_caption_align&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_caption_align as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_hint&quot;:&#x27; || uxf$fn_json_str(fi.ufi_hint), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_hidden&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_hidden as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufp_required&quot;:&#x27; || uxf$fn_json_bool(fi.ufp_required), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_refresh&quot;:&#x27; || uxf$fn_json_bool(fi.ufi_refresh), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_readonly&quot;:&#x27; || uxf$fn_json_bool(fi.ufi_readonly), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_group_direction&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_group_direction as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_h_align&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_h_align as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_v_align&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_v_align as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_width&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_width as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_height&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_height as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_sizable&quot;:&#x27; || uxf$fn_json_bool(fi.ufi_sizable), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_order_index&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_order_index as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_group_index&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_group_index as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_fixed_kind&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_fixed_kind as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_summary_kind&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_summary_kind as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_dataset_field&quot;:&#x27; || uxf$fn_json_str(fi.ufi_dataset_field), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_lookup_sql&quot;:&#x27; || uxf$fn_json_str(fi.ufi_lookup_sql), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_ufr_code&quot;:&#x27; || uxf$fn_json_str(fi.ufi_ufr_code), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_ufr_uuid&quot;:&#x27; || uxf$fn_json_uuid(fi.ufi_ufr_uuid), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_is_param&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_is_param as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_combo_uf_uuid&quot;:&#x27; || uxf$fn_json_uuid(fi.ufi_combo_uf_uuid), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;fr_code&quot;:&#x27; || uxf$fn_json_str(fi.fr_code), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;fr_uuid&quot;:&#x27; || uxf$fn_json_uuid(fi.fr_uuid), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_ua_uuid&quot;:&#x27; || uxf$fn_json_uuid(fi.ufi_ua_uuid), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;usr_id_field&quot;:&#x27; || uxf$fn_json_str(fi.usr_id_field), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;usr_text_field&quot;:&#x27; || uxf$fn_json_str(fi.usr_text_field), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ua_usr_id_field&quot;:&#x27; || uxf$fn_json_str(fi.ua_usr_id_field), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ua_usr_text_field&quot;:&#x27; || uxf$fn_json_str(fi.ua_usr_text_field), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;usr_editor_param_field&quot;:&#x27; || uxf$fn_json_str(fi.usr_editor_param_field), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;usr_editor_readonly&quot;:&#x27; || uxf$fn_json_bool(fi.usr_editor_readonly), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufp_edit_mask&quot;:&#x27; || uxf$fn_json_str(fi.ufp_edit_mask), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufp_mask_message&quot;:&#x27; || uxf$fn_json_str(fi.ufp_mask_message), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_list_kind&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_list_kind as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufp_public&quot;:&#x27; || uxf$fn_json_bool(fi.ufp_public), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_global_param&quot;:&#x27; || uxf$fn_json_str(fi.ufi_global_param), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_img_uuid_code&quot;:&#x27; || uxf$fn_json_str(fi.ufi_img_uuid_code), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_uf_uuid&quot;:&#x27; || uxf$fn_json_uuid(fi.ufi_uf_uuid), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_event_control&quot;:&#x27; || uxf$fn_json_str(fi.ufi_event_control), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;edi_name&quot;:&#x27; || uxf$fn_json_str(fi.edi_name), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;usr_multiselect_delimiter&quot;:&#x27; || uxf$fn_json_str(fi.usr_multiselect_delimiter), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_band_index&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_band_index as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_header_align&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_header_align as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_value_align&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_value_align as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufp_uuid&quot;:&#x27; || uxf$fn_json_uuid(fi.ufp_uuid), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;usr_is_form_editor&quot;:&#x27; || uxf$fn_json_bool(fi.usr_is_form_editor), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_font_size&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_font_size as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_add_expr_button&quot;:&#x27; || uxf$fn_json_bool(fi.ufi_add_expr_button), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_add_action_button&quot;:&#x27; || uxf$fn_json_bool(fi.ufi_add_action_button), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufi_action_name&quot;:&#x27; || uxf$fn_json_str(fi.ufi_action_name), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;}&#x27;;
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+    end
+    tmp_values = &#x27;]&#x27;;
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+
+    if (v_ux_split) then
+    begin
+      /* --- uxfritems_split --- */
+      tmp_values = &#x27;,&quot;uxfritems_split&quot;:[&#x27;;
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      first_fri = true;
+      for select *
+          from uxp$ui_uxfritems(:ua_uuid, &#x27;split&#x27;, :form_ver_kind, null) as cursor fi
+      do
+      begin
+        if (not first_fri) then
+        begin
+          tmp_values = &#x27;,&#x27;;
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+        end
+        first_fri = false;
+        tmp_values = &#x27;{&#x27;;
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;&quot;ufi_uuid&quot;:&#x27; || uxf$fn_json_uuid(fi.ufi_uuid), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_code&quot;:&#x27; || uxf$fn_json_str(fi.ufi_code), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_parent_uuid&quot;:&#x27; || uxf$fn_json_uuid(fi.ufi_parent_uuid), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_parent_code&quot;:&#x27; || uxf$fn_json_str(fi.ufi_parent_code), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_kind&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_kind as d_id)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_control&quot;:&#x27; || uxf$fn_json_str(fi.ufi_control), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_position&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_position as d_id)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_name&quot;:&#x27; || uxf$fn_json_str(fi.ufi_name), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_caption_align&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_caption_align as d_id)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_hint&quot;:&#x27; || uxf$fn_json_str(fi.ufi_hint), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_hidden&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_hidden as d_id)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufp_required&quot;:&#x27; || uxf$fn_json_bool(fi.ufp_required), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_refresh&quot;:&#x27; || uxf$fn_json_bool(fi.ufi_refresh), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_readonly&quot;:&#x27; || uxf$fn_json_bool(fi.ufi_readonly), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_group_direction&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_group_direction as d_id)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_h_align&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_h_align as d_id)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_v_align&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_v_align as d_id)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_width&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_width as d_id)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_height&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_height as d_id)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_sizable&quot;:&#x27; || uxf$fn_json_bool(fi.ufi_sizable), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_order_index&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_order_index as d_id)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_group_index&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_group_index as d_id)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_fixed_kind&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_fixed_kind as d_id)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_summary_kind&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_summary_kind as d_id)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_dataset_field&quot;:&#x27; || uxf$fn_json_str(fi.ufi_dataset_field), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_lookup_sql&quot;:&#x27; || uxf$fn_json_str(fi.ufi_lookup_sql), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_ufr_code&quot;:&#x27; || uxf$fn_json_str(fi.ufi_ufr_code), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_ufr_uuid&quot;:&#x27; || uxf$fn_json_uuid(fi.ufi_ufr_uuid), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_is_param&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_is_param as d_id)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_combo_uf_uuid&quot;:&#x27; || uxf$fn_json_uuid(fi.ufi_combo_uf_uuid), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;fr_code&quot;:&#x27; || uxf$fn_json_str(fi.fr_code), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;fr_uuid&quot;:&#x27; || uxf$fn_json_uuid(fi.fr_uuid), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_ua_uuid&quot;:&#x27; || uxf$fn_json_uuid(fi.ufi_ua_uuid), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;usr_id_field&quot;:&#x27; || uxf$fn_json_str(fi.usr_id_field), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;usr_text_field&quot;:&#x27; || uxf$fn_json_str(fi.usr_text_field), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ua_usr_id_field&quot;:&#x27; || uxf$fn_json_str(fi.ua_usr_id_field), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ua_usr_text_field&quot;:&#x27; || uxf$fn_json_str(fi.ua_usr_text_field), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;usr_editor_param_field&quot;:&#x27; || uxf$fn_json_str(fi.usr_editor_param_field), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;usr_editor_readonly&quot;:&#x27; || uxf$fn_json_bool(fi.usr_editor_readonly), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufp_edit_mask&quot;:&#x27; || uxf$fn_json_str(fi.ufp_edit_mask), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufp_mask_message&quot;:&#x27; || uxf$fn_json_str(fi.ufp_mask_message), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_list_kind&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_list_kind as d_id)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufp_public&quot;:&#x27; || uxf$fn_json_bool(fi.ufp_public), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_global_param&quot;:&#x27; || uxf$fn_json_str(fi.ufi_global_param), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_img_uuid_code&quot;:&#x27; || uxf$fn_json_str(fi.ufi_img_uuid_code), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_uf_uuid&quot;:&#x27; || uxf$fn_json_uuid(fi.ufi_uf_uuid), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_event_control&quot;:&#x27; || uxf$fn_json_str(fi.ufi_event_control), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;edi_name&quot;:&#x27; || uxf$fn_json_str(fi.edi_name), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;usr_multiselect_delimiter&quot;:&#x27; || uxf$fn_json_str(fi.usr_multiselect_delimiter), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_band_index&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_band_index as d_id)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_header_align&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_header_align as d_id)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_value_align&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_value_align as d_id)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufp_uuid&quot;:&#x27; || uxf$fn_json_uuid(fi.ufp_uuid), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;usr_is_form_editor&quot;:&#x27; || uxf$fn_json_bool(fi.usr_is_form_editor), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_font_size&quot;:&#x27; || uxf$fn_json_int(cast(fi.ufi_font_size as d_id)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_add_expr_button&quot;:&#x27; || uxf$fn_json_bool(fi.ufi_add_expr_button), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_add_action_button&quot;:&#x27; || uxf$fn_json_bool(fi.ufi_add_action_button), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ufi_action_name&quot;:&#x27; || uxf$fn_json_str(fi.ufi_action_name), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = &#x27;}&#x27;;
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+      end
+      tmp_values = &#x27;]&#x27;;
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+    end
+
+    /* --- uxgrid --- */
+    tmp_values = &#x27;,&quot;uxgrid&quot;:[&#x27;;
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+
+    first_grid = true;
+    for select distinct x.ufi_uuid
+        from uxp$ui_uxfritems(:ua_uuid, &#x27;&#x27;, :form_ver_kind, null) x
+        where lower(x.ufi_control) in (&#x27;grid&#x27;, &#x27;tree&#x27;)
+        into :grid_uuid
+    do
+    begin
+      for select *
+          from uxp$ui_uxgrid(:grid_uuid) as cursor gr
+      do
+      begin
+        if (not first_grid) then
+        begin
+          tmp_values = &#x27;,&#x27;;
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+        end
+        first_grid = false;
+        tmp_values = &#x27;{&#x27;;
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;&quot;ugr_uuid&quot;:&#x27; || uxf$fn_json_uuid(:grid_uuid), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_name&quot;:&#x27; ||(uxf$fn_json_str(gr.ugr_name)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_memo&quot;:&#x27; ||(uxf$fn_json_str(gr.ugr_memo)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_is_private&quot;:&#x27; ||(uxf$fn_json_int(cast(gr.ugr_is_private as d_id))), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_hide_on_group&quot;:&#x27; ||(uxf$fn_json_int(cast(gr.ugr_hide_on_group as d_id))), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_group_panel&quot;:&#x27; ||(uxf$fn_json_int(cast(gr.ugr_group_panel as d_id))), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_find_panel&quot;:&#x27; ||(uxf$fn_json_int(cast(gr.ugr_find_panel as d_id))), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_hide_summary&quot;:&#x27; ||(uxf$fn_json_int(cast(gr.ugr_hide_summary as d_id))), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_updated&quot;:&#x27; ||(uxf$fn_json_dt(gr.ugr_updated)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_readonly&quot;:&#x27; ||(uxf$fn_json_int(cast(gr.ugr_readonly as d_id))), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_caption_align&quot;:&#x27; ||(uxf$fn_json_int(cast(gr.ugr_caption_align as d_id))), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_hidden&quot;:&#x27; ||(uxf$fn_json_int(cast(gr.ugr_hidden as d_id))), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_h_align&quot;:&#x27; ||(uxf$fn_json_int(cast(gr.ugr_h_align as d_id))), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_v_align&quot;:&#x27; ||(uxf$fn_json_int(cast(gr.ugr_v_align as d_id))), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_width&quot;:&#x27; ||(uxf$fn_json_int(cast(gr.ugr_width as d_id))), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_height&quot;:&#x27; ||(uxf$fn_json_int(cast(gr.ugr_height as d_id))), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_disable_edit&quot;:&#x27; ||(uxf$fn_json_int(cast(gr.ugr_disable_edit as d_id))), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_autowidth&quot;:&#x27; ||(uxf$fn_json_int(cast(gr.ugr_autowidth as d_id))), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_filter_uuid_code&quot;:&#x27; ||(uxf$fn_json_str(gr.ugr_filter_uuid_code)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_is_banded&quot;:&#x27; ||(uxf$fn_json_int(cast(gr.ugr_is_banded as d_id))), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_header_autoheight&quot;:&#x27; ||(uxf$fn_json_int(cast(gr.ugr_header_autoheight as d_id))), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_show_info_panel&quot;:&#x27; ||(uxf$fn_json_int(cast(gr.ugr_show_info_panel as d_id))), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_hide_inplace_editor&quot;:&#x27; ||(uxf$fn_json_int(cast(gr.ugr_hide_inplace_editor as d_id))), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_show_excel_import&quot;:&#x27; ||(uxf$fn_json_int(cast(gr.ugr_show_excel_import as d_id))), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_owner_user&quot;:&#x27; ||(uxf$fn_json_str(gr.ugr_owner_user)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_ds_code&quot;:&#x27; ||(uxf$fn_json_str(gr.ugr_ds_code)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_group_field&quot;:&#x27; ||(uxf$fn_json_str(gr.ugr_group_field)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_formatting&quot;:&#x27; ||(uxf$fn_json_str(gr.ugr_formatting)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        if (gr.ugr_excel is null) then
+        begin
+          tmp_values = &#x27;,&quot;ugr_has_excel&quot;:0&#x27;;
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = &#x27;,&quot;ugr_excel&quot;:&quot;&quot;&#x27;;
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+        end
+        else
+        begin
+          tmp_values = &#x27;,&quot;ugr_has_excel&quot;:1&#x27;;
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          if (json_8100 &lt;&gt; &#x27;&#x27;) then
+            row_json = blob_append(row_json, json_8100);
+          row_json = blob_append(row_json, &#x27;,&quot;ugr_excel&quot;:&quot;&#x27; || coalesce(base64_encode(gr.ugr_excel), &#x27;&#x27;) || &#x27;&quot;&#x27;);
+          json_8100 = &#x27;&#x27;;
+        end
+        tmp_values = coalesce(&#x27;,&quot;ugr_tree_can_move&quot;:&#x27; ||(uxf$fn_json_int(cast(gr.ugr_tree_can_move as d_id))), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_allow_append&quot;:&#x27; ||(uxf$fn_json_int(cast(gr.ugr_allow_append as d_id))), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_ui_kind&quot;:&#x27; ||(uxf$fn_json_str(gr.ugr_ui_kind)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;ugr_calendar_fields&quot;:&#x27; ||(uxf$fn_json_str(gr.ugr_calendar_fields)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = &#x27;,&quot;bands&quot;:[&#x27;;
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        first_band = true;
+        for select *
+            from uxp$ui_uxband(:grid_uuid) as cursor bd
+        do
+        begin
+          if (not first_band) then
+          begin
+            tmp_values = &#x27;,&#x27;;
+            if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+            begin
+              row_json = blob_append(row_json, json_8100);
+              json_8100 = &#x27;&#x27;;
+            end
+            json_8100 = json_8100 || tmp_values;
+          end
+          first_band = false;
+          tmp_values = &#x27;{&#x27;;
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;&quot;bnd_grid_uuid&quot;:&#x27; ||(uxf$fn_json_uuid(bd.bnd_grid_uuid)), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;bnd_id&quot;:&#x27; ||(uxf$fn_json_int(cast(bd.bnd_id as d_id))), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;bnd_parent_id&quot;:&#x27; ||(uxf$fn_json_int(cast(bd.bnd_parent_id as d_id))), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;bnd_index&quot;:&#x27; ||(uxf$fn_json_int(cast(bd.bnd_index as d_id))), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;bnd_parent_index&quot;:&#x27; ||(uxf$fn_json_int(cast(bd.bnd_parent_index as d_id))), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;bnd_position&quot;:&#x27; ||(uxf$fn_json_int(cast(bd.bnd_position as d_id))), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;bnd_caption&quot;:&#x27; ||(uxf$fn_json_str(bd.bnd_caption)), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;bnd_hidden&quot;:&#x27; ||(uxf$fn_json_int(cast(bd.bnd_hidden as d_id))), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;bnd_hold_own&quot;:&#x27; ||(uxf$fn_json_int(cast(bd.bnd_hold_own as d_id))), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;bnd_width&quot;:&#x27; ||(uxf$fn_json_int(cast(bd.bnd_width as d_id))), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;bnd_fixed_kind&quot;:&#x27; ||(uxf$fn_json_int(cast(bd.bnd_fixed_kind as d_id))), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;bnd_childs&quot;:&#x27; ||(uxf$fn_json_int(cast(bd.bnd_childs as d_id))), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = &#x27;}&#x27;;
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+        end
+        tmp_values = &#x27;]&#x27;;
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = &#x27;,&quot;fields&quot;:[&#x27;;
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        first_gf = true;
+        for select *
+            from uxp$ui_uxgritems(:ua_uuid, :form_ver_kind, :grid_uuid) as cursor gf
+        do
+        begin
+          if (not first_gf) then
+          begin
+            tmp_values = &#x27;,&#x27;;
+            if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+            begin
+              row_json = blob_append(row_json, json_8100);
+              json_8100 = &#x27;&#x27;;
+            end
+            json_8100 = json_8100 || tmp_values;
+          end
+          first_gf = false;
+          tmp_values = &#x27;{&#x27;;
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;&quot;ufi_uuid&quot;:&#x27; || uxf$fn_json_uuid(gf.ufi_uuid), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_code&quot;:&#x27; || uxf$fn_json_str(gf.ufi_code), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_parent_uuid&quot;:&#x27; || uxf$fn_json_uuid(gf.ufi_parent_uuid), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_parent_code&quot;:&#x27; || uxf$fn_json_str(gf.ufi_parent_code), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_kind&quot;:&#x27; || uxf$fn_json_int(cast(gf.ufi_kind as d_id)), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_control&quot;:&#x27; || uxf$fn_json_str(gf.ufi_control), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_position&quot;:&#x27; || uxf$fn_json_int(cast(gf.ufi_position as d_id)), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_name&quot;:&#x27; || uxf$fn_json_str(gf.ufi_name), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_caption_align&quot;:&#x27; || uxf$fn_json_int(cast(gf.ufi_caption_align as d_id)), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_hint&quot;:&#x27; || uxf$fn_json_str(gf.ufi_hint), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_hidden&quot;:&#x27; || uxf$fn_json_int(cast(gf.ufi_hidden as d_id)), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufp_required&quot;:&#x27; || uxf$fn_json_bool(gf.ufp_required), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_refresh&quot;:&#x27; || uxf$fn_json_bool(gf.ufi_refresh), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_readonly&quot;:&#x27; || uxf$fn_json_bool(gf.ufi_readonly), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_group_direction&quot;:&#x27; || uxf$fn_json_int(cast(gf.ufi_group_direction as d_id)), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_h_align&quot;:&#x27; || uxf$fn_json_int(cast(gf.ufi_h_align as d_id)), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_v_align&quot;:&#x27; || uxf$fn_json_int(cast(gf.ufi_v_align as d_id)), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_width&quot;:&#x27; || uxf$fn_json_int(cast(gf.ufi_width as d_id)), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_height&quot;:&#x27; || uxf$fn_json_int(cast(gf.ufi_height as d_id)), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_sizable&quot;:&#x27; || uxf$fn_json_bool(gf.ufi_sizable), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_order_index&quot;:&#x27; || uxf$fn_json_int(cast(gf.ufi_order_index as d_id)), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_group_index&quot;:&#x27; || uxf$fn_json_int(cast(gf.ufi_group_index as d_id)), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_fixed_kind&quot;:&#x27; || uxf$fn_json_int(cast(gf.ufi_fixed_kind as d_id)), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_summary_kind&quot;:&#x27; || uxf$fn_json_int(cast(gf.ufi_summary_kind as d_id)), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_dataset_field&quot;:&#x27; || uxf$fn_json_str(gf.ufi_dataset_field), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_lookup_sql&quot;:&#x27; || uxf$fn_json_str(gf.ufi_lookup_sql), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_ufr_code&quot;:&#x27; || uxf$fn_json_str(gf.ufi_ufr_code), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_ufr_uuid&quot;:&#x27; || uxf$fn_json_uuid(gf.ufi_ufr_uuid), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_is_param&quot;:&#x27; || uxf$fn_json_int(cast(gf.ufi_is_param as d_id)), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_combo_uf_uuid&quot;:&#x27; || uxf$fn_json_uuid(gf.ufi_combo_uf_uuid), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;fr_code&quot;:&#x27; || uxf$fn_json_str(gf.fr_code), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;fr_uuid&quot;:&#x27; || uxf$fn_json_uuid(gf.fr_uuid), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_ua_uuid&quot;:&#x27; || uxf$fn_json_uuid(gf.ufi_ua_uuid), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;usr_id_field&quot;:&#x27; || uxf$fn_json_str(gf.usr_id_field), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;usr_text_field&quot;:&#x27; || uxf$fn_json_str(gf.usr_text_field), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ua_usr_id_field&quot;:&#x27; || uxf$fn_json_str(gf.ua_usr_id_field), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ua_usr_text_field&quot;:&#x27; || uxf$fn_json_str(gf.ua_usr_text_field), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;usr_editor_param_field&quot;:&#x27; || uxf$fn_json_str(gf.usr_editor_param_field), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;usr_editor_readonly&quot;:&#x27; || uxf$fn_json_bool(gf.usr_editor_readonly), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufp_edit_mask&quot;:&#x27; || uxf$fn_json_str(gf.ufp_edit_mask), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufp_mask_message&quot;:&#x27; || uxf$fn_json_str(gf.ufp_mask_message), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_list_kind&quot;:&#x27; || uxf$fn_json_int(cast(gf.ufi_list_kind as d_id)), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufp_public&quot;:&#x27; || uxf$fn_json_bool(gf.ufp_public), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_global_param&quot;:&#x27; || uxf$fn_json_str(gf.ufi_global_param), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_img_uuid_code&quot;:&#x27; || uxf$fn_json_str(gf.ufi_img_uuid_code), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_uf_uuid&quot;:&#x27; || uxf$fn_json_uuid(gf.ufi_uf_uuid), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_event_control&quot;:&#x27; || uxf$fn_json_str(gf.ufi_event_control), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;edi_name&quot;:&#x27; || uxf$fn_json_str(gf.edi_name), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;usr_multiselect_delimiter&quot;:&#x27; || uxf$fn_json_str(gf.usr_multiselect_delimiter), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_band_index&quot;:&#x27; || uxf$fn_json_int(cast(gf.ufi_band_index as d_id)), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_header_align&quot;:&#x27; || uxf$fn_json_int(cast(gf.ufi_header_align as d_id)), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_value_align&quot;:&#x27; || uxf$fn_json_int(cast(gf.ufi_value_align as d_id)), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufp_uuid&quot;:&#x27; || uxf$fn_json_uuid(gf.ufp_uuid), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;usr_is_form_editor&quot;:&#x27; || uxf$fn_json_bool(gf.usr_is_form_editor), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_font_size&quot;:&#x27; || uxf$fn_json_int(cast(gf.ufi_font_size as d_id)), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_add_expr_button&quot;:&#x27; || uxf$fn_json_bool(gf.ufi_add_expr_button), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_add_action_button&quot;:&#x27; || uxf$fn_json_bool(gf.ufi_add_action_button), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = coalesce(&#x27;,&quot;ufi_action_name&quot;:&#x27; || uxf$fn_json_str(gf.ufi_action_name), &#x27;&#x27;);
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+          tmp_values = &#x27;}&#x27;;
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+        end
+        tmp_values = &#x27;]&#x27;;
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = &#x27;}&#x27;;
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+      end
+    end
+    tmp_values = &#x27;]&#x27;;
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+
+    /* --- uxform_combo --- */
+    tmp_values = &#x27;,&quot;uxform_combo&quot;:[&#x27;;
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+
+    first_combo = true;
+    for select *
+        from uxp$ui_uxform_combo(:ufm_uuid) as cursor cb
+    do
+    begin
+      if (not first_combo) then
+      begin
+        tmp_values = &#x27;,&#x27;;
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+      end
+      first_combo = false;
+      tmp_values = &#x27;{&#x27;;
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;&quot;ufc_uf_uuid&quot;:&#x27; || uxf$fn_json_uuid(cb.ufc_uf_uuid), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufc_hide_text&quot;:&#x27; || uxf$fn_json_int(cast(cb.ufc_hide_text as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufc_combo_values&quot;:&#x27; || uxf$fn_json_str(cb.ufc_combo_values), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufc_kind&quot;:&#x27; || uxf$fn_json_int(cast(cb.ufc_kind as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufc_width&quot;:&#x27; || uxf$fn_json_int(cast(cb.ufc_width as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ufc_height&quot;:&#x27; || uxf$fn_json_int(cast(cb.ufc_height as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;}&#x27;;
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+    end
+    tmp_values = &#x27;]&#x27;;
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+
+    /* --- uxevents --- */
+    tmp_values = &#x27;,&quot;uxevents&quot;:[&#x27;;
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+
+    first_evt = true;
+    for select *
+        from uxp$ui_uxevents(:ufm_uuid) as cursor ev
+    do
+    begin
+      if (not first_evt) then
+      begin
+        tmp_values = &#x27;,&#x27;;
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+      end
+      first_evt = false;
+      tmp_values = &#x27;{&#x27;;
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;&quot;evt_sender_uuid&quot;:&#x27; || uxf$fn_json_uuid(ev.evt_sender_uuid), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;evt_event_kind&quot;:&#x27; || uxf$fn_json_int(cast(ev.evt_event_kind as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;evt_target_uuid&quot;:&#x27; || uxf$fn_json_uuid(ev.evt_target_uuid), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;evt_handler_kind&quot;:&#x27; || uxf$fn_json_int(cast(ev.evt_handler_kind as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;evt_expression&quot;:&#x27; || uxf$fn_json_str(ev.evt_expression), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;evt_sender_field_frame&quot;:&#x27; || uxf$fn_json_uuid(ev.evt_sender_field_frame), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;evt_sender_field_name&quot;:&#x27; || uxf$fn_json_str(ev.evt_sender_field_name), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;evt_sender_field_is_param&quot;:&#x27; || uxf$fn_json_int(cast(ev.evt_sender_field_is_param as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;evt_target_field_frame&quot;:&#x27; || uxf$fn_json_uuid(ev.evt_target_field_frame), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;evt_target_field_name&quot;:&#x27; || uxf$fn_json_str(ev.evt_target_field_name), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;evt_target_field_is_param&quot;:&#x27; || uxf$fn_json_int(cast(ev.evt_target_field_is_param as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;evt_link_kind&quot;:&#x27; || uxf$fn_json_int(cast(ev.evt_link_kind as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;evt_field_type&quot;:&#x27; || uxf$fn_json_int(cast(ev.evt_field_type as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;evt_expr_is_sql&quot;:&#x27; || uxf$fn_json_int(cast(ev.evt_expr_is_sql as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;evt_message&quot;:&#x27; || uxf$fn_json_str(ev.evt_message), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;}&#x27;;
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+    end
+    tmp_values = &#x27;]&#x27;;
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+
+    /* --- uxjsonconfig --- */
+    tmp_values = &#x27;,&quot;uxjsonconfig&quot;:[&#x27;;
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+
+    first_cfg = true;
+    for select *
+        from uxp$ui_uxjsonconfig(:ufm_uuid) as cursor jc
+    do
+    begin
+      if (not first_cfg) then
+      begin
+        tmp_values = &#x27;,&#x27;;
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+      end
+      first_cfg = false;
+      tmp_values = &#x27;{&#x27;;
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;&quot;ujs_ufp_uuid&quot;:&#x27; || uxf$fn_json_uuid(jc.ujs_ufp_uuid), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;,&quot;ujs_show_mode&quot;:&#x27; || uxf$fn_json_int(cast(jc.ujs_show_mode as d_id)), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;,&quot;keys&quot;:[&#x27;;
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      ufp = jc.ujs_ufp_uuid;
+      first_key = true;
+      for select *
+          from uxp$ui_uxjsonkeys(:ufp) as cursor jk
+      do
+      begin
+        if (not first_key) then
+        begin
+          tmp_values = &#x27;,&#x27;;
+          if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+          begin
+            row_json = blob_append(row_json, json_8100);
+            json_8100 = &#x27;&#x27;;
+          end
+          json_8100 = json_8100 || tmp_values;
+
+        end
+        first_key = false;
+        tmp_values = &#x27;{&#x27;;
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;&quot;key_name&quot;:&#x27; || uxf$fn_json_str(jk.key_name), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;key_caption&quot;:&#x27; || uxf$fn_json_str(jk.key_caption), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;key_memo&quot;:&#x27; || uxf$fn_json_str(jk.key_memo), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = coalesce(&#x27;,&quot;key_hidden&quot;:&#x27; || uxf$fn_json_int(cast(jk.key_hidden as d_id)), &#x27;&#x27;);
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+        tmp_values = &#x27;}&#x27;;
+        if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+        begin
+          row_json = blob_append(row_json, json_8100);
+          json_8100 = &#x27;&#x27;;
+        end
+        json_8100 = json_8100 || tmp_values;
+
+      end
+      tmp_values = &#x27;]&#x27;;
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;}&#x27;;
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+    end
+    tmp_values = &#x27;]&#x27;;
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+
+    /* --- userdeny --- */
+    tmp_values = &#x27;,&quot;userdeny&quot;:&#x27;;
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+
+    got_ud = false;
+    for select *
+        from uxp$ui_userdeny(:ufm_uuid, :un_id) as cursor ud
+    do
+    begin
+      got_ud = true;
+      tmp_values = &#x27;{&#x27;;
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = coalesce(&#x27;&quot;denied_actions&quot;:&#x27; || uxf$fn_json_str(ud.denied_actions), &#x27;&#x27;);
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      tmp_values = &#x27;}&#x27;;
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+
+      leave;
+    end
+    if (not got_ud) then
+    begin
+      tmp_values = &#x27;{}&#x27;;
+      if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+      begin
+        row_json = blob_append(row_json, json_8100);
+        json_8100 = &#x27;&#x27;;
+      end
+      json_8100 = json_8100 || tmp_values;
+    end
+
+    tmp_values = &#x27;}&#x27;;
+    if (char_length(coalesce(json_8100 || tmp_values, &#x27;&#x27;)) &gt; 8100) then
+    begin
+      row_json = blob_append(row_json, json_8100);
+      json_8100 = &#x27;&#x27;;
+    end
+    json_8100 = json_8100 || tmp_values;
+  end
+
+  if (json_8100 &lt;&gt; &#x27;&#x27;) then
+    row_json = blob_append(row_json, json_8100);
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

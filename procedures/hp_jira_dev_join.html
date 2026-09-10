@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_JIRA_DEV_JOIN — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_JIRA_DEV_JOIN: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_JIRA_DEV_JOIN</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CORRECT_LOGIN</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REMOVE_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_JIRA_DEV_JOIN(
+    CORRECT_LOGIN D_STR_CODE,
+    REMOVE_FIO D_STR_100)
+AS
+declare variable dev_correct_id d_id;
+declare variable dev_remove_id d_id;
+begin
+  select jrd_id
+  from jira_dev
+  where jrd_login = :correct_login
+  into dev_correct_id;
+
+  if (dev_correct_id is null) then
+    exception e_message &#x27;Login not found: &#x27; || coalesce(correct_login, &#x27;&lt;Null&gt;&#x27;);
+
+  select jrd_id
+  from jira_dev
+  where jrd_fio = :remove_fio and
+        jrd_id &lt;&gt; :dev_correct_id
+  into dev_remove_id;
+
+  if (dev_remove_id is null) then
+    exception e_message &#x27;New FIO not found: &#x27; || coalesce(remove_fio, &#x27;&lt;Null&gt;&#x27;);
+
+  update jira_issues
+  set jri_dev_id = :dev_correct_id
+  where jri_dev_id = :dev_remove_id;
+
+  update jira_log
+  set jrl_dev_id = :dev_correct_id
+  where jrl_dev_id = :dev_remove_id;
+
+  if (not exists(select * from jira_calc
+                 where jrc_dev_id = :dev_correct_id)) then
+  begin
+    update jira_calc
+    set jrc_dev_id = :dev_correct_id
+    where jrc_dev_id = :dev_remove_id;
+  end else
+  begin
+    if (exists(select * from jira_calc
+               where jrc_dev_id = :dev_remove_id)) then
+      exception e_message &#x27;Both Dev_Id exists in Jira_calc&#x27;;
+  end
+
+  if (not exists(select * from jira_kpi
+                 where jrk_dev_id = :dev_correct_id)) then
+  begin
+    update jira_kpi
+    set jrk_dev_id = :dev_correct_id
+    where jrk_dev_id = :dev_remove_id;
+  end else
+  begin
+    if (exists(select * from jira_kpi
+               where jrk_dev_id = :dev_remove_id)) then
+      exception e_message &#x27;Both Dev_Id exists in Jira_calc&#x27;;
+  end
+
+  delete from jira_dev
+  where jrd_id = :dev_remove_id;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

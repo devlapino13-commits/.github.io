@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_AZ_0059_SQL — процедура — схема БД</title>
+<meta name="description" content="Процедура CM_AZ_0059_SQL: 3 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_AZ_0059_SQL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_AZ_0059_SQL(
+    MA_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable C_ID D_ID;
+declare variable CLIENT_POINT D_INTEGER;
+declare variable PR_ID D_ID;
+declare variable MA_AMOUNT D_CURRENCY;
+declare variable ACTIVE_CNT D_INTEGER;
+declare variable MDS D_CURRENCY;
+declare variable DELINQ_EPISODES D_INTEGER;
+declare variable MAX_DELINQ_DAYS D_INTEGER;
+declare variable MAX_AMOUNT_BY_POINTS D_CURRENCY;
+declare variable ACTIVE_BALANCE D_CURRENCY;
+begin
+  select
+    mac.mac_amount,
+    ma.ma_from_pr_id,
+    mac.mac_from_c_id
+  from miniapp ma
+  inner join miniappclient mac on mac.mac_from_ma_id = ma.ma_id
+    and mac.mac_amount &gt; 0
+  where ma.ma_id = :ma_id and
+        ma.ma_is_active = 1 and
+        ma.ma_date_end = &#x27;31.12.9999&#x27;
+  into
+    :ma_amount,
+    :pr_id,
+    :c_id;
+
+  if (pr_id not in (170,171,172,173,174,175,176,177)) then
+    exit;
+
+
+  /* 1. Не более двух активных кредитов */
+  select count(distinct ks.ks_from_k_id)
+  from knclient kc
+  inner join kontstate ks on ks.ks_from_k_id = kc.kc_from_k_id
+    and current_date between ks.ks_date_begin and ks.ks_date_end
+    and ks.ks_ol_is_delete = 0
+    and ks.ks_state = 1
+  where kc.kc_from_c_id = :c_id
+    and kc.kc_amount_approved &gt; 0
+  into :active_cnt;
+
+  if (active_cnt &gt;= 2) then
+  begin
+    res_error_is_critical = 2;
+    res_error_text = &#x27;Müştərinin 2 aktiv krediti mövcuddur, 3-cü kreditin verilişi qadağan olunur&#x27;;
+    suspend;
+  end
+
+  /* 2. Минимум 20 баллов */
+  client_point = f_point(:c_id, current_date);
+  if (client_point &lt; 20) then
+  begin
+    res_error_is_critical = 2;
+    res_error_text = &#x27;Cari məhsul üzrə müştərinin minimum 20 balı olmalıdır.&#x27;;
+    suspend;
+  end
+
+  /* 2a. Активная просрочка */
+  if (exists
+    (
+      select 1
+      from knclient kc
+      inner join oksummary oks on oks.oks_from_k_id = kc.kc_from_k_id
+      where kc.kc_from_c_id = :c_id
+        and oks.oks_close_state = 0
+        and current_date between oks.oks_date_begin and oks.oks_date_end
+        and current_date - oks.oks_delinq_date &gt; 0
+    )
+  ) then
+  begin
+    res_error_is_critical = 2;
+    res_error_text = &#x27;Müştərinin aktiv gecikməsi mövcuddur.&#x27;;
+    suspend;
+  end
+
+  /* 2b. Не более 1 просрочки за год, и она ≤3 дня */
+  select count(distinct ok.ok_sh_date), coalesce(max(ok.ok_ol_date - ok.ok_sh_date), 0)
+  from operkred ok
+  inner join knclient kc on kc.kc_from_k_id = ok.ok_from_k_id
+  where kc.kc_from_c_id = :c_id
+    and ok.ok_ol_is_active = 1
+    and ok.ok_ol_date &lt;= current_date
+    and ok.ok_ol_date &gt; ok.ok_sh_date
+    and ok.ok_type &lt; 7
+    and ok.ok_os + ok.ok_perc &lt; 0
+    and ok.ok_from_c_id = 0
+    and ok.ok_ol_date &gt;= dateadd(year, -1, current_date)
+  into :delinq_episodes, :max_delinq_days;
+
+  if (:delinq_episodes &gt; 1 or coalesce(:max_delinq_days, 0) &gt; 3) then
+  begin
+    res_error_is_critical = 2;
+    res_error_text = &#x27;Müştərinin son 1 il ərzində 3 gündən artıq gecikməsi olmamalıdır.&#x27;;
+    suspend;
+  end
+  -- RFCAZ-611
+  max_amount_by_points = case
+    when client_point between 0 and 2 then 4500
+    when client_point between 3 and 5 then 4500
+    when client_point between 6 and 11 then 5000
+    when client_point between 12 and 17 then 5500
+    when client_point between 18 and 23 then 6000
+    when client_point between 24 and 29 then 6000
+    when client_point between 30 and 35 then 6500
+    when client_point between 36 and 41 then 7500
+    when client_point between 42 and 47 then 8000
+    else 8500 -- 48+
+  end;
+
+  /* 4. Проверка лимита по баллам */
+  select coalesce(sum(oks.oks_balance), 0)
+  from knclient kc
+  inner join oksummary oks on oks.oks_from_k_id = kc.kc_from_k_id
+    and oks.oks_close_state = 0
+    and current_date between oks.oks_date_begin and oks.oks_date_end
+  where kc.kc_from_c_id = :c_id
+  into :active_balance;
+
+  if (coalesce(:active_balance, 0) + coalesce(:ma_amount, 0) &gt; :max_amount_by_points) then
+  begin
+    res_error_is_critical = 2;
+    res_error_text = &#x27;Aktiv kreditin və aksiya çərçivəsində alınan kreditin ümumi məbləği toplanmış ballara görə maksimum kredit məbləğindən çox olmamalıdır&#x27;;
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

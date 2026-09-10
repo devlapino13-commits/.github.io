@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_KG_0015_SQL — процедура — схема БД</title>
+<meta name="description" content="Приказ № 66-08-15 о/д">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_KG_0015_SQL</code></h1>
+<p class="desc">Приказ № 66-08-15 о/д</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_kontstate_loan_status.html"><div class="to">HP_KONTSTATE_LOAN_STATUS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_KG_0015_SQL(
+    MA_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable C_ID ID_TYPE;
+declare variable MA_PERCENT PERC_TYPE;
+declare variable KF_ID ID_TYPE;
+declare variable K_KREDLINE_END date;
+declare variable K_ID ID_TYPE;
+declare variable REP_DATE date;
+declare variable C_CURR_BONUS_STATUS integer;
+declare variable MAX_DELINQ_DAY integer;
+declare variable K_KONTRACT_NO STR_100;
+declare variable K_BONUS_TEXT STR_100;
+declare variable DELINQ_DAY_REPAYMENT integer;
+declare variable OKS_DELINQ_DAY integer;
+declare variable MA_LIMIT integer;
+begin
+    if (current_date between &#x27;17.08.2015&#x27; and &#x27;31.08.2015&#x27;) then -- период действия акции  по приказу №66-08-15
+    begin
+        for select maa.ma_percent,
+                   maa.ma_from_kf_id,
+                   maa.ma_date_app
+        from miniapp maa
+        inner join product pr on pr.pr_id =  ma_from_pr_id
+        where maa.ma_id = :ma_id
+        and pr.pr_loan_type = 0 -- только групповой
+        and maa.ma_date_end=&#x27;31.12.9999&#x27;
+        and ma_percent = 27 -- по приказу % = 27
+        and maa.ma_is_active = 1
+        into :ma_percent,
+             :kf_id,
+             :rep_date
+        do
+        begin
+            if (:rep_date not between &#x27;17.08.2015&#x27; and &#x27;31.08.2015&#x27;) then
+            begin
+                res_error_is_critical=1;
+                res_error_text = &#x27;Срок действия акции с 17.08.2015 по 31.08.2015&#x27;;
+                Suspend;     
+            end
+            else
+            begin
+                --  если уже имется 500 активных заявок по данной акции, тогда, выдаю ошибку
+                ma_limit = null;
+                select count(maa.ma_id)
+                from miniapp maa
+                where  maa.ma_date_end=&#x27;31.12.9999&#x27;
+                and ma_percent = 27 -- по приказу % = 27
+                and maa.ma_is_active = 1
+                and maa.ma_id &lt;&gt; :ma_id
+                and maa.ma_date_app between cast(&#x27;17.08.2015&#x27; as date) and cast(&#x27;31.08.2015&#x27; as date)
+                into :ma_limit;
+    
+                ma_limit = coalesce(ma_limit,0);
+                if (ma_limit &gt;= 500) then
+                begin
+                    res_error_is_critical=1;
+                    res_error_text = &#x27;По пакции уже зарегистрировано 500 групп&#x27;;
+                    Suspend;                
+                end
+                else
+                begin
+                    k_kredline_end = null;
+                    k_id = null;
+        
+                    /*
+                    -- проверяю, есть ли активный займ
+                    select ks.ks_from_k_id, kont.k_kredline_end, kont.k_kontract_no
+                    from kontstate ks
+                    inner join kontract kont on kont.k_id = ks.ks_from_k_id
+                    where ks.ks_state = 1
+                    and kont.k_from_kf_id =:kf_id
+                    and :rep_date between  ks.ks_date_begin and ks.ks_date_end
+                    and ks.ks_ol_is_delete = 0
+                    order by kont.k_kredline_end
+                    rows 1
+                    into :k_id, :k_kredline_end, :k_kontract_no;
+                    */
+--                  Предыдущий исправлено на следующее т.е. нужно брать только основные групповые кредиты
+--                  Изменен по письму Алтын от 17.08.2015 тема письма &quot;RE: приказ - Акция ко Дню независимости&quot;
+                    select k_id, k_kredline_end, k_kontract_no
+                    from kontstate, kontract, product
+                    where ks_ol_is_delete = 0
+                    and ks_state = 1
+                    and :rep_date between ks_date_begin and ks_date_end
+                    and ks_from_k_id = k_id
+                    and k_from_kf_id = :kf_id
+                    and k_kredline_end is not null
+                    and k_from_pr_id = pr_id
+                    and pr_product_kind = 1 -- Брать только групповые кредиты
+                    order by k_kredline_end
+                    rows 1
+                    into k_id, k_kredline_end, k_kontract_no;
+        
+                    if (k_id is not null) then
+                    begin  -- если есть активный займ
+                        if (k_kredline_end &lt; &#x27;31.10.2015&#x27;) then
+                        begin
+                            -- &gt;&gt; определяю статус группы
+                            select C_CURR_BONUS_STATUS
+                            from HP_KONTSTATE_LOAN_STATUS(0, 0, :ma_id, :rep_date, null)
+                            into :C_CURR_BONUS_STATUS;   
+        
+                            if (C_CURR_BONUS_STATUS = -1)  then k_bonus_text=&#x27;Не определен&#x27;;
+                            if (C_CURR_BONUS_STATUS = 0)   then k_bonus_text=&#x27;Без статуса&#x27;;
+                            if (C_CURR_BONUS_STATUS = 1)   then k_bonus_text=&#x27;Бронзовый&#x27;;
+                            if (C_CURR_BONUS_STATUS = 2)   then k_bonus_text=&#x27;Серебрянный&#x27;;
+                            -- &lt;&lt;
+        
+                            if (C_CURR_BONUS_STATUS &gt;= 3) then
+                            begin
+                                max_delinq_day = 0; -- Максимальный срок задержки кредита
+                                delinq_day_repayment = 0;
+                                oks_delinq_day = 0;
+                        
+                                select max(ok.ok_ol_date - ok_sh_date) from operkred ok
+                                where ok.ok_ol_is_active = 1
+                                and ok.ok_ol_date  &lt;= :REP_DATE
+                                and ok.ok_ol_date  &gt; ok_sh_date
+                                and ok_type &lt; 7
+                                and ok_from_k_id = :k_id
+                                and ok_os + ok_perc &lt; 0
+                                and ok_from_c_id=0
+                                into delinq_day_repayment;
+                        
+                                select (cast (:rep_date as date) - oks_delinq_date) oks_delinq_day
+                                from oksummary oks
+                                where oks.oks_from_k_id = :k_id
+                                and oks_close_state = 0
+                                and :rep_date between oks_date_begin and oks_date_end
+                                and cast(:rep_date as date) - oks_delinq_date &gt;= 0
+                                into oks_delinq_day;
+                        
+                                if (delinq_day_repayment is null) then delinq_day_repayment = 0;
+                                if (oks_delinq_day is null) then oks_delinq_day= 0;
+                        
+                                if (oks_delinq_day &gt; delinq_day_repayment) then
+                                     MAX_DELINQ_DAY = oks_delinq_day;
+                                else
+                                     MAX_DELINQ_DAY = delinq_day_repayment;
+                    
+                                if (max_delinq_day &gt; 0) then
+                                begin
+                                    -- Ошибка Не должно быть просрочек
+                                    res_error_is_critical=1;
+                                    res_error_text=&#x27;У группы в активной кредите имеются просрочки. Договор № &#x27;||:k_kontract_no;
+                                    Suspend;
+                                end
+                             end
+                             else
+                             begin
+                                -- Ошибка Акция только для групп со статусом Золотой , Брил
+                                res_error_is_critical=1;
+                                res_error_text=&#x27;У группы статус &quot;&#x27;||:k_bonus_text||&#x27;&quot;. Акции подлежат группы со статусом &quot;Золотой&quot;, &quot;Бриллиантовый&quot;&#x27;;
+                                Suspend;
+                             end
+                        end
+                        else
+                        begin
+                            -- Ошибка Дата последнего погашения должна выпадать до 31 октября 2015
+                            res_error_is_critical=1;
+                            res_error_text=&#x27;Дата последнего платежа должна выпадать до 31.10.2015. Договор № &#x27;||:k_kontract_no;
+                            Suspend;
+                        end
+                    end
+                    else  --  если нет активного займа, проверяю закрытый заем, сортирую по дате выдачи
+                    begin
+                        k_id = null;
+        
+                        select kont.k_id, kont.k_kontract_no
+                        from kontstate ks
+                        inner join kontract kont on kont.k_id = ks.ks_from_k_id
+                        where ks.ks_ol_is_delete = 0
+                        and ks.ks_state = 2
+                        and ks.ks_date_begin &lt;= :rep_date
+                        and kont.k_from_kf_id = :kf_id
+                        order by kont.k_disb_date desc
+                        rows 1
+                        into :k_id, :k_kontract_no;
+        
+                        if (k_id is null) then
+                        begin
+                            -- Предыдущий займ группы не определен
+                            res_error_is_critical=1;
+                            res_error_text=&#x27;Предыдущий займ группы не определен&#x27;;
+                            Suspend;
+                        end
+                        else
+                        begin
+                            max_delinq_day =0;
+        
+                            select max(ok.ok_ol_date - ok_sh_date)
+                            from operkred ok
+                            where ok.ok_ol_is_active = 1
+                            and ok.ok_ol_date  &lt;= :REP_DATE
+                            and ok.ok_ol_date  &gt; ok_sh_date
+                            and ok_type &lt; 7
+                            and ok_from_k_id = :k_id
+                            and ok_os + ok_perc &lt; 0
+                            and ok_from_c_id=0
+                            into MAX_DELINQ_DAY;
+            
+                            if (MAX_DELINQ_DAY is null) then MAX_DELINQ_DAY = 0;
+            
+                            if (max_delinq_day &lt;= 0) then
+                            begin
+                                /* &gt;&gt; определяю статус группы                           */
+                                select C_CURR_BONUS_STATUS
+                                from HP_KONTSTATE_LOAN_STATUS(0, 0, :ma_id, :rep_date, null)
+                                into :C_CURR_BONUS_STATUS;
+                            
+                                if (C_CURR_BONUS_STATUS = -1)  then k_bonus_text=&#x27;Не определен&#x27;;
+                                if (C_CURR_BONUS_STATUS = 0)   then k_bonus_text=&#x27;Без статуса&#x27;;
+                                if (C_CURR_BONUS_STATUS = 1)   then k_bonus_text=&#x27;Бронзовый&#x27;;
+                                if (C_CURR_BONUS_STATUS = 2)   then k_bonus_text=&#x27;Серебрянный&#x27;;
+                                /* &lt;&lt;  */
+                                if (C_CURR_BONUS_STATUS &lt; 3) then
+                                begin
+                                    res_error_is_critical=1;
+                                    res_error_text=&#x27;У группы статус &quot;&#x27;||:k_bonus_text||&#x27;&quot;. Акции подлежат группы со статусом &quot;Золотой&quot;, &quot;Бриллиантовый&quot;&#x27;;
+                                    Suspend;
+                                end
+                            end
+                            else
+                            begin
+                                -- Ошибка Не должно быть просрочек
+                                res_error_is_critical=1;
+                                res_error_text=&#x27;У группы в последнем цикле были просрочки. (Договора № &#x27;||:k_kontract_no||&#x27;)&#x27;;
+                                Suspend;
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

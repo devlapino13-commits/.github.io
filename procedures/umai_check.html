@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UMAI_CHECK — процедура — схема БД</title>
+<meta name="description" content="Процедура UMAI_CHECK: 4 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UMAI_CHECK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ESM_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FULL_SOURCE</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ANSWER</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ERROR_CODE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UMAI_CHECK(
+    ESM_ID D_ID,
+    FULL_SOURCE D_STR_8100,
+    ANSWER D_STR_8100,
+    ERROR_CODE D_BOOL)
+AS
+declare variable esa_id d_id;
+declare variable esm_id_pay d_id;
+begin
+  error_code = coalesce(error_code, 0);
+
+  update extsysmain em
+  set em.esm_full_source = :full_source
+  where em.esm_id  = :esm_id;
+
+  insert into extsysanswer (esa_from_esm_id, esa_message)
+  values (:esm_id, :answer)
+  returning esa_id
+  into :esa_id;
+
+  if ((error_code = 0) and (f_json_str_get_value(:answer, &#x27;StatusCode&#x27;, null) = &#x27;1&#x27;)) then
+  begin
+     insert into extsysmain (esm_project, esm_action, esm_date, esm_account, esm_object_kind,
+                             esm_object_id, esm_status, esm_full_source, esm_amount, esm_from_k_id)
+     select esm_project, &#x27;pay&#x27;, current_date, esm_account, esm_object_kind, esm_object_id,
+            0, esm_full_source, esm_amount, esm_from_k_id
+     from extsysmain
+     where esm_id = :esm_id
+     returning esm_id
+     into :esm_id_pay;
+
+     update finerefund fr
+     set fr.fr_from_esm_id = :esm_id_pay
+     where fr.fr_from_esm_id = :esm_id;
+
+     update overpayment
+     set ovp_pay_esm_id = :esm_id_pay
+     where ovp_check_esm_id = :esm_id
+       and ovp_status = 2;
+
+     update nbkr_umai_transfer nut
+     set nut.nut_from_esm_id_pay = :esm_id_pay
+     where nut.nut_from_esm_id_check = :esm_id;
+
+     update kommisrefund_cards kmr
+     set kmr.kmr_pay_esm_id = :esm_id_pay
+     where kmr.kmr_check_esm_id = :esm_id;
+
+     update extsysmain em
+     set em.esm_status = 1,
+         em.esm_ext_datetime = current_timestamp
+     where em.esm_id = :esm_id;
+  end
+  else
+  begin
+    update extsysmain em
+    set em.esm_status = -1,
+        em.esm_ext_datetime = current_timestamp
+    where em.esm_id = :esm_id;
+
+     update overpayment
+     set ovp_status = 4
+     where ovp_check_esm_id = :esm_id
+       and ovp_status = 2;
+
+    update nbkr_umai_transfer nut
+    set nut.nut_status = -2
+    where nut.nut_from_esm_id_check = :esm_id;
+
+    update kommisrefund_cards kmr
+    set kmr.kmr_status = -1
+    where kmr.kmr_check_esm_id = :esm_id;
+
+    update extsysanswer ea
+    set ea.esa_status = -1
+    where ea.esa_id = :esa_id;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

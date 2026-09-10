@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_REFLINK_CHECKS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_REFLINK_CHECKS: 4 входных, 6 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_REFLINK_CHECKS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_reflink_category.html"><div class="to">HP_REFLINK_CATEGORY</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MASTER_CATEGORY</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REF_CATEGORY</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REF_OBJ_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KIND</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RD_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RD_NAME</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RD_MEMO</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RD_STR_ID</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RD_IS_ACTIVE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RD_CHECKED</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_REFLINK_CHECKS(
+    MASTER_CATEGORY VARCHAR(255),
+    REF_CATEGORY VARCHAR(255),
+    REF_OBJ_ID DECIMAL(18,0),
+    KIND VARCHAR(100))
+RETURNS (
+    RD_ID INTEGER,
+    RD_NAME VARCHAR(255),
+    RD_MEMO VARCHAR(255),
+    RD_STR_ID VARCHAR(255),
+    RD_IS_ACTIVE INTEGER,
+    RD_CHECKED INTEGER)
+AS
+declare variable ref_table_name varchar(100);
+declare variable obj_kind integer;
+begin
+  if (coalesce(master_category, &#x27;&#x27;) = &#x27;&#x27;) then
+    exit;
+
+  if (coalesce(ref_category, &#x27;&#x27;) = &#x27;&#x27;) then
+    ref_category = master_category;
+  select ref_table_name
+  from hp_reflink_category(0)
+  where ref_name = :master_category
+  into :ref_table_name;
+
+  obj_kind = f_objkind(ref_table_name, &#x27;id&#x27;);
+
+  if (kind = &#x27;all_in_category&#x27;) then
+  begin
+    for select rd_id, rd_name, rd_memo, rd_str_id, rd_is_active
+        from refdata
+        where rd_main_code = &#x27;reflink&#x27; and
+              rd_memo = :ref_category
+        into :rd_id, rd_name, rd_memo, rd_str_id, rd_is_active
+    do
+    begin
+      rd_checked = 0;
+      if (exists(select *
+                 from reflink
+                 where rlk_object_kind = :obj_kind and
+                       rlk_object_id = :ref_obj_id and
+                       rlk_from_rd_id = :rd_id)) then
+        rd_checked = 1;
+
+      suspend;
+    end
+  end
+  if (kind = &#x27;all_checked&#x27;) then
+  begin
+    rd_checked = 1;
+    for select rd_id, rd_name, rd_memo, rd_str_id, rd_is_active
+        from refdata, reflink
+        where rd_main_code = &#x27;reflink&#x27; and
+              rlk_object_kind = :obj_kind and
+              rlk_object_id = :ref_obj_id and
+              rlk_from_rd_id = rd_id
+        into :rd_id, rd_name, rd_memo, rd_str_id, rd_is_active
+    do
+    begin
+      suspend;
+    end
+  end
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

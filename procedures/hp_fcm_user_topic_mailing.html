@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_FCM_USER_TOPIC_MAILING — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_FCM_USER_TOPIC_MAILING: 4 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_FCM_USER_TOPIC_MAILING</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="mc_fcm_data.html"><div class="to">MC_FCM_DATA</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">TOPIC_NAME</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PUSH_TITLE</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PUSH_BODY</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LIFETIME_DAYS</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_FCM_USER_TOPIC_MAILING(
+    TOPIC_NAME D_STR_255,
+    PUSH_TITLE D_STR_255,
+    PUSH_BODY D_STR_LONG,
+    LIFETIME_DAYS D_INTEGER = 7)
+RETURNS (
+    RES_TEXT D_STR_255)
+AS
+declare variable topic_found d_bool;
+declare variable jso_body d_str_8100;
+declare variable db_id d_id;
+declare variable msg_id d_id;
+begin
+  -- Отправка сообщений в группу рассылок
+
+  -- Текущие, реализованные группы рассылок (топики)
+  -- ru_kmp_all, kg_kmp_all, az_kmp_all, kz_kmp_all - Все пользователи КМП (по стране)
+  -- ru_oivo_all - Все пользователи OIVO КМП (РФ)
+  -- ru_kmp_ad  - Все пользователи КМП (РФ), подписавшие согласие на рекламу
+  -- ru_kmp_test - Тестовая рассылка программистам РФ
+
+  -- Если требуется новая группа рассылки (топик), требуются нижеописанные действия:
+  --   1. Нужно доработать hp_fcm_user_topics, чтобы она возвращала имя
+  --       нового топика для целевых пользователей.
+  --   2. Запустить процедуру hp_fcm_user_list_fill(&#x27;clear_all,add_username,add_mc_login&#x27;)
+  --      Эта процедура заполняет таблицу fcm_user_list, для синхронизации в FsSvc
+  --      Эту процедуру вызывает робот в 21:00, так что вызывать ее
+  --      вручную стоит, если только нужно ускорить процесс.
+  --   3. Дождаться когда сервис FsSvc сделает синхронизацию топиков.
+  --      Сервис FsSvc вычитывает записи из fcm_user_list, делает синхронизацию
+  --      топиков пользователя в Firebase, после этого удаляет запись в fcm_user_list.
+  --      Таким образом если fcm_user_list пустая, значит синхронизация завершена.
+  --      Эта задача находится в fsrobot_sh_main, fsm_kind = 7,
+  --      работает порционно, запускается регулярно
+  --   4. Доработать проверки в данной процедуре, добавив топик в список допустимых
+  --      и дописав в начало название и описание топика.
+
+  --      Важно: Добавлять топик нужно только для периодических рассылок.
+  --      Для разовых рассылок проще отправлять напрямую, через mc_send_push
+
+  res_text = &#x27;&#x27;;
+  topic_found = 0;
+  db_id = f_get_db_id();
+
+  -- Проверяем, что топик в списке разрешенных в КМП
+  if ((db_id = 81001 and topic_name in (
+         &#x27;ru_kmp_ad&#x27;,
+         &#x27;ru_kmp_all&#x27;,
+         &#x27;ru_kmp_test&#x27;,
+         &#x27;ru_oivo_all&#x27;)) or
+      (db_id in (39801, 41701) and topic_name in (&#x27;kg_kmp_all&#x27;)) or
+      (db_id = 94401 and topic_name in (&#x27;az_kmp_all&#x27;)))
+  then
+      topic_found = 1;
+
+  -- Проверяем, что топик в списке разрешенных в МП
+  if (topic_found = 0 and
+      exists (
+        select *
+        from refdata
+        where rd_main_code = &#x27;mailgroup&#x27; and
+              rd_parent_id is not null and
+              replace(rd_memo, &#x27;/topics/&#x27;, &#x27;&#x27;) = :topic_name))
+  then
+    topic_found = 1;
+
+  if (topic_found = 0) then
+    res_text =  &#x27;Группа рассылки не реализована:&#x27; || coalesce(topic_name, &#x27;NULL&#x27;);
+
+  -- Производим отправку
+  if (res_text = &#x27;&#x27;) then
+  begin
+    select res_text
+    from mc_fcm_data(:push_body, :push_title, &#x27;mailmessages_push&#x27;,
+      &#x27;fsrobot_msgbox&#x27;, null, null, null, null, null)
+    into jso_body;
+
+    insert into fsrobot_msgbox (msg_type, msg_mail_to, msg_subject, msg_body,
+      msg_lifetime_days, msg_from_un_id, msg_command_kind, msg_object_kind,
+      msg_object_id, msg_status)
+    values (2, &#x27;/topics/&#x27; || :topic_name, :push_title, :jso_body, :lifetime_days, 1000000000000,
+      &#x27;msg_to_clients&#x27;, f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;), 1000000000000, 0)
+    returning msg_id
+    into msg_id;
+
+    res_text = &#x27;Сообщение отправлено, msg_id:&#x27; || msg_id;
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

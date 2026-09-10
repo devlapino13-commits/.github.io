@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_OKSUMMARY_CREATE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_OKSUMMARY_CREATE: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_OKSUMMARY_CREATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_devide_kontract_clients.html"><div class="to">HP_DEVIDE_KONTRACT_CLIENTS</div></a><a class="ref-card" href="hp_oksummary_recalc.html"><div class="to">HP_OKSUMMARY_RECALC</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_OKSUMMARY_CREATE(
+    K_ID D_ID NOT NULL)
+AS
+declare variable ol_date d_date;
+declare variable date_first d_date;
+declare variable date_last d_date;
+declare variable kf_id d_id;
+declare variable ks_date_begin d_date;
+declare variable ks_date_end d_date;
+begin
+  -- Создает полную историю данных в таблице OKSUMMARY.
+
+  delete from oksummary
+  where oks_from_k_id = :k_id
+  order by oks_from_k_id desc, oks_date_begin desc;
+
+  select ks_date_begin, ks_date_end
+  from kontstate
+  where ks_from_k_id = :k_id and
+        ks_state = 1 and
+        ks_ol_is_delete = 0
+  into ks_date_begin, ks_date_end;
+
+  if (ks_date_begin is null) then
+    exit;
+
+  if (ks_date_end &lt; &#x27;31.12.2999&#x27;) then
+    ks_date_end = ks_date_end + 1;
+
+  for select distinct ok_ol_date
+  from operkred
+  where ok_from_k_id = :k_id and
+        not(ok_type = 9 and ok_ol_date &gt; :ks_date_end) and
+        ok_ol_is_active = 1
+  union
+  select ok_sh_date
+  from operkred
+  where ok_from_k_id = :k_id and
+        ok_ol_is_active = 1
+  union
+  select oko_ol_date
+  from operkroff
+  where oko_from_k_id = :k_id and
+        oko_ol_is_active = 1
+  union
+  select ox_ol_date
+  from operextra
+  where ox_object_kind = 9 and
+        ox_object_id = :k_id and
+        ox_ol_is_active = 1
+  union
+  select or_ol_date
+  from operrest
+  where or_from_k_id = :k_id and
+        or_ol_is_active = 1
+  union
+  select kd_ol_date
+  from kontdata
+  where kd_from_k_id = :k_id and
+        kd_ol_is_delete = 0
+  union
+  select ks_date_begin
+  from kontstate
+  where ks_from_k_id = :k_id and
+        ks_ol_is_delete = 0 and
+        ks_state = 2
+  into ol_date
+  do
+  begin
+    if (ol_date is null) then
+      continue;
+
+    if (date_first is null or date_first &gt; ol_date) then
+      date_first = ol_date;
+
+    insert into oksummary (oks_from_k_id, oks_date_begin, oks_need_recalc)
+    values (:k_id, :ol_date, 1)
+    returning iif(oks_close_state = 2, oks_date_begin, oks_date_end)
+    into date_last;
+  end
+
+  select k_from_kf_id
+  from kontract
+  where k_id = :k_id
+  into kf_id;
+
+  for select kal_date
+  from knaktlist a
+  where a.kal_from_kf_id = :kf_id and
+        a.is_delete = 0 and
+        a.kal_date between :date_first and :date_last
+  into ol_date
+  do
+  begin
+    if (ol_date is null) then
+      continue;
+
+    if (not exists(select * from oksummary
+    where oks_from_k_id = :k_id and
+          oks_date_begin = :ol_date)) then
+    begin
+      insert into oksummary (oks_from_k_id, oks_date_begin, oks_need_recalc)
+      values (:k_id, :ol_date, 1);
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

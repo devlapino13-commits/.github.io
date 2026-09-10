@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_USER_REGIONS — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_USER_REGIONS: 1 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_USER_REGIONS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_region_user_tmp.html"><div class="to">AAREP_REGION_USER_TMP</div></a><a class="ref-card" href="hp_test_un_id.html"><div class="to">HP_TEST_UN_ID</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_html_extminiapp.html"><div class="to">FM_HTML_EXTMINIAPP</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REG_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REG_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_USER_REGIONS(
+    UN_ID D_ID)
+RETURNS (
+    REG_ID D_INTEGER,
+    REG_NAME D_STR_100)
+AS
+declare variable is_office d_bool;
+begin
+  -- Процедура возвращает список офисов, доступных пользователю
+  -- Используется для фильтра по региону в отчетах МП
+  -- RFCRU-4679
+
+  if (un_id is null) then
+    exit;
+
+  select un_id
+  from hp_test_un_id(:un_id)
+  into :un_id;
+
+  for select distinct reg_list, reg_code || &#x27;  &#x27; || reg_name,
+                      iif(reg_status = 3, 1, 0)
+      from aarep_region_user_tmp(:un_id), region
+      where reg_unicode = reg_list and
+            reg_code &lt;&gt; reg_name and -- Офисы без названия, н-р 0127 не кредитуют
+            coalesce(reg_date_close, current_date) &gt;= current_date -- Закрытые не возвращаем
+      order by reg_code, reg_unicode
+      into reg_id, :reg_name, is_office
+  do
+  begin
+    if (is_office = 0) then
+    begin
+      -- Не возвращаем родителей (узлы), если все подчиненные офисы закрыты
+      if (not exists(select *
+                     from region
+                     where parent = :reg_id and
+                           reg_status = 3 and
+                           coalesce(reg_date_close, current_date) &gt;= current_date)) then
+      begin
+        -- Проверка второго уровня вложенности
+        if (not exists(select *
+                       from region r1, region r2
+                       where r1.parent = :reg_id and
+                             r1.reg_unicode = r2.parent and
+                             r2.reg_status = 3 and
+                             coalesce(r2.reg_date_close, current_date) &gt;= current_date)) then
+          continue;
+      end
+    end
+
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

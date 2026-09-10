@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_VERIFY_WEBCAM_PHOTO_ADD — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_VERIFY_WEBCAM_PHOTO_ADD: 7 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_VERIFY_WEBCAM_PHOTO_ADD</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">7</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="get_grs_photo.html"><div class="to">GET_GRS_PHOTO</div></a><a class="ref-card" href="hp_insert_into_blobstore.html"><div class="to">HP_INSERT_INTO_BLOBSTORE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">7 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">JSON_ANSWER</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">STATUS</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">WCAM_PHOTO</div><div class="ptype">BLOB SUB_TYPE BINARY SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">VID_TYPE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_VERIFY_WEBCAM_PHOTO_ADD(
+    K_ID D_ID,
+    C_ID D_ID,
+    JSON_ANSWER D_STR_8100,
+    STATUS D_INTEGER,
+    UN_ID D_ID,
+    WCAM_PHOTO D_BLOB_BINARY NOT NULL,
+    VID_TYPE D_BOOL = 0)
+AS
+declare variable grs_bls_id d_id;
+declare variable wcam_bls_id d_id;
+declare variable acl_id d_id;
+declare variable reg_id d_integer;
+declare variable rd_id d_integer;
+begin
+  reg_id = (select k_last_reg_id from kontract where k_id = :k_id);
+  rd_id = f_get_rd_id(&#x27;ActionGroup.Photo_Verify_Issue&#x27;);
+  grs_bls_id = (select bls_id from get_grs_photo(:c_id, 1));
+
+  execute procedure hp_insert_into_blobstore (
+    &#x27;wcam_&#x27; || :c_id || &#x27;_&#x27; || :k_id || &#x27;.jpg&#x27;,
+    &#x27;vci&#x27;,
+    :wcam_photo,
+    :un_id,
+    0,
+  0)
+  returning_values :wcam_bls_id;
+
+
+  if (status = 0) then
+    insert into actionlist(
+      acl_from_reg_id,
+      acl_object_kind,
+      acl_object_id,
+      acl_from_rd_id,
+      acl_from_un_id)
+    values (
+      :reg_id,
+      9,
+      :k_id,
+      :rd_id,
+      :un_id)
+    returning acl_id
+    into
+      :acl_id;
+
+  insert into verify_webcam_photo (
+    vwp_k_id,
+    vwp_c_id,
+    vwp_type,
+    vwp_json_answer,
+    vwp_wcam_bls_id,
+    vwp_grs_bls_id,
+    vwp_acl_id,
+    vwp_status,
+    vwp_un_id)
+  values (
+    :k_id,
+    :c_id,
+    :vid_type,
+    :json_answer,
+    :wcam_bls_id,
+    :grs_bls_id,
+    :acl_id,
+    :status,
+    :un_id);
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

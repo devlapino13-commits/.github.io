@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_CALC_PERC_FIX_CLOSED_2021 — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_CALC_PERC_FIX_CLOSED_2021: 3 входных, 5 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_CALC_PERC_FIX_CLOSED_2021</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_calc_perc_fill_one.html"><div class="to">AAREP_CALC_PERC_FILL_ONE</div></a><a class="ref-card" href="aarep_calc_perc_one_cls.html"><div class="to">AAREP_CALC_PERC_ONE_CLS</div></a><a class="ref-card" href="hp_do_kn_operbook_one_online.html"><div class="to">HP_DO_KN_OPERBOOK_ONE_ONLINE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OL_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REG_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">BAL_PERC</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_CALC_PERC_FIX_CLOSED_2021(
+    REP_DATE_BEGIN D_DATE,
+    REP_DATE_END D_DATE,
+    REP_K_ID D_ID)
+RETURNS (
+    K_ID D_ID,
+    OL_ID D_ID,
+    OL_DATE D_DATE,
+    REG_ID D_INTEGER,
+    BAL_PERC D_CURRENCY)
+AS
+declare variable kcp_period d_integer;
+declare variable sh_id d_integer;
+declare variable sh_date d_date;
+declare variable tmp_period d_integer;
+declare variable tmp_date d_date;
+begin
+  for select ks_from_k_id, ks_from_ol_id, ks_date_begin, ks_region_id
+  from kontstate
+  where ks_state = 2 and
+        ks_date_begin between :rep_date_begin and :rep_date_end and
+        ks_ol_is_delete = 0 and
+        (:rep_k_id is null or ks_from_k_id = :rep_k_id)
+  into k_id, ol_id, ol_date, reg_id
+  do
+  begin
+    if (exists(select * from operfraud
+    where ofr_from_k_id = :k_id)) then
+      Continue;
+
+    kcp_period = extract(year from ol_date) * 100 + extract(month from ol_date);
+
+    bal_perc = 0;
+    select kcp_perc_saldo
+    from kontcalcperc
+    where kcp_from_k_id = :k_id and
+          kcp_period = :kcp_period
+    into bal_perc;
+
+    if (bal_perc &lt;&gt; 0) then
+    begin
+      bal_perc = 0;
+      select result_perc_end
+      from aarep_calc_perc_one_cls(:k_id, :rep_date_begin, f_date_month_end(:ol_date), 0, 1, 1)
+      into bal_perc;
+
+      if (bal_perc &lt;&gt; 0) then
+      begin
+        sh_id = null;
+        sh_date = null;
+        select ok_sh_id, ok_sh_date
+        from operkred
+        where ok_from_k_id = :k_id and
+              ok_from_ol_id = :ol_id
+        order by ok_sh_date desc
+        rows 1
+        into sh_id, sh_date;
+
+        if (sh_id is null) then
+          exception e_default f_format(&#x27;sh_id not found, k_id: %1, ol_id: %2&#x27;, k_id, ol_id);
+
+        insert into operkred (ok_from_ol_id, ok_number, ok_from_k_id, ok_sh_id, ok_sh_date, ok_type, ok_os, ok_perc, ok_fine,
+                              ok_pay_type, ok_kommis, ok_sh_os, ok_sh_perc, ok_kommis_adv, ok_tax, ok_ol_date, ok_ol_reg_id,
+                              ok_ol_is_active)
+        values (:ol_id, -1, :k_id, :sh_id, :sh_date, 7, 0, -:bal_perc, 0,
+                3, 0, 0, 0, 0, 0, :ol_date, :reg_id,
+                1);
+      end
+
+      update kn_oksummary
+      set oks_is_fix_bal_perc = 1,
+          oks_bal_perc_fixed = 0,
+          oks_need_recalc = 1
+      where oks_from_k_id = :k_id and
+            oks_date_begin = :ol_date;
+
+      delete from kontcalcperc
+      where kcp_from_k_id = :k_id and
+            kcp_period &gt; :kcp_period;
+
+      for select oks_date_begin
+      from kn_oksummary
+      where oks_from_k_id = :k_id and
+            oks_date_begin &gt; :ol_date
+      into tmp_date
+      do
+      begin
+        update kn_oksummary
+        set oks_is_fix_bal_perc = 0,
+            oks_bal_perc_fixed = 0,
+            oks_need_recalc = 1
+        where oks_from_k_id = :k_id and
+              oks_date_begin = :tmp_date;
+      end
+
+      for select distinct kcp_period
+      from kontcalcperc
+      where kcp_period &gt;= :kcp_period
+      order by kcp_period
+      into tmp_period
+      do
+        execute procedure aarep_calc_perc_fill_one(:k_id, :tmp_period, :tmp_period);
+
+      execute procedure hp_do_kn_operbook_one_online(:k_id, current_date, null, :ol_date - 1);
+
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KNCLIENT_PDN_LIMIT_CHECK — процедура — схема БД</title>
+<meta name="description" content="Процедура KNCLIENT_PDN_LIMIT_CHECK: 1 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>KNCLIENT_PDN_LIMIT_CHECK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">4</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_max_amount_allowed.html"><div class="to">HP_MAX_AMOUNT_ALLOWED</div></a><a class="ref-card" href="perc_amount_interval_by_point.html"><div class="to">PERC_AMOUNT_INTERVAL_BY_POINT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">4 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="cm_ru_0171_sql.html"><div class="to">CM_RU_0171_SQL</div></a><a class="ref-card" href="cm_ru_0175_sql.html"><div class="to">CM_RU_0175_SQL</div></a><a class="ref-card" href="hp_actionlist_set_status.html"><div class="to">HP_ACTIONLIST_SET_STATUS</div></a><a class="ref-card" href="hp_knclient_pdn_validate.html"><div class="to">HP_KNCLIENT_PDN_VALIDATE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">KC_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE KNCLIENT_PDN_LIMIT_CHECK(
+    KC_ID D_ID)
+RETURNS (
+    ERROR_TEXT D_STR_255,
+    ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable pr_code d_str_100;
+declare variable kf_disb_date d_date;
+declare variable c_id d_id;
+declare variable point_cl d_smallint;
+declare variable active_loan_balance d_currency;
+declare variable amount_max d_currency;
+declare variable is_refund d_smallint;
+declare variable final_pdn d_currency;
+declare variable kc_amount curr_type;
+declare variable k_id d_id;
+declare variable mds d_currency;
+declare variable perc_pdn d_currency;
+declare variable ma_id d_id;
+declare variable refund_active_loan_balance d_currency;
+declare variable pr_id d_integer;
+begin
+  error_text = null;
+  error_is_critical = 0;
+  final_pdn = 0;
+
+  select k_disb_date, pr_code, k_refund, kc_from_c_id, kc_amount_approved, k_id, k_from_ma_app_id, pr_id
+  from knclient, kontract, product
+  where kc_id = :kc_id and
+        k_id = kc_from_k_id and
+        pr_id = k_from_pr_id
+  into :kf_disb_date, pr_code, is_refund, c_id, kc_amount, k_id, ma_id, pr_id;
+
+  point_cl = f_point_get(9, k_id, c_id, kf_disb_date);
+
+  select kc_pdn_koef
+  from knclient_pdn
+  where kc_id = :kc_id and
+        kcp_kind = 0
+  into :final_pdn;
+  final_pdn = coalesce(final_pdn, 0);
+
+  if (final_pdn = 0
+      and pr_code not containing &#x27;.selfemployed.&#x27;
+      and pr_code not containing &#x27;.business.&#x27;) -- RFCRU-2301 -- Для продукта &quot;Самозанятый&quot; ПДН не рассчитывается
+  then
+  begin
+    error_text = &#x27;ПДН еще не рассчитан!&#x27;;
+    error_is_critical = 2;
+    suspend;
+    exit;
+  end
+  perc_pdn = 80;
+  if (pr_code containing &#x27;.privilege.&#x27;) then
+    perc_pdn = 50;
+
+  if (kf_disb_date &lt; &#x27;10.07.2025&#x27;) then
+  begin
+    if (final_pdn &lt; perc_pdn) then
+    begin
+      if (kf_disb_date &lt; cast(&#x27;15.08.2024&#x27; as date)) then
+      begin
+        amount_max = case
+                       when point_cl &lt;= 2 then 75000
+                       when point_cl &lt;= 5 then 90000
+                       when point_cl &lt;= 8 then 100000
+                       when point_cl &lt;= 11 then 120000
+                       when point_cl &lt;= 17 then 150000
+                       when point_cl &lt;= 23 then 200000
+                       else 200000
+                     end;
+      end
+      else
+      begin
+        amount_max = case
+                       when point_cl &lt;= 3 then 80000
+                       when point_cl &lt;= 6 then 90000
+                       when point_cl &lt;= 9 then 110000
+                       when point_cl &lt;= 12 then 120000
+                       when point_cl &lt;= 18 then 150000
+                       else 200000
+                     end;
+      end
+    end
+    else
+    begin
+      if (kf_disb_date &lt; cast(&#x27;15.08.2024&#x27; as date)) then
+      begin
+        amount_max = case
+                       when point_cl &lt;= 11 then 75000
+                       when point_cl &lt;= 17 then 90000
+                       when point_cl &lt;= 23 then 100000
+                       else iif(kf_disb_date &lt; cast(&#x27;17.07.2024&#x27; as date), 130000, 200000)
+                     end;
+      end
+      else
+      begin
+        amount_max = case
+                       when point_cl &lt;= 6 then 55000
+                       when point_cl &lt;= 9 then 75000
+                       when point_cl &lt;= 18 then 85000 -- до этого было 850 000, поправил от 20.12.2024г
+                       else 100000
+                     end;
+      end
+    end
+  end
+  else
+  begin
+    if (kf_disb_date &lt; &#x27;10.02.2026&#x27;) then
+    begin
+      if (pr_code containing &#x27;.zalog.&#x27;) then
+      begin
+        amount_max = case
+                       when point_cl &lt;= 9 then 200000
+                       when point_cl &lt;= 15 then 250000
+                       when point_cl &lt;= 35 then 300000
+                       when point_cl &lt;= 45 then 400000
+                       else 500000
+                     end;
+      end
+      else
+      begin
+        amount_max = case
+                       when point_cl &lt;= 9 then 100000
+                       when point_cl &lt;= 15 then 150000
+                       when point_cl &lt;= 35 then 250000
+                       when point_cl &lt;= 45 then 300000
+                       else 400000
+                     end;
+      end
+    end
+    else   --RFCRU-4949
+    begin
+      if (pr_code containing &#x27;.zalog.&#x27;) then
+      begin
+        amount_max = case
+                       when point_cl &lt;= 11 then 200000
+                       when point_cl &lt;= 17 then 250000
+                       when point_cl &lt;= 24 then 300000
+                       when point_cl &lt;= 35 then 350000
+                       when point_cl &lt;= 45 then 400000
+                       else 500000
+                     end;
+      end
+      else
+      begin
+        amount_max = case
+                       when point_cl &lt;= 6 then 100000
+                       when point_cl &lt;= 11 then 150000
+                       when point_cl &lt;= 17 then 200000
+                       when point_cl &lt;= 24 then 250000
+                       when point_cl &lt;= 35 then 300000
+                       when point_cl &lt;= 45 then 350000
+                       else 450000
+                     end;
+      end
+    end
+
+    if (pr_code containing &#x27;.privilege_plus.&#x27; or pr_code containing &#x27;.refinance.&#x27; or pr_code containing &#x27;.refinance_oivo.&#x27;) then
+    begin
+      select amount_max
+      from perc_amount_interval_by_point(:pr_id, :point_cl, :kf_disb_date)
+      into amount_max;
+
+      if (pr_code containing &#x27;.refinance.&#x27; or pr_code containing &#x27;.refinance_oivo.&#x27;) then
+      begin
+        select mds
+        from hp_max_amount_allowed(9, :k_id, :amount_max)
+        into mds;
+      end
+    end
+  end
+  if (pr_code containing &#x27;.privilege.&#x27;) then
+    amount_max = amount_max + 100000;
+
+  if (is_refund = 0) then
+  begin
+    select mds
+    from hp_max_amount_allowed(9, :k_id, :amount_max)
+    into mds;
+  end
+
+  active_loan_balance = 0;
+  if (is_refund = 0) then
+  begin
+    select coalesce(sum(oks_balance), 0)
+    from oksummary, knclient
+    where kc_from_c_id = :c_id and
+          kc_amount_approved &gt; 0 and
+          oks_from_k_id = kc_from_k_id and
+          :kf_disb_date between oks_date_begin and oks_date_end and
+          oks_close_state = 0
+    into active_loan_balance;
+  end
+  else
+  begin
+    select sum(oks_balance)
+    from oksummary, knclient, kontract, product
+    where kc_from_c_id = :c_id and
+          kc_amount_approved &gt; 0 and
+          oks_from_k_id = kc_from_k_id and
+          :kf_disb_date between oks_date_begin and oks_date_end and
+          oks_close_state = 0 and
+          oks_from_k_id = k_id and
+          k_from_pr_id = pr_id
+    into active_loan_balance;
+
+    select  coalesce(sum(oks_balance), 0)                  -- RFCRU-3486
+    from oksummary, knclient kc
+    inner join kontrefinance kr on kr.kr_from_k_id = kc.kc_from_k_id
+    where kc_from_c_id = :c_id and
+           kc_amount_approved &gt; 0 and
+           oks_from_k_id = kc_from_k_id and
+           current_date between oks_date_begin and oks_date_end and
+           oks_close_state = 0 and
+           kr.kr_from_ma_id = :ma_id and
+           kr.kr_from_k_id = kc_from_k_id
+    into refund_active_loan_balance;
+  end
+
+  active_loan_balance = coalesce(active_loan_balance, 0);
+  refund_active_loan_balance = coalesce(refund_active_loan_balance, 0);
+
+
+  /*if ((amount_max &lt; active_loan_balance + kc_amount) and
+      is_refund = 1) then
+  begin
+    amount_max = amount_max - active_loan_balance;
+    if (amount_max &lt; 0) then
+      amount_max = 0;
+    error_is_critical = 1;
+    error_text = f_format(&#x27;Баланс ОС по активным: %1 р. Разрешенная сумма для выдачи: %2, ПДН: %3, Балл: %4&#x27;, round(active_loan_balance), round(amount_max), f_numtostr(final_pdn, 2), point_cl);
+    suspend;
+  end*/
+
+    if (current_date &lt; &#x27;23.01.2025&#x27; and
+        (amount_max &lt; active_loan_balance + kc_amount)) then
+    begin
+      amount_max = amount_max - active_loan_balance;
+      if (amount_max &lt; 0) then
+        amount_max = 0;
+      error_is_critical = 1;
+      error_text = f_format(&#x27;Баланс ОС по активным: %1 р. Разрешенная сумма для выдачи: %2, ПДН: %3, Балл: %4&#x27;, round(active_loan_balance), round(amount_max), f_numtostr(final_pdn, 2), point_cl);
+      suspend;
+    end
+    if (current_date &gt;= &#x27;23.01.2025&#x27; and
+        (mds &lt; (kc_amount - refund_active_loan_balance))) then  -- RFCRU-4068
+    begin
+      if (mds &lt; 0) then
+        mds = 0;
+      error_is_critical = 1;
+      error_text = f_format(&#x27;Баланс ОС по активным: %1 р. Разрешенная сумма для выдачи: %2, ПДН: %3, Балл: %4&#x27;, round(active_loan_balance), round(mds), f_numtostr(final_pdn, 2), point_cl);
+      suspend;
+    end
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

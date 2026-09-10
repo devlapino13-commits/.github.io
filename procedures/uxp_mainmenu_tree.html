@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$MAINMENU_TREE — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$MAINMENU_TREE: 2 входных, 8 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$MAINMENU_TREE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">8</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">DEV_MODE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">WEB_MODE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">8 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MNU_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MNU_PARENT_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MNU_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MNU_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MNU_MEMO</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MNU_POSITION</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MNU_UA_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MNU_IS_FOLDER</div><div class="ptype">BOOLEAN</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$MAINMENU_TREE(
+    DEV_MODE D_BOOL = 1,
+    WEB_MODE D_BOOL = 0)
+RETURNS (
+    MNU_ID D_ID,
+    MNU_PARENT_ID D_ID,
+    MNU_CODE D_STR_CODE,
+    MNU_NAME D_STR_100,
+    MNU_MEMO D_STR_255,
+    MNU_POSITION D_INTEGER,
+    MNU_UA_UUID D_UUID,
+    MNU_IS_FOLDER D_BOOLEAN)
+AS
+begin
+  if (dev_mode is null) then
+    dev_mode = 1;
+
+  if (web_mode is null) then
+    web_mode = 0;
+
+  for with recursive tree$list
+  as (select cast(lpad(ml_position, 6, &#x27;_&#x27;) as varchar(255)) as tree$pos,
+             ml_id,
+             ml_parent_id,
+             ml_code,
+             ml_caption,
+             ml_description,
+             ml_position,
+             uml_ua_uuid,
+             iif(ml_has_child = 1, true, false) as ml_has_child
+      from menulist
+           left join ux$menulist on uml_ml_id = ml_id
+      where ml_parent_id is null and
+            (ml_has_child &gt; 0 or uml_ua_uuid is not null) and
+            (coalesce(uml_web_disabled, 0) = 0 or :web_mode = 0 or ml_has_child &gt; 0) and
+            (coalesce(uml_fs_disabled, 0) = 0 or :dev_mode = 1 or ml_has_child &gt; 0)
+      union all
+      select tree$pos || lpad(t.ml_position, 6, &#x27;_&#x27;),
+             t.ml_id,
+             t.ml_parent_id,
+             t.ml_code,
+             t.ml_caption,
+             t.ml_description,
+             t.ml_position,
+             m.uml_ua_uuid,
+             iif(t.ml_has_child = 1, true, false) as ml_has_child
+      from menulist t
+        left join ux$menulist m on m.uml_ml_id = t.ml_id
+        join tree$list on (tree$list.ml_id = t.ml_parent_id and
+                          (coalesce(m.uml_web_disabled, 0) = 0 or :web_mode = 0 or t.ml_has_child &gt; 0) and
+                          (coalesce(m.uml_fs_disabled, 0) = 0 or :dev_mode = 1 or t.ml_has_child &gt; 0))
+      where (t.ml_has_child &gt; 0 or m.uml_ua_uuid is not null))
+  select ml_id,
+         ml_parent_id,
+         ml_code,
+         ml_caption,
+         ml_description,
+         ml_position,
+         uml_ua_uuid,
+         ml_has_child
+  from tree$list
+  order by tree$pos
+  into mnu_id,
+       mnu_parent_id,
+       mnu_code,
+       mnu_name,
+       mnu_memo,
+       mnu_position,
+       mnu_ua_uuid,
+       mnu_is_folder
+  do
+    suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

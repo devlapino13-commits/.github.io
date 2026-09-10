@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EDOC_TRANSFORM_OBJ_KIND — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EDOC_TRANSFORM_OBJ_KIND: 2 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EDOC_TRANSFORM_OBJ_KIND</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_edoc_sms_text.html"><div class="to">HP_EDOC_SMS_TEXT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EDL_OBJECT_KIND</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">EDL_OBJECT_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OBJ_KIND</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EDOC_TRANSFORM_OBJ_KIND(
+    EDL_OBJECT_KIND D_INTEGER,
+    EDL_OBJECT_ID D_ID)
+RETURNS (
+    OBJ_KIND D_INTEGER,
+    OBJ_ID D_ID)
+AS
+declare variable spm_from_ma_id d_integer;
+declare variable spm_from_sbc_id d_id;
+begin
+    /*
+        RFCRU-4254
+        Процедура преобразует edl_object_kind, который отличается от clients/miniapp/kontract
+        к одному из этих типов, чтобы затем по ним определить mcl_project
+    */
+
+    if (f_get_db_id() &lt;&gt; 81001) then
+        exit;
+    
+    if (edl_object_kind = 51) then -- com_list
+    begin
+        -- Из этой таблицы мы можем достать контракт
+        select
+            cml.cml_object_kind,
+            cml.cml_object_id
+        from com_list cml
+        where cml.cml_id = :edl_object_id
+        into 
+            :obj_kind,
+            :obj_id;
+        
+        -- Если тип объекта не совпадает с ожидаемым, явно вызываем ошибку
+        if (obj_kind &lt;&gt; f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;)) then
+            exception e_default f_format(&#x27;Unexpected obj_kind. Expected: kontract, actual: %1&#x27;, f_objkind(:obj_kind, &#x27;name&#x27;));
+
+    end
+    else if (edl_object_kind = 56) then -- kontpsk
+    begin
+        obj_kind = f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;);
+
+        select kps.kps_from_k_id
+        from kontpsk kps
+        where kps.kps_id = :edl_object_id
+        into :obj_id;
+    end
+    else if (edl_object_kind = 59) then -- ft_anketa_list
+    begin
+        obj_kind = f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;);
+
+        select fal.fal_from_c_id
+        from ft_anketa_list fal
+        where fal.fal_id = :edl_object_id
+        into :obj_id;
+    end
+    else if (edl_object_kind = 74) then -- sud_mainreq
+    begin
+        obj_kind = f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;);
+
+        select smr.smr_from_k_id
+        from sud_mainreq smr
+        where smr.smr_id = :edl_object_id
+        into :obj_id;
+    end
+    else if (edl_object_kind = 117) then -- overpay_main
+    begin
+        obj_kind = f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;);
+
+        select opm.opm_from_c_id
+        from overpay_main opm
+        where opm.opm_id = :edl_object_id
+        into :obj_id;
+    end
+    else if (edl_object_kind = 118) then -- smevpass_msg
+    begin
+        select spm.spm_from_sbc_id, spm.spm_from_ma_id
+        from smevpass_msg spm
+        where spm.spm_id = :edl_object_id
+        into :spm_from_sbc_id, :spm_from_ma_id;
+
+        if (spm_from_ma_id is not null) then
+        begin
+            obj_kind = f_objkind(&#x27;miniapp&#x27;, &#x27;id&#x27;);
+            obj_id = spm_from_ma_id;
+        end
+        else
+        begin
+            obj_kind = f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;);
+
+            select sbc.sbc_from_c_id
+            from smevpass_blockclients sbc
+            where sbc.sbc_id = :spm_from_sbc_id
+            into :obj_id;
+        end
+    end
+
+    suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

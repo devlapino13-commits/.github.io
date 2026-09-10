@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_SURVEY_STATUS — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_SURVEY_STATUS: 0 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_SURVEY_STATUS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SVQ_CAPTION</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RESULT_STATUS</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SVQ_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_SURVEY_STATUS
+RETURNS (
+    SVQ_CAPTION VARCHAR(255),
+    RESULT_STATUS VARCHAR(255),
+    SVQ_ID INTEGER)
+AS
+declare variable total_count integer;
+declare variable voice_count integer;
+declare variable svr_from_sva_id integer;
+declare variable winners_count integer;
+declare variable winners_num varchar(255);
+declare variable svq_time_finish timestamp;
+declare variable kol integer;
+declare variable sva_caption varchar(255);
+begin
+  total_count = 0;
+  select count(*)
+  from survey_allowedcells
+  where sac_is_test &gt;= 0
+  into :total_count;
+
+  for select svq_id, svq_caption || &#x27; (&#x27; || svq_memo || &#x27;)&#x27;, svq_time_finish
+      from survey_ques
+      where svq_id between 42 and 53
+      order by svq_id
+      into :svq_id, svq_caption, svq_time_finish
+  do
+  begin
+    voice_count = 0;
+    select count(*)
+    from survey_result
+    where svr_from_svq_id = :svq_id
+    into voice_count;
+
+    result_status = &#x27;Проголосовало &#x27; || voice_count || &#x27; из &#x27; || total_count;
+
+    if (current_timestamp &gt; svq_time_finish) then
+    begin
+      result_status = &#x27;Нет СМС&#x27;;
+
+      select svr_from_sva_id, count(*)
+      from survey_result
+      where svr_from_svq_id = :svq_id
+      group by svr_from_sva_id
+      order by 2 desc
+      rows 1
+      into :svr_from_sva_id, :kol;
+
+      if (kol is null) then
+        kol = 0;
+      if (kol &gt; 0) then
+      begin
+        winners_count = 0;
+        winners_num = &#x27;&#x27;;
+        for select svr_from_sva_id
+            from survey_result
+            where svr_from_svq_id = :svq_id
+            group by svr_from_sva_id
+            having count(*) = :kol
+            into :svr_from_sva_id
+        do
+        begin
+          winners_count = winners_count + 1;
+          sva_caption = &#x27;&#x27;;
+          select sva_caption
+          from survey_answer
+          where sva_id = :svr_from_sva_id
+          into :sva_caption;
+          if (sva_caption is null) then
+            sva_caption = &#x27;&#x27;;
+
+          if (sva_caption &lt;&gt; &#x27;&#x27;) then
+          begin
+            if (substring(sva_caption from 2 for 1) = &#x27; &#x27;) then
+              sva_caption = left(sva_caption, 1);
+            else
+              sva_caption = left(sva_caption, 2);
+
+            if (winners_num = &#x27;&#x27;) then
+              winners_num = sva_caption;
+            else
+              winners_num = winners_num || &#x27;, &#x27; || sva_caption;
+          end
+        end
+--        Result_Status=&#x27;Номер&#x27;||iif(winners_count=1, &#x27;&#x27;, &#x27;а&#x27;)||&#x27; победител&#x27;||iif(winners_count=1, &#x27;я&#x27;, &#x27;ей&#x27;)||&#x27;: &#x27;||winners_num;
+        result_status = &#x27;Количество победителей: &#x27; || winners_count;
+      end
+    end
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

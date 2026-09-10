@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_SMS_DELINQ — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_SMS_DELINQ: 2 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_SMS_DELINQ</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_make_zad_list_temp.html"><div class="to">AAREP_MAKE_ZAD_LIST_TEMP</div></a><a class="ref-card" href="hp_fio_clear.html"><div class="to">HP_FIO_CLEAR</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fsrobot_sms_send_daily.html"><div class="to">FSROBOT_SMS_SEND_DAILY</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DAYS</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PHONE</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SMS_MESSAGE</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CLIENT_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CL_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_SMS_DELINQ(
+    REP_DATE DATE,
+    REP_DAYS INTEGER)
+RETURNS (
+    PHONE VARCHAR(20),
+    SMS_MESSAGE VARCHAR(255),
+    CLIENT_ID DECIMAL(18,0),
+    CL_NAME STR_100)
+AS
+declare variable DB_ID integer;
+declare variable K_ID decimal(18,0);
+declare variable REP_AMOUNT varchar(20);
+declare variable CURR varchar(10);
+declare variable NSD_PERCENT decimal(15,4);
+declare variable MBF_PHONE varchar(20);
+declare variable DATE_FORMAT_STR varchar(20);
+declare variable C_ALTERNAT_FIO STR_100;
+declare variable CELL_MAIN_RD_ID integer;
+declare variable IS_MAIN D_SMALLINT;
+begin
+
+  db_id = f_get_db_id();
+
+  if (db_id = 81001) then
+    curr = &#x27; руб.&#x27;;
+  if (db_id in (39801, 41701)) then
+    curr = &#x27; сом&#x27;;
+  if (db_id = 94401) then
+    curr = &#x27; AZN&#x27;;
+
+  nsd_percent = 0;
+  select coalesce(nsd_percent / 100, 0)
+  from nspconfig_data
+  where nsd_from_nsm_id = -1 and
+        (:rep_date + :rep_days) between nsd_date_begin and nsd_date_end
+  into nsd_percent;
+  if (nsd_percent is null) then
+    nsd_percent = 0;
+
+  date_format_str = right(&#x27;0&#x27; || extract(day from rep_date - rep_days), 2) || &#x27;.&#x27; || right(&#x27;0&#x27; || extract(month from rep_date - rep_days), 2) || &#x27;.&#x27; || extract(year from rep_date - rep_days);
+
+  for select oks.oks_from_k_id
+  from oksummary oks
+  where :rep_date - oks.oks_delinq_date &gt;= :rep_days
+  and oks_close_state = 0
+  and :rep_date between oks.oks_date_begin and oks.oks_date_end
+  into :k_id
+  do
+  begin
+      if (exists (
+          select ok_from_k_id
+          from operkred, kontstate
+          where ks_from_k_id = ok_from_k_id and
+                ks_ol_is_delete = 0 and
+                ks_date_begin &lt;= :rep_date and
+                ks_date_end &gt;= :rep_date and
+                ks_state = 1 and
+                ok_ol_is_active = 1 and
+                ok_sh_date = :rep_date - cast(:rep_days as integer) and
+                ok_type &lt;&gt; 8 and
+                ok_type &lt;&gt; 7 and
+                ok_from_c_id = 0 and
+                ok_from_k_id = :k_id
+          group by ok_from_k_id
+          having sum(ok_sh_os + ok_os + ok_sh_perc + ok_perc) &gt; 0
+          )) then
+      begin
+        select sum(round(zad_os + sh_calc_perc + sh_calc_perc * :nsd_percent + sh_calc_fine)) delinq_sum
+        from aarep_make_zad_list_temp(:k_id, :rep_date, 1)
+        where sh_date = :rep_date - :rep_days
+        into rep_amount;
+    
+        rep_amount = cast(rep_amount as decimal(15,0));
+        for select f_cont_info(&#x27;clients&#x27;, kc_from_c_id, &#x27;cell_main&#x27;, &#x27;ok&#x27;), kc_from_c_id
+            from knclient
+            where kc_from_k_id = :k_id and
+                  kc_amount_approved &gt; 0
+            into phone, client_id
+        do
+        begin
+          if ((db_id = 81001) and
+              (rep_days = 1) and
+              (phone = &#x27;&#x27;)) then -- RF и первый день просрочки
+          begin
+            select rd.rd_id, iif(rd.rd_code = &#x27;ContactInfo.Cell_Main&#x27;, 1, 0)
+            from refdata rd
+            where rd.rd_code = &#x27;ContactInfo.Cell_Main&#x27;
+            into :cell_main_rd_id, is_main;
+    
+            if (f_get_const(&#x27;new_contdata&#x27;) = 0) then
+            begin
+              select cff.cv_contact_value
+              from contverify cff
+              where cff.cv_object_kind = 0 and
+                    cff.cv_object_id = :client_id and
+                    cff.cv_from_rd_id = :cell_main_rd_id and
+                    cff.cv_status &gt; 0
+              order by cv_id desc
+              rows 1
+              into phone;
+            end else
+            begin
+              select f_cont_code(cda_from_clt_id)
+              from contdata, contveri
+              where cda_from_c_id = :client_id and
+                    cda_cont_kind = f_enum(&#x27;cont_kind&#x27;, &#x27;cell&#x27;, &#x27;id&#x27;) and
+                    cda_is_main = :is_main and
+                    cda_id = cvr_from_cda_id and
+                    cvr_status = 1
+              order by cvr_id desc
+              rows 1
+              into phone;
+            end
+    
+            phone = coalesce(phone, &#x27;&#x27;);
+          end
+    
+          if (phone &lt;&gt; &#x27;&#x27;) then
+          begin
+            if (db_id in (39801, 41701)) then -- KG
+            begin
+              sms_message = &#x27;Ваш долг от &#x27; || date_format_str || &#x27;г.до сих пор не погашен. Сумма:&#x27; || rep_amount || &#x27;сом&#x27;;
+    
+              suspend;
+            end
+            else
+            if (db_id = 81001) then -- RF
+            begin
+              cl_name = &#x27;&#x27;;
+    
+              select cl.c_alternat_fio
+              from clients cl
+              where cl.c_id = :client_id
+              into :c_alternat_fio;
+    
+              select txt2
+              from hp_fio_clear(:c_alternat_fio)
+              into :cl_name;
+    
+              cl_name = coalesce(cl_name, &#x27;&#x27;);
+              if (cl_name = &#x27;&#x27;) then
+                cl_name = &#x27;klient&#x27;;
+
+              mbf_phone = &#x27;88005557171&#x27;;
+    
+              sms_message = &#x27;&#x27;;
+    
+              if (rep_days = 1) then
+                sms_message = &#x27;Vnimanie! Uvajaemyi &#x27; || cl_name || &#x27;, srok oplaty prosrochen. &#x27; || &#x27;Сhtoby izbejat lishnih rashodov prosim oplatit &#x27; || :rep_amount || &#x27; rub. S zabotoi o Vas, M Bulak&#x27;;
+              else
+              if (rep_days = 2) then
+                sms_message = &#x27;Uvajaemyi &#x27; || cl_name || &#x27;, srok oplaty prosrochen. Сhtoby izbejat lishnih rashodov prosim vnesti plateg. S zabotoi o Vas, M Bulak!&#x27;;
+              else
+              if (rep_days between 4 and 6) then
+                sms_message = &#x27;Vnimanie! Uvajaemyi &#x27; || cl_name || &#x27;! Vash dolg uvelichivaetsa, svyajites s nami. T.&#x27; || mbf_phone || &#x27; My gotovy Vam pomoch. S zabotoi o Vas, M Bulak!&#x27;;
+              else
+              if (rep_days = 7) then
+                sms_message = &#x27;Uvajaemyi &#x27; || cl_name || &#x27;! Vashe delo peredano v Slujbu Vzyskaniy. My pytaemsya Vam POMOCH. Pojaluista, svyajites s nami T.&#x27; || mbf_phone || &#x27; Vash M Bulak&#x27;;
+              else
+              if (rep_days = 10) then
+                sms_message = &#x27;Uvajaemyi &#x27; || cl_name || &#x27;! My gotovy Vam POMOCH. Ne narushayte usloviya dogovora. Pojaluista, svyajites s nami T.&#x27; || mbf_phone || &#x27;. Vash, M Bulak!&#x27;;
+              else
+              if (rep_days = 27) then
+                sms_message = &#x27;Uvajaemyi &#x27; || cl_name || &#x27;! V sluchae neoplaty dolga, summa zajma mojet byt potrebovana dosrochno v ramkah prinuditelnogo vzyskaniya. Svyajites s nami, my gotovy Vam POMOCH T.&#x27; || mbf_phone || &#x27; S zabotoi o Vas, M Bulak!&#x27;;
+              suspend;
+            end
+            else
+            if (db_id = 94401) then -- AZ
+            begin
+              sms_message = &#x27;MBulaka odenishiniz &#x27; || :rep_days || &#x27; gun gecikir. Bugune olan gecikme borcunuz &#x27; || :rep_amount || :curr || &#x27;. Gecikmede olan her gune cerime hesablanir&#x27;;
+              suspend;
+            end
+          end
+        end
+     end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

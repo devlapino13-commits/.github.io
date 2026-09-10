@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_PRE_SUD_ACTION_LOG — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_PRE_SUD_ACTION_LOG: 3 входных, 7 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_PRE_SUD_ACTION_LOG</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">7</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE_START</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_STOP</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">7 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">LOG_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACT_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACT_K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACT_K_KONTRACT_NO</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACT_DATETIME</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACT_TYPE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACT_UN_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_PRE_SUD_ACTION_LOG(
+    REP_DATE_START D_DATE,
+    REP_DATE_STOP D_DATE,
+    REP_K_ID D_ID)
+RETURNS (
+    LOG_ID D_ID,
+    ACT_ID D_ID,
+    ACT_K_ID D_ID,
+    ACT_K_KONTRACT_NO D_STR_20,
+    ACT_DATETIME D_DATETIME,
+    ACT_TYPE D_STR_CODE,
+    ACT_UN_FIO D_STR_100)
+AS
+begin
+  -- Журнал действий в рамках досудебных взысканий (RFCRU-4792)
+  -- Финстарт: Документы -&gt; Модуль досудебного взыскания
+
+  if (rep_k_id is null) then
+  begin
+    if (rep_date_start &gt; rep_date_stop) then
+      exception e_message &#x27;Указан некорректный период&#x27;;
+    else if (rep_date_stop - rep_date_start &gt; 30) then
+      exception e_message &#x27;Период не может быть больше 30 дней&#x27;;
+
+    for select psal_id,
+               psal_action_datetime,
+               f_enum_name(&#x27;pre_sud_actions&#x27;, psal_action_type),
+               psal_action_id,
+               psal_action_k_id,
+               psal_action_un_fio
+        from pre_sud_action_log
+        where cast(psal_action_datetime as date) between :rep_date_start and :rep_date_stop
+        order by psal_id desc
+        into log_id,
+             act_datetime,
+             act_type,
+             act_id,
+             act_k_id,
+             act_un_fio
+    do
+    begin
+      act_k_kontract_no = null;
+      select k_kontract_no
+      from kontract
+      where k_id = :act_k_id
+      into act_k_kontract_no;
+
+      suspend;
+    end
+  end
+  else
+    for select psal_id,
+               psal_action_datetime,
+               f_enum_name(&#x27;pre_sud_actions&#x27;, psal_action_type),
+               psal_action_id,
+               psal_action_k_id,
+               psal_action_un_fio
+        from pre_sud_action_log
+        where psal_action_k_id = :rep_k_id
+        order by psal_id desc
+        into log_id,
+             act_datetime,
+             act_type,
+             act_id,
+             act_k_id,
+             act_un_fio
+    do
+    begin
+      act_k_kontract_no = null;
+      select k_kontract_no
+      from kontract
+      where k_id = :act_k_id
+      into act_k_kontract_no;
+
+      suspend;
+    end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

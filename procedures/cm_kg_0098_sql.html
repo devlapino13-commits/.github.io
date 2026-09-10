@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_KG_0098_SQL — процедура — схема БД</title>
+<meta name="description" content="Проверка актуальности фото">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_KG_0098_SQL</code></h1>
+<p class="desc">Проверка актуальности фото</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_KG_0098_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable kc_amount curr_type;
+declare variable kf_disb_date d_date;
+declare variable kf_client_pass_no varchar(30);
+declare variable dtoc d_date;
+declare variable photo_id id_type;
+declare variable days_qty integer;
+declare variable c_id d_id;
+declare variable pr_code d_str_100;
+begin
+  for select cl.c_name_fio, cl.c_pass_no, cl.c_blob_photo_id, kont.k_disb_date, cl.c_id, pr.pr_code
+      from knclient kc, clients cl, kontract kont, product pr
+      where kc.kc_from_k_id = :k_id and
+            kc.kc_from_c_id = cl.c_id and
+            kc.kc_amount_approved &gt; 0 and
+            kont.k_id = kc.kc_from_k_id and
+            pr.pr_id = kont.k_from_pr_id
+      into :res_info_text, :kf_client_pass_no, :photo_id, :kf_disb_date, :c_id, :pr_code
+  do
+  begin
+    if (pr_code containing &#x27;.auto_kk.&#x27; and check_kind = &#x27;.send_kk.&#x27;) then
+      exit;
+    if (photo_id is null) then
+    begin
+      res_error_text = &#x27;Фотография клиента отсутсвует. Утверждение займа невозможно&#x27;;
+      res_error_is_critical = 2;
+      suspend;
+      exit;
+    end
+    if (not exists (select *
+                from knclient kncl
+                inner join kontstate ks on ks.ks_from_k_id = kncl.kc_from_k_id
+                where kncl.kc_from_c_id = :c_id
+                and kncl.kc_amount_approved &gt; 0
+                and ks.ks_ol_is_delete = 0
+                and ks.ks_state = 1
+                and ks.ks_date_begin &lt;= :kf_disb_date
+                and ks.ks_from_k_id &lt;&gt; :k_id)) then
+    begin
+        select cast(bs.bls_datetime as date)
+        from blobstore bs
+        where bs.bls_id = :photo_id and
+              bs.bls_kind = 0 --фото сделано с камеры мобильного (0-камера, 1-сканирование, 2-галерея)
+        into :dtoc;
+    
+        days_qty = 0;
+    
+        select count(sc.scd_work_hours)
+        from sa_calendays sc
+        where sc.scd_date between :dtoc and :kf_disb_date and
+              sc.scd_work_hours &gt; 0
+        into :days_qty;
+    
+        if (days_qty &gt; 2) then
+        begin
+          res_error_text = &#x27;Фотография клиента не актуальна - сделана более 2 рабочих дней назад назад (&#x27; || f_datetostr(:dtoc) || &#x27;). Утверждение займа невозможно&#x27;;
+          res_error_is_critical = 1;
+          suspend;
+          exit;
+        end
+     end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

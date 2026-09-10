@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RCIB_CRED_MISSEDPAY_120 — процедура — схема БД</title>
+<meta name="description" content="Процедура RCIB_CRED_MISSEDPAY_120: 3 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>RCIB_CRED_MISSEDPAY_120</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="equifax_fip_list_temp.html"><div class="to">EQUIFAX_FIP_LIST_TEMP</div></a><a class="ref-card" href="rcib_cred_fip_list_temp.html"><div class="to">RCIB_CRED_FIP_LIST_TEMP</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_DISB_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MAX_DELINQ_DAYS</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE RCIB_CRED_MISSEDPAY_120(
+    K_ID ID_TYPE,
+    K_DISB_DATE DATE,
+    CHECK_DATE DATE)
+RETURNS (
+    MAX_DELINQ_DAYS INTEGER)
+AS
+declare variable date_end date;
+begin
+-- контракты у которых в течении 120 дней с момента выдачи была непрерывная просрочка более двух платежей
+
+  /*
+    График платежей по договору:
+    01.01.2015     01.02.2015   01.03.2015   01.04.2015   01.05.2015   01.06.2015   01.07.2015   01.08.2015   01.09.2015   ***
+    Дата договора  1-ый платеж  2-ой платеж  3-ий платеж  4-ый платеж  5-ый платеж  6-ой платеж  7-ой платеж  8-ой платеж  *** 
+                                                                                    ~ 120 дней с 
+                                                                                    первого платежа
+     
+    1.  1) Если субъект КИ  не погасил подряд  1-ый и 2-ой  платеж –  пропущено 2 подряд платежа  в течение 120 календарных дней с момента 
+    первого платежа, – то необходимо передать cred_missedpay_120 = 1. 
+
+    2.  Если субъект КИ погасил 1-ый и 2-ой платеж, но не погасил подряд 3-ий и 4-ий платеж (или 4-ый и 5-ый) – пропущено 2 подряд платежа в 
+    течение 120 календарных дней с момента первого платежа, – то необходимо передать cred_missedpay_120 = 1. 
+
+    3.  Если субъект КИ  не погасил 5-ый и 6-ой платеж, то необходимо передать cred_missedpay_120  =  0,  т.к. в течение 120 календарных дней с 
+    момента первого платежа был только один пропущенный платеж (5-ый платеж). 
+  */
+
+  if (k_id= 101010037329100101) then exit; /* Временно */
+
+  if (k_disb_date is null) then
+  begin
+    select ks_date_begin
+    from kontstate ks
+    where ks_ol_is_delete = 0 and
+          ks_state = 1 and
+          ks.ks_from_k_id = :k_id
+    into :k_disb_date;
+  end
+
+  date_end = dateadd(120 day to k_disb_date);
+
+  max_delinq_days = null;
+  if (date_end &gt; check_date) then
+    date_end = check_date;
+
+-- проверяю max число дней просрочки на дату = дата выдачи  + 120 дней
+--(считаю что 1 платеж = 30 дням), т.е. непрерывная просрочка в 2-а платежа = 60 дней.
+  select max(iif(oks_date_end &gt; cast(:date_end as date), cast(:date_end as date), oks_date_end + 1) - oks_delinq_date) max_delinq_days
+  from oksummary oks
+  where oks_delinq_date &lt; :date_end and
+        oks_close_state = 0 and
+        (iif(oks_date_end &gt; :date_end, :date_end, oks_date_end + 1) - oks_delinq_date) &gt; 60 and
+        oks_from_k_id = :k_id
+  into max_delinq_days;
+
+  if (max_delinq_days is not null) then
+  begin
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

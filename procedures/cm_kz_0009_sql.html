@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_KZ_0009_SQL — процедура — схема БД</title>
+<meta name="description" content="Процедура CM_KZ_0009_SQL: 3 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_KZ_0009_SQL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_make_zad_list.html"><div class="to">AAREP_MAKE_ZAD_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_KZ_0009_SQL(
+    MA_ID D_INTEGER NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable C_ID D_ID;
+declare variable MA_DATE_SAVE D_DATE;
+declare variable C_NAME_FIO D_STR_100;
+declare variable K_ID_ACTIVE D_ID;
+declare variable MBF_DEPT_SUPRUG D_CURRENCY;
+declare variable MBF_DEPT_SUPRUG_TMP D_CURRENCY;
+declare variable MA_SUMMA_MINUS D_CURRENCY;
+begin
+  -- RFCKZ-877
+  res_error_is_critical = 2;
+  mbf_dept_suprug = 0;
+
+  for select mac.mac_from_c_id,
+             c.c_name_fio,
+             cast(ma.ma_date_save as d_date),
+             ma.ma_summa_minus
+      from miniapp ma
+      inner join miniappclient mac on mac.mac_from_ma_id = ma.ma_id
+      inner join clients c on c.c_id = mac.mac_from_c_id
+      where ma.ma_id = :ma_id and
+            ma.ma_is_active = 1 and
+            ma.ma_date_end = &#x27;31.12.9999&#x27; and
+            mac.mac_amount &gt; 0
+      into c_id,
+           c_name_fio,
+           ma_date_save,
+           ma_summa_minus
+
+  do
+  begin
+
+    if (exists(select *
+               from miniapp ma
+               inner join miniappclient mac on mac.mac_from_ma_id = ma.ma_id
+               where ma.ma_is_active = 1 and
+                     ma.ma_id &lt;&gt; :ma_id and
+                     ma.ma_date_app = :ma_date_save and
+                     ma.ma_date_end = &#x27;31.12.9999&#x27; and
+                     mac.mac_amount &gt; 0 and
+                     mac.mac_from_c_id = :c_id)) then
+    begin
+      res_error_text = &#x27;Возможно взять только 1 заем в день&#x27;;
+      suspend;
+    end
+
+    mbf_dept_suprug = ma_summa_minus + mbf_dept_suprug;
+
+    for select ks.ks_from_k_id
+        from kontstate ks
+        inner join knclient kncl on ks.ks_from_k_id = kncl.kc_from_k_id
+        where ks.ks_state = 1 and
+              current_date between ks.ks_date_begin and ks.ks_date_end and
+              ks.ks_ol_is_delete = 0 and
+              kncl.kc_from_c_id = :c_id
+        into :k_id_active
+    do
+    begin
+      mbf_dept_suprug_tmp = 0;
+      select sum(zad_os + sh_calc_perc)
+      from aarep_make_zad_list(:k_id_active, current_date, 1)
+      into :mbf_dept_suprug_tmp;
+      mbf_dept_suprug_tmp = coalesce(mbf_dept_suprug_tmp, 0);
+      mbf_dept_suprug = mbf_dept_suprug + mbf_dept_suprug_tmp;
+    end
+
+    if (mbf_dept_suprug &gt; 1500000) then
+    begin
+      res_error_text = &#x27;Общий совокупный баланс и сумма в новой заявки клиента не должны превышать 1 500 000 тенге&#x27;;
+      suspend;
+    end
+
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

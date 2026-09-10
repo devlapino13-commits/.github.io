@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_REBUKE_SCORES_INSERT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_REBUKE_SCORES_INSERT: 3 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_REBUKE_SCORES_INSERT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SCORE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_REBUKE_SCORES_INSERT(
+    UN_ID D_ID,
+    C_ID D_ID,
+    SCORE D_SMALLINT)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255)
+AS
+declare variable points d_integer;
+declare variable points_new d_integer;
+declare variable act d_str_20;
+begin
+  -- процедура добавляет корректирующий бонусный или штрафной балл сотруднику (RFCKG-2189)
+
+  res_info_text = &#x27;&#x27;;
+  res_error_text = &#x27;&#x27;;
+
+  if (not exists(select *
+                 from username
+                 where un_from_c_id = :c_id)) then
+    res_error_text = &#x27;Сотрудник не найден&#x27;;
+
+  if (score is null or score = 0) then
+    res_error_text = &#x27;Корректирующий балл не может равняться нулю&#x27;;
+  else if (score &lt; 0) then
+    act = &#x27;Штрафной балл&#x27;;
+  else
+    act = &#x27;Бонусный балл&#x27;;
+
+  select sum(rs_scores)
+  from rebuke_scores
+  where rs_from_c_id = :c_id and
+        rs_is_delete = 0
+  into points; -- текущий итоговый балл
+
+  if ((points + score) &lt; 0) then
+    res_error_text = &#x27;Штрафный балл не может превышать текущий итоговый балл&#x27;;
+
+  if (res_error_text = &#x27;&#x27;) then
+  begin
+    insert into rebuke_scores (rs_from_c_id, rs_scores, rs_date, rs_protocol_no, rs_from_un_id, rs_datetime)
+    values (:c_id, :score, current_date, -1, :un_id, cast(&#x27;now&#x27; as timestamp));
+
+    if (row_count = 1) then
+    begin
+      select sum(rs_scores)
+      from rebuke_scores
+      where rs_from_c_id = :c_id and
+            rs_is_delete = 0
+      into points_new; -- итоговый балл после обновления
+
+      res_info_text = act || &#x27; успешно добавлен.&#x27; || ascii_char(13) || ascii_char(10);
+      res_info_text = res_info_text || &#x27;Изменение итогового балла: &#x27; || points || &#x27; -&gt; &#x27; || points_new;
+    end
+    else
+      res_error_text = act || &#x27; добавить не удалось, возникла ошибка&#x27;;
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

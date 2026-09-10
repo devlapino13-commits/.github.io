@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_RETURN_CONSULT_PARENT_OL — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_RETURN_CONSULT_PARENT_OL: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_RETURN_CONSULT_PARENT_OL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_overpayment_return_save_tmp.html"><div class="to">HP_OVERPAYMENT_RETURN_SAVE_TMP</div></a><a class="ref-card" href="last_doc_number.html"><div class="to">LAST_DOC_NUMBER</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ARC_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_RETURN_CONSULT_PARENT_OL(
+    UN_ID D_ID,
+    ARC_ID D_ID)
+AS
+declare variable def_curr d_str_255;
+declare variable new_ol_id d_id;
+declare variable account_overpayments d_str_20;
+declare variable account_doverit d_str_20;
+declare variable doc_no d_integer;
+declare variable reg_id d_integer;
+declare variable memo_date date;
+declare variable c_fio d_str_100;
+declare variable c_id d_id;
+declare variable k_id d_id;
+declare variable sum_ovp d_currency;
+declare variable kontract_no d_str_20;
+declare variable ol_memo d_str_255;
+declare variable ob_detail varchar(1024);
+begin
+
+    def_curr = f_get_const(&#x27;cm_default_currency&#x27;);
+    
+    new_ol_id = (select max(ob.ob_from_ol_id)
+               from operbook ob) + 1;
+
+    select arc.arc_date, c.c_name_fio, arc.arc_from_c_id, arc.arc_from_k_id, arci.arci_amount, k.k_kontract_no, arci.arci_consult_office_id
+    from app_return_consult arc
+    inner join app_return_consult_info arci on arci.arci_id = arc.arc_id
+    inner join clients c on c.c_id = arc.arc_from_c_id
+    inner join kontract k on k.k_id = arc.arc_from_k_id
+    where arc.arc_id = :arc_id
+    into :memo_date, :c_fio, :c_id, :k_id, :sum_ovp, :kontract_no, :reg_id;
+
+    select al.al_id
+    from acc_list al
+    where al.al_from_reg_id = :reg_id and
+            al.al_from_bg_id = &#x27;21114&#x27; and
+            al.al_number = 10
+    into :account_overpayments;
+
+    select al.al_id
+    from acc_list al
+    where al.al_from_reg_id = :reg_id and
+            al.al_from_bg_id = &#x27;21199&#x27; and
+            al.al_number = 110
+    into :account_doverit;
+
+    select num
+    from last_doc_number(current_date, 0, :reg_id)
+    into :doc_no;
+
+    ol_memo = right((100 + extract(day from memo_date)), 2) || &#x27;.&#x27; ||
+            right((100 + extract(month from memo_date)), 2) || &#x27;.&#x27; ||
+            extract(year from memo_date) || &#x27; г.&#x27;;
+  
+    ol_memo = &#x27;Сумма к возврату по консультационным услугам перед&#x27; || :c_fio || &#x27;согл.заявления от &#x27; || :ol_memo;
+    ob_detail = &#x27;&#x27;;
+    
+    execute procedure hp_overpayment_return_save_tmp(:new_ol_id, :reg_id, current_date, :doc_no, :ol_memo, :un_id,
+            :c_id, :def_curr, :account_overpayments, :sum_ovp, :account_doverit, :k_id, null, 0, :new_ol_id, :ob_detail);
+
+    update app_return_consult_info
+    set arci_from_ol_id = :new_ol_id
+    where (arci_id = :arc_id);
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

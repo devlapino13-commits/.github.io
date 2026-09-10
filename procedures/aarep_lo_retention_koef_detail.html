@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_LO_RETENTION_KOEF_DETAIL — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_LO_RETENTION_KOEF_DETAIL: 3 входных, 6 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_LO_RETENTION_KOEF_DETAIL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">LO_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">TXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_KONTRACT_NO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_CLOSED</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_REPEAT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_KOEF</div><div class="ptype">DECIMAL(18,7)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ACTIVE_BEGIN</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_LO_RETENTION_KOEF_DETAIL(
+    LO_ID DECIMAL(18,0),
+    REP_DATE_BEGIN DATE,
+    REP_DATE_END DATE)
+RETURNS (
+    TXT D_STR_100,
+    K_KONTRACT_NO D_STR_100,
+    RES_CLOSED INTEGER,
+    RES_REPEAT INTEGER,
+    RES_KOEF DECIMAL(18,7),
+    RES_ACTIVE_BEGIN INTEGER)
+AS
+declare variable res_closed_tmp integer;
+declare variable kf_id decimal(18,0);
+declare variable dd_tmp date;
+declare variable kc_when_prior_loan_closed date;
+declare variable k_refund integer;
+declare variable c_id id_type;
+declare variable k_disb_date date;
+declare variable kc_id id_type;
+declare variable ol_id id_type;
+declare variable min_sh_date date;
+declare variable kf_id_prior id_type;
+declare variable delinq_day_closed integer;
+declare variable c_id_prior id_type;
+begin
+  res_closed = 0;
+  res_repeat = 0;
+  res_active_begin = 0;
+  kf_id_prior = 0;
+  delinq_day_closed = 0;
+  c_id_prior = 0;
+  for select k_from_kf_id, ks_date_begin, ks_from_ol_id, kc_from_c_id, k_kontract_no
+      from kontract, kontstate, knclient
+      where ks_state = 2 and
+            ks_kc_id = :lo_id and
+            ks_ol_is_delete = 0 and
+            ks_date_begin between :rep_date_begin and :rep_date_end and
+            ks_from_k_id = k_id and
+            k_id = kc_from_k_id and
+            kc_amount_approved &gt; 0
+      order by kc_from_c_id, kc_id
+      into :kf_id, :dd_tmp, :ol_id, :c_id, k_kontract_no
+  do
+  begin
+
+    kf_id_prior = kf_id;
+    res_closed_tmp = 1;
+    -- если по одному клиенту было 2 выдачи то считать только одну, это касается если выдача в один и тот же день
+    if (c_id_prior = c_id) then
+      res_closed_tmp = 0;
+    c_id_prior = c_id;
+
+    if (res_closed_tmp = 1) then
+    begin
+      select min(ok_sh_date)
+      from operkred
+      where ok_from_ol_id = :ol_id and
+            ok_os + ok_perc &lt; 0
+      into min_sh_date;
+
+      delinq_day_closed = dd_tmp - min_sh_date; -- просрочки считать на момент закрытия кредита
+      -- не включать закрытые с просроченными более 360 дней
+      if (delinq_day_closed &gt; 45) then
+        res_closed_tmp = 0;
+    end
+
+    -- если в предыдущий день закрытия папка находилась в другом СВЗ то не будет считаться
+    if (res_closed_tmp = 1) then
+    begin
+      if (not exists(select *
+                     from knaktlist
+                     where kal_from_kf_id = :kf_id and
+                           knaktlist.is_delete = 0 and
+                           kal_new_kf_officer = :lo_id and
+                           kal_date &lt;= (:dd_tmp - 1) and
+                           kal_date_end &gt;= (:dd_tmp - 1))) then
+        res_closed_tmp = 0;
+    end
+
+    -- если на момент закрытия имеется активный кредит то не будет считаться что закрытым
+    if (res_closed_tmp = 1) then
+    begin
+      if (exists(select *
+                 from kontstate, knclient
+                 where ks_ol_is_delete = 0 and
+                       ks_state = 1 and
+                       :dd_tmp between ks_date_begin and ks_date_end and
+                       :dd_tmp &gt; ks_date_begin -- если дата выдачи совпадает с датой закрытия предыдущего займа то будет считаться удержанием
+                       and
+                       ks_from_k_id = kc_from_k_id and
+                       kc_amount_approved &gt; 0 and
+                       kc_from_c_id = :c_id)) then
+        res_closed_tmp = 0;
+    end
+
+    res_closed = res_closed + res_closed_tmp;
+    if (res_closed_tmp = 1) then
+    begin
+      txt = &#x27;Закрыт за период&#x27;;
+      suspend;
+    end
+  end
+    if (res_closed is null) then
+  res_closed = 0;
+
+  for select coalesce(kc_when_prior_loan_closed, &#x27;31.12.2999&#x27;), coalesce(k_refund, 0), k_disb_date, kc_from_c_id, kc_id,
+             k_kontract_no
+      from knclient, kontstate, kontract
+      where ks_state = 1 and
+            ks_kc_id = :lo_id and
+            ks_ol_is_delete = 0 and
+            ks_date_begin between :rep_date_begin and :rep_date_end and
+            ks_from_k_id = kc_from_k_id and
+            kc_amount_approved &gt; 0 and
+            ks_from_k_id = k_id
+      into kc_when_prior_loan_closed, k_refund, k_disb_date, c_id, kc_id, k_kontract_no
+  do
+  begin
+    --  Если контракт рефинансируется то сперва новый контракт выдается потом старый закрывается
+    --  тем самым поле kc_when_prior_loan_closed не заполняется так как при выдаче старый заем активный из-за этого сделаны ниже следюущие дейстивя
+    if (k_refund = 1 and
+        kc_when_prior_loan_closed = &#x27;31.12.2999&#x27;) then
+    begin
+      select ks_date_end
+      from kontstate, knclient
+      where ks_from_k_id = kc_from_k_id and
+            kc_from_c_id = :c_id and
+            kc_amount_approved &gt; 0 and
+            ks_state = 1 and
+            ks_ol_is_delete = 0 and
+            ks_date_begin &lt;= :k_disb_date and
+            kc_id &lt;&gt; :kc_id
+      order by ks_date_end desc
+      rows 1
+      into kc_when_prior_loan_closed;
+      kc_when_prior_loan_closed = coalesce(kc_when_prior_loan_closed, &#x27;31.12.2999&#x27;);
+      if (kc_when_prior_loan_closed &lt; &#x27;31.12.2999&#x27;) then
+        kc_when_prior_loan_closed = kc_when_prior_loan_closed + 1;
+    end
+
+    if (kc_when_prior_loan_closed between :rep_date_begin and :rep_date_end) then
+    begin
+      res_repeat = res_repeat + 1;
+      txt = &#x27;Повторно выданный&#x27;;
+      suspend;
+    end
+
+  end
+  
+  txt = &#x27;&#x27;;
+  res_koef = 100.0;
+  if (res_closed &lt;&gt; 0) then
+    res_koef = round(cast(res_repeat as double precision) / cast(res_closed as double precision) * 100.0, 1);
+
+  select count(distinct kc_from_c_id)
+  from oksummary, knclient
+  where oks_date_begin &lt;= (:rep_date_begin - 1) and
+        oks_date_end &gt;= (:rep_date_begin - 1) and
+        oks_kc_id = :lo_id and
+        oks_from_k_id = kc_from_k_id and
+        kc_amount_approved &gt; 0 and
+        oks_balance &gt; 0
+        and oks_close_state = 0
+  into :res_active_begin;
+
+  if (res_active_begin is null) then
+    res_active_begin = 0;
+
+  txt = &#x27;Итог&#x27;;
+  k_kontract_no = &#x27;&#x27;;
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

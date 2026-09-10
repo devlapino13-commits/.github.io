@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_LOGIN_ACTION_VALIDATION — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_LOGIN_ACTION_VALIDATION: 3 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_LOGIN_ACTION_VALIDATION</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_ip_info.html"><div class="to">HP_GET_IP_INFO</div></a><a class="ref-card" href="hp_get_mc_app_version.html"><div class="to">HP_GET_MC_APP_VERSION</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="mc_login_action.html"><div class="to">MC_LOGIN_ACTION</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ACTION_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACTION_DATA</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">IF_TEST_PHONE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ERR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_LOGIN_ACTION_VALIDATION(
+    ACTION_CODE D_STR_CODE,
+    ACTION_DATA D_STR_LONG,
+    IF_TEST_PHONE D_BOOL = 0)
+RETURNS (
+    RES_CODE D_STR_CODE,
+    ERR_TEXT D_STR_255)
+AS
+declare variable mcl_login d_str_code;
+declare variable birth_date_str d_str_code;
+declare variable operating_system d_str_10;
+declare variable application_version d_str_10;
+declare variable mcl_project_text d_str_code;
+declare variable is_biom d_smallint;
+declare variable db_id d_integer;
+declare variable pin_code d_integer;
+declare variable mcl_pass_hash d_str_long;
+declare variable db_is_actual d_smallint;
+declare variable country d_str_code;
+declare variable ip_address d_str_code;
+declare variable is_local_ip d_bool;
+declare variable is_test_phone d_bool;
+declare variable country_condition d_bool;
+begin
+    /*
+        RFCKG-4671
+        Процедура отвечает за валидацию входящих параметров процедуры mc_login_action
+    */
+
+    if (action_code not in (&#x27;send_code&#x27;, &#x27;check_code&#x27;, &#x27;update_pass&#x27;, &#x27;login&#x27;)) then
+        exception e_message f_format(&#x27;Недопустимое действие: %1&#x27;, :action_code);
+
+    db_id = f_get_db_id();
+    db_is_actual = 0;
+
+    if (exists(select * from hp_db_is_actual)) then
+        db_is_actual = 1;
+
+    is_biom = iif(db_id in (39801, 41701), 1, 0);
+
+    res_code = case action_code
+                   when &#x27;send_code&#x27; then &#x27;send_error&#x27;
+                   when &#x27;check_code&#x27; then &#x27;check_error&#x27;
+                   when &#x27;update_pass&#x27; then &#x27;pass_error&#x27;
+                   when &#x27;login&#x27; then &#x27;login_error&#x27;
+               end;
+
+    -------------------- ОБ�©ИЕ ПРОВЕРКИ ДЛЯ ВСЕХ ДЕЙСТВИЙ --------------------
+    mcl_login = f_json_str_get_value(action_data, &#x27;login&#x27;, &#x27;&#x27;);
+    operating_system = f_json_str_get_value(action_data, &#x27;operating_system&#x27;, &#x27;&#x27;);
+    application_version = f_json_str_get_value(action_data, &#x27;application_version&#x27;, &#x27;&#x27;);
+
+    if (coalesce(mcl_login, &#x27;&#x27;) = &#x27;&#x27;) then
+    begin
+        err_text = &#x27;Отсутствует номер телефона&#x27;;
+        suspend;
+        exit;
+    end
+
+    -- RFCRU-5785
+    if (f_phone_validate_mask(:mcl_login, :db_id) = 0) then
+    begin
+        err_text = &#x27;Неправильный номер телефона&#x27;;
+        suspend;
+        exit;
+    end
+
+    if (operating_system = &#x27;&#x27;) then
+    begin
+        err_text = &#x27;Название операционной системы не передано&#x27;;
+        suspend;
+        exit;
+    end
+
+    if (operating_system not in (&#x27;ios&#x27;, &#x27;android&#x27;)) then
+    begin
+        err_text = &#x27;Недопустимая операционная система&#x27;;
+        suspend;
+        exit;
+    end
+
+    if (application_version = &#x27;&#x27;) then
+    begin
+        err_text = &#x27;Версия приложения не передана&#x27;;
+        suspend;
+        exit;
+    end
+
+    --------------------------------------------------------------------------
+
+
+    --------- ПРОВЕРКА ВОЗМОЖНОСТИ РЕГИСТРАЦИИ В ОПРЕДЕЛЕННОЙ СТРАНЕ ---------                    -- временное решение
+    if (if_test_phone = 0 and db_is_actual = 1 and action_code in (&#x27;send_code&#x27;, &#x27;check_code&#x27;) and db_id &lt;&gt; 39801) then
+    begin
+        res_code = &#x27;send_error&#x27;; -- Для этих проверок res_code всегда будет &quot;send_error&quot;
+        ip_address = f_json_str_get_value(action_data, &#x27;ip&#x27;, &#x27;&#x27;);
+        is_test_phone = 0;
+
+        country =
+          case db_id
+               when 81001 then &#x27;РФ&#x27;
+               when 39801 then &#x27;РК&#x27;
+               when 41701 then &#x27;КГ&#x27;
+               when 94401 then &#x27;AZ&#x27;
+          end;
+
+        -- RFCRU-988 Регистрация в КМП возможна только с территории РФ
+        if (ip_address = &#x27;&#x27;) then
+        begin
+            err_text = &#x27;Не получен ip-адрес&#x27;;
+            suspend;
+            exit;
+        end
+
+        select ipr_is_local
+        from hp_get_ip_info(:ip_address)
+        into is_local_ip;
+
+        if (exists(select 1
+                   from mc_test_access mta
+                   where mta.mta_phone_number = :mcl_login)) then
+            is_test_phone = 1;
+        
+        if (is_local_ip = 0 and is_test_phone = 0) then  -- тестовые номера телефонов для РФ
+        begin
+            err_text = &#x27;Регистрация возможна только на территории &#x27;||country||&#x27;. Если вы находитесь в &#x27;||country||&#x27;, но не можете зарегистрироваться, проверьте, отключен ли у вас VPN&#x27;;
+            suspend;
+            exit;
+        end
+
+        country_condition = 0;
+        if ((db_id = 81001) and char_length(mcl_login) = 11 and left(mcl_login, 2) = &#x27;79&#x27;) then
+            country_condition = 1;
+        if ((db_id = 39801) and char_length(mcl_login) = 11 and left(mcl_login, 2) in (&#x27;70&#x27;, &#x27;74&#x27;, &#x27;77&#x27;)) then
+            country_condition = 1;
+        if ((db_id = 41701) and char_length(mcl_login) = 12 and left(mcl_login, 3) = &#x27;996&#x27;) then
+            country_condition = 1;
+        if ((db_id = 94401) and char_length(mcl_login) = 12 and left(mcl_login, 3) = &#x27;994&#x27;) then
+            country_condition = 1;
+    
+        if (country_condition = 0) then
+        begin
+            err_text = &#x27;Регистрация возможна только на территории &#x27;||country||&#x27;.&#x27;;
+            suspend;
+            exit;
+        end
+    end
+    --------------------------------------------------------------------------
+
+
+    --------------------- ПРОВЕРКА ФОРМАТА ДАТЫ РОЖДЕНИЯ ---------------------
+    if (action_code in (&#x27;send_code&#x27;, &#x27;update_pass&#x27;)) then
+    begin
+        birth_date_str = f_json_str_get_value(action_data, &#x27;birth_date&#x27;, &#x27;&#x27;);
+
+        if (is_biom = 0 and f_is_valid_date(:birth_date_str) = 0) then
+        begin
+            err_text = &#x27;Неправильный формат даты рождения&#x27;;
+            suspend;
+            exit;
+        end
+
+    end
+    --------------------------------------------------------------------------
+
+    ----------------------- ПРОВЕРКА ВЕРСИИ ПРИЛОЖЕНИЯ -----------------------
+    if (action_code in (&#x27;send_code&#x27;, &#x27;update_pass&#x27;, &#x27;login&#x27;)) then
+    begin
+        mcl_project_text = f_json_str_get_value(action_data, &#x27;project&#x27;, &#x27;kmp&#x27;);
+
+        select res_code, err_text
+        from hp_get_mc_app_version(:mcl_login, :mcl_project_text, :application_version, :operating_system)
+        into res_code, err_text;
+    
+        if (res_code = &#x27;version_error&#x27;) then
+        begin
+          suspend;
+          exit;
+        end
+    end
+    --------------------------------------------------------------------------
+
+
+    if (action_code = &#x27;send_code&#x27;) then
+    begin
+        -- Специфические проверки для действия &quot;send_code&quot;
+    end
+
+
+    if (action_code = &#x27;check_code&#x27;) then
+    begin
+        -- Специфические проверки для действия &quot;check_code&quot;
+        pin_code = f_json_str_get_value(action_data, &#x27;pin_code&#x27;, -1);
+
+        if (coalesce(pin_code, -1) = -1) then
+        begin
+          err_text = &#x27;Код не указан&#x27;;
+          suspend;
+          exit;
+        end
+
+    end
+
+
+    if (action_code = &#x27;update_pass&#x27;) then
+    begin
+        -- Специфические проверки для действия &quot;update_pass&quot;
+        pin_code = f_json_str_get_value(action_data, &#x27;pin_code&#x27;, -1);
+        mcl_pass_hash = f_json_str_get_value(action_data, &#x27;password&#x27;, null);
+
+        if (coalesce(pin_code, -1) = -1) then
+        begin
+            err_text = &#x27;Код не указан&#x27;;
+            suspend;
+            exit;
+        end
+    
+        if (coalesce(mcl_pass_hash, &#x27;&#x27;) = &#x27;&#x27;) then
+        begin
+            err_text = &#x27;Пустой пароль&#x27;;
+            suspend;
+            exit;
+        end
+
+    end
+
+
+    if (action_code = &#x27;login&#x27;) then
+    begin
+        -- Специфические проверки для действия &quot;login&quot;
+        mcl_pass_hash = f_json_str_get_value(action_data, &#x27;password&#x27;, &#x27;&#x27;);
+
+        if (coalesce(mcl_pass_hash, &#x27;&#x27;) = &#x27;&#x27;) then
+        begin
+            err_text = &#x27;Пустой пароль&#x27;;
+            suspend;
+            exit;
+        end
+
+    end
+
+    if (coalesce(err_text, &#x27;&#x27;) = &#x27;&#x27;) then
+        res_code = null;
+
+    suspend;
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

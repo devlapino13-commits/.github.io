@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0084_SQL — процедура — схема БД</title>
+<meta name="description" content="Проверка добавлены ли контактные лица(на уровне заявки)">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0084_SQL</code></h1>
+<p class="desc">Проверка добавлены ли контактные лица(на уровне заявки)</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0084_SQL(
+    MA_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare kf_disb_date d_date;
+declare variable C_ID ID_TYPE;
+declare variable PR_CODE str_255;
+begin
+    select ma.ma_date_oper, pr_code
+    from miniapp ma, product
+    where ma.ma_is_active = 1
+    and ma_id = :ma_id
+    and ma_from_pr_id = pr_id
+    and ma.ma_date_end = &#x27;31.12.9999&#x27;
+    into KF_DISB_DATE, :pr_code;
+    if (pr_code containing &#x27;.EMP.&#x27;) then exit;  -- микрозаем сотруднику, иностранному сотруднику
+    --Участники из заявки
+    for select mac.mac_from_c_id
+    from miniappclient mac
+    where mac.mac_from_ma_id = :ma_id
+    and mac.mac_amount &gt; 0 --
+    into :c_id
+    do
+    begin         
+      select cl.c_name_fio
+      from clients cl where cl.c_id = :c_id
+      into :res_info_text;
+    
+    
+      --Контакты родственники
+      if (not exists (select *
+          from contacts cont
+          where cont.cc_from_c_id = :c_id
+          and cont.cc_is_old_contact = 0
+          --and cont.cc_date &gt;= :KF_DISB_DATE-14
+          )) then
+      begin
+        res_error_text = &#x27;Для клиента &#x27;||:res_info_text||&#x27;, не указаны актуальные контактные лица (устаревшие контактные лица не учитываются)&#x27;;
+        res_error_is_critical = 1;
+        suspend;
+      end
+      else
+      if (not exists (select *
+          from contacts cont
+          where cont.cc_from_c_id = :c_id
+          and cont.cc_is_old_contact = 0
+          and cont.cc_date &gt;= :KF_DISB_DATE-14
+          )) then
+      begin
+        res_error_text = &#x27;Для клиента &#x27;||:res_info_text||&#x27;,  дата выдачи займа превышает срок актуальности контаткных лиц (разница между датой выдачи займа и датой занесения контактного лица в  БД не должна превышать 13 дней) &#x27;;
+        res_error_is_critical = 1;
+        suspend;
+      end
+    end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

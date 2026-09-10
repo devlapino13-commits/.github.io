@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0074_SQL — процедура — схема БД</title>
+<meta name="description" content="Акция по удержанию клиентов уволенного СВЗ">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0074_SQL</code></h1>
+<p class="desc">Акция по удержанию клиентов уволенного СВЗ</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_departed_svz.html"><div class="to">HP_GET_DEPARTED_SVZ</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0074_SQL(
+    MA_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare kc_amount curr_type;
+declare kf_disb_date d_date;
+declare kf_client_pass_no varchar(30);
+declare variable kf_id id_type;
+declare variable kf_officer id_type;
+declare variable is_svz smallint;
+declare variable last_k_id id_type;
+declare variable k_kredline_end date;
+declare variable oks_balance id_type;
+declare variable delinq_day integer;
+declare variable ks_date_begin date;
+declare variable ks_date_end date;
+declare variable action_date date;
+declare variable k_amount curr_type;
+declare variable max_delinq_day integer;
+declare variable ostatok curr_type;
+declare variable c_id id_type;
+begin
+  for
+  select ma_date_oper, ma_from_kf_id
+  from miniapp, product
+  where ma_id = :ma_id
+  and ma_date_end = &#x27;31.12.9999&#x27;
+  and ma_from_pr_id = pr_id
+  and pr_code containing &#x27;.ACT.&#x27;
+  into kf_disb_date, kf_id
+  do
+  begin
+    is_svz = 0;
+    for
+    select kal_new_kf_officer from knaktlist
+    where kal_from_kf_id = :kf_id
+    and knaktlist.is_delete = 0
+    order by kal_date desc
+    rows 2 -- проверяем последние 2 СВЗ т.е. после уволнения могут дургому передать
+    into kf_officer
+    do
+    begin
+      if (exists(select * from hp_get_departed_svz(:kf_officer)
+          where result = 1)) then is_svz = 1;
+    end 
+    if (is_svz = 0) then
+    begin
+      res_error_text = &#x27;Выбранный продукт предназначен для клиентов уволенного СВЗ. Текущий состав клиентов не является группой уволенного СВЗ.&#x27;;
+      res_error_is_critical = 2;
+      suspend;
+      exit;
+    end 
+--  вычисляем последний цикл
+    select k_id, k_kredline_end, ks_date_begin, ks_date_end, k_amount_approved
+    from kontract, kontstate
+    where k_from_kf_id = :kf_id
+    and k_disb_date &lt; :kf_disb_date
+    and k_id = ks_from_k_id
+    and ks_state = 1
+    order by ks_date_begin desc
+    rows 1
+    into last_k_id, k_kredline_end, ks_date_begin, ks_date_end, k_amount;
+    if (k_kredline_end - kf_disb_date &lt; 90) then
+    begin
+      res_error_text = &#x27;Доконца срока осталось менее 3х месяцев, не подлежит к акции&#x27;;
+      res_error_is_critical = 2;
+      suspend;
+      exit;
+    end 
+--  проверяем контракт закрылся или нет
+--  при следующей выдаче контракт может закрыться
+--  если контракт закрылся то датой проверки на просрочку и баланса будем брать дату до закрытия т.е. action_date
+    if (current_date between ks_date_begin and ks_date_end) then action_date = current_date;
+    else action_date = ks_date_end;
+    oks_balance = null;
+    delinq_day = null;
+    select oks_balance, :action_date - oks_delinq_date
+    from oksummary
+    where :action_date between oks_date_begin and oks_date_end
+    and oks_from_k_id = :last_k_id
+    and oks_close_state = 0
+    into oks_balance, delinq_day;
+    if (delinq_day &gt; 0) then
+    begin
+      res_error_text = &#x27;Контракт просрочен и не подлежит к ации&#x27;;
+      res_error_is_critical = 2;
+      suspend;
+      exit;
+    end 
+--  проверяем максимальный просроченный платеж
+    max_delinq_day = null;
+    select max(ok_ol_date - ok_sh_date)
+    from operkred
+    where ok_from_k_id = :last_k_id
+    and ok_type in (4,5)
+    and ok_os + ok_perc &lt; -100.0
+    and ok_ol_is_active = 1
+    into max_delinq_day;
+    max_delinq_day = coalesce(max_delinq_day, 0);
+    if (max_delinq_day &gt; 30) then
+    begin
+      res_error_text = &#x27;В контракте были просрочки более 30 дней&#x27;;
+      res_error_is_critical = 2;
+      suspend;
+      exit;
+    end 
+--  проверяем каждого клиента на баланc не менее 15 тыс.
+    for
+    select c_name_fio,
+           c_pass_no,
+           kc_amount_approved,
+           c_id
+    from knclient, clients
+    where kc_from_k_id = :last_k_id
+    and kc_amount_approved &gt; 0
+    and kc_from_c_id = c_id
+    into res_info_text,
+         kf_client_pass_no,
+         kc_amount,
+         c_id
+    do
+    begin
+      ostatok = cast(kc_amount as double precision)/k_amount * oks_balance;
+      if (ostatok &lt; 15000.0) then
+      begin
+        res_error_text = &#x27;У клиента баланс менее 15тыс. руб. не подлежит к акции&#x27;;
+        res_error_is_critical = 2;
+        suspend;
+        exit;
+      end
+      if (exists(
+          select * from miniappclient
+          where mac_from_ma_id = :ma_id
+          and mac_from_c_id = :c_id
+          and mac_amount &gt; :kc_amount + 10000.0
+           )) then
+      begin
+        res_error_text = &#x27;выдаваемая сумма клиента превышает остатка задолженности более чем на 10тыс. руб.&#x27;;
+        res_error_is_critical = 2;
+        suspend;
+      end
+    end
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

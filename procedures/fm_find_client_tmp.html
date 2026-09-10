@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_FIND_CLIENT_TMP — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_FIND_CLIENT_TMP: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_FIND_CLIENT_TMP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">3</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="find_us_clients.html"><div class="to">FIND_US_CLIENTS</div></a><a class="ref-card" href="fm_find_client.html"><div class="to">FM_FIND_CLIENT</div></a><a class="ref-card" href="hp_find_clients.html"><div class="to">HP_FIND_CLIENTS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">FIND_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">FC_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_FIND_CLIENT_TMP(
+    FIND_FIO VARCHAR(100))
+RETURNS (
+    FC_ID DECIMAL(18,0))
+AS
+declare variable n integer;
+declare variable i integer;
+declare variable num_str varchar(100);
+declare variable kf_id decimal(18,0);
+declare variable tire_count integer;
+declare variable isfound integer;
+declare variable k_id decimal(18,0);
+declare variable db_id integer;
+declare variable num_str_orig varchar(100);
+declare variable clt_id d_integer;
+declare variable is_new_contdata d_smallint;
+begin
+  db_id = f_get_db_id();
+
+  num_str = &#x27;&#x27;;
+  n = char_length(find_fio);
+  i = 0;
+  tire_count = 0;
+  while (i &lt; n) do
+  begin
+    i = i + 1;
+    if (substring(find_fio from i for 1) in (&#x27;0&#x27;, &#x27;1&#x27;, &#x27;2&#x27;, &#x27;3&#x27;, &#x27;4&#x27;, &#x27;5&#x27;, &#x27;6&#x27;, &#x27;7&#x27;, &#x27;8&#x27;, &#x27;9&#x27;,
+                                             &#x27;-&#x27;, &#x27;/&#x27;)) then
+      num_str = num_str || substring(find_fio from i for 1);
+
+    if (substring(find_fio from i for 1) = &#x27;-&#x27;) then
+      tire_count = tire_count + 1;
+  end
+  if (num_str = &#x27;&#x27;) then
+    exit;
+
+  is_new_contdata = f_get_const(&#x27;new_contdata&#x27;);
+  is_new_contdata = 1; -- процедуру переводим на новый механизм, Sanjari, 21.12.2019
+
+  -- Поиск по номеру телефона
+  isfound = 0;
+  if (char_length(num_str) &gt;= 10) then
+  begin
+    num_str_orig = num_str;
+    -- Удаляем тире, если в номере останется слеш, значит это не номер телефона
+    num_str = replace(num_str, &#x27;-&#x27;, &#x27;&#x27;);
+    if (db_id = 81001 and
+        char_length(num_str) = 11 and
+        left(num_str, 1) = &#x27;8&#x27;) then
+      num_str = &#x27;7&#x27; || right(num_str, 10);
+
+    if (char_length(num_str) = 10) then -- 0XXX-XX-XX-XX
+    begin
+      if (db_id in (39801, 41701)) then
+        num_str = &#x27;996&#x27; || right(num_str, 9);
+      if (db_id = 94401) then
+        num_str = &#x27;994&#x27; || right(num_str, 9);
+      if (db_id = 81001) then
+        num_str = &#x27;7&#x27; || num_str;
+    end
+    if (is_new_contdata = 0) then
+    begin
+      for select distinct opr_object_id
+          from objectprops, objectvalues, refdata
+          where opr_id = ovs_from_opr_id and
+                opr_actual_ovs_id = ovs_id and
+                opr_object_kind = 0 and
+                opr_subject_kind = -1 and
+                opr_subject_id = rd_id and
+                ovs_value = :num_str and
+                hash(lower(ovs_value)) = hash(lower(:num_str)) and
+                rd_main_code = &#x27;ContactInfo&#x27; and
+                rd_main_code &lt;&gt; rd_code
+          into :fc_id
+      do
+      begin
+        isfound = isfound + 1;
+        suspend;
+      end
+    end
+    else
+    begin
+      clt_id = f_cont_id(num_str, &#x27;null&#x27;);
+      if (clt_id is not null) then
+      begin
+        for select distinct cda_from_c_id
+            from contdata
+            where cda_from_clt_id = :clt_id and
+                  cda_is_delete = 0
+            into fc_id
+        do
+        begin
+          isfound = isfound + 1;
+          suspend;
+        end
+      end
+    end
+    num_str = num_str_orig;
+  end
+  if (isfound &gt; 0) then
+    exit;
+
+  -- Поиск по ИНН
+  if (char_length(num_str) &gt;= 8) then
+  begin
+    for select c_id
+        from clients
+        where c_inn = :num_str
+        into :fc_id
+    do
+    begin
+      isfound = isfound + 1;
+      suspend;
+    end
+  end
+  if (isfound &gt; 0) then
+    exit;
+
+  if (tire_count &gt;= 1) then -- Номер договора
+  begin
+    if (tire_count = 1) then
+      num_str = num_str || &#x27;-&#x27;;
+    isfound = 0;
+    for select distinct kc_from_c_id
+        from kontract
+        inner join knclient  on kc_from_k_id = k_id
+        where k_kontract_no starting :num_str and
+        kc_amount_approved &gt; 0
+        order by k_disb_date desc
+        into :fc_id
+    do
+    begin
+      isfound = isfound + 1;
+      suspend;
+    end
+  end
+  if (isfound &gt; 0) then
+    exit;
+
+  if (tire_count &gt;= 2) then
+  begin
+    if (tire_count = 2) then
+      num_str = num_str || &#x27;-&#x27;;
+    for select kal_from_kf_id
+        from knaktlist
+        where knaktlist.is_delete = 0 and
+              kal_date &lt;= current_date and
+              kal_date_end &gt;= current_date and
+              kal_new_kf_name starting :num_str
+        into :kf_id
+    do
+    begin
+      isfound = 0;
+      for select kc_from_c_id
+          from kontract, kontstate, knclient
+          where k_from_kf_id = :kf_id and
+                k_id = ks_from_k_id and
+                ks_state = 1 and
+                ks_ol_is_delete = 0 and
+                ks_date_end &gt;= &#x27;31.12.2999&#x27; and
+                kc_from_k_id = k_id and
+                kc_amount_approved &gt; 0
+          into fc_id
+      do
+      begin
+        isfound = isfound + 1;
+        suspend;
+      end
+      if (isfound = 0) then
+      begin
+        for select ks_from_k_id
+            from kontract, kontstate
+            where k_from_kf_id = :kf_id and
+                  k_id = ks_from_k_id and
+                  ks_state = 0 and
+                  ks_ol_is_delete = 0 and
+                  ks_date_begin &gt;= (current_date - 14) and
+                  ks_date_end &gt;= &#x27;31.12.2999&#x27;
+            order by ks_date_begin desc
+            rows 1
+            into k_id
+        do
+        begin
+          for select kc_from_c_id
+              from knclient
+              where kc_from_k_id = :k_id and
+                    kc_amount_approved &gt; 0
+              into :fc_id
+          do
+          begin
+            isfound = isfound + 1;
+            suspend;
+          end
+        end
+      end
+      if (isfound = 0) then
+      begin
+        for select ks_from_k_id
+            from kontract, kontstate
+            where k_from_kf_id = :kf_id and
+                  k_id = ks_from_k_id and
+                  ks_state = 2 and
+                  ks_ol_is_delete = 0 and
+                  ks_date_end &gt;= &#x27;31.12.2999&#x27;
+            order by ks_date_begin desc
+            rows 1
+            into k_id
+        do
+        begin
+          for select kc_from_c_id
+              from knclient
+              where kc_from_k_id = :k_id and
+                    kc_amount_approved &gt; 0
+              into :fc_id
+          do
+          begin
+            suspend;
+          end
+        end
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

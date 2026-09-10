@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_CENTERBANK_REP_FILL — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_CENTERBANK_REP_FILL: 4 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_CENTERBANK_REP_FILL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_QUERY_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RETURN_SCRIPT</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">COMMIT_EACH_COUNT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_SQL</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_CENTERBANK_REP_FILL(
+    REP_DATE_BEGIN D_DATE,
+    REP_QUERY_DATE D_DATE,
+    RETURN_SCRIPT D_BOOL = 1,
+    COMMIT_EACH_COUNT D_INTEGER = 1000)
+RETURNS (
+    RES_SQL D_STR_LONG)
+AS
+declare variable k_id d_id;
+declare variable rec_no d_integer;
+begin
+  delete from rep_ru_cbank
+  where 1 = 1;
+
+  if (return_script is null) then
+    return_script = 0;
+
+  if (coalesce(commit_each_count, 0) = 0) then
+    commit_each_count = 1000;
+
+  if (return_script = 1) then
+  begin
+    res_sql = &#x27;set statistics index pk_rep_ru_cbank;&#x27;;
+    suspend;
+    res_sql = &#x27;set statistics index rep_ru_cbank_k_id;&#x27;;
+    suspend;
+  end
+
+  rec_no = 0;
+  for select distinct oks_from_k_id
+      from kn_oksummary
+      where oks_date_begin between :rep_date_begin and :rep_query_date
+      into :k_id
+  do
+  begin
+    rec_no = rec_no + 1;
+
+    update or insert into rep_ru_cbank (line_no, k_id, rep_date_begin, rep_query_date, rep_need_recalc)
+    values (:rec_no, :k_id, :rep_date_begin, :rep_query_date, 0)
+    matching (k_id);
+
+    if (return_script = 1) then
+    begin
+      res_sql = &#x27;update rep_ru_cbank set rep_need_recalc = 1 where k_id = &#x27; || k_id || &#x27;;&#x27;;
+  
+      if (mod(rec_no, commit_each_count) = 0) then
+      begin
+        res_sql = res_sql || &#x27; commit;&#x27;;
+        suspend;
+
+        res_sql = &#x27;set statistics index pk_rep_ru_cbank;&#x27;;
+        suspend;
+
+        res_sql = &#x27;set statistics index rep_ru_cbank_k_id;&#x27;;
+        suspend;
+      end
+
+      suspend;
+    end
+  end
+  if (return_script = 1) then
+    res_sql = res_sql || &#x27; commit;&#x27;;
+  else
+    res_sql = &#x27;Заполнено строк: &#x27; || rec_no;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

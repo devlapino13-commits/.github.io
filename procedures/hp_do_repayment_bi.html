@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DO_REPAYMENT_BI — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DO_REPAYMENT_BI: 8 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DO_REPAYMENT_BI</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">8</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_debt_check.html"><div class="to">HP_DEBT_CHECK</div></a><a class="ref-card" href="hp_do_repayment.html"><div class="to">HP_DO_REPAYMENT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">8 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REPAY_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REPAY_FACT_OFFICE_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REPAY_DT_ACCOUNT_NO</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REPAY_USER_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REPAY_DOCUMENT_CLIENT</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REPAY_DOC_CLIENT_NAME_REASON</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OL_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DO_REPAYMENT_BI(
+    K_ID ID_TYPE,
+    REP_DATE DATE,
+    REPAY_AMOUNT CURR_TYPE,
+    REPAY_FACT_OFFICE_ID INTEGER,
+    REPAY_DT_ACCOUNT_NO STR_20,
+    REPAY_USER_ID ID_TYPE,
+    REPAY_DOCUMENT_CLIENT ID_TYPE,
+    REPAY_DOC_CLIENT_NAME_REASON STR_255)
+RETURNS (
+    OL_ID ID_TYPE,
+    ERROR_TEXT STR_255)
+AS
+declare variable debt_check integer;
+declare variable k_kontract_no str_20;
+declare variable operdel_date d_date;
+begin
+  ol_id = 0;
+  error_text = &#x27;&#x27;;
+
+  debt_check = (select result
+                from hp_debt_check(:k_id, null, :rep_date));
+  if (debt_check = -1) then
+    error_text = &#x27;Договор не определён&#x27;;
+
+  if (f_get_db_id() = 81001 and error_text = &#x27;&#x27;) then
+  begin
+    operdel_date = null;
+
+    -- Есть ли подтвержленная заявка на удаление
+    select min(odm_oper_date)
+    from operdelkont, operdelmain
+    where odk_from_k_id = :k_id and
+          odk_from_odm_id = odm_id and
+          odm_state = 1 and
+          odm_oper_date &gt;= (current_date - 7)
+    into operdel_date;
+
+    if (operdel_date is null) then
+      operdel_date = cast(&#x27;31.12.2999&#x27; as date);
+
+    if (exists(select * from operkred
+    where ok_ol_is_active = 1
+    and ok_from_k_id = :k_id 
+    and ok_ol_date between :rep_date and :operdel_date
+    and ok_type in (4,5,9)
+    and (ok_os &lt;&gt; 0 or ok_perc &lt;&gt; 0))) then
+    begin
+      select k_kontract_no from kontract
+      where k_id = :k_id
+      into k_kontract_no;
+
+      debt_check = -1;
+      error_text = &#x27;ВНИМАНИЕ! По займу &#x27;||k_kontract_no||
+      &#x27; ранее принято погашение с более поздней датой. Распроведите более раннее погашение, примите в ручном режиме погашение в рамках загружаемой выписки, затем примите снова распроведенное погашение.&#x27;;
+    end 
+  end 
+
+  if (debt_check = 1) then
+-- погашение
+    select ol_id, error_text
+    from hp_do_repayment(:k_id, 0, :rep_date, :repay_amount, 1, 1, 1, 1, 1, 0, 0, :repay_fact_office_id, 2, :repay_dt_account_no, 0, :repay_user_id, :repay_document_client, :repay_doc_client_name_reason, null, 0, 0)
+    into :ol_id, :error_text;
+
+  if (debt_check = 0) then
+-- переплата
+    select ol_id, error_text
+    from hp_do_repayment(:k_id, 0, :rep_date, :repay_amount, 1, 0, 0, 0, 1, 0, 0, :repay_fact_office_id, 3, :repay_dt_account_no, 1, :repay_user_id, :repay_document_client, :repay_doc_client_name_reason, null, 0, 0)
+    into :ol_id, :error_text;
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

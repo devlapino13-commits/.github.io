@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_REPAY_CALC_KOMMIS_RU — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_REPAY_CALC_KOMMIS_RU: 3 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_REPAY_CALC_KOMMIS_RU</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_kontract_status.html"><div class="to">HP_GET_KONTRACT_STATUS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_repay_calc_kommis.html"><div class="to">HP_REPAY_CALC_KOMMIS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_KOMMIS_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_REPAY_CALC_KOMMIS_RU(
+    K_ID DECIMAL(18,0),
+    C_ID DECIMAL(18,0),
+    REP_DATE DATE)
+RETURNS (
+    RES_KOMMIS_AMOUNT DECIMAL(18,4))
+AS
+declare variable need_kommis decimal(18,4) = 0;
+declare variable kc_id decimal(18,0);
+declare variable last_date date;
+declare variable base_amount decimal(18,4) = 0;
+declare variable k_percent_per_day decimal(18,7);
+declare variable aa_date_repay date;
+declare variable kol_days integer;
+declare variable gr_amount decimal(18,4) = 0;
+declare variable tmp decimal(18,4) = 0;
+declare variable pr_interest_method integer;
+declare variable k_stop_perc date;
+declare variable k_last_status integer;
+declare variable min_qty_day_before_pay integer;
+begin
+-- Вычисляет размер комиссии за досрочное погашение, РФ
+
+  need_kommis = 1;
+  res_kommis_amount = 0;
+
+  if (rep_date &gt;= cast(&#x27;23.03.2018&#x27; as date)) then -- реализовано на основании письма от Зары. Тема: ТЗ по изменениям в продукты, требования к клиентам и кредитный процесс
+  begin
+    need_kommis = 0;
+    suspend;
+    exit;
+  end
+
+-- Если папка числится в РФ ГО, комиссию не начислять
+  if ((select kal_new_reg_id
+       from knaktlist, kontract
+       where kal_from_kf_id = k_from_kf_id and
+             k_id = :k_id and
+             knaktlist.is_delete = 0 and
+             kal_date &lt;= :rep_date and
+             kal_date_end &gt;= :rep_date) = 1010100) then
+    need_kommis = 0;
+
+  select k_stop_perc, pr_interest_method
+  from kontract, product
+  where k_id = :k_id and
+        k_from_pr_id = pr_id
+  into :k_stop_perc, pr_interest_method;
+
+  if (k_stop_perc is not null) then
+    need_kommis = 0;
+
+  kol_days = 10;
+
+  k_last_status = 0;
+
+-- беру статус который был при выдаче займа
+  select k_last_status
+  from hp_get_kontract_status(:k_id, :rep_date)
+  into :k_last_status;
+
+  k_last_status = coalesce(k_last_status, 0);
+  if (k_last_status in (3, 4, 5)) then
+    need_kommis = 0;
+
+-- Проверяем, есть ли заявка на досрочное погашение
+  if (need_kommis = 1) then
+  begin
+    aa_date_repay = null;
+
+    min_qty_day_before_pay = 10;
+    if (k_last_status in (1, 2)) then
+      min_qty_day_before_pay = 5;
+
+    select aa_date_repay
+    from apadvanced
+    where aa_is_deleted = 0 and
+          aa_from_k_id = :k_id and
+          (:c_id = 0 or
+          aa_from_c_id = :c_id) and
+          aa_date_app &lt;= :rep_date and
+          datediff(day, aa_date_app, aa_date_repay) &gt;= :min_qty_day_before_pay
+    order by aa_date_app desc
+    rows 1
+    into :aa_date_repay;
+
+    if (aa_date_repay is not null) then
+    begin
+-- если дата в заявке и фактическое совпадает
+      if (aa_date_repay = rep_date) then
+        need_kommis = 0;
+
+-- если дата в заявке и фактическое плюс-минус 1 день
+      if (abs(datediff(day, :rep_date, :aa_date_repay)) &lt;= 1) then
+        need_kommis = 0;
+
+-- если дата погашения в заявке попадает на выходные
+      if (extract(weekday from aa_date_repay) in (0, 6)) then
+      begin
+-- если дата фактического погашения в заявке попадает на ближайшие пт-пн
+        if (extract(weekday from rep_date) in (0, 1, 5, 6)) then
+        begin
+-- если между ними не более 2 дней, то не считаем комиссию.
+          if (abs(datediff(day, :rep_date, :aa_date_repay)) &lt;= 2) then
+            need_kommis = 0;
+        end
+      end
+
+      if (need_kommis = 1) then
+      begin
+        if (aa_date_repay &gt; rep_date and
+            datediff(day, :rep_date, :aa_date_repay) &lt; 10) then
+          kol_days = datediff(day, :rep_date, :aa_date_repay);
+      end
+    end
+  end
+
+-- если нет заявки, проверяем исключения
+  if (need_kommis = 1) then
+  begin
+-- Если не прошло 14 дней с момента выдачи, могут погашать без комиссии
+    if (exists(select *
+               from kontstate
+               where ks_from_k_id = :k_id and
+                     ks_state = 1 and
+                     ks_ol_is_delete = 0 and
+                     datediff(day, ks_date_begin, :rep_date) &lt; 14)) then
+      need_kommis = 0;
+  end
+
+  if (need_kommis = 1) then
+  begin
+-- Если до конца срока кредита осталось меньше 10 дней, могут погашать без комиссии
+    select ok_sh_date
+    from operkred
+    where ok_from_k_id = :k_id and
+          ok_ol_is_active = 1 and
+          ok_from_c_id = 0
+    group by ok_sh_date
+    having sum(ok_sh_os + ok_os) &gt; 0
+    order by ok_sh_date desc
+    rows 1
+    into :last_date;
+
+    if (last_date is null) then
+    begin
+      select sh_date
+      from schedule
+      where sh_from_k_id = :k_id
+      order by sh_from_k_id desc, sh_date desc
+      rows 1
+      into :last_date;
+    end
+
+    if (datediff(day, :rep_date, :last_date) &lt; 10) then
+      need_kommis = 0;
+  end
+
+  if (need_kommis = 1) then
+  begin
+-- Проверяем, есть ли заявка на следующий цикл у группы или участника группы
+    for select kc_from_c_id
+        from knclient
+        where kc_from_k_id = :k_id and
+              kc_amount_approved &gt; 0 and
+              (:c_id = 0 or
+              kc_from_c_id = :c_id)
+        into :kc_id
+    do
+    begin
+      if (exists(select *
+                 from miniapp, miniappclient
+                 where ma_id = mac_from_ma_id and
+                       mac_amount &gt; 0 and
+                       mac_from_c_id = :kc_id and
+                       ma_date_end &gt;= &#x27;31.12.2999&#x27; and
+                       ma_date_oper &gt;= :rep_date and
+                       ma_date_app &lt;= :rep_date and
+                       ma_is_active = 1)) then
+        need_kommis = 0;
+    end
+  end
+
+  if (need_kommis = 1 and
+      rep_date &gt;= cast(&#x27;01.04.2016&#x27; as date)) then
+  begin
+-- Разработана по приказу №59-03-16 о/д  от 11 марта, добавил Улан. от 30.03.2016
+--  2,5 в случае, если клиент полностью досрочно погашает микрозаем, по которому имеется активная (действующая) просрочка
+    if (c_id &gt; 0) then
+    begin
+      if (exists(select *
+                 from knclient, oksummary
+                 where kc_from_c_id = :c_id and
+                       kc_amount_approved &gt; 0 and
+                       kc_from_k_id = oks_from_k_id and
+                       oks_close_state = 0 and
+                       cast(:rep_date as date) between oks_date_begin and oks_date_end and
+                       cast(:rep_date as date) - oks_delinq_date &gt; 0)) then
+      begin
+        need_kommis = 0;
+      end
+    end
+    else
+    begin
+      if (exists(select *
+                 from oksummary
+                 where oks_from_k_id = :k_id and
+                       oks_close_state = 0 and
+                       cast(:rep_date as date) between oks_date_begin and oks_date_end and
+                       cast(:rep_date as date) - oks_delinq_date &gt; 0)) then
+      begin
+        need_kommis = 0;
+      end
+    end
+--  дополнение по пункту 2,1 в течении 30ти календарных дней со дня получения микрозайма для ЦЕЛЕВЫХ мирозаймов
+--  по письму Зары получено от March 14, 2016 8:54 PM
+--  где &quot;К целевым займам сейчас относится только один продукт (это для п. 2.1 Приказа) – Микрозаем на патент.&quot;
+    if (need_kommis = 1 and
+        exists(select *
+               from kontstate, kontract, product
+               where k_id = :k_id and
+                     k_from_pr_id = pr_id and
+                     pr_code containing &#x27;.PATENT.&#x27; and
+                     ks_from_k_id = k_id and
+                     ks_state = 1 and
+                     ks_ol_is_delete = 0 and
+                     datediff(day, ks_date_begin, :rep_date) &lt; 30)) then
+      need_kommis = 0;
+  end
+
+  if (need_kommis = 1) then
+  begin
+-- если вышеуказанные условия не соблюдались
+-- вычисляем сумму комиссии
+    base_amount = 0;
+
+    if (pr_interest_method &gt; 0) then -- На остаток
+    begin
+      select oks_balance, kd_percent_per_day
+      from oksummary, kontdata
+      where oks_from_k_id = :k_id and
+            oks_date_begin &lt;= :rep_date and
+            oks_date_end &gt;= :rep_date and
+            kd_from_k_id = :k_id and
+            kd_ol_is_delete = 0 and
+            :rep_date between kd_ol_date and kd_date_end and
+            oks_close_state = 0
+      into :base_amount, k_percent_per_day;
+
+      if (c_id &gt; 0) then
+      begin
+        select k_amount_approved, kc_amount_approved
+        from knclient, kontract
+        where kc_from_c_id = :c_id and
+              kc_from_k_id = :k_id and
+              kc_amount_approved &gt; 0 and
+              k_id = :k_id
+        into :gr_amount, :tmp;
+        base_amount = round(cast(base_amount as double precision) * (tmp / cast(gr_amount as double precision)), 0);
+      end
+    end
+    else
+    begin
+      if (c_id &gt; 0) then
+      begin
+        select kc_amount_approved, kd_percent_per_day
+        from knclient, kontdata
+        where kc_from_c_id = :c_id and
+              kc_from_k_id = :k_id and
+              kc_amount_approved &gt; 0 and
+              kd_from_k_id = :k_id and
+              kd_ol_is_delete = 0 and
+              :rep_date between kd_ol_date and kd_date_end
+        into :base_amount, :k_percent_per_day;
+      end
+      else
+      begin
+        select k_amount_approved, kd_percent_per_day
+        from kontract, kontdata
+        where k_id = :k_id and
+              k_amount_approved &gt; 0 and
+              kd_from_k_id = :k_id and
+              kd_ol_is_delete = 0 and
+              :rep_date between kd_ol_date and kd_date_end
+        into :base_amount, :k_percent_per_day;
+      end
+    end
+    res_kommis_amount = round((cast(base_amount as double precision) / 100.0 * :kol_days) * k_percent_per_day, 0);
+  end
+  suspend;
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

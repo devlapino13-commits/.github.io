@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_MAKE_OPERBOOK_ACCPOSIT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_MAKE_OPERBOOK_ACCPOSIT: 2 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_MAKE_OPERBOOK_ACCPOSIT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ACCOUNT_DT</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACCOUNT_KT</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">LINE_NO</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ACCOUNT_DT</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ACCOUNT_KT</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CM_DEFAULT_CURRENCY</div><div class="ptype">VARCHAR(3)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_MAKE_OPERBOOK_ACCPOSIT(
+    ACCOUNT_DT VARCHAR(20),
+    ACCOUNT_KT VARCHAR(20))
+RETURNS (
+    LINE_NO INTEGER,
+    RES_ACCOUNT_DT VARCHAR(20),
+    RES_ACCOUNT_KT VARCHAR(20),
+    CM_DEFAULT_CURRENCY VARCHAR(3))
+AS
+declare variable reg_code varchar(20);
+declare variable bg_id varchar(20);
+declare variable bg_number integer;
+declare variable foreign_curr varchar(3);
+declare variable acc_tmp varchar(20);
+declare variable currency_kt varchar(3);
+declare variable currency_dt varchar(3);
+begin
+  select cm_default_currency
+  from company
+  into :cm_default_currency;
+
+  line_no = 1;
+  res_account_dt = &#x27;&#x27;;
+  res_account_kt = &#x27;&#x27;;
+  reg_code = left(account_dt, 4);
+
+  currency_dt = substring(account_dt from 5 for 3);
+  currency_kt = substring(account_kt from 5 for 3);
+  foreign_curr = &#x27;&#x27;;
+  if (currency_dt = cm_default_currency) then
+    foreign_curr = currency_kt;
+  if (currency_kt = cm_default_currency) then
+    foreign_curr = currency_dt;
+  if (foreign_curr = &#x27;&#x27;) then
+  begin
+    suspend;
+    exit;
+  end
+
+  bg_id = null;
+  line_no = 1;
+  select ap_position_bg, ap_position_number
+  from accposit
+  where ap_from_cl_id = :foreign_curr and
+        ap_date_begin &lt;= current_date
+  order by ap_date_begin desc
+  rows 1
+  into :bg_id, bg_number;
+  if (currency_dt = foreign_curr) then
+  begin
+    res_account_dt = account_dt;
+    res_account_kt = &#x27;&#x27;;
+    if (bg_id is not null) then
+      res_account_kt = reg_code || foreign_curr || bg_id || right(&#x27;0000000&#x27; || bg_number, 6);
+  end
+  else
+  begin
+    res_account_kt = account_kt;
+    res_account_dt = &#x27;&#x27;;
+    if (bg_id is not null) then
+      res_account_dt = reg_code || foreign_curr || bg_id || right(&#x27;0000000&#x27; || bg_number, 6);
+  end
+  suspend;
+
+  bg_id = null;
+  line_no = 2;
+  select ap_position_bg, ap_position_number
+  from accposit
+  where ap_from_cl_id = :cm_default_currency and
+        ap_date_begin &lt;= current_date
+  order by ap_date_begin desc
+  rows 1
+  into :bg_id, bg_number;
+  if (currency_dt = cm_default_currency) then
+  begin
+    res_account_dt = account_dt;
+    res_account_kt = &#x27;&#x27;;
+    if (bg_id is not null) then
+      res_account_kt = reg_code || cm_default_currency || bg_id || right(&#x27;0000000&#x27; || bg_number, 6);
+  end
+  else
+  begin
+    res_account_kt = account_kt;
+    res_account_dt = &#x27;&#x27;;
+    if (bg_id is not null) then
+      res_account_dt = reg_code || cm_default_currency || bg_id || right(&#x27;0000000&#x27; || bg_number, 6);
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

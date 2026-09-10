@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$UXFRAME_SYNC_PARAMS — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$UXFRAME_SYNC_PARAMS: 3 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$UXFRAME_SYNC_PARAMS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UFR_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SQL_KIND</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UFR_UUID_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$UXFRAME_SYNC_PARAMS(
+    UFR_UUID D_UUID,
+    SQL_KIND D_SMALLINT,
+    UFR_UUID_CODE D_STR_CODE = null)
+AS
+declare variable us_uuid d_uuid;
+declare variable select_us_uuid d_uuid;
+declare variable uf_uuid d_uuid;
+declare variable uf_is_param d_bool;
+declare variable uf_pk_field d_smallint;
+declare variable us_is_table d_bool;
+declare variable uf_not_null d_bool;
+declare variable uf_default d_str_100;
+declare variable uf_field_name d_str_code;
+declare variable ufp_uf_uuid d_uuid;
+declare variable ufp_uuid d_uuid;
+declare variable main_us_uuid d_uuid;
+declare variable uf_readonly d_boolean;
+begin
+  if (uxf$syncmode() = 1) then
+    exit;
+
+  if (coalesce(ufr_uuid, &#x27;&#x27;) = &#x27;&#x27;) then
+    ufr_uuid = uxf$uniq(ufr_uuid_code);
+
+  if (sql_kind = -1) then
+  begin
+    while (sql_kind &lt; 3) do
+    begin
+      sql_kind = sql_kind + 1;
+      execute procedure uxp$uxframe_sync_params(:ufr_uuid, :sql_kind);
+    end
+
+    exit;
+  end
+
+  select ufr_us_uuid
+  from ux$frame
+  where ufr_uuid = :ufr_uuid
+  into select_us_uuid;
+
+  if (sql_kind &lt;&gt; 0) then
+  begin
+    select ufd_us_uuid
+    from ux$frdata
+    where ufd_ufr_uuid = :ufr_uuid and
+          ufd_kind = :sql_kind and
+          ufd_us_uuid is distinct from :select_us_uuid
+    into :us_uuid;
+
+    if (us_uuid is null) then
+    begin
+      delete from ux$framesql
+      where ufs_ufr_uuid = :ufr_uuid and
+            ufs_sql_kind = :sql_kind;
+
+      exit;
+    end
+  end
+
+  main_us_uuid = null;
+
+  if (sql_kind = 0) then
+  begin
+    us_uuid = select_us_uuid;
+
+    select t.us_uuid
+    from ux$frame, ux$source t
+    where ufr_uuid = :ufr_uuid and
+          ufr_add_table_fields = t.us_code
+    into main_us_uuid;
+  end
+
+  if (main_us_uuid is null) then
+    main_us_uuid = us_uuid;
+
+  for select uf_uuid, uf_field_name, uf_is_param, uf_pk_field, us_is_table,
+             uf_not_null, uf_readonly, uf_default
+  from ux$field, ux$source
+  where us_uuid in (:us_uuid, :main_us_uuid) and
+        uf_owner = us_uuid
+  order by iif(us_uuid = :us_uuid, 1, 2) desc, uf_position
+  into :uf_uuid, :uf_field_name, :uf_is_param, :uf_pk_field, :us_is_table,
+       :uf_not_null, :uf_readonly, :uf_default
+  do
+  begin
+    if (sql_kind = 0) then
+    begin
+      if (not exists(select * from ux$frparam
+      where ufp_ufr_uuid = :ufr_uuid and
+            ufp_uf_uuid = :uf_uuid and
+            ufp_parent is null)) then
+      begin
+        ufp_uf_uuid = null;
+        ufp_uuid = null;
+
+        select ufp_uuid, ufp_uf_uuid
+        from ux$frparam, ux$field
+        where ufp_ufr_uuid = :ufr_uuid and
+              ufp_uf_uuid = uf_uuid and
+              ufp_parent is null and
+              uf_field_name = :uf_field_name
+        rows 1
+        into ufp_uuid, ufp_uf_uuid;
+
+        if (ufp_uf_uuid is null) then
+        begin
+          insert into ux$frparam (ufp_ufr_uuid, ufp_uf_uuid, ufp_not_null)
+          values (:ufr_uuid, :uf_uuid, :uf_not_null)
+          returning ufp_uuid
+          into ufp_uuid;
+  
+          if (coalesce(uf_default, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+            execute procedure uxp$uxparamdef_update(:ufp_uuid, null, :uf_default, 0);
+        end else
+        begin
+          update ux$frparam
+          set ufp_uf_uuid = :uf_uuid
+          where ufp_uuid = :ufp_uuid;
+        end
+      end
+    end else
+    begin
+      if (us_is_table = 0 and uf_is_param = 0) then
+        Continue;
+
+      if (us_is_table = 1 and uf_pk_field = 0 and sql_kind = 3) then
+        Continue;
+
+      if (us_is_table = 1 and uf_readonly) then
+        Continue;
+
+      if (not exists(select * from ux$framesql
+      where ufs_ufr_uuid = :ufr_uuid and
+            ufs_sql_kind = :sql_kind and
+            ufs_uf_uuid = :uf_uuid)) then
+      begin
+        insert into ux$framesql (ufs_ufr_uuid, ufs_sql_kind, ufs_uf_uuid)
+        values (:ufr_uuid, :sql_kind, :uf_uuid);
+      end
+    end
+  end
+
+  if (sql_kind = 0) then
+  begin
+    for select ufp_uf_uuid
+    from ux$frparam, ux$field
+    where ufp_ufr_uuid = :ufr_uuid and
+          ufp_parent is null and
+          ufp_uf_uuid = uf_uuid and
+          uf_owner not in (:us_uuid, :main_us_uuid)
+    into uf_uuid
+    do
+    begin
+      delete from ux$frparam
+      where ufp_ufr_uuid = :ufr_uuid and
+            ufp_uf_uuid = :uf_uuid and
+            ufp_parent is null;
+    end
+  end else
+  begin
+    for select ufs_uf_uuid
+    from ux$framesql, ux$field
+    where ufs_ufr_uuid = :ufr_uuid and
+          ufs_sql_kind = :sql_kind and
+          ufs_uf_uuid = uf_uuid and
+          (not(uf_owner in (:us_uuid, :main_us_uuid)) or uf_readonly)
+    into uf_uuid
+    do
+    begin
+      delete from ux$framesql
+      where ufs_ufr_uuid = :ufr_uuid and
+            ufs_sql_kind = :sql_kind and
+            ufs_uf_uuid = :uf_uuid;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

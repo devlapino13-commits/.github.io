@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EXTINFOLIST_PDN_FIX — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EXTINFOLIST_PDN_FIX: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EXTINFOLIST_PDN_FIX</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_blobex_blob.html"><div class="to">HP_GET_BLOBEX_BLOB</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">KC_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EXTINFOLIST_PDN_FIX(
+    KC_ID D_ID)
+AS
+declare variable json_full d_blob_text;
+declare variable bls_id d_id;
+declare variable poruch_json d_str_8100;
+declare variable zalog_json d_str_8100;
+declare variable is_poruch d_integer;
+declare variable is_zalog d_integer;
+declare variable kpl_rec_no d_id;
+declare variable credid d_str_code;
+declare variable kcp_id d_id;
+begin
+  select kcp_id
+  from knclient_pdn
+  where kc_id = :kc_id
+    and kcp_kind = 0
+  into kcp_id;
+
+  if (not exists(select * from knclient_pdnlist
+  where kpl_from_kcp_id = :kcp_id and
+        (kpl_poruch is null or kpl_zalog is null))) then
+    exit;
+
+  update knclient_pdnlist
+  set kpl_poruch = 0,
+      kpl_zalog = 0
+  where kpl_from_kcp_id = :kcp_id;
+
+  select eil_from_bls_id
+  from knclient_pdn, extinfolist
+  where kcp_id = :kcp_id and
+        kc_from_eil_id = eil_id
+  into bls_id;
+
+  if (bls_id is null) then
+    exit;
+
+  begin
+    select blx_blob
+    from hp_get_blobex_blob(:bls_id)
+    into :json_full;
+  
+    when any do
+      json_full = &#x27;&#x27;;
+  end
+
+  if (json_full = &#x27;&#x27;) then
+    exit;
+
+  poruch_json = &#x27;&#x27;;
+  zalog_json = &#x27;&#x27;;
+  poruch_json = f_json_blob_get_value(json_full, &#x27;response.basePart.credGuarantee&#x27;, &#x27;&#x27;);
+  zalog_json = f_json_blob_get_value(json_full, &#x27;response.basePart.collateral&#x27;, &#x27;&#x27;);
+
+  if (poruch_json = &#x27;&#x27; and zalog_json = &#x27;&#x27;) then
+    Exit;
+
+  for select kpl_rec_no, kpl_credid
+  from knclient_pdnlist
+  where kpl_from_kcp_id = :kcp_id and
+        kpl_rec_no &gt; 0
+  into kpl_rec_no, credId
+  do
+  begin
+    is_poruch = 0;
+    is_zalog = 0;
+    credId = coalesce(credId, &#x27;&#x27;);
+    if (credId = &#x27;&#x27;) then
+      Continue;
+
+    if (poruch_json &lt;&gt; &#x27;&#x27; and position(&#x27;&quot;&#x27; || credId || &#x27;&quot;&#x27;, poruch_json) &gt; 0) then
+      is_poruch = 1;
+
+    if (zalog_json &lt;&gt; &#x27;&#x27; and position(&#x27;&quot;&#x27; || credId || &#x27;&quot;&#x27;, zalog_json) &gt; 0) then
+      is_zalog = 1;
+
+    if (is_poruch = 1 or is_zalog = 1) then
+    begin
+      update knclient_pdnlist
+      set kpl_poruch = :is_poruch,
+          kpl_zalog = :is_zalog
+      where kpl_from_kcp_id = :kcp_id and
+            kpl_rec_no = :kpl_rec_no;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

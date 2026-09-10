@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EDOC_BLANK_SET_BLOB — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EDOC_BLANK_SET_BLOB: 4 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EDOC_BLANK_SET_BLOB</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_insert_into_blobstore.html"><div class="to">HP_INSERT_INTO_BLOBSTORE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EDB_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">EDB_BLOB</div><div class="ptype">BLOB SUB_TYPE BINARY SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">EBH_HASH</div><div class="ptype">VARCHAR(64)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">EDB_PAGE_COUNT</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EDOC_BLANK_SET_BLOB(
+    EDB_ID D_ID,
+    EDB_BLOB D_BLOB_BINARY,
+    EBH_HASH D_STR_64,
+    EDB_PAGE_COUNT D_SMALLINT = 0)
+AS
+declare variable edl_status d_smallint;
+declare variable edf_print_name d_str_255;
+declare variable bls_id d_id;
+declare variable edb_need_approve d_smallint;
+declare variable edc_msg_kind d_smallint;
+begin
+  select edb_need_approve, edl_status, edf_print_name, edc_msg_kind
+  from edoc_blank, edoc_list, edoc_frx, edoc_cfg
+  where edb_id = :edb_id and
+        edb_from_edl_id = edl_id and
+        edb_from_edf_id = edf_id and
+        edl_from_edc_id = edc_id
+  into edb_need_approve, edl_status, edf_print_name, edc_msg_kind;
+
+  if (edb_blob is not null) then
+  begin
+    if (edl_status = 1 and edb_need_approve = 0) then
+    begin
+      -- Если производится попытка переподготовить бланк документа,
+      -- который подписывается через sima.az, ломаемся, это запрещено,
+      -- т.к. это уничтожит подписи.
+      if (edc_msg_kind = 7) then
+        exception e_default &#x27;Re-preparing of signed blanks is not allowed!&#x27;;
+
+      -- Бланк готов и документ подписан: переносим в blobstore, обновляем статус, hash
+      execute procedure hp_insert_into_blobstore (&#x27;edoc_&#x27; || :edb_id || &#x27;.pdf&#x27;, :edf_print_name, :edb_blob,1000000000000, 4,
+              3)
+      returning_values :bls_id;
+
+      update edoc_blank
+      set edb_from_bls_id = :bls_id,
+          edb_blob = null,
+          edb_status = 1,
+          edb_page_count = :edb_page_count
+      where edb_id = :edb_id;
+
+      if (coalesce(ebh_hash, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+      begin
+        update or insert into edoc_blank_hash (ebh_from_edb_id, ebh_hash)
+        values (:edb_id, :ebh_hash)
+        matching (ebh_from_edb_id);
+      end
+    end
+    else
+    begin
+      -- Бланк готов, документ не подписан/не утвержден: сохраняем блоб, обновляем статус
+      update edoc_blank
+      set edb_blob = :edb_blob,
+          edb_status = 1,
+          edb_page_count = :edb_page_count
+      where edb_id = :edb_id;
+    end
+  end
+  else
+  begin
+    -- Бланк не готов: обновляем статус, блоб не трогаем, чтобы не потерять
+    update edoc_blank
+    set edb_status = -1,
+        edb_page_count = -1
+    where edb_id = :edb_id;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

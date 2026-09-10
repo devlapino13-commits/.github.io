@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_CELL_APPLICATION_SEND_CHECK — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_CELL_APPLICATION_SEND_CHECK: 2 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_CELL_APPLICATION_SEND_CHECK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_cmd.html"><div class="to">FM_REPORT_CMD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EDB_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_NEED_ROLLBACK</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_CELL_APPLICATION_SEND_CHECK(
+    EDB_ID D_ID,
+    UN_ID D_ID)
+RETURNS (
+    RES_TEXT D_STR_LONG,
+    RES_NEED_ROLLBACK D_SMALLINT)
+AS
+declare variable c_id d_id;
+declare variable eds_status d_smallint;
+begin
+  res_text = &#x27;&#x27;;
+  res_need_rollback = 1;
+
+  eds_status = 0;
+  c_id = 0;
+
+  select eds.eds_from_c_id,
+         eds.eds_status
+  from edoc_blank edb
+  join edoc_list edl on edl.edl_id = edb.edb_from_edl_id
+  join edoc_sign eds on eds.eds_from_edl_id = edl.edl_id
+  where eds.eds_from_c_id &gt; 0
+    and edb.edb_id = :edb_id
+  into :c_id,
+       :eds_status;
+
+  if (eds_status = 0) then
+    res_text = &#x27;Документ на изменение номера не подписан клиентом&#x27;;
+
+  if (res_text = &#x27;&#x27; and eds_status = 1) then
+  begin
+    if (not exists(select *
+                   from clientdocs cd
+                   where cd.cds_from_c_id = :c_id and
+                         cd.cds_from_pk_id = 355 and
+                         current_date between cd.cds_doc_date_begin and cd.cds_doc_date_end and
+                         cd.cds_is_delete = 0 and
+                         cd.cds_verify_status in (-3, 1))) then
+      res_text = &#x27;Закрепите фото клиента для смены номера&#x27;;
+  end
+
+  if (res_text = &#x27;&#x27;) then
+  begin
+    update edoc_blank_scan
+    set edbs_status = 1,
+        edbs_status_un_id = :un_id
+    where edbs_from_edb_id = :edb_id and
+          edbs_from_bls_id is not null and
+          edbs_status in (-1, 0);
+
+    res_need_rollback = 0;
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

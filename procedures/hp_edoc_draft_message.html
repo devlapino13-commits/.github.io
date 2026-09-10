@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EDOC_DRAFT_MESSAGE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EDOC_DRAFT_MESSAGE: 3 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EDOC_DRAFT_MESSAGE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_html_client_info_asp.html"><div class="to">FM_HTML_CLIENT_INFO_ASP</div></a><a class="ref-card" href="fm_html_edoc_info.html"><div class="to">FM_HTML_EDOC_INFO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EDOC_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MSG_TEXT</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EDOC_DRAFT_MESSAGE(
+    EDOC_KIND D_STR_CODE,
+    OBJ_ID D_ID,
+    C_ID D_ID)
+RETURNS (
+    MSG_TEXT D_STR_8100)
+AS
+declare variable edc_state d_smallint;
+declare variable obj_kind d_integer;
+declare variable edl_id d_id;
+declare variable eds_id d_id;
+declare variable pin_code d_str_code;
+declare variable eds_uuid d_str_code;
+declare variable params d_str_8100;
+begin
+  -- Процедура возвращает ссылку и пинкод для подписания вместо клиента
+  -- Алгоритм работает только с проектами в тестовом режиме. Если боевой режим, возвращает пустую строку
+
+  msg_text = &#x27;&#x27;;
+  edoc_kind = f_edoc_kind(edoc_kind, &#x27;id&#x27;);
+
+  select edc_state, edc_object_kind
+  from edoc_cfg
+  where edc_id = :edoc_kind
+  into edc_state, obj_kind;
+
+  if (edc_state &lt;&gt; 3) then
+  begin
+    select edl_id
+    from edoc_list
+    where edl_from_edc_id = :edoc_kind and
+          edl_object_kind = :obj_kind and
+          edl_object_id = :obj_id and
+          edl_status = 0
+    order by edl_id desc
+    rows 1
+    into edl_id;
+  
+    if (edl_id is not null) then
+    begin
+      select eds_id, edm_hash_pin
+      from edoc_sign, edoc_msg
+      where eds_from_edl_id = :edl_id and
+            eds_from_c_id = :c_id and
+            eds_status = 0 and
+            edm_from_eds_id = eds_id and
+            edm_status = 0
+      order by edm_from_eds_id desc, edm_from_msg_id desc
+      rows 1
+      into eds_id, pin_code;
+
+      if (eds_id is not null and coalesce(:pin_code, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+      begin
+        if (char_length(pin_code) &lt;= 6) then
+        begin
+          eds_uuid = f_uuid(&#x27;edoc_sign&#x27;, eds_id);
+          msg_text = &#x27;Тестовый режим, подпишите вместо клиента нажав %1.&lt;br&gt;Пин-код: &lt;b&gt;%2&lt;/b&gt;&#x27;;
+
+          params = &#x27;&#x27;;
+          params = case f_get_db_id()
+            when 81001 then &#x27;https://edoc.molbulak.ru/&#x27;
+            when 41701 then &#x27;https://edoc.molbulak.kg/&#x27;
+            when 94401 then &#x27;https://edoc.molbulak.com/&#x27;
+          end;
+          params = trim(params);
+          params = params || eds_uuid;
+          params = f_format(&#x27;&lt;a href=&quot;%1&quot;&gt;ссылку&lt;/a&gt;&#x27;, params);
+          msg_text = f_format(msg_text, params, pin_code);
+        end
+      end
+    end
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CHECK_PSK_LIMIT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CHECK_PSK_LIMIT: 3 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CHECK_PSK_LIMIT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">4 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_calcperc_psk_limit.html"><div class="to">HP_CALCPERC_PSK_LIMIT</div></a><a class="ref-card" href="hp_effect_rate_common.html"><div class="to">HP_EFFECT_RATE_COMMON</div></a><a class="ref-card" href="hp_effect_rate_reschedule.html"><div class="to">HP_EFFECT_RATE_RESCHEDULE</div></a><a class="ref-card" href="hp_kontpsk_limit.html"><div class="to">HP_KONTPSK_LIMIT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_com_list_send_kk.html"><div class="to">FM_COM_LIST_SEND_KK</div></a><a class="ref-card" href="hp_com_action_add.html"><div class="to">HP_COM_ACTION_ADD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CHECK_ITEM</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CHECK_PSK_LIMIT(
+    CHECK_ITEM D_STR_CODE,
+    CHECK_ID D_ID,
+    CHECK_DATE D_DATE)
+RETURNS (
+    RES_TEXT D_STR_255)
+AS
+declare variable res_psk_limit d_currency;
+declare variable disb_amount d_currency;
+declare variable total_income d_currency;
+declare variable cml_object_kind d_integer;
+declare variable k_id d_id;
+declare variable payed_plus d_currency;
+declare variable min_sh_date d_date;
+declare variable max_sh_date d_date;
+declare variable pr_is_secured d_bool;
+declare variable k_disb_date d_date;
+declare variable psk_calc_date d_date;
+declare variable psk_calc_perc d_percent;
+declare variable psk_limit d_percent;
+declare variable pr_code d_str_255;
+begin
+  if (check_item not in (&#x27;schedule&#x27;, &#x27;com_list&#x27;)) then
+    exception e_default &#x27;Unknown check_item: &#x27; || coalesce(check_item, &#x27;&lt;Null&gt;&#x27;);
+
+  res_text = &#x27;&#x27;;
+
+  select res_psk_limit
+  from hp_calcperc_psk_limit(:check_date)
+  into :res_psk_limit;
+
+  if (res_psk_limit &gt; 0) then
+  begin
+    if (check_item = &#x27;schedule&#x27;) then
+    begin
+      k_id = check_id;
+      select sum(sh_os), sum(sh_perc)
+      from schedule
+      where sh_from_k_id = :k_id
+      into disb_amount, total_income;
+
+      select pr_code
+      from kontract, product
+      where k_id = :k_id and
+            k_from_pr_id = pr_id
+      into pr_code;
+
+      if (total_income &gt; round(disb_amount * res_psk_limit) and pr_code not containing &#x27;.selfemployed.&#x27;) then
+        res_text = &#x27;Процентный доход превышает &#x27; || round(res_psk_limit * 100.00) || &#x27;% от суммы выдачи&#x27;;
+    end else
+    if (check_item = &#x27;com_list&#x27;) then
+    begin
+      select cml_object_kind, cml_object_id
+      from com_list
+      where cml_id = :check_id
+      into cml_object_kind, k_id;
+
+      if (cml_object_kind &lt;&gt; f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;)) then
+        res_text = &#x27;В заявке отсутствует договор займа&#x27;;
+
+      if (res_text = &#x27;&#x27;) then
+      begin
+        disb_amount = 0;
+        payed_plus = 0;
+        total_income = 0;
+
+        select k_amount_approved, pr_code
+        from kontract, product
+        where k_id = :k_id and
+              k_from_pr_id = pr_id
+        into disb_amount, pr_code;
+
+        select -sum(ok_perc + ok_fine)
+        from operkred
+        where ok_from_k_id = :k_id and
+              ok_type = 4 and
+              ok_ol_is_active = 1 and
+              ok_ol_date &lt;= :check_date
+        into payed_plus;
+
+        if (payed_plus is null) then
+          payed_plus = 0;
+
+        select sum(cmr_sh_perc)
+        from com_list_resh
+        where cmr_from_cml_id = :check_id
+        into total_income;
+
+        if (total_income is null) then
+          total_income = 0;
+
+        total_income = total_income + payed_plus;
+        if (k_id not in (101010009792002101)) then
+          if (total_income &gt; round(disb_amount * res_psk_limit) and pr_code not containing &#x27;.selfemployed.&#x27;) then
+            res_text = &#x27;Превышен ограничитель &#x27; || round(res_psk_limit * 100.00) || &#x27;% по соотношению дохода по займу к сумме займа, измените график&#x27;;
+      end
+    end
+
+    if (res_text = &#x27;&#x27;) then
+    begin
+      -- Расчет и контроль лимита по ПСК
+      -- k_id и disb_amount уже получены ранее
+      select pr_is_secured, k_disb_date, pr_code
+      from kontract, product
+      where k_id = :k_id
+        and k_from_pr_id = pr_id
+      into pr_is_secured, k_disb_date, pr_code;
+  
+      min_sh_date = k_disb_date;
+  
+      if (check_item = &#x27;schedule&#x27;) then
+      begin
+        psk_calc_date = k_disb_date;
+        select max(sh_date)
+        from schedule
+        where sh_from_k_id = :k_id
+        into max_sh_date;
+  
+        select effect_rate
+        from hp_effect_rate_common(:k_id)
+        into psk_calc_perc;
+      end
+      else
+      if (check_item = &#x27;com_list&#x27;) then
+      begin
+        select cml_date
+        from com_list
+        where cml_id = :check_id
+        into psk_calc_date;
+  
+        select max(cmr_sh_date)
+        from com_list_resh
+        where cmr_from_cml_id = :check_id
+        into max_sh_date;
+  
+        select effect_rate
+        from hp_effect_rate_reschedule(:k_id, :psk_calc_date, :check_id)
+        into psk_calc_perc;
+      end
+  
+      select limit
+      from hp_kontpsk_limit(:psk_calc_date, :max_sh_date - :min_sh_date, :disb_amount, :pr_is_secured)
+      into psk_limit;
+  
+      if (psk_calc_perc &gt; psk_limit and pr_code not containing &#x27;.selfemployed.&#x27;) then
+        res_text = f_format(&#x27;Превышен ограничитель по ПСК: фактическое значение ПСК = %1, предельное значение ограничителя = %2. Измените график&#x27;,
+          f_numtostr(psk_calc_perc, 3), f_numtostr(psk_limit, 3));
+    end
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

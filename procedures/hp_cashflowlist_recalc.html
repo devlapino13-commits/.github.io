@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CASHFLOWLIST_RECALC — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CASHFLOWLIST_RECALC: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CASHFLOWLIST_RECALC</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_cashflowexcel_recalc.html"><div class="to">HP_CASHFLOWEXCEL_RECALC</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CASHFLOWLIST_RECALC(
+    REP_DATE_BEGIN D_DATE,
+    REP_DATE_END D_DATE)
+AS
+declare variable rec_count d_integer;
+declare variable cfl_date d_date;
+declare variable cash_acc_id d_id;
+begin
+  cfl_date = rep_date_begin;
+
+  while (cfl_date &lt;= rep_date_end) do
+  begin
+    for select acc_id
+    from ref_account, sys_accbalance
+    where sab_full_code = &#x27;ПлатСистемы.Погашено&#x27; and
+          acc_from_sab_id = sab_id
+    into cash_acc_id
+    do
+    begin
+      for select kob_id, kob_from_ol_id, kob_ol_date, kob_cashflow_date
+      from kn_operbook
+      where kob_ol_date = :cfl_date and
+            kob_ol_is_active = 1 and
+            kob_acc_dt + 0 = :cash_acc_id
+      as cursor cur
+      do
+      begin
+        if (not exists(select kob_ol_date
+        from operperiod, kn_operbook, ref_account, sys_accbalance
+        where cur.kob_ol_date between olp_date_begin and olp_date_end and
+              kob_ol_date = cur.kob_cashflow_date and
+              kob_ol_is_active = 1 and
+              olp_from_ol_id = kob_from_ol_id and
+              kob_acc_kt + 0 = :cash_acc_id and
+              kob_acc_dt = acc_id and
+              acc_from_sab_id = sab_id and
+              sab_full_code starting &#x27;Деньги.Безнал.Банк.&#x27;)) then
+        begin
+          update kn_operbook
+          set kob_from_rml_id = -2
+          where current of cur;
+        end
+      end
+    end
+
+    update kn_operbook
+    set kob_from_rml_id = -2
+    where kob_ol_date = :cfl_date and
+          (kob_from_rml_id is null or kob_from_rml_id = 0);
+
+    update or insert into cashflowlist (cfl_date, cfl_book_count, cfl_excel_count, cfl_data_count, cfl_book_zero, cfl_un_id,
+                                        cfl_datetime)
+    values (:cfl_date, 0, 0, 0, 0, uxf$user(), current_timestamp)
+    matching (cfl_date);
+
+    select count(*)
+    from cashflowexcel
+    where cfx_date = :cfl_date
+    into rec_count;
+
+    update cashflowlist
+    set cfl_excel_count = :rec_count
+    where cfl_date = :cfl_date;
+
+    select count(*)
+    from cashflowdata
+    where cfd_date = :cfl_date
+    into rec_count;
+
+    update cashflowlist
+    set cfl_data_count = :rec_count
+    where cfl_date = :cfl_date;
+
+    select count(*)
+    from kn_operbook
+    where kob_cashflow_date = :cfl_date and
+          kob_ol_is_active = 1 and
+          kob_from_rml_id &gt; 0
+    into rec_count;
+  
+    update cashflowlist
+    set cfl_book_count = :rec_count
+    where cfl_date = :cfl_date;
+
+    select count(*)
+    from kn_operbook
+    where kob_cashflow_date = :cfl_date and
+          kob_ol_is_active = 1 and
+          kob_from_rml_id = 0
+    into rec_count;
+
+    update cashflowlist
+    set cfl_book_zero = :rec_count
+    where cfl_date = :cfl_date;
+
+    cfl_date = cfl_date + 1;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

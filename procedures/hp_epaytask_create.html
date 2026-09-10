@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EPAYTASK_CREATE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EPAYTASK_CREATE: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EPAYTASK_CREATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="agreement_payment_qr_json.html"><div class="to">AGREEMENT_PAYMENT_QR_JSON</div></a><a class="ref-card" href="hp_actionlist_insert.html"><div class="to">HP_ACTIONLIST_INSERT</div></a><a class="ref-card" href="hp_sugarpaymenttask_noacc.html"><div class="to">HP_SUGARPAYMENTTASK_NOACC</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_expressapp_do_disbursement.html"><div class="to">HP_EXPRESSAPP_DO_DISBURSEMENT</div></a><a class="ref-card" href="hp_sugarpaymenttask_run.html"><div class="to">HP_SUGARPAYMENTTASK_RUN</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EPAYTASK_CREATE(
+    K_ID D_ID)
+AS
+declare variable pr_ipf boolean;
+declare variable pr_goods boolean;
+declare variable pr_sugar boolean;
+declare variable acc_absent boolean;
+declare variable seller_id d_id;
+declare variable elsom_account d_str_20;
+declare variable elcard_account d_str_20;
+declare variable mbank_account d_str_20;
+declare variable pay_amount d_currency;
+declare variable un_id d_id;
+declare variable master_acl_id d_id;
+declare variable child_acl_id d_id;
+declare variable reg_id d_integer;
+declare variable ag_id d_integer;
+declare variable rd_code d_str_255;
+declare variable qr_account d_str_8100;
+declare variable acl_id d_id;
+begin
+  select
+    pr_code containing &#x27;.ipf.&#x27;,
+    pr_code containing &#x27;.installment_goods.&#x27;,
+    pr_code containing &#x27;.sugarmill.&#x27;,
+    k_last_reg_id,
+    un_id
+  from kontract
+    inner join product
+      on pr_id = k_from_pr_id
+    inner join username
+      on un_from_c_id = k_approved_manager
+  where k_id = :k_id
+    and k_status = 1
+  into
+    :pr_ipf,
+    :pr_goods,
+    :pr_sugar,
+    :reg_id,
+    :un_id;
+  if (row_count = 0 or not (pr_ipf or pr_goods or pr_sugar)) then
+    exit;
+
+  if (pr_goods or pr_sugar) then
+  begin
+    -- товары в рассрочку
+    if (pr_goods) then
+      select
+        cs_from_c_id,
+        mp_amount * (1 - cs_discount / 100)
+      from kontract
+        inner join mc_purchase
+          on mp_from_ma_id = k_from_ma_app_id
+        inner join clientshops
+          on cs_id = mp_from_cs_id
+            and cs_from_rd_id = f_get_rd_id(&#x27;ClientShops.outlets&#x27;)
+            and cs_is_delete = 0
+      where k_id = :k_id
+      into
+        :seller_id,
+        :pay_amount;
+    else
+    -- сах.завод
+    if (pr_sugar) then
+      select
+        spt_seller_id,
+        spt_amount
+      from sugarpaymenttask
+      where spt_k_id = :k_id
+      into
+        :seller_id,
+        :pay_amount;
+
+    select first 1
+      ag_id,
+      f_get_rd_code(ag_from_pay_rd_id)
+    from agreements
+    where ag_object_kind = 0
+      and ag_object_id = :seller_id
+      and current_date between
+        coalesce(ag_date_begin, &#x27;01.01.1900&#x27;) and
+        coalesce(ag_date_end, &#x27;31.12.9999&#x27;)
+      and ag_from_rd_id = f_get_rd_id(&#x27;AgreementKinds.installment_goods&#x27;)
+      and ag_status = 1
+    order by ag_id desc
+    into
+      :ag_id,
+      :rd_code;
+
+    if (ag_id is null) then
+      exit;
+  end
+
+  -- если есть задачи по контракту, перешедшие на уровень оплаты
+  if (exists(
+    select *
+    from kontpaytasks
+    where kpr_from_k_id = :k_id
+      and kpt_status &gt;= 0))
+  then exit;
+
+  -- &#x27;откатываем&#x27;(если таковые есть) все задачи по оплате в режиме &#x27;ожидания&#x27;
+  -- для данного контракта
+  select acl.acl_id
+  from actionlist acl
+  where acl_object_id = :k_id
+    and acl_object_kind = 9
+    and acl_from_rd_id = f_get_rd_id(&#x27;EPayProjects&#x27;)
+    and acl_status = 0
+  into :acl_id;
+
+  if (acl_id is not null) then
+  begin
+      update actionlist set
+        acl_result_rd_id = f_get_rd_id(&#x27;EPayTaskResults.TaskCancel&#x27;),
+        acl_status = -2
+      where acl_id = :acl_id;
+
+      update actionlist acl set
+        acl_result_rd_id = f_get_rd_id(&#x27;EPayTaskResults.TaskCancel&#x27;),
+        acl_status = -2
+      where acl.acl_parent_id = :acl_id
+      and acl.acl_status = 0;
+  end
+
+  -- список продавцов в рамках контракта с их счетами и суммами
+  for
+    select
+      :ag_id,
+      :seller_id,
+      :rd_code,
+      :pay_amount
+    from rdb$database
+    where :pr_goods or :pr_sugar
+    union
+    select
+      ag_id,
+      ag_object_id,
+      f_get_rd_code(ag_from_pay_rd_id),
+      coalesce(sum(kml_total), 0)
+    from kontmat
+      inner join agreements
+        on ag_id = kml_from_ag_id
+          and ag_from_rd_id in (
+            f_get_rd_id(&#x27;AgreementKinds.IPF_Sellers&#x27;),
+            f_get_rd_id(&#x27;AgreementKinds.TSP_and_IPF&#x27;),
+            f_get_rd_id(&#x27;AgreementKinds.IPF_WithCommission&#x27;),
+            f_get_rd_id(&#x27;AgreementKinds.IPF_Idjara&#x27;))
+          and ag_status = 1
+    where :pr_ipf
+      and kml_object_kind = 9
+      and kml_object_id = :k_id
+      and kml_status = 1
+    group by
+      ag_id,
+      ag_object_id,
+      ag_from_pay_rd_id
+  into
+    :ag_id,
+    :seller_id,
+    :rd_code,
+    :pay_amount
+  do
+  begin
+    select
+      trim(coalesce(ag_elsom_account, &#x27;&#x27;)),
+      trim(coalesce(ag_elcard_account, &#x27;&#x27;)),
+      trim(coalesce(ag_mbank_account, &#x27;&#x27;))
+    from agreements ag
+    where ag_id = :ag_id
+    into
+      :elsom_account,
+      :elcard_account,
+      :mbank_account;
+
+    if (rd_code = &#x27;EPayProjects.QR&#x27;) then
+        qr_account = coalesce((select url_data from agreement_payment_qr_json(:ag_id)), &#x27;&#x27;);
+
+    acc_absent = (
+      (rd_code = &#x27;EPayProjects.ElSom&#x27; and elsom_account = &#x27;&#x27;) or
+      (rd_code = &#x27;EPayProjects.ElCard&#x27; and elcard_account = &#x27;&#x27;) or
+      (rd_code = &#x27;EPayProjects.MBank&#x27; and mbank_account = &#x27;&#x27;) or
+      (rd_code = &#x27;EPayProjects.QR&#x27; and qr_account = &#x27;&#x27;));
+
+    if ((pr_sugar or pr_goods) and acc_absent) then
+    begin
+      execute procedure hp_sugarpaymenttask_noacc(:k_id, :pr_sugar);
+      exit;
+    end
+
+    -- родительская запись в Actionlist на уровне договора
+    if (master_acl_id is null) then
+      execute procedure hp_actionlist_insert(
+        null,
+        :reg_id,
+        &#x27;Kontract&#x27;,
+        :k_id,
+        &#x27;EPayProjects&#x27;,
+        0,
+        :un_id)
+      returning_values :master_acl_id;
+
+    -- создаю задачу на оплату
+    child_acl_id = null;
+    execute procedure hp_actionlist_insert(
+      :master_acl_id,
+      :reg_id,
+      &#x27;Clients&#x27;,
+      :seller_id,
+      :rd_code,
+      0,
+      :un_id)
+    returning_values :child_acl_id;
+
+    if (pay_amount = 0)
+    then
+      update actionlist set
+        acl_result_rd_id = f_get_rd_id(&#x27;EPayTaskResults.ZeroSumm&#x27;),
+        acl_status = -2
+      where acl_id = :child_acl_id;
+    else
+      if (acc_absent) then
+        update actionlist set
+          acl_result_rd_id = f_get_rd_id(&#x27;EPayTaskResults.AccountAbsent&#x27;),
+          acl_status = -2
+        where acl_id = :child_acl_id;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

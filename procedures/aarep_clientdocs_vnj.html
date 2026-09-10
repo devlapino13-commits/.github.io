@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_CLIENTDOCS_VNJ — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_CLIENTDOCS_VNJ: 2 входных, 7 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_CLIENTDOCS_VNJ</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">7</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_client_type.html"><div class="to">HP_GET_CLIENT_TYPE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_REGION_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">7 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_KONTRACT_NO</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_NAME_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KS_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CDS_CREATE_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_KONTRACT_NO_LIST</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_CLIENT_IS_RESIDENT</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACC_NO</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_CLIENTDOCS_VNJ(
+    REP_REGION_ID ID_TYPE,
+    REP_DATE_END DATE)
+RETURNS (
+    K_KONTRACT_NO D_STR_20,
+    C_NAME_FIO D_STR_100,
+    KS_DATE_BEGIN D_DATE,
+    CDS_CREATE_DATE D_DATE,
+    K_KONTRACT_NO_LIST D_STR_LONG,
+    RES_CLIENT_IS_RESIDENT D_SMALLINT,
+    ACC_NO D_STR_20)
+AS
+declare variable k_id d_id;
+declare variable c_id d_id;
+declare variable k_kontract_no_last d_str_20;
+declare variable n d_smallint;
+declare variable k_fact_disb_date d_date;
+declare variable office_id d_integer;
+declare variable k_kontract_no_1 d_str_20;
+declare variable is_suspend d_smallint;
+declare variable citizen_ru_id d_integer;
+declare variable doc_vnj_id d_integer;
+declare variable kc_id d_id;
+declare variable knr_non_resident d_smallint;
+begin
+
+  --Беру все активные офисы
+  for select reg_unicode
+      from region reg, region_list(:rep_region_id, 1, -1, 1)
+      where reg.is_delete = 0 and
+            reg_status = 3 and
+            reg.reg_date_close is null and
+            reg.reg_date_open &lt;= :rep_date_end and
+            (reg_unicode = id_list)
+      order by reg_name
+      into office_id
+  do
+  begin
+
+    /*
+Берем все активные контракты на текущую дату и проверяем было ли добавлено ВНЖ после выдачи контракта, если есть кандидаты то показываем.
+*/
+    for select ks.ks_from_k_id, knc.kc_from_c_id, ks.ks_date_begin, kc_id
+        from kontstate ks
+        inner join knclient knc on knc.kc_from_k_id = ks.ks_from_k_id and
+              knc.kc_amount_approved &gt; 0
+        where ks.ks_state = 1 and
+              ks.ks_region_id = :office_id and
+              :rep_date_end between ks.ks_date_begin and ks.ks_date_end and
+              ks.ks_ol_is_delete = 0 /*and ks_from_k_id = 101010060080800701  */
+        into :k_id, c_id, ks_date_begin, kc_id
+    do
+    begin
+      cds_create_date = null;
+
+      select cast(cds_create_datetime as d_date)
+      from clientdocs cds
+      inner join passkind pk on cds.cds_from_pk_id = pk.pk_id
+      inner join passdoctype pdt on pk.pk_from_pdt_id = pdt.pdt_id
+      where cds.cds_from_c_id = :c_id and
+            cds.cds_is_delete = 0 and
+            cast(cds_create_datetime as d_date) &gt; :ks_date_begin and
+            :ks_date_begin between cds.cds_doc_date_begin and coalesce(cds.cds_doc_date_end, &#x27;31.12.2999&#x27;) and
+            pdt.pdt_code in (&#x27;registration_vnj&#x27;)
+      order by cds_create_datetime desc
+      rows 1
+      into :cds_create_date;
+
+      if (:cds_create_date &gt; :ks_date_begin) then
+      begin
+        k_kontract_no = &#x27;&#x27;;
+        c_name_fio = &#x27;&#x27;;
+
+        select k.k_kontract_no
+        from kontract k
+        where k.k_id = :k_id
+        into :k_kontract_no;
+
+        k_kontract_no_list = &#x27;&#x27;;
+        n = 0;
+        is_suspend = 1;
+        for select k.k_kontract_no, k_fact_disb_date
+            from kontract k
+            inner join knclient knc on knc.kc_from_k_id = k.k_id and
+                  knc.kc_amount_approved &gt; 0
+            where k.k_fact_disb_date &gt; :ks_date_begin and
+                  knc.kc_from_c_id = :c_id
+            order by k_fact_disb_date
+            into :k_kontract_no_1, k_fact_disb_date
+        do
+        begin
+          n = n + 1;
+          if (n = 1) then
+            k_kontract_no_list = k_kontract_no_1 || &#x27; от &#x27; || f_datetostr(k_fact_disb_date);
+          else
+            k_kontract_no_list = k_kontract_no_list || &#x27;, &#x27; || k_kontract_no_1 || &#x27; от &#x27; || f_datetostr(k_fact_disb_date);
+          if (k_fact_disb_date = cds_create_date) then
+            is_suspend = 0;
+        end
+
+        select cl.c_name_fio
+        from clients cl
+        where cl.c_id = :c_id
+        into :c_name_fio;
+
+        if (is_suspend = 1) then
+        begin
+          citizen_ru_id = 0;
+          select rd_id
+          from refdata
+          where rd_code = &#x27;Citizen.RU&#x27;
+          into :citizen_ru_id;
+
+          doc_vnj_id = 0;
+          select pk_id
+          from passkind, passdoctype
+          where pdt_id = pk_from_pdt_id and
+                pk_is_delete = 0 and
+                pdt_code = &#x27;registration_vnj&#x27; rows 1
+          into :doc_vnj_id;
+          -- Резидент
+          select 1 - res_non_resident
+          from hp_get_client_type(:c_id, :citizen_ru_id, :doc_vnj_id, :rep_date_end)
+          into :res_client_is_resident;
+
+          knr_non_resident = null;
+
+          select knr_non_resident
+          from kn_resident
+          where knr_from_kc_id = :kc_id and
+                :rep_date_end between knr_date_begin and knr_date_end
+          into knr_non_resident;
+
+          acc_no = null;
+          if (knr_non_resident = 1) then
+            acc_no = &#x27;492&#x27;;
+          else
+          if (knr_non_resident = 0) then
+            acc_no = &#x27;488&#x27;;
+
+          suspend;
+        end
+
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

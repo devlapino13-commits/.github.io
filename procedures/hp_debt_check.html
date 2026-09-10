@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DEBT_CHECK — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DEBT_CHECK: 3 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DEBT_CHECK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">3</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_bank_import_repayment.html"><div class="to">HP_BANK_IMPORT_REPAYMENT</div></a><a class="ref-card" href="hp_do_repayment_bi.html"><div class="to">HP_DO_REPAYMENT_BI</div></a><a class="ref-card" href="hp_get_kontract_bankimport.html"><div class="to">HP_GET_KONTRACT_BANKIMPORT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_NO</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ON_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RESULT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RESULT_K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DEBT_CHECK(
+    K_ID ID_TYPE,
+    K_NO STR_20,
+    ON_DATE DATE NOT NULL = current_date)
+RETURNS (
+    RESULT INTEGER,
+    RESULT_K_ID ID_TYPE)
+AS
+declare variable oek_rd_id integer;
+begin
+  oek_rd_id = f_get_rd_id(&#x27;OperExtraKind.LawClientExpense&#x27;);
+
+  if (k_no is not null) then
+    k_id = (select k_id
+            from kontract
+            where k_kontract_no = :k_no);
+  if (exists(select *
+             from kontract
+             where k_id = :k_id)) then
+  begin
+    if (exists(select *
+               from oksummary
+               where oks_from_k_id = :k_id and
+                     :on_date between oks_date_begin and oks_date_end and
+                     oks_close_state = 0 ) or exists(select oko_from_k_id
+                                                                                 from operkroff
+                                                                                 where oko_from_k_id = :k_id and
+                                                                                       oko_ol_is_active = 1 and
+                                                                                       oko_ol_date &lt;= :on_date
+                                                                                 group by oko_from_k_id
+                                                                                 having sum(oko_os + oko_perc + oko_sh_os + oko_sh_perc) &gt; 0) or exists(select ox_object_id
+                                                                                                                                                        from operextra
+                                                                                                                                                        where ox_from_rd_id = :oek_rd_id and
+                                                                                                                                                              ox_object_id = :k_id and
+                                                                                                                                                              ox_object_kind = 9 and
+                                                                                                                                                              ox_ol_is_active = 1 and
+                                                                                                                                                              ox_ol_date &lt;= :on_date
+                                                                                                                                                        group by ox_object_id
+                                                                                                                                                        having sum(ox_amount_plus - ox_amount_minus - ox_amount_writeoff) &gt; 0)) then
+      result = 1;
+    else
+      result = 0;
+    result_k_id = k_id;
+  end
+  else
+  begin
+    result = -1;
+    result_k_id = 0;
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

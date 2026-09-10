@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_FS_POST_CKECK_DO_PROCESS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_FS_POST_CKECK_DO_PROCESS: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_FS_POST_CKECK_DO_PROCESS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_objectprops_get.html"><div class="to">HP_OBJECTPROPS_GET</div></a><a class="ref-card" href="hp_underwriter_set_to_staff.html"><div class="to">HP_UNDERWRITER_SET_TO_STAFF</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_FS_POST_CKECK_DO_PROCESS
+AS
+declare variable acl_id d_id;
+declare variable c_id d_id;
+declare variable is_online d_integer;
+declare variable rd_online d_integer;
+declare variable task_count d_integer;
+declare variable role_underwriter d_integer;
+begin
+  -- Распределение свободных задач на работающих андеррайтеров
+  select rd_id
+  from refdata
+  where rd_code = &#x27;ObjectProps.KK_Staff_Online&#x27;
+  into rd_online;
+
+  select rn_id
+  from rolename
+  where rn_name = &#x27;SERTIFIKATOR&#x27;
+  into role_underwriter;
+
+  if (rd_online is null) then
+    exit;
+
+  -- Внешний цикл очереди получаем андеррайтеров
+  for with post_check
+      as (select un_id
+          from permissions, username
+          where pm_object_kind = 0 and
+                pm_object_id = un_id and
+                pm_subject_kind = 1 and
+                pm_subject_id = :role_underwriter and
+                pm_is_delete = 0 and
+                (coalesce(pm_date_begin, &#x27;01.01.2000&#x27;) &lt;= current_date) and
+                (coalesce(pm_date_end, &#x27;31.12.2999&#x27;) &gt;= current_date) and
+                pm_access_kind = 1
+                order by rand()),
+      fs_users
+      as (select un_id as fs_un_id
+          from post_check, hp_permission_access_check(un_id, &#x27;Permactions&#x27;, 0, &#x27;FinStart.Login&#x27;)
+          where has_access = 1)
+      select un_from_c_id
+      from username, fs_users
+      where un_id = fs_un_id
+      into c_id
+  do
+  begin
+    if (:c_id in (1090100543518, 1090100010098, 1090100936078, 1090101387464)) then
+      continue;
+    -- Проверяем что работает
+    select ovs_add_value
+    from hp_objectprops_get(&#x27;clients&#x27;, :c_id, -1, :rd_online, null)
+    into is_online;
+    is_online = coalesce(is_online, 1);
+    if (is_online &lt;&gt; 1) then
+      continue;
+
+    -- Проверяем количество задач
+    select sum(iif(aco_status = 0, 1, 0))
+    from refdata
+    inner join actionorder on aco_from_rd_id = rd_id
+    left join actionmark on atm_from_acl_id = aco_id
+    left join actionlist on acl_id = aco_id
+    where aco_respons_c_id = :c_id and
+          rd_code = &#x27;ActionGroup.Check_Loan_Data_PostCheck&#x27; and
+          rd_str_id = &#x27;UnderWriter_PostCheck&#x27; and
+          atm_from_acl_id is null
+    into task_count;
+    if (task_count &gt; 1) then
+      continue;
+
+    -- Нашли бездельника, готовим ему две задачи
+    -- На будущее лучше бы раздавать по одной, иначе первые в списке будут запахиваться
+    for select aco_id
+        from refdata
+        inner join actionorder on aco_from_rd_id = rd_id
+        left join actionmark on atm_from_acl_id = aco_id
+        left join actionlist on acl_id = aco_id
+        where rd_code = &#x27;ActionGroup.Check_Loan_Data_PostCheck&#x27; and
+              rd_str_id = &#x27;UnderWriter_PostCheck&#x27; and
+              aco_respons_c_id is null and
+              aco_status = 0 and
+              atm_from_acl_id is null
+        order by acl_last_datetime asc
+        rows 1
+        into acl_id
+    do
+    begin
+      execute procedure hp_underwriter_set_to_staff(1000000000000, acl_id, c_id);
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

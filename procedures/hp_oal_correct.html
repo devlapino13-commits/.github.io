@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_OAL_CORRECT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_OAL_CORRECT: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_OAL_CORRECT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_OAL_CORRECT
+AS
+declare variable oal_bill_id decimal(18,0);
+declare variable oal_bill_line_no integer;
+declare variable oal_from_ol_id decimal(18,0);
+declare variable oal_is_delete smallint;
+declare variable oal_oper_type smallint;
+declare variable oal_lifetime_month integer;
+declare variable oal_summa_os decimal(18,4);
+declare variable oal_summa_amort decimal(18,4);
+declare variable oal_year integer;
+declare variable oal_month integer;
+declare variable oal_dont_calc smallint;
+declare variable bill_id decimal(18,0);
+declare variable bill_line_no integer;
+declare variable summa_os decimal(18,4);
+declare variable summa_amor decimal(18,4);
+declare variable summa_lt integer;
+declare variable line integer;
+declare variable mon_no integer;
+declare variable new_amor decimal(18,4);
+declare variable sum_new_amor decimal(18,4);
+declare variable k integer;
+begin
+  update operlist
+  set is_delete = 1
+  where (ol_id = 1090100000009029 or
+        ol_id = 1090100000009044);
+
+  for select distinct oal_bill_id, oal_bill_line_no
+      from operamorlist, operbill, matcateg
+      where oal_bill_id = ob_bill_id and
+            oal_bill_line_no = ob_bill_line_no and
+            ob_date_end = &#x27;31.12.9999&#x27; and
+            ob_from_mc_id = mc_id and
+            ((mc_status = 0) or
+            (mc_status = 2)) and
+            oal_is_delete = 0
+      into :bill_id, :bill_line_no
+  do
+  begin
+    summa_os = 0;
+    summa_amor = 0;
+    line = 0;
+    summa_lt = 0;
+    mon_no = 0;
+    sum_new_amor = 0;
+    for select oal_bill_id, oal_bill_line_no, oal_from_ol_id, oal_is_delete, oal_oper_type, oal_lifetime_month,
+               oal_summa_os, oal_summa_amort, oal_year, oal_month, oal_dont_calc
+        from operamorlist, operlist
+        where oal_bill_id = :bill_id and
+              oal_bill_line_no = :bill_line_no and
+              oal_from_ol_id = ol_id and
+              is_delete = 0 and
+              oal_is_delete = 0
+        order by ol_date, ol_id
+        into :oal_bill_id, :oal_bill_line_no, :oal_from_ol_id, :oal_is_delete, :oal_oper_type, :oal_lifetime_month,
+             :oal_summa_os, :oal_summa_amort, :oal_year, :oal_month, :oal_dont_calc
+    do
+    begin
+      line = :line + 1;
+      summa_lt = :summa_lt + :oal_lifetime_month;
+      summa_os = :summa_os + :oal_summa_os;
+      summa_amor = :summa_amor + :oal_summa_amort;
+      if (line &gt; 1) then
+      begin
+        new_amor = 0;
+        if (oal_oper_type = 1) then
+        begin
+          if (mon_no &lt; summa_lt) then
+          begin
+            new_amor = cast((summa_os - sum_new_amor) / (summa_lt - mon_no) as decimal(15,2));
+            sum_new_amor = :sum_new_amor + :new_amor;
+            if (new_amor &lt;&gt; oal_summa_amort) then
+            begin
+              update operamorlist
+              set oal_summa_amort = :new_amor
+              where oal_bill_id = :bill_id and
+                    oal_bill_line_no = :bill_line_no and
+                    oal_from_ol_id = :oal_from_ol_id;
+            end
+          end
+          if (mon_no = summa_lt) then
+          begin
+            new_amor = :summa_os - :sum_new_amor;
+            if ((new_amor &lt;&gt; oal_summa_amort) and
+                (new_amor &gt;= 0)) then
+            begin
+              update operamorlist
+              set oal_summa_amort = :new_amor
+              where oal_bill_id = :bill_id and
+                    oal_bill_line_no = :bill_line_no and
+                    oal_from_ol_id = :oal_from_ol_id;
+            end
+          end
+        end
+        if ((oal_oper_type = 0) or (oal_oper_type = 3) or (oal_oper_type = 4)) then
+        begin
+          k = 0;
+          if (oal_summa_amort &lt; 0) then
+            k = -1;
+          if (oal_summa_amort &gt; 0) then
+            k = 1;
+          if ((oal_summa_amort &lt;&gt; 0) and
+              (oal_summa_amort &lt;&gt; k * sum_new_amor)) then
+          begin
+            update operamorlist
+            set oal_summa_amort = :k * :sum_new_amor
+            where oal_bill_id = :bill_id and
+                  oal_bill_line_no = :bill_line_no and
+                  oal_from_ol_id = :oal_from_ol_id;
+          end
+        end
+      end
+      if (oal_oper_type = 1) then
+        mon_no = :mon_no + 1;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

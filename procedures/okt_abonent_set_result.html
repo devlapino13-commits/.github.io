@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OKT_ABONENT_SET_RESULT — процедура — схема БД</title>
+<meta name="description" content="Процедура OKT_ABONENT_SET_RESULT: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>OKT_ABONENT_SET_RESULT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_json_parse.html"><div class="to">FM_JSON_PARSE</div></a><a class="ref-card" href="hp_pantera_ignore_insert.html"><div class="to">HP_PANTERA_IGNORE_INSERT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">JSON_STR</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE OKT_ABONENT_SET_RESULT(
+    JSON_STR D_STR_LONG)
+AS
+declare variable RES_ID D_INTEGER;
+declare variable DELETE_FROM_ABONENT_LIST D_BOOL;
+declare variable ADD_IGNORE_LIST D_BOOL;
+declare variable PI_ID D_INTEGER;
+declare variable PANT_ID D_ID;
+declare variable OBJECT_KIND D_INTEGER;
+declare variable OBJECT_ID D_ID;
+declare variable PHONE D_STR_CODE;
+declare variable RESULT_CODE D_STR_100;
+declare variable TIMEZONE D_INTEGER;
+declare variable ATTEMPTS_REMAINING_QTY D_INTEGER;
+declare variable IS_IVR D_BOOL;
+declare variable DURATION D_INTEGER;
+declare variable JSON_KEY D_STR_255;
+declare variable JSON_VALUE D_STR_255;
+declare variable OPERATOR_PHONE D_STR_CODE;
+declare variable PHONE_ID D_INTEGER;
+declare variable OPERATOR_PHONE_ID D_INTEGER;
+begin
+  for select json_key, json_value
+      from fm_json_parse(:json_str, 0)
+      into :json_key, :json_value
+  do
+  begin
+    if (json_key = &#x27;pant_id&#x27;) then
+      pant_id = json_value;
+
+    if (json_key = &#x27;object_kind&#x27;) then
+      object_kind = json_value;
+
+    if (json_key = &#x27;object_id&#x27;) then
+      object_id = json_value;
+
+    if (json_key = &#x27;phone&#x27;) then
+      phone = json_value;
+
+    if (json_key = &#x27;result_code&#x27;) then
+      result_code = json_value;
+
+    if (json_key = &#x27;timezone&#x27;) then
+      timezone = json_value;
+
+    if (json_key = &#x27;attempts_remaining_qty&#x27;) then
+      attempts_remaining_qty = json_value;
+
+    if (json_key = &#x27;is_ivr&#x27;) then
+      is_ivr = json_value;
+
+    if (json_key = &#x27;duration&#x27;) then
+      duration = json_value;
+
+    if (json_key = &#x27;operator_phone&#x27;) then
+        operator_phone = json_value;
+  end
+
+  -- RFCRU-5338
+  phone = (case
+                when char_length(:phone) = 11
+                     and :phone starting with &#x27;89&#x27;
+                then &#x27;7&#x27; || substring(:phone from 2)
+                else phone
+          end);
+
+  result_code = &#x27;IVRCallStatus.&#x27;||result_code;
+  res_id = f_get_rd_id(result_code);
+
+  delete_from_abonent_list = 0;
+  add_ignore_list = 0;
+
+  if (result_code = &#x27;IVRCallStatus.Successful&#x27;) then
+  begin
+    delete_from_abonent_list = 1;
+    add_ignore_list = 1;
+  end
+  else
+  begin
+    if (attempts_remaining_qty = 0) then
+    begin
+        delete_from_abonent_list = 1;
+        add_ignore_list = 1;
+    end
+  end
+
+  if ((add_ignore_list = 1) and (f_get_const(&#x27;okt_ivr_test&#x27;) = 0)) then
+    pi_id = (select pi_id from hp_pantera_ignore_insert(null, :object_kind, :object_id, f_get_rd_id(&#x27;contactinfo.cell_main&#x27;), :result_code, :pant_id, null));
+
+  if (delete_from_abonent_list = 1) then
+    delete from okt_active_abonent_list t where t.oal_phone = :phone;
+
+  if (coalesce(phone, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+    phone_id = f_cont_id(phone, &#x27;add&#x27;);
+
+  if (coalesce(operator_phone, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+    operator_phone_id = f_cont_id(operator_phone, &#x27;add&#x27;);
+
+  insert into okt_abonent_calls (oas_object_kind, oas_object_id, oas_from_pant_id, oas_result, oas_timezone, oas_duration, oas_attempts_remaining_qty, oas_is_ivr, oas_abonent_phone, oas_operator_phone, oas_ignore_id, oas_json)
+  values (:object_kind, :object_id, :pant_id, :res_id, :timezone,  :duration, :attempts_remaining_qty, :is_ivr, :phone_id, :operator_phone_id, :pi_id, :json_str);
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

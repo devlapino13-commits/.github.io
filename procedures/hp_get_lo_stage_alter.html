@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_GET_LO_STAGE_ALTER — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_GET_LO_STAGE_ALTER: 2 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_GET_LO_STAGE_ALTER</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">4</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">4 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_lo_performance_period.html"><div class="to">AAREP_LO_PERFORMANCE_PERIOD</div></a><a class="ref-card" href="cb_ru_drr_202205.html"><div class="to">CB_RU_DRR_202205</div></a><a class="ref-card" href="cb_ru_drr_202411.html"><div class="to">CB_RU_DRR_202411</div></a><a class="ref-card" href="cb_ru_lo_alternative.html"><div class="to">CB_RU_LO_ALTERNATIVE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">LO_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">LO_STAGE_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LO_STAGE_MONTH</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">HRV_DATE_END_FACT</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LO_STAGE_MONTH_H</div><div class="ptype">DECIMAL(4,2)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_GET_LO_STAGE_ALTER(
+    LO_ID ID_TYPE,
+    REP_DATE DATE)
+RETURNS (
+    LO_STAGE_DATE DATE,
+    LO_STAGE_MONTH INTEGER,
+    HRV_DATE_END_FACT DATE,
+    LO_STAGE_MONTH_H DECIMAL(4,2))
+AS
+declare variable reg_id integer;
+declare variable day_razn integer;
+declare variable jk_system_code d_str_100;
+declare variable lo_stage_date_tmp d_date;
+declare variable ps_is_working d_smallint;
+begin
+  lo_stage_date = null;
+  lo_stage_month = 0;
+  lo_stage_month_h = -1; -- если -1 то на СВЗ нету приказа
+
+  if (not exists(select *
+                 from hr_pstatus, joblist, jobkind
+                 where ps_from_c_id = :lo_id and
+                       ps_status = 1 and
+                       ps_is_working = 1 and
+                       :rep_date between ps_date_begin and ps_date_end and
+                       ps_from_jl_id = jl_id and
+                       jl_kind = jk_id and
+                       jk_system_code = &#x27;JobSystem.LO_Standart&#x27;)) then
+  begin
+    suspend;
+    exit;
+  end
+
+  for select ps_date_begin, ps_from_reg_id, jk_system_code, ps_is_working
+      from hr_pstatus, joblist, jobkind
+      where ps_status = 1 and
+            ps_from_jl_id = jl_id and
+            jl_kind = jk_id and
+            ps_from_c_id = :lo_id and
+            ps_date_begin &lt;= ps_date_end and
+            ps_date_begin &lt;= :rep_date
+      order by ps_date_begin
+      into lo_stage_date_tmp, reg_id, jk_system_code, ps_is_working
+  do
+  begin
+    if (jk_system_code = &#x27;JobSystem.LO_Standart&#x27; and
+        ps_is_working = 1) then
+    begin
+      if (lo_stage_date is null and
+          not exists(select *
+                     from oksummary
+                     where oks_kc_id = :lo_id and
+                           :lo_stage_date_tmp between oks_date_begin and oks_date_end and
+                           oks_close_state = 0 and
+                           oks_region_id = :reg_id and
+                           oks_balance &gt; 0)) then
+        lo_stage_date = lo_stage_date_tmp;
+    end
+    else
+    begin
+      lo_stage_date = null;
+    end
+  end
+
+  if (lo_stage_date is null) then
+  begin
+    select ps_date_begin, ps_from_reg_id
+    from hr_pstatus, joblist, jobkind
+    where ps_status = 1 and
+          ps_from_jl_id = jl_id and
+          jl_kind = jk_id and
+          jk_system_code = &#x27;JobSystem.LO_Standart&#x27; and
+          ps_from_c_id = :lo_id and
+          ps_is_working = 1 and
+          ps_date_begin &lt;= ps_date_end and
+          ps_date_begin &lt;= :rep_date rows 1
+    into lo_stage_date, reg_id;
+  end
+
+  --  проверка из декретного отпуска когда выходила
+  hrv_date_end_fact = null;
+  select hrv.hrv_date_end_fact
+  from hr_voctravel hrv, hr_orders ho, sa_worktype
+  where hrv_from_ho_id = ho_id and
+        ho_order_type = sawt_id and
+        hrv_from_c_id = :lo_id and
+        hrv_status = 1 and
+        sawt_id in (16, 17, 18, 20, 21) and
+        hrv_date_begin &lt;= :rep_date /*and
+        hrv_date_end_fact &lt;= :rep_date */
+  order by ho.ho_save_time desc
+  rows 1
+  into hrv_date_end_fact;
+
+  if (hrv_date_end_fact &gt; rep_date) then
+    hrv_date_end_fact = null;
+
+  if (hrv_date_end_fact is not null) then
+  begin
+    if (not exists(select *
+                   from oksummary
+                   where oks_kc_id = :lo_id and
+                         :hrv_date_end_fact - 1 between oks_date_begin and oks_date_end -- портфель проверять на предыдущий день
+                         --              and oks_region_id = :reg_id
+                         and
+                         oks_close_state = 0 and
+                         oks_balance &gt; 0) and
+        hrv_date_end_fact &gt; lo_stage_date and
+        not exists(select sawt_name
+                   from hr_voctravel, hr_orders, sa_worktype
+                   where hrv_from_ho_id = ho_id and
+                         ho_order_type = sawt_id and
+                         hrv_from_c_id = :lo_id and
+                         hrv_status = 1 and
+                         hrv_date_begin &lt;= :rep_date and
+                         hrv_date_end_fact &gt;= :rep_date and
+                         sawt_id in (16, 17, 18, 21)
+                   order by hrv_date_begin desc
+                   rows 1)) then
+      lo_stage_date = hrv_date_end_fact;
+  end
+
+  -- RFCRU-5099
+  if (:lo_id = 1010100018842) then
+    lo_stage_date = &#x27;15.11.2025&#x27;;
+
+  if (lo_stage_date is not null) then
+  begin
+    lo_stage_month = datediff(month, lo_stage_date, rep_date); -- ранее вместо res_date_end было res_date_begin, исправлено по звонку Ироды от 31.01.2018
+
+    if (rep_date &lt;&gt; &#x27;31.12.9999&#x27; and
+        datediff(month, rep_date, rep_date + 1) = 0) then -- если дата отчета не конец месяца то выполняй ниже следующее
+      if (extract(day from lo_stage_date) &gt; extract(day from rep_date) and
+          lo_stage_month &gt; 0) then
+        lo_stage_month = lo_stage_month - 1;
+
+    day_razn = :rep_date - dateadd(month, lo_stage_month, lo_stage_date);
+    lo_stage_month_h = lo_stage_month + cast(day_razn as double precision) / 30;
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

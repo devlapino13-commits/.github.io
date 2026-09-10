@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_HTML_COM_LIST_INFO — процедура — схема БД</title>
+<meta name="description" content="Информация по запросу на кредитный комитет">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_HTML_COM_LIST_INFO</code></h1>
+<p class="desc">Информация по запросу на кредитный комитет</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_html_com_reschedule.html"><div class="to">FM_HTML_COM_RESCHEDULE</div></a><a class="ref-card" href="fm_report_cmd_mru.html"><div class="to">FM_REPORT_CMD_MRU</div></a><a class="ref-card" href="hp_com_list_memo.html"><div class="to">HP_COM_LIST_MEMO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_html_main.html"><div class="to">FM_REPORT_HTML_MAIN</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CML_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SOURCE_SYSTEM</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_HTML_COM_LIST_INFO(
+    CML_ID D_ID,
+    UN_ID D_ID,
+    SOURCE_SYSTEM D_SMALLINT)
+RETURNS (
+    RES_TEXT D_BLOB_TEXT)
+AS
+declare variable TMP_STR_LONG D_STR_8100;
+declare variable CAPTION D_STR_CODE;
+declare variable URI D_STR_4096;
+declare variable DESCRIPTION D_STR_255;
+declare variable EDIT_KIND D_STR_CODE;
+declare variable MAX_LENGTH D_SMALLINT;
+declare variable PARAM_NAME D_STR_CODE;
+declare variable PARAM_VALUE D_STR_CODE;
+declare variable PARAM_STR_VALUE D_STR_255;
+declare variable CML_STATUS D_SMALLINT;
+declare variable LANG D_STR_LANG;
+declare variable CML_IS_CLOSED D_SMALLINT;
+declare variable CMC_COM_KIND D_STR_CODE;
+declare variable CML_ADD_PARAMS D_STR_LONG;
+declare variable RES_USER D_STR_100;
+declare variable RES_DATETIME D_DATETIME;
+declare variable RES_IS_ACTION D_SMALLINT;
+declare variable RES_MEMO D_STR_LONG;
+declare variable CML_DATE D_DATE;
+declare variable CMC_ID D_INTEGER;
+declare variable CMCP_DEFAULT_VALUE D_STR_CODE;
+declare variable CMCP_DEFAULT_TEXT D_STR_CODE;
+declare variable CMCP_READ_ONLY D_SMALLINT;
+declare variable OBJ_KIND D_STR_CODE;
+declare variable OBJ_ID D_ID;
+declare variable KF_NAME D_STR_100;
+declare variable C_ID D_ID;
+declare variable C_NAME_FIO D_STR_100;
+declare variable PR_NAME D_STR_255;
+declare variable DB_ID D_INTEGER;
+declare variable IS_MANAGER D_SMALLINT;
+declare variable CMC_CODE D_STR_CODE;
+begin
+  -- Процедура готовится как для МП, так и для Finstart
+  -- Для Finstart ссылки нужно прятать
+
+  lang = f_get_lang_code(un_id, null);
+  db_id = f_get_db_id();
+
+  is_manager = 0;
+  if (db_id = 81001) then
+  begin
+    -- Проверка на менеджера нужна только в РФ, в остальных не используем
+    if (exists(select *
+       from hr_pstatus, joblist, jobkind, username
+       where un_id = :un_id and
+             ps_date_begin &lt;= current_date and
+             ps_date_end &gt;= current_date and
+             ps_is_working = 1 and
+             ps_status = 1 and
+             ps_from_jl_id = jl_id and
+             jl_kind = jk_id and
+             un_from_c_id = ps_from_c_id and
+             jk_system_code = &#x27;JobSystem.Region_KM&#x27;)) then
+      is_manager = 1;
+  end
+
+  res_text = (select res_style from fm_html_styles) || &#x27;&lt;body&gt;&#x27; ||
+    f_format(&#x27;&lt;h2&gt;%1&lt;/h2&gt;&#x27;, f_lang(lang, &#x27;Общая информация&#x27;));
+
+
+  select f_objkind(cml_object_kind, &#x27;name&#x27;), cml_object_id
+  from com_list
+  where cml_id = :cml_id
+  into obj_kind, obj_id;
+
+  if (obj_kind = &#x27;kontract&#x27;) then
+  begin
+    select kal_new_kf_name, pr_name
+      from knaktlist, kontract, product
+      where k_id = :obj_id
+      and k_from_kf_id = kal_from_kf_id
+      and knaktlist.is_delete = 0
+      and current_date between kal_date and kal_date_end
+      and k_from_pr_id = pr_id
+      into kf_name, pr_name;
+  end
+  kf_name = coalesce(kf_name , &#x27;&#x27;);
+  pr_name = coalesce(pr_name, &#x27;&#x27;);
+
+  select
+    f_format(&#x27;%1: &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&#x27;, f_lang(:lang, &#x27;Тип запроса&#x27;), cmc_name) ||
+    f_format(&#x27;%1: &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&#x27;, f_lang(:lang, &#x27;Объект&#x27;), f_objname(cml_object_kind, cml_object_id)) ||
+    iif(:kf_name &lt;&gt; &#x27;&#x27;, f_format(&#x27;%1: &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&#x27;, f_lang(:lang, &#x27;Кредитная папка&#x27;), :kf_name), &#x27;&#x27;) ||
+    f_format(&#x27;%1: &lt;b&gt;%2&lt;/b&gt;&#x27;, f_lang(:lang, &#x27;Дата&#x27;), f_datetostr(cml_date)) || &#x27; $$$&lt;br&gt;&#x27; ||
+    f_format(&#x27;%1: &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&#x27;, f_lang(:lang, &#x27;Продукт&#x27;), :pr_name) ||
+    f_format(&#x27;%1: &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&#x27;, f_lang(:lang, &#x27;Офис&#x27;), reg_name) ||
+    f_format(&#x27;%1: &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&#x27;, f_lang(:lang, &#x27;Заявитель&#x27;), c_name_fio) ||
+    f_format(&#x27;%1: &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&#x27;, f_lang(:lang, &#x27;Статус&#x27;), f_lang(:lang, f_enum(&#x27;com_action_status&#x27;, cml_last_status, &#x27;name&#x27;))),
+    cmc_id, f_enum(&#x27;com_kind&#x27;, cmc_com_kind, &#x27;code&#x27;), cml_last_status, cml_is_closed, cml_add_params, cml_date, cmc_code
+  from com_list, com_cfg, region, clients
+  where cml_id = :cml_id and
+        cml_from_cmc_id = cmc_id and
+        cml_from_reg_id = reg_unicode and
+        cml_init_c_id = c_id
+  into tmp_str_long, cmc_id, cmc_com_kind, cml_status, cml_is_closed,
+    cml_add_params, cml_date, cmc_code;
+
+  if (cml_date &lt;&gt; current_date and
+      f_enum(&#x27;com_action_status&#x27;, cml_status, &#x27;code&#x27;) in (&#x27;new&#x27;, &#x27;rework&#x27;)
+      and source_system = 1
+    ) then
+  begin
+    uri = f_uri_sql(f_lang(lang, &#x27;Обновить&#x27;), &#x27;com_date_update&#x27;,
+      f_objkind(&#x27;com_list&#x27;, &#x27;id&#x27;), cml_id, &#x27;none&#x27;,
+      f_lang(lang,  &#x27;Дата запроса будет изменена на текущую, продолжить?&#x27;),
+      null, null, null, null, null, &#x27;dialog&#x27;, null);
+    tmp_str_long = replace(tmp_str_long, &#x27;$$$&#x27;, uri);
+  end
+  else
+    tmp_str_long = replace(tmp_str_long, &#x27;$$$&#x27;, &#x27;&#x27;);
+
+  res_text = BLOB_APPEND(res_text, tmp_str_long);
+
+  -- Для реструктуризируемых контрактов выводим клиентов
+  if (obj_kind = &#x27;kontract&#x27;) then
+  begin
+    tmp_str_long = f_format(
+      &#x27;&lt;br&gt;&lt;table width=&quot;100%&quot; class=&quot;msg&quot;&gt;&lt;col width=&quot;100%&quot;&gt;&lt;tr&gt;&lt;th&gt;%1&lt;/th&gt;&lt;/tr&gt;&#x27;,
+      f_lang(lang, &#x27;Клиенты договора&#x27;));
+
+    for select c_id, c_name_fio
+    from knclient, clients
+    where kc_from_k_id = :obj_id
+      and kc_from_c_id = c_id
+      and kc_amount_approved &gt; 0
+    into c_id, c_name_fio do
+    begin
+      if (source_system = 1) then
+        uri = f_uri_open(c_name_fio, &#x27;client&#x27;, &#x27;Clients&#x27;, c_id, c_name_fio, &#x27;&#x27;, un_id);
+      else
+        uri = c_name_fio;
+      tmp_str_long = tmp_str_long ||&#x27;&lt;tr&gt;&lt;td&gt;&#x27; || uri || &#x27;&lt;/td&gt;&lt;/tr&gt;&#x27;;
+    end
+    tmp_str_long = tmp_str_long || &#x27;&lt;/table&gt;&#x27;;
+  end
+  res_text = BLOB_APPEND(res_text, tmp_str_long);
+
+  -- Отображаем таблицу параметров параметров.
+  -- Если еще не отправлен на КК, то даем редактировать.
+  res_text = BLOB_APPEND(res_text, f_format(
+    &#x27;&lt;br&gt;&lt;table width=&quot;100%&quot; class=&quot;msg&quot;&gt;&lt;col width=&quot;40%&quot;&gt;&lt;col width=&quot;40%&quot;&gt;&#x27; ||
+    &#x27;&lt;col width=&quot;20%&quot;&gt;&lt;tr&gt;&lt;th colspan=&quot;3&quot;&gt;%1&lt;/th&gt;&lt;/tr&gt;&#x27;,
+    f_lang(lang, &#x27;Параметры реструктуризации&#x27;)));
+
+
+  for select cmcp_param_name, cmcp_caption, cmcp_description, cmcp_edit_kind,
+             cmcp_max_length, cmcp_default_value, cmcp_default_text, cmcp_read_only
+  from com_cfg_params
+  where cmcp_from_cmc_id = :cmc_id and
+        cmcp_is_hidden = 0
+  order by cmcp_order
+  into :param_name, :caption, :description, :edit_kind,
+       :max_length, :cmcp_default_value, :cmcp_default_text, :cmcp_read_only
+  do
+  begin
+    param_value = f_json_str_get_value(cml_add_params, param_name, cmcp_default_value);
+
+    if (edit_kind in (&#x27;text&#x27;, &#x27;date&#x27;)) then
+    begin
+      if (param_value = cmcp_default_value)
+      then param_str_value = cmcp_default_text;
+      else param_str_value = param_value;
+    end
+
+    if (edit_kind = &#x27;refdata&#x27;) then
+      edit_kind = &#x27;combo&#x27;;
+
+    -- Получаем текстовое представление значения для выпадающих списков
+    if (edit_kind = &#x27;combo&#x27;) then
+    begin
+      param_str_value = f_format(f_lang(lang, &#x27;Значение: %1&#x27;), param_value);
+      select m_name
+      from fm_report_cmd_mru(&#x27;cml_set_rest_&#x27; || :param_name, f_objkind(&#x27;com_list&#x27;, &#x27;id&#x27;), :cml_id, :un_id)
+      where m_id = :param_value
+      into :param_str_value;
+    end
+
+    caption = trim(caption);
+    param_value = trim(param_value);
+
+    if (f_enum(&#x27;com_action_status&#x27;, cml_status, &#x27;code&#x27;) in (&#x27;new&#x27;, &#x27;rework&#x27;) and source_system = 1 and cmcp_read_only = 0) then
+    begin
+      uri = f_uri_sql(f_lang(lang, &#x27;Изменить&#x27;), &#x27;cml_set_rest_&#x27; || param_name,
+        f_objkind(&#x27;com_list&#x27;, &#x27;id&#x27;), cml_id, edit_kind, description, &#x27;&#x27;, 1,
+        max_length, param_value, &#x27;&#x27;, &#x27;dialog&#x27;, param_name);
+      res_text = BLOB_APPEND(res_text,
+        &#x27;&lt;tr&gt;&lt;td&gt;&#x27; || caption ||
+        &#x27;&lt;/td&gt;&lt;td align=&quot;center&quot;&gt;&#x27; || param_str_value ||
+        &#x27;&lt;/td&gt;&lt;td align=&quot;center&quot;&gt;&#x27; || uri || &#x27;&lt;/td&gt;&lt;/tr&gt;&#x27;);
+    end
+    else
+    res_text = BLOB_APPEND(res_text,
+      f_format(
+        &#x27;&lt;tr&gt;&lt;td&gt;%1&lt;/td&gt;&lt;td align=&quot;center&quot; colspan=&quot;2&quot;&gt;%2&lt;/td&gt;&lt;/tr&gt;&#x27;,
+        caption, param_str_value));
+  end
+  res_text = BLOB_APPEND(res_text, &#x27;&lt;/table&gt;&#x27;);
+
+  if (cml_is_closed = 0 and source_system = 1) then
+  begin
+    res_text = BLOB_APPEND(res_text, f_format(&#x27;&lt;h2&gt;%1&lt;/h2&gt;&#x27;, f_lang(lang, &#x27;Действия&#x27;)));
+  
+    -- Графики новый и старый
+    if (cmc_com_kind in (&#x27;reschedule&#x27;,&#x27;termination&#x27;)) then
+    begin
+      res_text = BLOB_APPEND(res_text, f_uri_html(f_lang(lang, &#x27;Показать график&#x27;),
+        &#x27;com_list_reschedule&#x27;, f_lang(lang, &#x27;Графики погашений&#x27;),
+        &#x27;com_list&#x27;, cml_id, null, null, &#x27;&#x27;) || &#x27;&lt;br&gt;&lt;br&gt;&#x27;);
+    end
+
+    -- Отправка на КК
+    if (f_enum(&#x27;com_action_status&#x27;, cml_status, &#x27;code&#x27;) in (&#x27;new&#x27;, &#x27;rework&#x27;)) then
+    begin
+
+      if (db_id &lt;&gt; 81001 or is_manager = 1) then
+      begin
+        res_text = BLOB_APPEND(res_text, f_uri_sql(f_lang(lang, &#x27;Отправить на КК&#x27;),
+          &#x27;com_list_send_kk&#x27;, f_objkind(&#x27;com_list&#x27;, &#x27;id&#x27;), cml_id, &#x27;none&#x27;,
+          f_lang(lang, &#x27;Подтвердите отправку запроса на КК&#x27;), &#x27;&#x27;, 0, 0, &#x27;&#x27;, &#x27;&#x27;,
+          &#x27;dialog&#x27;, &#x27;&#x27;) || &#x27;&lt;br&gt;&lt;br&gt;&#x27;);
+      end
+
+      res_text = BLOB_APPEND(res_text, f_uri_sql(f_lang(:lang, &#x27;Отменить&#x27;),
+        &#x27;com_list_cancel_kk&#x27;, f_objkind(&#x27;com_list&#x27;, &#x27;id&#x27;), cml_id, &#x27;none&#x27;,
+        f_lang(lang, &#x27;Подтвердите отмену. Запрос будет исключен из списка КК&#x27;),
+        &#x27;&#x27;, 0, 0, &#x27;&#x27;, &#x27;&#x27;, &#x27;dialog&#x27;, &#x27;&#x27;) || &#x27;&lt;br&gt;&lt;br&gt;&#x27;);
+    end
+  
+    -- Добавление комментария
+    res_text = BLOB_APPEND(res_text, f_uri_sql(f_lang(lang, &#x27;Добавить комментарий&#x27;),
+      &#x27;com_memo_add&#x27;, f_objkind(&#x27;com_list&#x27;, &#x27;id&#x27;), cml_id, &#x27;text&#x27;,
+      f_lang(lang, &#x27;Введите комментарий&#x27;), &#x27;&#x27;, 5, 1024, &#x27;&#x27;,
+      f_lang(lang, &#x27;Комментарий не введен&#x27;), &#x27;dialog&#x27;, &#x27;&#x27;) || &#x27;&lt;br&gt;&lt;br&gt;&#x27;);
+
+    -- Добавление документа
+    res_text = BLOB_APPEND(res_text, f_uri_open(f_lang(lang, &#x27;Добавить документ&#x27;),
+      &#x27;com_blob&#x27;, f_objkind(&#x27;com_list&#x27;, &#x27;id&#x27;), cml_id,
+      f_lang(lang, &#x27;Добавить документ&#x27;), &#x27;&#x27;, un_id) || &#x27;&lt;br&gt;&lt;br&gt;&#x27;);
+  end
+
+  if (cmc_com_kind in (&#x27;reschedule&#x27;, &#x27;termination&#x27;) and source_system = 0) then
+  begin
+    res_text = BLOB_APPEND(res_text, (select res_text
+      from fm_html_com_reschedule(:cml_id, :un_id, 1)) || &#x27;&lt;br&gt;&#x27;);
+  end
+
+  if (source_system = 1) then
+  begin
+    res_text = BLOB_APPEND(res_text, f_format(
+      &#x27;&lt;table width=&quot;100%&quot; class=&quot;msg&quot;&gt;&lt;col width=&quot;70%&quot;&gt;&lt;col width=&quot;30%&quot;&gt;&#x27; ||
+      &#x27;&lt;tr&gt;&lt;th colspan=&quot;2&quot;&gt;%1&lt;/th&gt;&lt;/tr&gt;&#x27;, f_lang(lang, &#x27;Действия и комментарии&#x27;)));
+  
+    for select res_user, res_datetime, res_memo, res_is_action
+    from hp_com_list_memo(:cml_id, 0, :un_id)
+    into res_user, res_datetime, res_memo, res_is_action
+    do
+    begin
+      res_text = BLOB_APPEND(res_text,
+        f_format(
+          &#x27;&lt;tr&gt;&lt;td class=&quot;msg_header&quot;&gt;%1&lt;/td&gt;&lt;td class=&quot;msg_header&quot; align=&quot;right&quot;&gt;%2&lt;/td&gt;&lt;/tr&gt;&#x27;,
+          res_user, f_datetimetostr(res_datetime)) ||
+        f_format(
+          &#x27;&lt;tr&gt;&lt;td class=&quot;msg_text&quot; colspan=&quot;2&quot;&gt;&lt;font color=&quot;%1&quot;&gt;%2&lt;/font&gt;&lt;/td&gt;&lt;/tr&gt;&#x27;,
+          trim(iif(res_is_action=0, &#x27;blue&#x27;, &#x27;black&#x27;)), res_memo));
+    end
+    res_text = BLOB_APPEND(res_text, &#x27;&lt;/table&gt;&#x27;);
+  end
+
+  res_text = BLOB_APPEND(res_text, &#x27;&lt;/body&gt;&#x27;);
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

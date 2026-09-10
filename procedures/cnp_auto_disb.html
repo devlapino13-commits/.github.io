@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CNP_AUTO_DISB — процедура — схема БД</title>
+<meta name="description" content="Процедура CNP_AUTO_DISB: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CNP_AUTO_DISB</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_disbursement.html"><div class="to">HP_DO_DISBURSEMENT</div></a><a class="ref-card" href="hp_send_quick_message.html"><div class="to">HP_SEND_QUICK_MESSAGE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CNP_AUTO_DISB
+AS
+declare variable k_id d_id;
+declare variable c_id d_id;
+declare variable manager_id d_id;
+declare variable un_id d_id;
+declare variable res_ol_ids d_id;
+declare variable res_text d_str_255;
+declare variable reg_id d_integer;
+declare variable acc_kt d_str_20;
+declare variable sql_text d_str_8100;
+begin
+  for select cpr.cpr_from_k_id
+      from cnp_payment_requests cpr
+      inner join kontstate ks on ks.ks_from_k_id = cpr.cpr_from_k_id and
+            ks.ks_state = 0 and
+            ks.ks_ol_is_delete = 0 and
+            current_date between ks.ks_date_begin and ks.ks_date_end
+      where cpr.cpr_status = 2 and
+            cpr.cpr_action = &#x27;pay&#x27;
+      into k_id
+  do
+  begin
+    select ks.ks_region_id
+    from kontstate ks
+    where ks.ks_from_k_id = :k_id and
+          ks.ks_state = 0
+    into reg_id;
+
+    select kt.k_clients_cashier_id, kt.k_approved_manager
+    from kontract kt
+    where kt.k_id = :k_id
+    into c_id, manager_id;
+
+    --выдача &quot;вешается&quot; на сотрудника который утвердил займ
+    select kl.kl_user_id
+    from kontlog kl
+    where kl.kl_from_k_id = :k_id and
+          kl.kl_state = 1
+    order by kl.kl_datetime desc rows 1
+    into un_id;
+
+    select al_id
+    from acc_list
+    where al_from_reg_id = 1010100 and
+          al_currency = &#x27;398&#x27; and
+          al_account = iif(f_get_disb_source(:k_id) = &#x27;bc&#x27;, &#x27;1021/2&#x27;, &#x27;1021/3&#x27;)
+    into :acc_kt;
+
+    sql_text = &#x27;select res_ol_ids, res_text from hp_do_disbursement(&#x27;||:un_id||&#x27;, &#x27;||:k_id||&#x27;, &#x27;||:reg_id||&#x27;, 5, &#x27;&#x27;&#x27;||:acc_kt||&#x27;&#x27;&#x27;, &#x27;||:reg_id||&#x27;, 2, &#x27;&#x27;&#x27;||:acc_kt||&#x27;&#x27;&#x27;, &#x27;||:c_id||&#x27;, &#x27;||:manager_id||&#x27;)&#x27;;
+
+    execute statement(:sql_text)
+    with autonomous transaction
+    into res_ol_ids, res_text;
+
+    if (coalesce(res_ol_ids, &#x27;&#x27;) = &#x27;&#x27;) then
+    begin
+      execute procedure hp_send_quick_message(&#x27;email&#x27;, &#x27;h.raimjanov@mbulak.kg&#x27;,
+          &#x27;ошибка при выдачи&#x27;,
+          &#x27;выдача не осуществилась. ошибка -&#x27; || :res_text, &#x27;&#x27;, 7, 1000000000000);
+    end
+    when any do
+      execute procedure hp_send_quick_message(&#x27;email&#x27;, &#x27;h.raimjanov@mbulak.kg&#x27;,
+          &#x27;ошибка при выдачи&#x27;,
+          &#x27;выдача не осуществилась. техническая ошибка. gdscode = &#x27; || gdscode,
+          &#x27;&#x27;, 7, 1000000000000);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

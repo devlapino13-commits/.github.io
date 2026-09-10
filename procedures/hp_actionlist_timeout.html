@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_ACTIONLIST_TIMEOUT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_ACTIONLIST_TIMEOUT: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_ACTIONLIST_TIMEOUT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_kontract_process.html"><div class="to">HP_GET_KONTRACT_PROCESS</div></a><a class="ref-card" href="hp_get_kontract_status.html"><div class="to">HP_GET_KONTRACT_STATUS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_ACTIONLIST_TIMEOUT
+AS
+declare variable acl_id decimal(18,0);
+declare variable rd_id_loan integer;
+declare variable rep_k_id decimal(18,0);
+declare variable result integer;
+declare variable respons_c_id decimal(18,0);
+declare variable db_id integer;
+declare variable time_limit integer;
+declare variable minutes_diff integer;
+declare variable k_disb_date date;
+declare variable total_status integer;
+declare variable pr_code str_100;
+declare variable region_id integer;
+declare variable kk_preference smallint;
+declare variable k_is_online d_smallint;
+declare variable respons_un_id d_id;
+declare variable k_disb_kind d_id;
+declare variable rd_id_loan_sp d_integer;
+begin
+  -- Процедура автоматически утверждает кредиты если в очереди висит более 60 минут.
+  select rd_id
+  from refdata
+  where rd_code = &#x27;ActionGroup.Check_Loan_Data&#x27; and
+        rd_is_active = 1
+  into :rd_id_loan;
+  if (rd_id_loan is null) then
+    exit;
+
+  select rd_id
+  from refdata
+  where rd_code = &#x27;ActionGroup.Check_Loan_Data_Special&#x27; and
+        rd_is_active = 1
+  into :rd_id_loan_sp;
+  if (rd_id_loan_sp is null) then
+    exit;
+
+  :db_id = f_get_db_id();
+  if (db_id = 81001) then
+  begin
+    -- Если заявка КК, висит активной на Санжаре, ее нужно открепить от него
+    respons_c_id = 1000000000001; -- Sanjar Islamov
+
+    for select ao.aco_id, ao.aco_object_id
+        from actionorder ao
+        where ao.aco_respons_c_id = :respons_c_id and
+              aco_from_rd_id in (:rd_id_loan, :rd_id_loan_sp) and
+              aco_object_kind = 9
+        into :acl_id, :rep_k_id
+    do
+    begin
+      update actionlist
+      set acl_status = 0,
+          acl_respons_c_id = null
+      where acl_parent_id = :acl_id and
+            acl_dont_show_in_order = 1;
+
+      update actionlist
+      set acl_status = 0,
+          acl_respons_c_id = null
+      where acl_id = :acl_id;
+    end
+  end
+
+  if (db_id = 81001) then
+    time_limit = 1;
+  else
+    time_limit = 60;
+
+  for select acl_id, acl_object_id, datediff(minute, coalesce(acl_last_datetime, acl_datetime), current_timestamp)
+      from actionlist, actionorder
+      where aco_id = acl_id and
+            aco_respons_c_id is null and
+            datediff(minute, coalesce(acl_last_datetime, acl_datetime, current_timestamp-1), current_timestamp) &gt; :time_limit and
+            aco_status = 0 and
+            aco_from_rd_id = :rd_id_loan and
+            aco_object_kind = 9
+      into :acl_id, :rep_k_id, :minutes_diff
+  do
+  begin
+    respons_c_id = 1000000000001; -- Санжар Исламов
+    result = 0;
+    total_status = 0;
+
+    if (db_id = 81001) then
+    begin
+      select k_disb_date,
+             pr_code,
+             k_last_reg_id,
+             k_is_online,
+             k_disb_kind
+      from kontract
+      inner join product pr on pr_id = k_from_pr_id
+      where k_id = :rep_k_id
+      into k_disb_date,
+           pr_code,
+           region_id,
+           k_is_online,
+           k_disb_kind;
+
+      select coalesce(reg.reg_kk_preference, 0)
+      from region reg
+      where reg.reg_unicode = :region_id
+      into :kk_preference;
+
+      if (kk_preference = 1 and
+          k_is_online = 0 and
+          pr_code not containing &#x27;.zalog_car.&#x27; and
+          pr_code not containing &#x27;.education.&#x27; and
+          pr_code not containing &#x27;.reliable_emp.&#x27;) then
+      begin
+        if ((pr_code containing (&#x27;.PATENT.&#x27;)) or (pr_code containing (&#x27;.PATENT PLUS.&#x27;)) or (pr_code containing (&#x27;.SHANS.&#x27;))) then
+          result = 1;
+
+        if (result = 0) then
+        begin
+          -- Если вся группа соcтоит из повторников
+          if (not exists(select *
+                         from knclient kncl
+                         where kncl.kc_from_k_id = :rep_k_id and
+                               kncl.kc_amount_approved &gt; 0 and
+                               kncl.kc_circle &lt;= 1)) then
+          begin
+            result = 1;
+          end
+        end
+      end
+
+      if (result = 0 and
+          kk_preference = 1 and
+          k_is_online = 0 and
+          pr_code not containing &#x27;.zalog_car.&#x27; and
+          pr_code not containing &#x27;.education.&#x27; and
+          pr_code not containing &#x27;.reliable_emp.&#x27;) then
+      begin
+        select datediff(minute, coalesce(ovs_datetime, current_timestamp - 1), current_timestamp)
+        from objectprops, objectvalues
+        where opr_id = ovs_from_opr_id and
+              ovs_is_active = 1 and
+              opr_object_kind = 9 and
+              opr_object_id = :rep_k_id and
+              opr_subject_kind = -1 and
+              opr_subject_id = :rd_id_loan
+        order by ovs_datetime desc
+        rows 1
+        into :minutes_diff;
+        minutes_diff = coalesce(minutes_diff, 1000);
+
+        select k_curr_status
+        from hp_get_kontract_status(:rep_k_id, iif(:k_disb_date &gt; current_date, current_date, :k_disb_date))
+        into :total_status;
+
+        total_status = coalesce(total_status, 0);
+
+        if (total_status in (4, 5)) then
+          result = 1;
+        else
+        if ((total_status = 3) and
+            (minutes_diff &gt; 5)) then -- Если 3 звезды и заявка висит незаблокированной более 5 минут
+          result = 1;
+        else
+        if ((total_status in (1, 2)) and
+            (minutes_diff &gt; 30)) then
+          result = 1;
+      end
+    end
+
+    minutes_diff = coalesce(minutes_diff, 1000);
+
+    if (db_id &lt;&gt; 81001) then
+    begin
+      if ((minutes_diff &gt; 60) and
+          (result = 0)) then
+      begin
+        select result
+        from hp_get_kontract_process(:rep_k_id)
+        into :result;
+        if (result is null) then
+          result = 0;
+
+        if (result = 0 and
+            minutes_diff &gt; 115) then
+          result = 1;
+      end
+    end
+    else
+    begin
+      if (pr_code containing &#x27;.zalog_car.&#x27; or
+          pr_code containing &#x27;.education.&#x27; or
+          pr_code containing &#x27;.reliable_emp.&#x27;) then
+      begin
+        result = 0;
+        minutes_diff = 0;
+      end
+
+      if (result = 0 and
+          minutes_diff &gt; 115) then
+        result = 1;
+    end
+
+    -- После запуска БС СОФР в РФ, СБП автоматически не утверждаем
+    if (result = 1 and k_disb_kind in (7, 8) and f_can_disb_on_card(&#x27;kontract&#x27;, rep_k_id, db_id) = 0) then
+      result = 0;
+
+    if (result = 1) then
+    begin
+      select un_from_c_id, un_id
+      from username
+      where un_name = &#x27;ykashtanova&#x27; -- Каштанова Юлия
+      into respons_c_id, respons_un_id;
+
+      update actionlist
+      set acl_status = 2,
+          acl_respons_c_id = :respons_c_id,
+          acl_from_un_id = :respons_un_id
+      where acl_parent_id = :acl_id and
+            acl_dont_show_in_order = 1;
+
+      update actionlist
+      set acl_status = 2,
+          acl_respons_c_id = :respons_c_id,
+          acl_from_un_id = :respons_un_id
+      where acl_id = :acl_id;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

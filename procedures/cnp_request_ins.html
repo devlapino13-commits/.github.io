@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CNP_REQUEST_INS — процедура — схема БД</title>
+<meta name="description" content="Процедура CNP_REQUEST_INS: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CNP_REQUEST_INS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_freeze_data.html"><div class="to">HP_GET_FREEZE_DATA</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_edoc_after_sign_action.html"><div class="to">HP_EDOC_AFTER_SIGN_ACTION</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CNP_REQUEST_INS(
+    K_ID D_ID,
+    UN_ID D_ID)
+AS
+declare variable c_id d_id;
+declare variable kc_amount_approved d_currency;
+declare variable freeze_datetime_end d_datetime;
+declare variable loan_sign_datetime d_datetime;
+declare variable freeze_time_h d_integer;
+begin
+  select freeze_datetime_end, freeze_time_h
+  from hp_get_freeze_data(:k_id)
+  into freeze_datetime_end, freeze_time_h;
+
+  if (freeze_time_h = 0 or freeze_datetime_end &lt; current_timestamp) then
+  begin
+    delete from freeze_main
+    where fzm_from_k_id = :k_id;
+
+    for select kc.kc_from_c_id, kc.kc_amount_approved
+        from knclient kc
+        where kc.kc_from_k_id = :k_id and
+              kc.kc_amount_approved &gt; 0
+        into c_id, kc_amount_approved
+    do
+    begin
+  
+      if (not exists(select *
+                     from cnp_payment_requests cpr
+                     where cpr.cpr_from_k_id = :k_id and
+                           cpr.cpr_status &lt;&gt; -2)) then
+        insert into cnp_payment_requests (cpr_from_c_id, cpr_from_k_id, cpr_amount, cpr_action, cpr_from_un_id)
+        values (:c_id, :k_id, :kc_amount_approved, &#x27;pay&#x27;, :un_id);
+    end
+  end
+  else
+  begin
+    select coalesce(min(eds_status_datetime), current_timestamp)
+    from edoc_sign, edoc_list
+    where eds_from_edl_id = edl_id
+      and edl_from_edc_id = f_edoc_kind(&#x27;loan.agreement&#x27;, &#x27;id&#x27;)
+      and edl_object_kind = 9
+      and edl_object_id = :k_id
+      and eds_status = 1
+      and edl_status = 1
+    into loan_sign_datetime;
+
+    update or insert into freeze_main (fzm_from_k_id, fzm_datetime_begin, fzm_datetime_end)
+    values (:k_id, :loan_sign_datetime, :freeze_datetime_end)
+    matching(fzm_from_k_id);
+  end 
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

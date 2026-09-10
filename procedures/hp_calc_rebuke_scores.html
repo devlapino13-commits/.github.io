@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CALC_REBUKE_SCORES — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CALC_REBUKE_SCORES: 3 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CALC_REBUKE_SCORES</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_rebuke_scores.html"><div class="to">AAREP_REBUKE_SCORES</div></a><a class="ref-card" href="hp_calc_rebuke_bonus.html"><div class="to">HP_CALC_REBUKE_BONUS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">HIST_DATETIME</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SCORES_WAS_ADDED</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SCORES_WAS_USED</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SCORES_SUM</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ZEROED_SCORES</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CALC_REBUKE_SCORES(
+    REP_DATE_END D_DATE,
+    C_ID D_ID,
+    HIST_DATETIME D_DATETIME = null)
+RETURNS (
+    SCORES_WAS_ADDED D_INTEGER,
+    SCORES_WAS_USED D_INTEGER,
+    SCORES_SUM D_INTEGER,
+    ZEROED_SCORES D_INTEGER)
+AS
+declare variable scores_tmp d_integer;
+declare variable un_id d_id;
+begin
+  scores_sum = 0;
+  scores_was_used = 0;
+  zeroed_scores = 0;
+
+  if (hist_datetime is null) then
+  begin
+    select coalesce(sum(rs_scores), 0) as scores_sum
+    from rebuke_scores rs
+    inner join rebuke rb on rb.rb_id = rs.rs_from_rb_id and
+          rb.rb_is_delete = 0 and
+          rb.rb_date &lt;= :rep_date_end
+    where rs.rs_from_c_id = :c_id and
+          rs.rs_from_rb_id is not null
+    into :scores_was_added;
+
+    for select rs.rs_scores, rs.rs_from_un_id
+        from rebuke_scores rs
+        where rs.rs_from_c_id = :c_id and
+              rs.rs_from_rb_id is null and
+              rs.rs_is_delete = 0 and
+              rs.rs_date &lt;= :rep_date_end
+        into :scores_tmp, :un_id
+    do
+    begin
+      if (:un_id = 1000000000000) then
+        zeroed_scores = :zeroed_scores + :scores_tmp;
+      scores_was_used = :scores_was_used + :scores_tmp;
+    end
+  end
+  else
+  begin
+    select coalesce(sum(rs_scores), 0) as scores_sum
+    from rebuke_scores rs
+    inner join rebuke rb on rb.rb_id = rs.rs_from_rb_id and
+          rb.rb_is_delete = 0 and
+          rb.rb_date &lt;= :rep_date_end and
+          rs.rs_datetime &lt; :hist_datetime
+    where rs.rs_from_c_id = :c_id and
+          rs.rs_from_rb_id is not null
+    into :scores_was_added;
+
+    for select rs.rs_scores, rs.rs_from_un_id
+        from rebuke_scores rs
+        where rs.rs_from_c_id = :c_id and
+              rs.rs_from_rb_id is null and
+              rs.rs_is_delete = 0 and
+              rs.rs_date &lt;= :rep_date_end and
+              rs.rs_datetime &lt; :hist_datetime
+        into :scores_tmp, :un_id
+    do
+    begin
+      if (:un_id = 1000000000000) then
+        zeroed_scores = :zeroed_scores + :scores_tmp;
+      scores_was_used = :scores_was_used + :scores_tmp;
+    end
+  end
+
+  scores_sum = :scores_was_added + :scores_was_used;
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

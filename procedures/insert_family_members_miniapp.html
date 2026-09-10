@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>INSERT_FAMILY_MEMBERS_MINIAPP — процедура — схема БД</title>
+<meta name="description" content="Процедура INSERT_FAMILY_MEMBERS_MINIAPP: 4 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>INSERT_FAMILY_MEMBERS_MINIAPP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_send_to_family_members.html"><div class="to">FM_SEND_TO_FAMILY_MEMBERS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_FROM_REG_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MA_FROM_UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">IS_PORUCH</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SEND_KOL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE INSERT_FAMILY_MEMBERS_MINIAPP(
+    MA_FROM_REG_ID INTEGER,
+    MA_ID DECIMAL(18,0),
+    MA_FROM_UN_ID DECIMAL(18,0),
+    IS_PORUCH SMALLINT = 0)
+RETURNS (
+    SEND_KOL INTEGER)
+AS
+declare variable c_id decimal(18,0);
+declare variable db_id integer;
+declare variable ma_id_tmp integer;
+begin
+  send_kol = 0;
+
+  select k_from_ma_app_id
+  from kontract
+  where k_id = :ma_id
+  into :ma_id_tmp;
+  if (ma_id_tmp is null) then
+    ma_id_tmp = :ma_id;
+
+   if (is_poruch &lt;&gt; 1) then
+  begin
+    for select mac_from_c_id
+        from miniappclient
+        where mac_from_ma_id = :ma_id_tmp and
+              mac_amount &gt; 0 and
+              mac_is_cashier = 1
+        into :c_id
+    do
+    begin
+      if (not(exists(select *
+                     from extinfolist eti
+                     where eti.eil_from_c_id = :c_id and
+                           eti.eil_object_id = :ma_id_tmp and
+                           eti.eil_from_eic_id = 1))) then
+      begin
+        insert into extinfolist (eil_from_c_id, eil_from_eic_id, eil_object_kind, eil_object_id, eil_is_json)
+        values (:c_id, 4, 11, :ma_id_tmp, 1);
+        send_kol = send_kol + 1;
+      end
+    end
+  end
+  else
+  begin
+    for select mac_from_c_id
+        from miniappclient
+        where mac_from_ma_id = :ma_id_tmp and
+              mac_is_poruch = 1
+        into :c_id
+    do
+    begin
+      if (not(exists(select *
+                     from extinfolist eti
+                     where eti.eil_from_c_id = :c_id and
+                           eti.eil_object_id = :ma_id_tmp and
+                           eti.eil_from_eic_id = 1))) then
+      begin
+        insert into extinfolist (eil_from_c_id, eil_from_eic_id, eil_object_kind, eil_object_id, eil_is_json)
+        values (:c_id, 4, 11, :ma_id_tmp, 1);
+        send_kol = send_kol + 1;
+      end
+    end
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

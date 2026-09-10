@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DO_PEREPLAT_FIX_WRITEOFF — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DO_PEREPLAT_FIX_WRITEOFF: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DO_PEREPLAT_FIX_WRITEOFF</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_pereplat_ol_id_link.html"><div class="to">HP_DO_PEREPLAT_OL_ID_LINK</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DO_PEREPLAT_FIX_WRITEOFF(
+    K_ID ID_TYPE,
+    AMOUNT CURR_TYPE)
+AS
+declare variable ol_date date;
+declare variable tmp_amount curr_type;
+declare variable kont_str d_str_code;
+declare variable reg_id integer;
+declare variable pereplat_ol_id id_type;
+declare variable acc_income d_str_code;
+declare variable acc_pereplat d_str_code;
+declare variable k_kontract_no d_str_code;
+declare variable ol_id id_type;
+begin
+  ol_date = &#x27;31.12.2017&#x27;;
+
+  select k_kontract_no, k_kontract_no || &#x27; от &#x27; || f_datetostr(k_kontract_date)
+  from kontract
+  where k_id = :k_id
+  into k_kontract_no, :kont_str;
+
+  if (kont_str is null) then
+    exception e_default &#x27;Kontract not found: &#x27; || coalesce(k_id, &#x27;&lt;null&gt;&#x27;);
+
+  select sum(-ok_os)
+  from operkred
+  where ok_ol_is_active = 1 and
+        ok_ol_date &lt;= :ol_date and
+        ok_from_k_id = :k_id and
+        ok_type = 9
+  into tmp_amount;
+  if (tmp_amount is null) then
+    tmp_amount = 0;
+  if (tmp_amount &lt;&gt; amount) then
+    exception e_default &#x27;Different input amount: &#x27; || amount || &#x27;, saldo amount: &#x27; || tmp_amount;
+
+  select ok_from_ol_id
+  from operkred
+  where ok_from_k_id = :k_id and
+        ok_type = 9 and
+        ok_os &lt; 0 and
+        ok_ol_is_active = 1 and
+        ok_ol_date &lt; :ol_date
+  order by ok_ol_date desc, ok_from_ol_id desc
+  rows 1
+  into :pereplat_ol_id;
+
+  if (k_id &lt;&gt; 101010004981200101) then
+  begin
+    select ob_ol_reg_id, ob_account_kt
+    from operbook
+    where ob_from_ol_id = :pereplat_ol_id and
+          (ob_account_kt containing &#x27;76-06&#x27; or
+          ob_account_kt containing &#x27;76-04&#x27;) rows 1
+    into :reg_id, :acc_pereplat;
+
+    if (acc_pereplat is null) then
+      exception e_default &#x27;No pereplat operbook in ol_id: &#x27; || pereplat_ol_id;
+  end
+
+  insert into operlist (ol_from_reg_id, ol_oper_type, ol_date, ol_doc_no, ol_doc_no_str, ol_doc_kind, ol_memo,
+                        ol_status, is_delete, ol_user_id, ol_document_client, ol_from_mo_id, ol_is_mo_modified,
+                        ol_document_office, ol_acc_no_client, ol_acc_no_office, ol_oper_subtype)
+  values (:reg_id, 2, :ol_date, 0, &#x27;&#x27;, 9,
+          &#x27;Признание доходом суммы переплаты по договору &#x27; || :kont_str || &#x27;по истечению срока&#x27;,
+          1, 0, 1000000000001, null, null, 0, :reg_id, null, null, 11)
+  returning ol_id
+  into :ol_id;
+
+  if (k_id &lt;&gt; 101010004981200101) then
+  begin
+    acc_income = left(acc_pereplat, 7);
+    acc_income = acc_income || &#x27;91-01000004&#x27;;
+
+    insert into operbook (ob_from_ol_id, ob_number, ob_currency, ob_curr_rate, ob_account_dt, ob_summa_val, ob_summa,
+                          ob_account_kt, ob_detail)
+    values (:ol_id, 1, &#x27;810&#x27;, 1, :acc_pereplat, :amount, :amount, :acc_income, &#x27;Переплата на доход&#x27;);
+  end
+
+  execute procedure hp_do_pereplat_ol_id_link(:ol_id, :k_kontract_no, 1, &#x27;00-00&#x27;, :amount);
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

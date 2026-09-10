@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_BKI_GET_PACKET_NAME_NBKI — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_BKI_GET_PACKET_NAME_NBKI: 3 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_BKI_GET_PACKET_NAME_NBKI</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_bki_get_packet_name.html"><div class="to">HP_BKI_GET_PACKET_NAME</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PACKET_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">COUNTER</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PACKET_FORMAT</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PACKET_NAME</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEW_COUNTER</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_BKI_GET_PACKET_NAME_NBKI(
+    PACKET_DATE D_DATE,
+    COUNTER D_INTEGER,
+    PACKET_FORMAT D_SMALLINT)
+RETURNS (
+    PACKET_NAME D_STR_CODE,
+    NEW_COUNTER D_INTEGER)
+AS
+declare variable ts d_datetime;
+declare variable need_exit boolean;
+begin
+  counter = coalesce(counter, 0);
+  need_exit = false;
+  while (not need_exit)
+  do
+  begin
+    counter = counter + 1;
+    -- если счетчик вышел за пределы
+    if (counter &gt; 9999) then
+      exception e_default &#x27;counter overflow&#x27;;
+
+  ts = localtimestamp + cast(counter as float)/86400;
+
+  -- firebird может подставить значение 60 секунд!!!
+  if (extract(second from ts) = 60) then
+    ts = ts + 1e0/86400;
+
+  packet_name = f_format(&#x27;P701NN000001_%1_%2&#x27;,
+                               extract(year    from packet_date)||
+                          lpad(extract(month   from packet_date),2,&#x27;0&#x27;)||
+                          lpad(extract(day     from packet_date),2,&#x27;0&#x27;),
+
+                          lpad(extract(hour    from ts),2,&#x27;0&#x27;)||
+                          lpad(extract(minute  from ts),2,&#x27;0&#x27;)||
+                          lpad(cast(extract(second  from ts) as integer),2,&#x27;0&#x27;));
+
+    if (packet_format = 2) then
+      packet_name = packet_name || &#x27;_AF&#x27;;
+
+    -- проверка имени на уникальность.
+    if (not exists (select * from bki_packet bkp where bkp.bkp_code = :packet_name)) then
+      need_exit = true;
+  end
+  new_counter = counter;
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

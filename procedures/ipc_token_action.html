@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IPC_TOKEN_ACTION — процедура — схема БД</title>
+<meta name="description" content="Процедура IPC_TOKEN_ACTION: 4 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>IPC_TOKEN_ACTION</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACTION_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REQUEST_TXT</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ANSWER_TXT</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE IPC_TOKEN_ACTION(
+    C_ID D_ID,
+    ACTION_CODE D_STR_CODE,
+    REQUEST_TXT D_STR_8100,
+    ANSWER_TXT D_STR_8100)
+AS
+declare variable TOKEN D_STR_CODE;
+declare variable TOKEN_ID D_STR_CODE;
+declare variable CARD_NAME STR_100;
+declare variable CARD_LAST4 D_STR_10;
+declare variable ET_ID D_ID;
+declare variable ACTION_ID D_INTEGER;
+declare variable ERR_CODE D_INTEGER;
+declare variable CARD_EXPIRE D_STR_10;
+declare variable BANK_ID D_INTEGER;
+declare variable TOKEN_STATE D_INTEGER;
+begin
+  --процедура для реализации проекта Токенизация карт в КГ
+
+  -- сам токен хранится в т. extsys_token
+  -- действия с токеном в т. extsys_token_actions (хвост для хранения запросов в МПЦ и ответов из МПЦ)
+  action_id = f_enum_id(&#x27;ipc_token_actions&#x27;, :action_code);
+  if (action_id is null) then
+    exception e_default &#x27;Передан не существующий action_code!&#x27;;
+
+  err_code = f_json_str_get_value(:answer_txt, &#x27;code&#x27;, 0);
+  token_id = f_json_str_get_value(:request_txt, &#x27;token_id&#x27;, &#x27;&#x27;);
+
+  if (action_code &lt;&gt; &#x27;new_token&#x27;) then
+  begin
+      select et_id
+      from extsys_token et
+      inner join extsys_token_add eta on eta.eta_from_et_id = et.et_id
+      where et.et_from_c_id = :c_id and
+            eta.eta_token_id = :token_id
+      into et_id;
+  end
+
+  if (err_code = 0) then
+  begin
+       -- Создание нового токена
+      if (action_code = &#x27;new_token&#x27;) then
+      begin
+        token = f_json_str_get_value(:answer_txt, &#x27;token&#x27;, &#x27;&#x27;);
+        card_last4 = f_json_str_get_value(:answer_txt, &#x27;last4&#x27;, &#x27;&#x27;);
+        card_name = f_json_str_get_value(:answer_txt, &#x27;card_name&#x27;, &#x27;&#x27;);
+        card_expire = left(f_json_str_get_value(:answer_txt, &#x27;expiry&#x27;, &#x27;&#x27;), 10);
+        bank_id = f_json_str_get_value(:answer_txt, &#x27;bank_id&#x27;, 0);
+        token_state = f_json_str_get_value(:answer_txt, &#x27;state&#x27;, 0);
+        
+        et_id = null;
+
+        insert into extsys_token (et_from_c_id, et_token, et_is_actual, et_cardnumber)
+        values (:c_id, :token, 0, :card_last4)
+        returning et_id
+        into :et_id;
+        
+        insert into extsys_token_add (eta_from_et_id, eta_token_id, eta_name_on_card, eta_expiry, eta_bank_id, eta_state)
+        values (:et_id, :token_id, :card_name, :card_expire, :bank_id, :token_state);
+      end
+      -- Подтверждение токена
+      else if (action_code = &#x27;confirmation_save&#x27;) then
+      begin
+        update extsys_token et
+        set et.et_code = f_json_str_get_value(:request_txt, &#x27;verification_value&#x27;, &#x27;&#x27;),
+            et.et_is_actual = 1
+        where et.et_id = :et_id;
+
+        update extsys_token_add eta
+        set eta.eta_state = f_enum_id(&#x27;card_token_state&#x27;, &#x27;confirmed&#x27;)
+        where eta.eta_from_et_id = :et_id;
+      end
+      -- Удаление токена
+      else if (action_code = &#x27;token_delete&#x27;) then
+      begin
+        update extsys_token et
+        set et.et_is_actual = -1
+        where et.et_id = :et_id;
+
+        update extsys_token_add eta
+        set eta.eta_state = f_enum_id(&#x27;card_token_state&#x27;, &#x27;deleted&#x27;)
+        where eta.eta_from_et_id = :et_id;
+      end
+  end
+
+  -- Сохранение действия в таблицу
+  insert into extsys_token_actions (eta_from_c_id, eta_from_et_id, eta_action_id, eta_request_txt, eta_answer_txt)
+  values (:c_id, :et_id, :action_id, :request_txt, :answer_txt);
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

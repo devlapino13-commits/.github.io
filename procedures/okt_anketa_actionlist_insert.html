@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OKT_ANKETA_ACTIONLIST_INSERT — процедура — схема БД</title>
+<meta name="description" content="Процедура OKT_ANKETA_ACTIONLIST_INSERT: 6 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>OKT_ANKETA_ACTIONLIST_INSERT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_actionlist_insert.html"><div class="to">HP_ACTIONLIST_INSERT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="okt_abonent_check.html"><div class="to">OKT_ABONENT_CHECK</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ACL_ID_INPUT</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJECT_KIND</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJECT_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ANKETA_CODE</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ACL_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ERR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE OKT_ANKETA_ACTIONLIST_INSERT(
+    ACL_ID_INPUT ID_TYPE,
+    OBJECT_KIND STR_100,
+    OBJECT_ID ID_TYPE,
+    FIO STR_100,
+    ANKETA_CODE STR_100,
+    UN_ID ID_TYPE)
+RETURNS (
+    ACL_ID ID_TYPE,
+    ERR_TEXT STR_255)
+AS
+declare variable rd_id integer;
+declare variable acl_status integer;
+declare variable anketa_code_old str_100;
+declare variable rd_code str_255;
+declare variable object_kind_str str_100;
+declare variable cc_name str_100;
+declare variable cc_from_c_id id_type;
+begin
+  acl_id_input = coalesce(acl_id_input, 0);
+  object_kind = coalesce(object_kind, &#x27;&#x27;);
+  object_id = coalesce(object_id, 0);
+  anketa_code = coalesce(anketa_code, &#x27;&#x27;);
+  un_id = coalesce(un_id, 0);
+  err_text = &#x27;&#x27;;
+
+  if (anketa_code = &#x27;&#x27;) then
+  begin
+    err_text = &#x27;Код анкеты не указан (ANKETA_CODE)&#x27;;
+    suspend;
+    exit;
+  end
+
+  if (acl_id_input &lt;&gt; 0) then -- если анкета, ранее, уже была создана
+  begin
+    select rd.rd_code, al.acl_object_id, f_objkind(al.acl_object_kind, &#x27;name&#x27;)
+    from actionlist al
+    inner join refdata rd on rd.rd_id = al.acl_from_rd_id
+    where al.acl_id = :acl_id_input
+    into :rd_code, :object_id, :object_kind;
+
+    if (rd_code = &#x27;OKTELL.Projects.Website&#x27;) then -- звонки по заявкам с сайта для мигрантов
+    begin
+      acl_id = null;
+
+      select al.acl_id
+      from actionlist al
+      where al.acl_parent_id = :acl_id_input and
+            al.acl_status in (0, 1)
+      into :acl_id;
+
+      if (acl_id is not null) then
+      begin
+        suspend;
+      end
+      else
+      begin
+        execute procedure hp_actionlist_insert(:acl_id_input, null, :object_kind, :object_id, :anketa_code, 0, :un_id)
+            returning_values :acl_id;
+
+        suspend;
+      end
+    end
+    else
+    if (rd_code containing (&#x27;OKTELL.Projects.InCall.&#x27;)) then -- входящие звонки
+    begin
+      acl_id = acl_id_input;
+
+      acl_status = -777;
+      rd_id = null;
+
+      select acl_status, acl.acl_from_rd_id
+      from actionlist acl
+      where acl.acl_id = :acl_id_input
+      into :acl_status, :rd_id;
+
+      acl_status = coalesce(acl_status, -777);
+
+      if (rd_id is null) then
+      begin
+        err_text = &#x27;Анкета не обнаружена&#x27;;
+        suspend;
+        exit;
+      end
+      else
+      if (acl_status not in (0, 1)) then
+      begin
+        err_text = &#x27;Анкета уже обработана&#x27;;
+        suspend;
+        exit;
+      end
+      else
+      begin
+        anketa_code_old = &#x27;&#x27;;
+
+        select rd.rd_code
+        from refdata rd
+        where rd.rd_id = :rd_id
+        into :anketa_code_old;
+
+        anketa_code_old = coalesce(anketa_code_old, &#x27;&#x27;); -- предыдущий тип анкеты
+
+        select f_objkind(oid.oid_object_kind, &#x27;name&#x27;), oid.oid_object_id
+        from okt_ivr_data oid
+        where oid.oid_from_acl_id = :acl_id
+        into :object_kind_str, :object_id;
+
+        if (object_kind_str = &#x27;Contacts&#x27;) then
+        begin
+          select cont.cc_name, cont.cc_from_c_id
+          from contacts cont
+          where cont.cc_id = :object_id
+          into :cc_name, :cc_from_c_id;
+
+          cc_name = coalesce(cc_name, &#x27;&#x27;);
+          cc_from_c_id = coalesce(cc_from_c_id, 0);
+
+          if ((cc_name &lt;&gt; fio) and
+              (cc_from_c_id = 0)) then
+          begin
+            update contacts cont
+            set cont.cc_name = :fio
+            where cont.cc_id = :object_id;
+          end
+        end
+
+        if (anketa_code &lt;&gt; anketa_code_old) then --  если тип анкеты поменялся
+        begin
+          select rd.rd_id
+          from refdata rd
+          where rd.rd_code = :anketa_code
+          into :rd_id;
+
+          update actionlist
+          set acl_from_rd_id = :rd_id
+          where (acl_id = :acl_id);
+
+          suspend;
+        end
+        else
+          suspend;
+      end
+    end
+  end
+  else -- если анкета ранее не была создана
+  begin
+    execute procedure hp_actionlist_insert(null, null, :object_kind, :object_id, :anketa_code, 0, :un_id)
+        returning_values :acl_id;
+
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

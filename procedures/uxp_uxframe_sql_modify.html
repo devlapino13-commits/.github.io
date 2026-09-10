@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$UXFRAME_SQL_MODIFY — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$UXFRAME_SQL_MODIFY: 3 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$UXFRAME_SQL_MODIFY</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">FR_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DATA_KIND</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FR_UUID_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SQL_TEXT</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">EXEC_PROC</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$UXFRAME_SQL_MODIFY(
+    FR_UUID D_UUID,
+    DATA_KIND D_INTEGER,
+    FR_UUID_CODE D_STR_CODE = null)
+RETURNS (
+    SQL_TEXT D_STR_8100,
+    EXEC_PROC D_BOOL)
+AS
+declare variable ufs_field_name d_str_code;
+declare variable ufp_field_name d_str_code;
+declare variable field_list d_str_8100;
+declare variable enter_sym d_str_10;
+declare variable sql_where d_str_long;
+declare variable data_source d_str_code;
+declare variable is_table d_bool;
+declare variable uf_pk_field d_smallint;
+declare variable value_list d_str_8100;
+declare variable f_temp d_str_255;
+declare variable frame_us_uuid d_uuid;
+declare variable data_us_uuid d_uuid;
+declare variable fr_code_msg d_str_100;
+declare variable ufs_uf_uuid d_uuid;
+declare variable is_blob d_bool;
+declare variable need_sql d_bool;
+declare variable sql_kind d_str_code;
+declare variable ufs_default d_str_100;
+declare variable us_autoincfield d_str_code;
+declare variable ufp_uuid d_uuid;
+declare variable ufs_is_param d_bool;
+declare variable ufp_is_param d_bool;
+declare variable ufr_add_table_fields d_str_code;
+declare variable main_us_uuid d_uuid;
+begin
+  -- Приготовление Update sql для фрейма
+
+  if (coalesce(fr_uuid, &#x27;&#x27;) = &#x27;&#x27;) then
+    fr_uuid = uxf$uniq(fr_uuid_code);
+
+  fr_code_msg = uxf$code(fr_uuid, &#x27;fcode&#x27;);
+
+  if (data_kind is null) then
+    exception e_default f_format(&#x27;Empty data_kind, frame: %1&#x27;, fr_code_msg);
+
+  if (data_kind not in (1, 2, 3)) then
+    exception e_default f_format(&#x27;Undefined data_kind, frame: %1, data_kind: %2&#x27;, fr_code_msg, data_kind);
+
+  exec_proc = 0;
+  sql_text = &#x27;&#x27;;
+  field_list = &#x27;&#x27;;
+  value_list = &#x27;&#x27;;
+  sql_where = &#x27;&#x27;;
+  enter_sym = ascii_char(13) || ascii_char(10);
+
+  f_temp = &#x27;coalesce(uxf$set_blob(:new_%1$blob, :new_%1$file), :new_%1)&#x27;;
+
+  select ufr_us_uuid, ufr_add_table_fields,
+         iif(:data_kind = 1, ufr_can_update, iif(:data_kind = 2, ufr_can_insert, ufr_can_delete))
+  from ux$frame
+  where ufr_uuid = :fr_uuid
+  into frame_us_uuid, ufr_add_table_fields, need_sql;
+
+  if (need_sql = 0) then
+  begin
+    suspend;
+    exit;
+  end
+
+  if (ufr_add_table_fields &lt;&gt; &#x27;&#x27;) then
+  begin
+    select us_uuid
+    from ux$source
+    where us_code = :ufr_add_table_fields
+    into main_us_uuid;
+  end
+
+  select ufd_us_uuid, us_code, us_is_table, us_autoincfield
+  from ux$frdata, ux$source
+  where ufd_ufr_uuid = :fr_uuid and
+        ufd_kind = :data_kind and
+        ufd_us_uuid = us_uuid
+  into data_us_uuid, data_source, is_table, us_autoincfield;
+
+  if (row_count = 0) then
+    exception e_default f_format(&#x27;Data source not found, frame: %1&#x27;, fr_code_msg);
+
+  if (is_table = 1) then
+  begin
+    for select uf_uuid, uf_field_name, uf_pk_field
+    from ux$field
+    where uf_owner = :data_us_uuid and
+          uf_type = 0 and
+          not(uf_readonly)
+    order by uf_position
+    into ufs_uf_uuid, ufs_field_name, uf_pk_field
+    do
+    begin
+      ufp_uuid = null;
+      ufp_field_name = &#x27;&#x27;;
+      ufs_default = &#x27;&#x27;;
+      ufs_is_param = 0;
+
+      ufp_is_param = ufs_is_param;
+
+      select ufs_ufp_uuid, ufs_default
+      from ux$framesql
+      where ufs_ufr_uuid = :fr_uuid and
+            ufs_sql_kind = :data_kind and
+            ufs_uf_uuid = :ufs_uf_uuid
+      into ufp_uuid, ufs_default;
+
+      if (row_count = 0) then
+      begin
+        if (data_us_uuid = frame_us_uuid or data_us_uuid = main_us_uuid) then
+        begin
+          ufp_field_name = ufs_field_name;
+
+          select ufp_uuid
+          from ux$frparam
+          where ufp_ufr_uuid = :fr_uuid and
+                ufp_uf_uuid = :ufs_uf_uuid
+          into ufp_uuid;
+        end
+
+        if (ufp_uuid is null) then
+          Continue;
+      end else
+      if (ufp_uuid is not null) then
+      begin
+        select uf_field_name, uf_is_param
+        from ux$frparam, ux$field
+        where ufp_uuid = :ufp_uuid and
+              ufp_uf_uuid = uf_uuid
+        into ufp_field_name, ufp_is_param;
+
+        ufs_default = &#x27;&#x27;;
+      end else
+        if (data_kind in (1, 3)) then
+          Continue;
+
+      is_blob = 0;
+      if (ufp_uuid is not null) then
+      begin
+        select iif(ufp_editor = &#x27;blob&#x27;, 1, 0)
+        from ux$frparam
+        where ufp_uuid = :ufp_uuid
+        into is_blob;
+
+        if (row_count = 0) then
+          Continue;
+      end
+
+      if (not(data_kind = 2 and ufs_field_name = us_autoincfield)) then
+      begin
+        if (field_list &lt;&gt; &#x27;&#x27;) then
+          field_list = field_list || &#x27;, &#x27; || enter_sym;
+  
+        if (data_kind = 2 and value_list &lt;&gt; &#x27;&#x27;) then
+          value_list = value_list || &#x27;, &#x27; || enter_sym;
+      end
+  
+      if (data_kind = 1) then
+      begin
+        if (is_blob = 0) then
+        begin
+          if (ufp_is_param = 0) then
+            field_list = field_list || ufs_field_name || &#x27; = :new_&#x27; || ufp_field_name;
+          else
+            field_list = field_list || ufs_field_name || &#x27; = :&#x27; || ufp_field_name;
+        end
+        else
+          field_list = field_list || ufs_field_name || &#x27; = &#x27; || f_format(f_temp, ufp_field_name);
+      end
+
+      if (data_kind = 2 and ufs_field_name &lt;&gt; us_autoincfield) then
+      begin
+        field_list = field_list || ufs_field_name;
+
+        if (ufs_default = &#x27;&#x27;) then
+        begin
+          if (is_blob = 0) then
+          begin
+            if (ufp_is_param = 0) then
+              value_list = value_list || &#x27;:new_&#x27; || ufp_field_name;
+            else
+              value_list = value_list || &#x27;:&#x27; || ufp_field_name;
+          end
+          else
+            value_list = value_list || f_format(f_temp, ufp_field_name);
+        end else
+          value_list = value_list || ufs_default;
+      end
+  
+      if (uf_pk_field &lt;&gt; 0) then
+      begin
+        if (data_kind in (1, 3)) then
+        begin
+          if (sql_where &lt;&gt; &#x27;&#x27;) then
+            sql_where = sql_where || &#x27; and &#x27; || enter_sym;
+    
+          sql_where = sql_where || ufs_field_name || &#x27; = :old_&#x27; || ufp_field_name;
+        end
+      end
+    end
+
+    if (data_kind = 1) then
+    begin
+      if (field_list &lt;&gt; &#x27;&#x27;) then
+      begin
+        sql_text = &#x27;update &#x27; || data_source || &#x27; set &#x27;;
+        sql_text = sql_text || enter_sym || field_list;
+  
+        if (sql_where &lt;&gt; &#x27;&#x27;) then
+        begin
+          sql_text = sql_text || enter_sym || &#x27;where (&#x27; || sql_where || &#x27;)&#x27;;
+          if (us_autoincfield &lt;&gt; &#x27;&#x27;) then
+            sql_text = sql_text || enter_sym || &#x27;returning (&#x27; || us_autoincfield || &#x27;)&#x27;;
+        end
+        else
+          exception e_message (&#x27;Update SQL: Нет условия по ключевым полям (WHERE)&#x27;);
+      end
+    end else
+    if (data_kind = 2) then
+    begin
+      if (field_list &lt;&gt; &#x27;&#x27;) then
+      begin
+        sql_text = &#x27;insert into &#x27; || data_source;
+        sql_text = sql_text || enter_sym || &#x27; (&#x27; || field_list || &#x27;)&#x27;;
+        sql_text = sql_text || enter_sym || &#x27;values (&#x27; || value_list || &#x27;)&#x27;;
+
+        if (us_autoincfield &lt;&gt; &#x27;&#x27;) then
+          sql_text = sql_text || enter_sym || &#x27;returning (&#x27; || us_autoincfield || &#x27;)&#x27;;
+      end
+    end else
+    if (data_kind = 3) then
+    begin
+      if (sql_where &lt;&gt; &#x27;&#x27;) then
+      begin
+        sql_text = &#x27;delete from &#x27; || data_source;
+        sql_text = sql_text || enter_sym || &#x27;where (&#x27; || sql_where || &#x27;)&#x27;;
+      end else
+        exception e_message (&#x27;Delete SQL: Нет условия по ключевым полям (WHERE)&#x27;);
+    end
+  end else
+  begin
+    for select uf_uuid, uf_field_name, uf_pk_field
+    from ux$field
+    where uf_owner = :data_us_uuid and
+          uf_is_param = 1 and
+          uf_type = 0
+    order by uf_position
+    into ufs_uf_uuid, ufs_field_name, uf_pk_field
+    do
+    begin
+      ufp_uuid = null;
+      ufp_field_name = &#x27;&#x27;;
+      ufs_default = &#x27;&#x27;;
+
+      select ufs_ufp_uuid, ufs_default
+      from ux$framesql
+      where ufs_ufr_uuid = :fr_uuid and
+            ufs_sql_kind = :data_kind and
+            ufs_uf_uuid = :ufs_uf_uuid
+      into ufp_uuid, ufs_default;
+
+      if (row_count = 0) then
+      begin
+        if (data_us_uuid = frame_us_uuid or data_us_uuid = main_us_uuid) then
+        begin
+          ufp_field_name = ufs_field_name;
+
+          select ufp_uuid
+          from ux$frparam
+          where ufp_ufr_uuid = :fr_uuid and
+                ufp_uf_uuid = :ufs_uf_uuid
+          into ufp_uuid;
+        end
+      end else
+      if (ufp_uuid is not null) then
+      begin
+        select uf_field_name
+        from ux$frparam, ux$field
+        where ufp_uuid = :ufp_uuid and
+              ufp_uf_uuid = uf_uuid
+        into ufp_field_name;
+
+        ufs_default = &#x27;&#x27;;
+      end
+
+      is_blob = 0;
+      if (ufp_uuid is not null) then
+      begin
+        select iif(ufp_editor = &#x27;blob&#x27;, 1, 0)
+        from ux$frparam
+        where ufp_uuid = :ufp_uuid
+        into is_blob;
+      end
+
+      if (field_list &lt;&gt; &#x27;&#x27;) then
+        field_list = field_list || &#x27;, &#x27; || enter_sym;
+
+      if (ufp_field_name &lt;&gt; &#x27;&#x27;) then
+      begin
+        if (is_blob = 0) then
+          field_list = field_list || &#x27;:&#x27; || ufp_field_name;
+        else
+          field_list = field_list || f_format(f_temp, ufp_field_name);
+      end
+      else
+      begin
+        if (ufs_default &lt;&gt; &#x27;&#x27;) then
+          field_list = field_list || ufs_default;
+        else
+          field_list = field_list || &#x27;null&#x27;;
+      end
+    end
+
+    exec_proc = 1;
+    if (exists(select * from ux$field
+    where uf_owner = :data_us_uuid and
+          uf_is_param = 0)) then
+      exec_proc = 0;
+
+    if (field_list &lt;&gt; &#x27;&#x27;) then
+    begin
+      if (exec_proc = 0) then
+        sql_text = &#x27;select * from &#x27; || data_source || &#x27;(&#x27; || field_list || &#x27;)&#x27;;
+      else
+        sql_text = &#x27;execute procedure &#x27; || data_source || &#x27;(&#x27; || field_list || &#x27;)&#x27;;
+    end
+    else
+    begin
+      sql_kind = case data_kind
+        when 1 then &#x27;Update&#x27;
+        when 2 then &#x27;Insert&#x27;
+        when 3 then &#x27;Delete&#x27;
+      end;
+
+      exception e_default f_format(&#x27;Не настроены параметры процедуры %1, фрейм: %2, SQL: %3&#x27;,
+                                   upper(data_source), fr_code_msg, sql_kind);
+    end
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

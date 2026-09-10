@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_DELINQREP_MNT_CARD — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_DELINQREP_MNT_CARD: 2 входных, 6 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_DELINQREP_MNT_CARD</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_KONTRACT_NO</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_DISB_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_NAME_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">METHOD_ISSUE</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CARD_MASK</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_DELINQREP_MNT_CARD(
+    REP_DATE_BEGIN DATE,
+    REP_DATE_END DATE)
+RETURNS (
+    K_ID ID_TYPE,
+    K_KONTRACT_NO STR_20,
+    K_DISB_DATE DATE,
+    C_NAME_FIO STR_100,
+    METHOD_ISSUE STR_100,
+    CARD_MASK STR_100)
+AS
+declare variable OEK_RD_ID integer;
+begin
+    oek_rd_id = f_get_rd_id(&#x27;OperExtraKind.LawClientExpense&#x27;);
+
+    for with tabl1
+      as (select oks_from_k_id as k_id, oks_balance balance, :rep_date_end - oks_delinq_date as delinq_day,
+                 oks_delinq_date delinq_date, 0 as zad_oko_os, 0 as zad_oko_perc, 0 as zad_oko_other,
+                 null as oko_ol_date, 0 as oko_os, 0 as oko_perc, 0 as oko_other, null as date_woff_temp,0 as ox_amount_rez
+          from oksummary
+          where :rep_date_end between oks_date_begin and oks_date_end and
+                :rep_date_end - oks_delinq_date &gt; 0
+                and oks_close_state = 0 
+          union all
+          select oko_from_k_id, 0 oks_balance, 0 delinq_day, null, oko_os + oko_sh_os, oko_perc + oko_sh_perc,
+                 oko_other + oko_sh_other, iif(oko_type = 4, oko_ol_date, null), iif(oko_type = 4, oko_os, 0),
+                 iif(oko_type = 4, oko_perc, 0), iif(oko_type = 4, oko_other, 0), oko_ol_date as date_woff_temp, 0 as ox_amount_rez
+          from operkroff
+          where oko_ol_is_active = 1 and
+                oko_ol_date &lt;= :rep_date_end
+          union all
+          select ox_object_id as k_id, 0 oks_balance, 0 delinq_day, null,0 as zad_oko_os, 0 as zad_oko_perc, 0 as zad_oko_other,
+                 null as oko_ol_date, 0 as oko_os, 0 as oko_perc, 0 as oko_other, null as date_woff_temp , ox_amount_plus - ox_amount_minus - ox_amount_writeoff as ox_amount_rez
+          from operextra
+          where ox_ol_is_active = 1 and
+              ox_from_rd_id = :oek_rd_id and
+              ox_object_kind = f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;) and
+              ox_ol_date&lt;=:rep_date_end)
+
+      select k_id
+      from tabl1
+      group by k_id
+      having sum(balance) &lt;&gt; 0 or sum(zad_oko_os) &lt;&gt; 0 or sum(zad_oko_perc) &lt;&gt; 0 or sum(zad_oko_other) &lt;&gt; 0 or max(delinq_day) &gt; 0 or sum(ox_amount_rez)&lt;&gt;0
+      into k_id
+
+      do
+      begin
+
+          for select k_kontract_no, k_disb_date, c_name_fio,
+                 case k_disb_kind
+                     when 5 then &#x27;Банк.карта &#x27; || iif(k_is_online=1, &#x27;онлайн&#x27;, &#x27;офлайн&#x27;)
+                     when 7 then &#x27;СБП&#x27;
+                     when 8 then &#x27;Расчетный счет&#x27;
+                     else k_disb_kind
+                   end
+          from kontract
+          inner join knclient on kc_from_k_id = k_id 
+          inner join clients on c_id = kc_from_c_id
+          where k_id = :k_id
+          and k_disb_kind &lt;&gt; 1
+          into k_kontract_no, k_disb_date, c_name_fio, method_issue
+
+          do
+          begin
+
+              card_mask = null;
+              select et_cardnumber
+              from extsys_token, extsysmain
+              where esm_from_k_id = :k_id
+              and esm_account = et_token
+              and esm_project = &#x27;moneta_disb&#x27;
+              and esm_action = &#x27;carddisb&#x27;
+              and esm_status = 1
+              and esm_date &lt;= :k_disb_date
+              order by esm_date desc
+              rows 1
+              into card_mask;
+    
+              suspend;
+          end
+      end
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_GET_KONTRACT_SUD_INFO — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_GET_KONTRACT_SUD_INFO: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_GET_KONTRACT_SUD_INFO</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="mc_loan_list.html"><div class="to">MC_LOAN_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">LOAN_MESSAGE</div><div class="ptype">VARCHAR(2048)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_GET_KONTRACT_SUD_INFO(
+    K_ID D_ID,
+    C_ID D_ID)
+RETURNS (
+    LOAN_MESSAGE D_STR_2048)
+AS
+declare variable DELINQ_DAYS_CNT D_INTEGER;
+declare variable JSON_TEMPLATE D_STR_2048;
+declare variable SMR_ID D_ID;
+declare variable EDS_ID D_ID;
+begin
+    if (f_get_db_id() &lt;&gt; 81001) then
+    begin
+        -- Для других стран (не РФ) возвращаем пустой JSON
+        loan_message = &#x27;{}&#x27;;
+        suspend;
+        exit;
+    end
+
+    -- RFCRU-5274: Если клиент банкрот со статусом &quot;Реализация имущества завершена&quot;, то отображаем соответствующее сообщение
+    if (exists(select *
+               from bankrupt brt, hp_get_kontur_info(brt.brt_from_eil_id) ki
+               where brt.brt_from_c_id = :c_id and
+                     current_date between brt.brt_date_begin and brt.brt_date_end and
+                     ki.status = &#x27;Реализация имущества завершена&#x27;)) then
+    begin
+        json_template = &#x27;{&quot;is_critical&quot;:%1,&quot;content&quot;:[{&quot;type&quot;:&quot;text&quot;,&quot;display&quot;:&quot;%2&quot;}]}&#x27;;
+        loan_message = f_format(json_template, &#x27;0&#x27;, &#x27;*Вы освобождены  от исполнения обязательств в связи с вашим банкротством&#x27;);
+        suspend;
+        exit;
+    end  
+
+    select first 1 smr.smr_id
+    from sud_mainreq smr
+    where smr.smr_from_k_id = :k_id and
+          smr.smr_status = 2
+    order by smr.smr_date desc
+    into :smr_id;
+
+    select first 1 eds.eds_id
+    from edoc_list edl
+    inner join edoc_sign eds on eds.eds_from_edl_id = edl.edl_id
+    inner join edoc_cfg edc on edl.edl_from_edc_id = edc.edc_id
+    where edl.edl_object_kind = f_objkind(&#x27;sud_mainreq&#x27;, &#x27;id&#x27;) and
+         edl.edl_object_id = :smr_id and
+         edc.edc_code = &#x27;pretrial_claim&#x27;
+    order by edl.edl_create_datetime desc
+    into :eds_id;
+
+    if (coalesce(eds_id, 0) &lt;&gt; 0) then
+    begin
+        json_template = &#x27;{&quot;is_critical&quot;:1,&quot;content&quot;:[{&quot;type&quot;:&quot;text&quot;,&quot;display&quot;:&quot;%2&quot;},{&quot;type&quot;:&quot;link&quot;,&quot;value&quot;:&quot;%1&quot;,&quot;display&quot;:&quot;Претензия&quot;},{&quot;type&quot;:&quot;text&quot;,&quot;display&quot;:&quot;%3&quot;}]}&#x27;;
+
+        loan_message = f_format(:json_template,
+                                trim(&#x27;https://edoc.molbulak.ru/&#x27;) || f_uuid(&#x27;edoc_sign&#x27;, :eds_id),
+                                &#x27;Вам направлена досудебная Претензия, ознакомиться с текстом можно по ссылке: &#x27;,
+                                &#x27;Тел: +7(906)7365444. В случае не оплаты задолженности дело будет передано в суд.&#x27;
+                                );
+
+        suspend;
+        exit;
+    end
+
+
+    -- Получаем количество дней просрочки по кредиту
+    select iif(current_date - oks.oks_delinq_date &lt; 0, 0, current_date - oks.oks_delinq_date)
+    from oksummary oks
+    where (current_date between oks.oks_date_begin and oks.oks_date_end) and
+          oks.oks_from_k_id = :k_id and
+          oks_close_state = 0
+    into :delinq_days_cnt;
+    
+    json_template = &#x27;{&quot;is_critical&quot;:%1,&quot;content&quot;:[{&quot;type&quot;:&quot;text&quot;,&quot;display&quot;:&quot;%2&quot;}]}&#x27;;
+
+    if (delinq_days_cnt = 0) then
+        loan_message = f_format(:json_template, &#x27;0&#x27;, &#x27;Оплачивайте вовремя или заранее, чтобы сохранить низкую ставку по займу.&#x27;);
+    else if (delinq_days_cnt between 1 and 30) then
+        loan_message = f_format(:json_template, &#x27;1&#x27;, &#x27;Срочно оплатите просроченный долг, чтобы не испортить кредитную историю и сохранить доступ к кредитованию.&#x27;);
+    else if (delinq_days_cnt &gt; 30) then
+        loan_message = f_format(:json_template, &#x27;1&#x27;, &#x27;Срочно закройте просроченный долг. Ваша кредитная история ухудшается, вы можете потерять доступ к кредитованию.&#x27;);
+    else
+        loan_message = &#x27;{}&#x27;;
+
+    suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

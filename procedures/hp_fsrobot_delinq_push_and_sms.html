@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_FSROBOT_DELINQ_PUSH_AND_SMS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_FSROBOT_DELINQ_PUSH_AND_SMS: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_FSROBOT_DELINQ_PUSH_AND_SMS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="crm_send_sms.html"><div class="to">CRM_SEND_SMS</div></a><a class="ref-card" href="mc_send_push.html"><div class="to">MC_SEND_PUSH</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_FSROBOT_DELINQ_PUSH_AND_SMS
+AS
+declare variable K_ID D_ID;
+declare variable K_KONTRACT_NO D_STR_20;
+declare variable MCL_ID D_ID;
+declare variable CELL D_STR_100;
+declare variable PUSH_MESSAGE D_STR_LONG;
+declare variable V_ERR D_STR_255;
+declare variable V_RES D_STR_10;
+declare variable DELAY_DAYS D_INTEGER;
+begin
+    if (f_get_db_id() &lt;&gt; 39801) then
+    exit;
+
+    --Реализовано для КЗ
+    for select k.k_id,
+               k.k_kontract_no,
+               current_date - oks.oks_delinq_date
+    from oksummary oks
+    inner join kontract k on oks.oks_from_k_id = k.k_id
+    where oks.oks_close_state = 0
+    and current_date between oks.oks_date_begin and oks.oks_date_end
+    and current_date - oks.oks_delinq_date between 5 and 15
+    into :k_id,
+         :k_kontract_no,
+         :delay_days
+    do
+    begin
+        for select mcl.mcl_id,
+                   cc.cc_cell_no
+        from knclient kc
+        inner join clients c on kc.kc_from_c_id = c.c_id
+        inner join mc_login mcl on mcl.mcl_from_c_id = kc.kc_from_c_id
+        inner join contacts cc on c.c_id = cc.cc_from_c_id
+        where kc.kc_from_k_id = :k_id
+        and kc.kc_amount_approved &gt; 0
+        and mcl.mcl_is_delete = 0
+        and cc.cc_is_old_contact = 0
+
+        into :mcl_id,
+             :cell
+
+        do
+        begin
+            push_message = f_format(
+                        &#x27;Уважаемый клиент, у вас имеется просрочка в количестве %2 дней по контракту №%1. Просьба срочно оплатить просроченный платеж через доступные платёжные системы&#x27;,
+                        k_kontract_no,
+                        delay_days
+                        );
+
+            if (delay_days = 5) then                --Отправка PUSH и SMS уведомлений на 5 день просрочки
+            begin
+                execute procedure mc_send_push(&#x27;mc_login&#x27;, :mcl_id, &#x27;Уведомление о просрочке&#x27;, :push_message, :delay_days);
+                execute procedure crm_send_sms(:cell, :push_message)
+                returning_values :v_err, :v_res;
+            end
+            if (delay_days between 6 and 15) then   --Отправка PUSH уведомлений с 6 по 15 день просрочки
+            begin
+                execute procedure mc_send_push(&#x27;mc_login&#x27;, :mcl_id, &#x27;Уведомление о просрочке&#x27;, :push_message, :delay_days);
+
+            end
+        end
+    end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

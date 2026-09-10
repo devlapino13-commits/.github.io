@@ -1,0 +1,728 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DO_REF_ACCOUNT_LOAN_OB_SALDO — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DO_REF_ACCOUNT_LOAN_OB_SALDO: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DO_REF_ACCOUNT_LOAN_OB_SALDO</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="get_ref_account_knclient.html"><div class="to">GET_REF_ACCOUNT_KNCLIENT</div></a><a class="ref-card" href="get_ref_account_office.html"><div class="to">GET_REF_ACCOUNT_OFFICE</div></a><a class="ref-card" href="hp_do_kn_operbook_ins.html"><div class="to">HP_DO_KN_OPERBOOK_INS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_kn_operbook_one_loan.html"><div class="to">HP_DO_KN_OPERBOOK_ONE_LOAN</div></a><a class="ref-card" href="hp_do_ref_account_loan_create.html"><div class="to">HP_DO_REF_ACCOUNT_LOAN_CREATE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DO_REF_ACCOUNT_LOAN_OB_SALDO(
+    K_ID ID_TYPE)
+AS
+declare variable disb_date date;
+declare variable ol_date date;
+declare variable kc_id id_type;
+declare variable date_close date;
+declare variable sys_account_id id_type;
+declare variable oks_balance curr_type;
+declare variable ol_id id_type;
+declare variable k_kontract_no d_str_code;
+declare variable zero_acc_id id_type;
+declare variable kc_non_resident smallint;
+declare variable kc_client_type smallint;
+declare variable reg_id integer;
+declare variable amount_ekv curr_type;
+declare variable amount_tax curr_type;
+declare variable acc_id integer;
+declare variable detail_id id_type;
+declare variable acc_dt id_type;
+declare variable acc_kt id_type;
+declare variable oks_bal_perc curr_type;
+declare variable oks_bal_kommis curr_type;
+declare variable oks_ecl_acc_kind integer;
+declare variable oks_llr_os curr_type;
+declare variable oks_llr_perc curr_type;
+declare variable oks_diff_ecl_llr curr_type;
+declare variable oks_diff_esp_bal curr_type;
+declare variable oks_diff_esp_norm curr_type;
+declare variable k_reserv_kind integer;
+declare variable tmp_amount curr_type;
+declare variable bal_off_os curr_type;
+declare variable bal_off_perc curr_type;
+declare variable loan_reg_id integer;
+declare variable loan_amount curr_type;
+declare variable client_amount curr_type;
+declare variable saldo_amount curr_type;
+declare variable koef double precision;
+declare variable sh_client_perc curr_type;
+declare variable sh_perc curr_type = 0;
+declare variable just_operkroff integer;
+declare variable tmp_acc_id id_type;
+declare variable bal_ox curr_type;
+declare variable just_operextra integer;
+declare variable line_no integer;
+declare variable pereplat decimal(18,4) = 0;
+declare variable oks_bal_law d_currency;
+declare variable oks_reserv_law d_currency;
+declare variable oek_rd_id integer;
+begin
+  oek_rd_id = f_get_rd_id(&#x27;OperExtraKind.LawClientExpense&#x27;);
+
+-- формируем начальное сальдо по займу
+  ol_date = &#x27;31.12.2017&#x27;;
+
+  select ks_date_begin, ks_date_end, ks_region_id, k_kontract_no, k_reserv_kind, kal_new_reg_id, k_amount_approved
+  from kontstate, kontract, knaktlist ka
+  where ks_from_k_id = :k_id and
+        ks_state = 1 and
+        ks_ol_is_delete = 0 and
+        ks_from_k_id = k_id and
+        ka.kal_from_kf_id = k_from_kf_id and
+        ka.kal_date &lt;= :ol_date and
+        ka.kal_date_end &gt;= :ol_date and
+        ka.is_delete = 0
+  into :disb_date, :date_close, :reg_id, :k_kontract_no, k_reserv_kind, :loan_reg_id, loan_amount;
+
+-- сальдо формируем по займам, выданные до 31.12.2017 включительно
+  if (disb_date &gt; ol_date) then
+    exit;
+
+  line_no = 0;
+  just_operkroff = 0;
+
+  bal_off_os = 0;
+  bal_off_perc = 0;
+
+  select sum(oko_os + oko_sh_os), sum(oko_perc + oko_sh_perc)
+  from operkroff
+  where oko_ol_date &lt;= :ol_date and
+        oko_ol_is_active = 1 and
+        oko_from_k_id = :k_id
+  into :bal_off_os, bal_off_perc;
+
+  if (bal_off_os is null) then
+    bal_off_os = 0;
+  if (bal_off_perc is null) then
+    bal_off_perc = 0;
+
+  if (bal_off_os &lt;&gt; 0 and
+      bal_off_perc &lt;&gt; 0) then
+    just_operkroff = 1;
+
+  just_operextra = 0;
+
+  bal_ox = 0;
+  select sum(ox_amount_plus - ox_amount_minus - ox_amount_writeoff)
+  from operextra
+  where ox_from_rd_id = :oek_rd_id and
+        ox_ol_date &lt;= :ol_date and
+        ox_ol_is_active = 1 and
+        ox_object_kind = 9 and
+        ox_object_id = :k_id
+  into :bal_ox;
+  if (bal_ox is null) then
+    bal_ox = 0;
+  if (bal_ox &lt;&gt; 0) then
+    just_operextra = 1;
+
+  pereplat = 0;
+  select sum(ok_os)
+  from operkred
+  where ok_from_k_id = :k_id and
+        ok_ol_date &lt;= :ol_date and
+        ok_ol_is_active = 1 and
+        ok_type = 9
+  into pereplat;
+  if (pereplat is null) then
+    pereplat = 0;
+
+  if (date_close &lt; ol_date and
+      just_operkroff = 0 and
+      just_operextra = 0 and
+      pereplat = 0) then
+    exit;
+
+  zero_acc_id = 0; -- ID нулевого счета
+
+  insert into operlist (ol_from_reg_id, ol_oper_type, ol_oper_subtype, ol_date, ol_doc_kind, ol_doc_no, ol_doc_no_str,
+                        ol_memo, ol_parent_id, is_delete, ol_user_id)
+  values (:loan_reg_id, 2, 30, :ol_date, 9, 0, &#x27;&#x27;,
+          &#x27;Начальное сальдо по договору &#x27; || coalesce(:k_kontract_no, &#x27;&#x27;), null, 0,
+          1000000000001)
+  returning ol_id
+  into :ol_id;
+
+  select obd_id
+  from kn_obdetail
+  where obd_detail = &#x27;Начальное сальдо&#x27;
+  into detail_id;
+
+  if (detail_id is null) then
+  begin
+    insert into kn_obdetail (obd_detail)
+    values (&#x27;Начальное сальдо&#x27;)
+    returning obd_id
+    into :detail_id;
+  end
+
+  saldo_amount = loan_amount;
+
+  sh_perc = 0;
+  if (k_reserv_kind = 2 and
+      date_close &gt;= ol_date) then
+  begin
+    select sum(sh_perc)
+    from schedule
+    where sh_from_k_id = :k_id
+    into :sh_perc;
+    if (sh_perc is null) then
+      sh_perc = 0;
+  end
+
+  for select kc_id, kc_non_resident, kc_client_type, kc_amount_approved
+      from knclient
+      where kc_from_k_id = :k_id and
+            kc_amount_approved &gt; 0
+      into :kc_id, kc_non_resident, kc_client_type, client_amount
+  do
+  begin
+    line_no = line_no + 1;
+
+    for select oks_balance, oks_bal_perc, oks_bal_kommis, iif(oks_close_state = 0, oks_diff_esp_bal, 0),
+               oks_ecl_acc_kind, oks_llr_os, oks_llr_perc, iif(oks_close_state = 0, oks_diff_ecl_llr, 0)
+        from kn_oksummary
+        where oks_from_kc_id = :kc_id and
+              oks_date_begin = :ol_date
+        into oks_balance, oks_bal_perc, oks_bal_kommis, oks_diff_esp_bal, oks_ecl_acc_kind, oks_llr_os, oks_llr_perc,
+             oks_diff_ecl_llr
+    do
+    begin
+
+-- начало показателя
+-- сальдо по ДТ
+      sys_account_id = 12; -- Микрозаймы.Баланс.ОС
+      acc_id = null;
+      select acc_id
+      from get_ref_account_knclient(:sys_account_id, &#x27;&#x27;, :kc_id, :kc_non_resident, :kc_client_type, :ol_date, :reg_id)
+      into :acc_id;
+
+      amount_ekv = abs(oks_balance);
+      amount_tax = amount_ekv;
+
+      if (oks_balance &gt;= 0) then
+      begin
+        acc_dt = acc_id;
+        acc_kt = zero_acc_id;
+      end
+      else
+      begin
+        acc_dt = zero_acc_id;
+        acc_kt = acc_id;
+      end
+
+      execute procedure hp_do_kn_operbook_ins(:ol_id, :kc_id, :acc_dt, :acc_kt, null, null, :amount_ekv, 0, :amount_tax,
+          :ol_date, :reg_id, 1, :detail_id, 0, 1, null, null, &#x27;810&#x27;, 1.0000);
+-- конец показателя
+
+-- начало показателя
+-- сальдо по ДТ
+      sys_account_id = 15; -- Микрозаймы.Начислено.Процент
+      acc_id = null;
+      select acc_id
+      from get_ref_account_knclient(:sys_account_id, &#x27;&#x27;, :kc_id, :kc_non_resident, :kc_client_type, :ol_date, :reg_id)
+      into :acc_id;
+
+      amount_ekv = abs(oks_bal_perc);
+      amount_tax = amount_ekv;
+
+      if (oks_bal_perc &gt;= 0) then
+      begin
+        acc_dt = acc_id;
+        acc_kt = zero_acc_id;
+      end
+      else
+      begin
+        acc_dt = zero_acc_id;
+        acc_kt = acc_id;
+      end
+
+      execute procedure hp_do_kn_operbook_ins(:ol_id, :kc_id, :acc_dt, :acc_kt, null, null, :amount_ekv, 0, :amount_tax,
+          :ol_date, :reg_id, 1, :detail_id, 0, 1, null, null, &#x27;810&#x27;, 1.0000);
+-- конец показателя
+
+-- начало показателя
+-- сальдо по Кт
+      sys_account_id = 21; -- Микрозаймы.Погашено.ДопПроцент
+      acc_id = null;
+      select acc_id
+      from get_ref_account_knclient(:sys_account_id, &#x27;&#x27;, :kc_id, :kc_non_resident, :kc_client_type, :ol_date, :reg_id)
+      into :acc_id;
+
+      amount_ekv = abs(oks_bal_kommis);
+      amount_tax = amount_ekv;
+
+      if (oks_bal_kommis &gt;= 0) then
+      begin
+        acc_dt = zero_acc_id;
+        acc_kt = acc_id;
+      end
+      else
+      begin
+        acc_dt = acc_id;
+        acc_kt = zero_acc_id;
+      end
+
+      execute procedure hp_do_kn_operbook_ins(:ol_id, :kc_id, :acc_dt, :acc_kt, null, null, :amount_ekv, 0, :amount_tax,
+          :ol_date, :reg_id, 1, :detail_id, 0, 1, null, null, &#x27;810&#x27;, 1.0000);
+-- конец показателя
+
+-- начало показателя
+-- сальдо по Кт
+      sys_account_id = 30 + (oks_ecl_acc_kind - 1) * 3; -- Микрозаймы.Резерв.ОС(N)
+      acc_id = null;
+      select acc_id
+      from get_ref_account_knclient(:sys_account_id, &#x27;&#x27;, :kc_id, :kc_non_resident, :kc_client_type, :ol_date, :reg_id)
+      into :acc_id;
+
+      amount_ekv = abs(oks_llr_os);
+      amount_tax = amount_ekv;
+
+      if (oks_llr_os &gt;= 0) then
+      begin
+        acc_dt = zero_acc_id;
+        acc_kt = acc_id;
+      end
+      else
+      begin
+        acc_dt = acc_id;
+        acc_kt = zero_acc_id;
+      end
+
+      execute procedure hp_do_kn_operbook_ins(:ol_id, :kc_id, :acc_dt, :acc_kt, null, null, :amount_ekv, 0, :amount_tax,
+          :ol_date, :reg_id, 1, :detail_id, 0, 1, null, null, &#x27;810&#x27;, 1.0000);
+-- конец показателя
+
+-- начало показателя
+-- сальдо по Кт
+      sys_account_id = 31 + (oks_ecl_acc_kind - 1) * 3; -- Микрозаймы.Резерв.Процент(N)
+      acc_id = null;
+      select acc_id
+      from get_ref_account_knclient(:sys_account_id, &#x27;&#x27;, :kc_id, :kc_non_resident, :kc_client_type, :ol_date, :reg_id)
+      into :acc_id;
+
+      amount_ekv = abs(oks_llr_perc);
+      amount_tax = amount_ekv;
+
+      if (oks_llr_perc &gt;= 0) then
+      begin
+        acc_dt = zero_acc_id;
+        acc_kt = acc_id;
+      end
+      else
+      begin
+        acc_dt = acc_id;
+        acc_kt = zero_acc_id;
+      end
+
+      execute procedure hp_do_kn_operbook_ins(:ol_id, :kc_id, :acc_dt, :acc_kt, null, null, :amount_ekv, 0, :amount_tax,
+          :ol_date, :reg_id, 1, :detail_id, 0, 1, null, null, &#x27;810&#x27;, 1.0000);
+-- конец показателя
+
+-- начало показателя
+-- сальдо по Кт
+      sys_account_id = 32 + (oks_ecl_acc_kind - 1) * 3; -- Микрозаймы.Резерв.Корректировка(N)
+      acc_id = null;
+      select acc_id
+      from get_ref_account_knclient(:sys_account_id, &#x27;&#x27;, :kc_id, :kc_non_resident, :kc_client_type, :ol_date, :reg_id)
+      into :acc_id;
+
+      amount_ekv = abs(oks_diff_ecl_llr);
+      amount_tax = amount_ekv;
+
+      if (oks_diff_ecl_llr &gt;= 0) then
+        sys_account_id = 59; -- Микрозаймы.Расход.ИзмРезерваРО
+      else
+        sys_account_id = 58; -- Микрозаймы.Доход.ИзмРезерваРО
+
+      tmp_acc_id = null;
+      select acc_id
+      from get_ref_account_office(:sys_account_id, &#x27;&#x27;, :reg_id, &#x27;810&#x27;, -1, :kc_non_resident, :kc_client_type, :ol_date)
+      into :tmp_acc_id;
+
+      if (oks_diff_ecl_llr &gt;= 0) then
+      begin
+        acc_dt = tmp_acc_id;
+        acc_kt = acc_id;
+      end
+      else
+      begin
+        acc_dt = acc_id;
+        acc_kt = tmp_acc_id;
+      end
+
+      execute procedure hp_do_kn_operbook_ins(:ol_id, :kc_id, :acc_dt, :acc_kt, null, null, :amount_ekv, 0, :amount_tax,
+          :ol_date, :reg_id, 1, :detail_id, 0, 1, null, null, &#x27;810&#x27;, 1.0000);
+
+      if (oks_diff_ecl_llr &gt;= 0) then
+      begin
+        acc_dt = zero_acc_id;
+        acc_kt = tmp_acc_id;
+      end
+      else
+      begin
+        acc_dt = tmp_acc_id;
+        acc_kt = zero_acc_id;
+      end
+
+      execute procedure hp_do_kn_operbook_ins(:ol_id, :kc_id, :acc_dt, :acc_kt, null, null, :amount_ekv, 0, :amount_tax,
+          :ol_date, :reg_id, 1, :detail_id, 0, 1, null, null, &#x27;810&#x27;, 1.0000);
+
+-- конец показателя
+
+      if (k_reserv_kind = 2 and
+          (oks_balance &lt;&gt; 0 or oks_bal_perc &lt;&gt; 0 or kc_id = 622529)) then
+      begin
+-- начало показателя, поручительство
+-- сальдо по ДТ
+        tmp_amount = 0;
+        koef = client_amount / loan_amount;
+        sh_client_perc = sh_perc * koef;
+        if (abs(sh_client_perc - saldo_amount) &lt;= 5 or sh_client_perc &gt; saldo_amount) then
+        begin
+          sh_client_perc = saldo_amount;
+          saldo_amount = 0;
+        end
+        else
+        begin
+          sh_client_perc = round(sh_client_perc, 2);
+          saldo_amount = saldo_amount - sh_client_perc;
+        end
+        tmp_amount = client_amount + sh_client_perc;
+
+        sys_account_id = 67; -- Микрозаймы.Внебаланс.Поручительство
+        acc_dt = null;
+        select acc_id
+        from get_ref_account_knclient(:sys_account_id, &#x27;&#x27;, :kc_id, :kc_non_resident, :kc_client_type, :ol_date, :reg_id)
+        into :acc_dt;
+
+        sys_account_id = 65; -- Внебаланс.99999
+        acc_kt = null;
+        select acc_id
+        from get_ref_account_office(:sys_account_id, &#x27;&#x27;, :reg_id, &#x27;&#x27;, -1, :kc_non_resident, :kc_client_type, :ol_date)
+        into :acc_kt;
+
+        amount_ekv = tmp_amount;
+        amount_tax = amount_ekv;
+
+        execute procedure hp_do_kn_operbook_ins(:ol_id, :kc_id, :acc_dt, :acc_kt, null, null, :amount_ekv, 0, :amount_tax,
+            :ol_date, :reg_id, 1, :detail_id, 0, 1, null, null, &#x27;810&#x27;, 1.0000);
+-- конец показателя
+      end
+    end
+
+    if (oks_diff_esp_bal is null) then
+      oks_diff_esp_bal = 0;
+
+    oks_diff_esp_norm = 0;
+    select sum(oks_diff_esp_norm)
+    from kn_oksummary
+    where oks_from_kc_id = :kc_id and
+          oks_date_begin &lt;= :ol_date
+    into oks_diff_esp_norm;
+    if (oks_diff_esp_norm is null) then
+      oks_diff_esp_norm = 0;
+
+    if (oks_diff_esp_norm &lt;&gt; 0) then -- начало показателя
+    begin
+      sys_account_id = 13; -- Микрозаймы.Баланс.ИзмВБС
+      acc_id = null;
+      select acc_id
+      from get_ref_account_knclient(:sys_account_id, &#x27;&#x27;, :kc_id, :kc_non_resident, :kc_client_type, :ol_date, :reg_id)
+      into :acc_id;
+
+      if (oks_diff_esp_norm &gt;= 0) then
+        sys_account_id = 45; -- Микрозаймы.Доход.КорИзмПотока
+      else
+        sys_account_id = 46; -- Микрозаймы.Расход.КорИзмПотока
+
+      tmp_acc_id = null;
+      select acc_id
+      from get_ref_account_office(:sys_account_id, &#x27;&#x27;, :loan_reg_id, &#x27;810&#x27;, -1, :kc_non_resident, :kc_client_type, :ol_date)
+      into :tmp_acc_id;
+
+      if (oks_diff_esp_norm &gt;= 0) then
+      begin
+        acc_dt = acc_id;
+        acc_kt = tmp_acc_id;
+      end
+      else
+      begin
+        acc_dt = tmp_acc_id;
+        acc_kt = acc_id;
+      end
+
+      amount_ekv = abs(oks_diff_esp_norm);
+      amount_tax = 0;
+
+      execute procedure hp_do_kn_operbook_ins(:ol_id, :kc_id, :acc_dt, :acc_kt, null, null, :amount_ekv, 0, :amount_tax,
+          :ol_date, :reg_id, 1, :detail_id, 1, 0, null, null, &#x27;810&#x27;, 1.0000);
+
+      if (oks_diff_esp_norm &gt;= 0) then
+      begin
+        acc_dt = tmp_acc_id;
+        acc_kt = zero_acc_id;
+      end
+      else
+      begin
+        acc_dt = zero_acc_id;
+        acc_kt = tmp_acc_id;
+      end
+
+      execute procedure hp_do_kn_operbook_ins(:ol_id, :kc_id, :acc_dt, :acc_kt, null, null, :amount_ekv, 0, :amount_tax,
+          :ol_date, :reg_id, 1, :detail_id, 0, 0, null, null, &#x27;810&#x27;, 1.0000);
+
+    end -- конец показателя
+
+    if (oks_diff_esp_norm &lt;&gt; 0 or oks_diff_esp_bal &lt;&gt; 0) then -- начало показателя
+    begin
+      sys_account_id = 13; -- Микрозаймы.Баланс.ИзмВБС
+      acc_dt = null;
+      select acc_id
+      from get_ref_account_knclient(:sys_account_id, &#x27;&#x27;, :kc_id, :kc_non_resident, :kc_client_type, :ol_date, :reg_id)
+      into :acc_dt;
+
+      sys_account_id = 47; -- Микрозаймы.Доход.КорРазницаСтавок (парный)
+      acc_kt = null;
+      select acc_id
+      from get_ref_account_office(:sys_account_id, &#x27;&#x27;, :loan_reg_id, &#x27;810&#x27;, -1, :kc_non_resident, :kc_client_type, :ol_date)
+      into :acc_kt;
+
+      amount_ekv = oks_diff_esp_bal;
+      amount_tax = 0;
+
+      execute procedure hp_do_kn_operbook_ins(:ol_id, :kc_id, :acc_dt, :acc_kt, null, null, :amount_ekv, 0, :amount_tax,
+          :ol_date, :reg_id, 1, :detail_id, 1, 0, null, null, &#x27;810&#x27;, 1.0000);
+
+      acc_dt = acc_kt;
+      acc_kt = zero_acc_id;
+      amount_ekv = abs(oks_diff_esp_bal);
+      amount_tax = 0;
+
+      execute procedure hp_do_kn_operbook_ins(:ol_id, :kc_id, :acc_dt, :acc_kt, null, null, 0, 0, 0, :ol_date, :reg_id, 1,
+          :detail_id, 1, 0, null, null, &#x27;810&#x27;, 1.0000);
+
+    end -- конец показателя
+
+-- начало показателя
+-- забалансовый долг по ОД
+    if (just_operkroff = 1) then
+    begin
+      bal_off_os = 0;
+      bal_off_perc = 0;
+
+      select sum(oko_os + oko_sh_os), sum(oko_perc + oko_sh_perc)
+      from operkroff, knclient
+      where oko_ol_date &lt;= :ol_date and
+            oko_ol_is_active = 1 and
+            kc_id = :kc_id and
+            kc_from_k_id = oko_from_k_id and
+            kc_from_c_id = oko_from_c_id and
+            kc_amount_approved &gt; 0
+      into :bal_off_os, bal_off_perc;
+
+      if (bal_off_os is null) then
+        bal_off_os = 0;
+      if (bal_off_perc is null) then
+        bal_off_perc = 0;
+
+      if (bal_off_os &lt;&gt; 0) then
+      begin
+        sys_account_id = 62; -- Микрозаймы.Внебаланс.ОС
+        acc_dt = null;
+        select acc_id
+        from get_ref_account_knclient(:sys_account_id, &#x27;&#x27;, :kc_id, :kc_non_resident, :kc_client_type, :ol_date, :reg_id)
+        into :acc_dt;
+
+        sys_account_id = 65; -- &#x27;Внебаланс.99999
+        acc_kt = null;
+        select acc_id
+        from get_ref_account_office(:sys_account_id, &#x27;&#x27;, :reg_id, &#x27;810&#x27;, -1, :kc_non_resident, :kc_client_type, :ol_date)
+        into :acc_kt;
+
+        amount_ekv = bal_off_os;
+        if (disb_date &gt;= &#x27;28.02.2012&#x27;) then
+          amount_tax = amount_ekv;
+        else
+          amount_tax = 0;
+
+        execute procedure hp_do_kn_operbook_ins(:ol_id, :kc_id, :acc_dt, :acc_kt, null, null, :amount_ekv, 0, :amount_tax,
+            :ol_date, :reg_id, 1, :detail_id, 0, 0, null, null, &#x27;810&#x27;, 1.0000);
+      end -- конец внебаланс ОД
+
+      if (bal_off_perc &lt;&gt; 0) then
+      begin
+        sys_account_id = 63; -- Микрозаймы.Внебаланс.Процент
+        acc_dt = null;
+        select acc_id
+        from get_ref_account_knclient(:sys_account_id, &#x27;&#x27;, :kc_id, :kc_non_resident, :kc_client_type, :ol_date, :reg_id)
+        into :acc_dt;
+
+        sys_account_id = 65; -- &#x27;Внебаланс.99999
+        acc_kt = null;
+        select acc_id
+        from get_ref_account_office(:sys_account_id, &#x27;&#x27;, :reg_id, &#x27;810&#x27;, -1, :kc_non_resident, :kc_client_type, :ol_date)
+        into :acc_kt;
+
+        amount_ekv = bal_off_perc;
+        if (disb_date &gt;= &#x27;28.02.2012&#x27;) then
+          amount_tax = amount_ekv;
+        else
+          amount_tax = 0;
+
+        execute procedure hp_do_kn_operbook_ins(:ol_id, :kc_id, :acc_dt, :acc_kt, null, null, :amount_ekv, 0, :amount_tax,
+            :ol_date, :reg_id, 1, :detail_id, 0, 0, null, null, &#x27;810&#x27;, 1.0000);
+      end -- конец внебаланс %%
+    end
+-- конец показателя
+
+-- начало показателя
+-- Госпошлина
+    oks_bal_law = 0;
+    oks_reserv_law = 0;
+    select oks_bal_law, oks_reserv_law, oks_ecl_acc_kind
+    from kn_oksummary
+    where oks_from_kc_id = :kc_id and
+          oks_date_begin &lt;= :ol_date and
+          oks_date_end &gt;= :ol_date
+    into oks_bal_law, oks_reserv_law, oks_ecl_acc_kind;
+    if (oks_bal_law is null) then
+      oks_bal_law = 0;
+    if (oks_reserv_law is null) then
+      oks_reserv_law = 0;
+
+    if (oks_bal_law &lt;&gt; 0) then
+    begin
+      sys_account_id = 27; -- Микрозаймы.Погашено.Госпошлина
+
+      acc_dt = null;
+      select acc_id
+      from get_ref_account_knclient(:sys_account_id, &#x27;&#x27;, :kc_id, :kc_non_resident, :kc_client_type, :ol_date, :reg_id)
+      into :acc_dt;
+
+      acc_kt = zero_acc_id;
+
+      amount_ekv = oks_bal_law;
+      amount_tax = oks_bal_law;
+
+      execute procedure hp_do_kn_operbook_ins(:ol_id, :kc_id, :acc_dt, :acc_kt, null, null, :amount_ekv, 0, :amount_tax,
+          :ol_date, :reg_id, 1, :detail_id, 0, 0, null, null, &#x27;810&#x27;, 1.0000);
+    end -- конец внебаланс Госпошлина
+
+    if (oks_reserv_law &lt;&gt; 0) then
+    begin
+      acc_dt = zero_acc_id;
+
+      sys_account_id = 85 + oks_ecl_acc_kind; -- Микрозаймы.Резерв.Госпошлина(N)
+      acc_dt = null;
+      select acc_id
+      from get_ref_account_knclient(:sys_account_id, &#x27;&#x27;, :kc_id, :kc_non_resident, :kc_client_type, :ol_date, :reg_id)
+      into :acc_kt;
+
+      amount_ekv = oks_reserv_law;
+      amount_tax = 0;
+
+      execute procedure hp_do_kn_operbook_ins(:ol_id, :kc_id, :acc_dt, :acc_kt, null, null, :amount_ekv, 0, :amount_tax,
+          :ol_date, :reg_id, 1, :detail_id, 0, 0, null, null, &#x27;810&#x27;, 1.0000);
+    end -- конец внебаланс Госпошлина
+-- конец показателя
+
+-- начало показателя
+-- Переплата
+    if (pereplat &lt;&gt; 0) then
+    begin
+      acc_dt = zero_acc_id;
+
+      sys_account_id = 53; -- Микрозаймы.Погашено.Переплата
+      acc_kt = null;
+      select acc_id
+      from get_ref_account_knclient(:sys_account_id, &#x27;&#x27;, :kc_id, :kc_non_resident, :kc_client_type, :ol_date, :reg_id)
+      into :acc_kt;
+
+      amount_ekv = 0;
+      select sum(-ok_os)
+      from kn_operkred
+      where ok_from_kc_id = :kc_id and
+            ok_ol_is_active = 1 and
+            ok_ol_date &lt;= :ol_date and
+            ok_type = 9
+      into amount_ekv;
+      if (amount_ekv is null) then
+        amount_ekv = 0;
+
+      amount_tax = amount_ekv;
+
+      execute procedure hp_do_kn_operbook_ins(:ol_id, :kc_id, :acc_dt, :acc_kt, null, null, :amount_ekv, 0, :amount_tax,
+          :ol_date, :reg_id, 1, :detail_id, 0, 0, null, null, &#x27;810&#x27;, 1.0000);
+    end -- конец внебаланс ОД
+-- конец показателя
+
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

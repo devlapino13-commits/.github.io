@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0319_SQL — процедура — схема БД</title>
+<meta name="description" content="Процедура CM_RU_0319_SQL: 3 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0319_SQL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0319_SQL(
+    MA_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable C_ID D_ID;
+declare variable DISB_DATE D_DATE;
+declare variable CLI_BALANCE CURR_TYPE;
+declare variable AMOUNT CURR_TYPE;
+declare variable COUNTER D_INTEGER;
+declare variable DELINQ_BALANCE D_CURRENCY;
+declare variable OFFICE_ID D_INTEGER;
+declare variable CLIENT_POINT D_INTEGER;
+declare variable LAST_DISB_DATE D_DATE;
+declare variable MAX_SUM D_CURRENCY;
+begin
+  res_error_is_critical = 2;
+
+  for select mac_from_c_id, ma_date_oper, ma_office_id, mac_amount
+      from miniapp
+      inner join miniappclient on mac_from_ma_id = ma_id
+      inner join product on pr_id = ma_from_pr_id
+      where ma_id = :ma_id and
+            ma_is_active = 1 and
+            ma_date_end = &#x27;31.12.9999&#x27; and
+            pr_code containing &#x27;.plus_100_b.&#x27;
+      into c_id, disb_date, office_id, amount
+  do
+  begin
+    client_point = 0;
+
+    client_point = f_point_get(11, ma_id, c_id, disb_date);
+
+    -- посчитать количество выданных +60
+    counter = 0;
+    last_disb_date = null;
+    select count(k_id), max(k_disb_date)
+    from kontstate, knclient, kontract, product
+    where ks_ol_is_delete = 0 and
+          ks_state &gt;= 1 and
+          ks_from_k_id = k_id and
+          k_from_pr_id = pr_id and
+          ks_from_k_id = kc_from_k_id and
+          :disb_date between ks_date_begin and ks_date_end and
+          kc_amount_approved &gt; 0 and
+          kc_from_c_id = :c_id and
+          pr_code containing &#x27;.plus_100_b.&#x27;
+    into counter, last_disb_date;
+    counter = coalesce(counter, 0);
+    if (last_disb_date is null) then last_disb_date = &#x27;01.01.1990&#x27;;
+
+    if (last_disb_date + 3  &gt; disb_date) then
+    begin
+      res_error_text = &#x27;Новый заем по продукту Плюс 60 может быть выдан не ранее &#x27;||f_datetostr((last_disb_date + 3));
+      suspend;
+    end 
+
+    --    Заем может быть выдан при условии, что после его выдачи общая задолженность клиента по основному долгу не превысит 500 000 руб.
+    cli_balance = 0;
+    delinq_balance = 0;
+    select sum(oks_balance), sum(iif(:disb_date &gt; oks_delinq_date, oks_delinq_os + oks_delinq_perc, 0))
+    from knclient, oksummary
+    where kc_from_c_id = :c_id and
+          kc_amount_approved &gt; 0 and
+          kc_from_k_id = oks_from_k_id and
+          oks_balance &gt; 0 and
+          oks_close_state = 0 and
+          :disb_date between oks_date_begin and oks_date_end
+    into cli_balance, delinq_balance;
+    cli_balance = coalesce(cli_balance, 0);
+    delinq_balance = coalesce(delinq_balance, 0);
+
+    max_sum = case
+                when client_point &lt;= 6 then 100000
+                when client_point &lt;= 11 then 150000
+                when client_point &lt;= 17 then 200000
+                when client_point &lt;= 24 then 250000
+                when client_point &lt;= 35 then 300000
+                when client_point &lt;= 45 then 350000
+                else 450000
+              end;
+
+    if (cli_balance + amount &gt; max_sum) then
+    begin
+      res_error_text = &#x27;Общий баланс всех займов превышает лимит:&#x27;||max_sum;
+      suspend;
+    end
+
+    if (delinq_balance &gt; 0) then
+    begin
+      res_error_text = &#x27;У клиента имеется активная просрочка&#x27;;
+      suspend;
+    end
+
+    if (not exists(select * from temp_schedule_correct
+    where tsc_k_id = :c_id
+    and tsc_sh_id = 1)) then
+    begin
+      res_error_is_critical = 2;
+      res_error_text = &#x27;клиенту запрещено получить кредит по продукту &quot;Плюс 100 базовый&quot;&#x27;;
+      suspend;
+    end 
+
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

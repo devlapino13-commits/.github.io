@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PKB_GET_KONTRACT_DATA_TMP — процедура — схема БД</title>
+<meta name="description" content="Процедура PKB_GET_KONTRACT_DATA_TMP: 1 входных, 8 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>PKB_GET_KONTRACT_DATA_TMP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">8</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="pkb_get_loan_categ.html"><div class="to">PKB_GET_LOAN_CATEG</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="pkb_get_kont_data.html"><div class="to">PKB_GET_KONT_DATA</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">POCKET_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">8 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_KONTRACT_NO</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ORDER_MARK</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PHASEOFCONTRACT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DAYS_PAST_DUE_DOMAIN</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DAYS_PAST_DUE_DOMAIN_PREV</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LOCAL_STATUS</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACTIVE_DELINQ_DAYS</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE PKB_GET_KONTRACT_DATA_TMP(
+    POCKET_ID INTEGER)
+RETURNS (
+    K_ID ID_TYPE,
+    K_KONTRACT_NO D_STR_CODE,
+    ORDER_MARK D_SMALLINT,
+    PHASEOFCONTRACT D_INTEGER,
+    DAYS_PAST_DUE_DOMAIN D_INTEGER,
+    DAYS_PAST_DUE_DOMAIN_PREV D_INTEGER,
+    LOCAL_STATUS D_STR_CODE,
+    ACTIVE_DELINQ_DAYS D_INTEGER)
+AS
+declare variable k_id_old id_type;
+declare variable rep_date_begin d_date;
+declare variable rep_date_end d_date;
+declare variable pocket_type d_str_10;
+declare variable do_suspend d_bool;
+declare variable disb_date d_date;
+declare variable date_type d_str_20;
+declare variable contract_status_tmp d_integer;
+declare variable is_fixed d_smallint;
+declare variable gkb d_integer;
+declare variable pkb d_integer;
+declare variable cib_code d_str_20;
+begin
+  k_id_old = 0;
+  gkb = null;
+  pkb = null;
+  select cp.cp_date_begin, --
+         cp.cp_date_end, --
+         cp.cp_pocket_type,
+         f_get_rd_code(cp.cp_cib_id)
+  from cib_pocket cp
+  where cp.cp_id = :pocket_id
+  into :rep_date_begin,
+       :rep_date_end,
+       :pocket_type,
+       cib_code;
+
+  if (cib_code = &#x27;CIB.PKB&#x27;) then
+   pkb = :pocket_id;
+  else
+   gkb = :pocket_id;
+
+  if ((rep_date_end is null) or (pocket_type is null)) then
+    exit;
+
+  for select ks_from_k_id,
+             order_mark,
+             phaseofcontract,
+             is_fixed
+      from (
+            select ks_from_k_id, order_mark, phaseofcontract, is_fixed
+            from (select ks.ks_from_k_id,
+                  0 as order_mark,
+                  iif(ks.ks_state = 1, 4, 5) as phaseofcontract, 0 as is_fixed
+                  from cib_to_send_kontracts cts
+                  inner join kontstate ks  on ks.ks_from_k_id = cts.cts_from_k_id
+                  where :rep_date_end between ks.ks_date_begin and ks.ks_date_end and
+                        ks.ks_ol_is_delete = 0 and
+                        iif(:cib_code = &#x27;CIB.PKB&#x27;, cts.cts_from_cp_pkb_id = :pkb, cts.cts_from_cp_gkb_id = :gkb)
+            ) Kont
+            union
+            select ks_from_k_id, order_mark, phaseofcontract, is_fixed
+            from (select ks.ks_from_k_id,
+                  0 as order_mark,
+                  iif(ks.ks_state = 1, 4, 5) as phaseofcontract, 1 as is_fixed
+                  from CIB_KONTRACT_ERRORS cke
+                  inner join kontstate ks  on ks.ks_from_k_id = cke.cke_from_k_id
+                  where :rep_date_end between ks.ks_date_begin and ks.ks_date_end and
+                        ks.ks_ol_is_delete = 0 and
+                        cke.cke_checked_datetime  &gt;= :rep_date_end - 1 and
+                        cke.cke_checked_datetime &lt; :rep_date_end
+            ) CheckedKont
+      ) total
+      order by ks_from_k_id,
+               order_mark
+      into :k_id,
+           :order_mark,
+           :phaseofcontract,
+           :is_fixed
+  do
+  begin
+    if (k_id &lt;&gt; k_id_old) then
+    begin
+      k_id_old = k_id;
+
+
+
+      -- если крежит в игнор листе, его не отправляем
+      if (exists(select * from kib_ignore where ki_from_k_id = :k_id)) then
+        continue;
+
+      select kont.k_kontract_no,
+             kont.k_disb_date
+      from kontract kont
+      where kont.k_id = :k_id
+      into :k_kontract_no,
+           :disb_date;
+    
+      if (phaseofcontract = 5) then  -- если крежит был закрыт отпраляем его в любом случае
+      begin
+        days_past_due_domain = 1;
+        local_status = &#x27;closed&#x27;;
+      end
+      else -- если это активный заем
+      begin
+           days_past_due_domain = 10;
+        
+           -- если у кредита изменился статус просрочки по отновшению к предыдущему дню, отправляем его
+           for select date_type,
+                      contract_status ,
+                      active_delinq_days
+           from pkb_get_loan_categ(:k_id, :rep_date_end)
+           into :date_type,
+                :contract_status_tmp,
+                :active_delinq_days
+           do
+           begin
+               if (date_type = &#x27;rep_date&#x27;) then
+                   days_past_due_domain = contract_status_tmp;
+               else
+                   days_past_due_domain_prev = contract_status_tmp;
+           end
+           if (days_past_due_domain &lt;&gt; days_past_due_domain_prev) then
+           begin
+               local_status = &#x27;changed_delinq_status&#x27;;
+           end
+           -- &lt; ---------
+           -- если это выдача займа
+           if (disb_date between rep_date_begin and rep_date_end) then
+           begin
+             if (not exists(select * from cib_to_send_kontracts cts
+                        where cts.cts_from_k_id = :k_id and
+                              iif(:cib_code = &#x27;CIB.PKB&#x27;, cts.cts_from_cp_pkb_id &lt;&gt; :pkb, cts.cts_from_cp_gkb_id &lt;&gt; :gkb))) then   -- если выдача была сегодня, но контракт снова попал в список, то отправляем уже не как новый контракт
+             begin
+               local_status = &#x27;disb&#x27;;
+               days_past_due_domain = 27;
+             end
+             else
+             begin
+               local_status = &#x27;payed&#x27;;
+               days_past_due_domain = 10;
+             end
+
+           end
+           -- если на период пакета по кредиту была оплата, добавляем кредит в пакет
+
+               if (exists(select *
+                       from operkred ok
+                       where ok.ok_type in (2, 4, 9) and
+                             ok.ok_ol_is_active = 1 and
+                             ok.ok_from_k_id = :k_id and
+                             ok.ok_ol_date between :rep_date_begin and :rep_date_end)) then
+                   local_status = &#x27;payed&#x27;;
+           -- &lt; --
+      end
+           suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

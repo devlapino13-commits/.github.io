@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_IMESSAGE_CREATE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_IMESSAGE_CREATE: 6 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_IMESSAGE_CREATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_approve_loan.html"><div class="to">HP_APPROVE_LOAN</div></a><a class="ref-card" href="hp_do_repayment.html"><div class="to">HP_DO_REPAYMENT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PLAN_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PLAN_REPAY</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">IM_TYPE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">IN_UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">IN_K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">IM_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_IMESSAGE_CREATE(
+    OL_ID D_ID,
+    PLAN_DATE D_DATE = current_date,
+    PLAN_REPAY CURR_TYPE = 0,
+    IM_TYPE D_INTEGER = 0,
+    IN_UN_ID D_ID = null,
+    IN_K_ID D_ID = null)
+RETURNS (
+    IM_ID D_ID)
+AS
+declare variable ol_date d_date;
+declare variable reg_id d_integer;
+declare variable cl_name d_str_255;
+declare variable un_id d_id;
+declare variable k_id d_id;
+declare variable actual_date d_date;
+declare variable actual_repay curr_type;
+declare variable amount_payment curr_type;
+begin
+
+  im_id = 0;
+  reg_id = (select ol_from_reg_id
+    from operlist where ol_id = :ol_id);
+  select first 1
+    ol_id,
+    ol_date,
+    ol_doc_client_name,
+    ol_user_id
+  from operlist
+  where (ol_id = :ol_id
+    or ol_parent_id = :ol_id)
+    and ol_oper_type = 1
+    and ol_oper_subtype = 2
+    and is_delete = 0
+    and ol_doc_client_name &lt;&gt; &#x27;&#x27;
+  into
+    :ol_id,
+    :ol_date,
+    :cl_name,
+    :un_id;
+
+  if (ol_id &gt; 0 or
+     (im_type = 1 and coalesce(:in_k_id, 0) &gt; 0)) then begin
+    actual_date = ol_date;
+    select
+      max(ok_from_k_id),
+      -sum(ok_os + ok_perc + ok_fine + ok_kommis + ok_kommis_adv)
+    from operkred
+    where ok_from_ol_id = :ol_id
+    into
+      :k_id,
+      :actual_repay;
+
+    amount_payment = 0;
+    if (actual_date &lt; plan_date) then
+    begin
+      if (actual_repay &gt;= plan_repay) then
+        amount_payment = actual_repay;
+      -- в случае полного досрочного погашения сумма plan_repay может оказаться больше чем actual_repay
+      -- поэтому проверим через oksummary закрыт ли кредит
+      else if (not exists(select * from oksummary oks
+                          where oks.oks_from_k_id = :k_id
+                            and :actual_date between oks.oks_date_begin and oks.oks_date_end
+      )) then
+        amount_payment = actual_repay;
+    end
+    if (actual_date = plan_date and actual_repay &gt; plan_repay )
+      then amount_payment = actual_repay - plan_repay;
+
+    if (amount_payment &gt; 0) then
+    begin
+      insert into internal_message(
+        im_from_ol_id, im_from_k_id, im_from_reg_id, im_through_whom, im_amount_payment, im_cashier_id, im_type)
+      values(:ol_id, :k_id, :reg_id, :cl_name, :amount_payment, :un_id, :im_type)
+      returning im_id into im_id;
+    end
+    else if (im_type = 1) then
+    begin
+      if (un_id is null) then
+        un_id = in_un_id;
+      if (k_id is null) then
+        k_id = in_k_id;
+      if (coalesce(amount_payment, 0) = 0 or coalesce(reg_id, 0) = 0 ) then
+      begin
+        select k.k_amount_approved, k.k_last_reg_id
+        from kontract k
+        where k.k_id = :k_id
+        into amount_payment, reg_id;
+      end
+
+      insert into internal_message(
+        im_from_ol_id, im_from_k_id, im_from_reg_id, im_through_whom, im_amount_payment, im_cashier_id, im_type)
+      values(:ol_id, :k_id, :reg_id, coalesce(:cl_name, &#x27;&#x27;), :amount_payment, :un_id, :im_type)
+      returning im_id into im_id;
+    end
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

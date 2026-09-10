@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_KN_OKSUMMARY_CHECK_DATA — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_KN_OKSUMMARY_CHECK_DATA: 0 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_KN_OKSUMMARY_CHECK_DATA</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_LINE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_NAME</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_KN_OKSUMMARY_CHECK_DATA
+RETURNS (
+    REP_LINE INTEGER,
+    REP_NAME D_STR_255,
+    REP_DATE DATE,
+    REP_AMOUNT CURR_TYPE)
+AS
+declare variable start_month date;
+begin
+  rep_date = &#x27;31.12.2017&#x27;;
+  start_month = rep_date - extract(day from rep_date) + 1;
+
+  while (rep_date &lt;= &#x27;30.09.2018&#x27;) do
+  begin
+    rep_line = 1;
+    rep_name = &#x27;Займы, где просроченный ОД меньше баланса&#x27;;
+    rep_amount = 0;
+    select count(*)
+    from kn_oksummary
+    where oks_date_begin = :rep_date and
+          oks_bal_zad_os &gt; oks_balance
+    into rep_amount;
+    if (rep_amount is null) then
+      rep_amount = 0;
+    suspend;
+
+    rep_line = 2;
+    rep_name = &#x27;Договора, где баланс участников с разными знаками&#x27;;
+    rep_amount = 0;
+    with tab
+    as (select oks_from_k_id, sum(oks_balance) as sum_balance, min(oks_balance) as min_balance
+        from kn_oksummary
+        where oks_date_begin = :rep_date
+        group by 1)
+    select count(*)
+    from tab
+    where (sum_balance &gt; 0 and
+          min_balance &lt;= 0) or
+          (sum_balance = 0 and
+          min_balance &lt; 0)
+    into rep_amount;
+    if (rep_amount is null) then
+      rep_amount = 0;
+    suspend;
+
+    rep_line = 3;
+    rep_name = &#x27;Договора, где просроченные дни участников разные&#x27;;
+    rep_amount = 0;
+    with tab
+    as (select oks_from_k_id, max(coalesce(oks_delinq_date, &#x27;01.01.1990&#x27;)) as max_delinq_date,
+               min(coalesce(oks_delinq_date, &#x27;01.01.1990&#x27;)) as min_delinq_date
+        from kn_oksummary
+        where oks_date_begin = :rep_date
+        group by 1)
+    select count(*)
+    from tab
+    where max_delinq_date &lt;&gt; min_delinq_date
+    into rep_amount;
+    if (rep_amount is null) then
+      rep_amount = 0;
+    suspend;
+
+    rep_line = 4;
+    rep_name = &#x27;Займы, где на момент закрытия линейный ВБС &lt; 0&#x27;;
+    rep_amount = 0;
+    select count(*)
+    from kn_oksummary
+    where oks_date_begin between :start_month and :rep_date and
+          oks_close_state = 1 and
+          oks_vbs_end &lt; 0
+    into rep_amount;
+    if (rep_amount is null) then
+      rep_amount = 0;
+    suspend;
+
+    rep_line = 5;
+    rep_name = &#x27;Займы, где на момент закрытия ВБС ЕПС &lt; 0&#x27;;
+    rep_amount = 0;
+    select count(*)
+    from kn_oksummary
+    where oks_date_begin between :start_month and :rep_date and
+          oks_close_state = 1 and
+          oks_bal_esp_end &lt; 0
+    into rep_amount;
+    if (rep_amount is null) then
+      rep_amount = 0;
+    suspend;
+
+    rep_line = 6;
+    rep_name = &#x27;Займы, где на момент закрытия ВБС ЕПС &lt; линейный ВБС&#x27;;
+    rep_amount = 0;
+    select count(*)
+    from kn_oksummary
+    where oks_date_begin between :start_month and :rep_date and
+          oks_close_state = 1 and
+          oks_bal_esp_end &lt; oks_vbs_end
+    into rep_amount;
+    if (rep_amount is null) then
+      rep_amount = 0;
+    suspend;
+
+    rep_line = 7;
+    rep_name = &#x27;Займы, где РО больше ВБС ЕПС&#x27;;
+    rep_amount = 0;
+    select count(*)
+    from kn_oksummary
+    where oks_date_begin = :rep_date and
+          oks_ecl_vbs &gt; oks_bal_esp_end
+    into rep_amount;
+    if (rep_amount is null) then
+      rep_amount = 0;
+    suspend;
+
+    rep_line = 8;
+    rep_name = &#x27;Займы, где РО больше ВБС ЕПС более чем 1 руб.&#x27;;
+    rep_amount = 0;
+    select count(*)
+    from kn_oksummary
+    where oks_date_begin = :rep_date and
+          oks_ecl_vbs &gt; oks_bal_esp_end + 1
+    into rep_amount;
+    if (rep_amount is null) then
+      rep_amount = 0;
+    suspend;
+
+    rep_date = dateadd(month, 1, dateadd(day, 1, rep_date)) - 1;
+    start_month = rep_date - extract(day from rep_date) + 1;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

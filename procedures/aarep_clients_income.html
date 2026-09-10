@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_CLIENTS_INCOME — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_CLIENTS_INCOME: 2 входных, 5 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_CLIENTS_INCOME</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_objectprops_get.html"><div class="to">HP_OBJECTPROPS_GET</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_REGION_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_INN</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OFFICER_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REG_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_KONTRACT_NO</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OVS_VALUE</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_CLIENTS_INCOME(
+    REP_REGION_ID INTEGER,
+    REP_DATE_END DATE)
+RETURNS (
+    C_INN VARCHAR(100),
+    OFFICER_NAME VARCHAR(100),
+    REG_NAME VARCHAR(100),
+    K_KONTRACT_NO VARCHAR(20),
+    OVS_VALUE VARCHAR(255))
+AS
+declare variable C_ID ID_TYPE;
+declare variable OKS_KC_ID ID_TYPE;
+declare variable OKS_REGION_ID integer;
+declare variable C_NAME_FIO varchar(100);
+declare variable K_ID ID_TYPE;
+declare variable REG_ID_PRIOR integer;
+declare variable OKS_KC_ID_PRIOR ID_TYPE;
+begin
+  reg_id_prior = 0;
+  oks_kc_id_prior = 0;
+  for select oks_kc_id, oks_region_id, oks_from_k_id
+      from oksummary, region_list(:rep_region_id, 1, 3, 1)
+      where :rep_date_end between oks_date_begin and oks_date_end and
+            oks_region_id = id_list
+            and oks_close_state = 0 
+      order by oks_region_id, oks_kc_id
+      into oks_kc_id, oks_region_id, k_id
+  do
+  begin
+    if (reg_id_prior &lt;&gt; oks_region_id) then
+    begin
+      reg_id_prior = oks_region_id;
+      select reg_code || &#x27; &#x27; || reg_name
+      from region
+      where reg_unicode = :oks_region_id
+      into reg_name;
+    end
+    if (oks_kc_id_prior &lt;&gt; oks_kc_id) then
+    begin
+      oks_kc_id_prior = oks_kc_id;
+      select c_name_fio
+      from clients
+      where c_id = :oks_kc_id
+      into officer_name;
+    end
+    select k_kontract_no
+    from kontract
+    where k_id = :k_id
+    into k_kontract_no;
+
+    for select kc_from_c_id
+        from knclient
+        where kc_from_k_id = :k_id and
+              kc_amount_approved &gt; 0
+        into c_id
+    do
+    begin
+
+      select c_name_fio, c_inn
+      from clients
+      where c_id = :c_id
+      into c_name_fio, c_inn;
+      if (c_inn is null) then
+        c_inn = c_name_fio;
+
+      select ovs_value
+      from hp_objectprops_get(0, :c_id, -1, &#x27;work_monthly_income&#x27;, :rep_date_end)
+      into ovs_value;
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

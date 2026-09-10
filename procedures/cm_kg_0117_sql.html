@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_KG_0117_SQL — процедура — схема БД</title>
+<meta name="description" content="Процедура CM_KG_0117_SQL: 3 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_KG_0117_SQL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_KG_0117_SQL(
+    MA_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable kc_amount curr_type;
+declare variable c_id id_type;
+declare variable pr_id d_integer;
+declare variable pr_code d_str_100;
+declare variable date_oper d_date;
+declare variable pr_id_tmp d_integer;
+declare variable is_ok d_smallint;
+declare variable pr_code_tmp d_str_100;
+declare variable pr_name d_str_100;
+begin
+  res_error_is_critical = 2;
+  select p.pr_id, p.pr_code, m.ma_date_oper, p.pr_name
+  from miniapp m, product p
+  where ma_id = :ma_id and
+        ma_is_active = 1 and
+        ma_date_end = &#x27;31.12.9999&#x27; and
+        m.ma_refund = 1 and
+        p.pr_id = m.ma_from_pr_id
+  into pr_id, pr_code, date_oper, pr_name;
+  if (pr_code containing &#x27;.IPF.&#x27; and
+      pr_code not containing &#x27;.KARDHASAN.&#x27;) then -- если не Карт-Хасан
+  begin
+    res_error_text = &#x27;Рефинансирование ИПФ-займов возможно только по Карт-Хасан&#x27;;
+    suspend;
+    exit;
+  end
+  if (pr_code is not null) then
+    for select mac_from_c_id
+        from miniappclient mcl
+        where mac_from_ma_id = :ma_id and
+              mac_amount &gt; 0
+        into :c_id
+    do
+    begin
+      select c_name_fio
+      from clients
+      where c_id = :c_id
+      into :res_info_text;
+      pr_id_tmp = null;
+      is_ok = 0;
+      for select k.k_from_pr_id, pr.pr_code
+          from kontstate ks
+          inner join knclient knc on knc.kc_from_k_id = ks.ks_from_k_id
+          inner join kontract k on k.k_id = knc.kc_from_k_id
+          inner join product pr on pr.pr_id = k.k_from_pr_id
+          where knc.kc_from_c_id = :c_id and
+                knc.kc_amount_approved &gt; 0 and
+                ks.ks_ol_is_delete = 0 and -- говорит о том что операция не удалена
+                ks.ks_state = 1 and -- говорит о том, что кредит активный
+                :date_oper between ks.ks_date_begin and ks.ks_date_end and
+                :is_ok = 0
+          into pr_id_tmp, pr_code_tmp
+      do
+      begin
+        if (coalesce(pr_id_tmp, &#x27;&#x27;) = &#x27;&#x27;) then
+        begin
+          res_error_text = &#x27;Не найден активный заем для рефинансирования&#x27;;
+          suspend;
+        end
+        /* MRAKHMANOV
+    Продукт  список ID
+    Бирге Стандарт   214, 215, 335
+    Бирге Экспресс  235, 236, 340
+    Бирге Льготный  171, 176, 341
+    Бирге Мугалим  218, 219, 339
+    Бирге Мугалим Льготный  232, 233, 342
+    */
+        if (pr_code containing &#x27;.BIRGE.&#x27;) then
+        begin
+          if (pr_code containing &#x27;.STANDART.&#x27; and --            pr_id_tmp in (214, 215, 335)
+              pr_code_tmp not containing &#x27;.IPF.&#x27;) then
+          begin
+            is_ok = 1;
+          end
+          else
+          if (pr_code containing &#x27;.express.&#x27; and
+              pr_id_tmp in (235, 236, 340)) then
+          begin
+            is_ok = 1;
+          end
+          else
+          if (pr_code containing &#x27;.MUGALIM.&#x27;) then
+          begin
+            if (pr_code containing &#x27;.par.&#x27; and
+                pr_id_tmp in (232, 233, 342)) then
+            begin
+              is_ok = 1;
+            end
+            else
+            if (pr_id_tmp in (218, 219, 339)) then
+            begin
+              is_ok = 1;
+            end
+          end
+          else
+          if (pr_code containing &#x27;.PAR.&#x27; and
+              pr_id_tmp in (171, 176, 341, 272)) then     --добавил 272 письмо от Анары Кошматов
+          begin
+            is_ok = 1;
+          end
+        end
+        else
+        if (pr_code containing &#x27;.GR.&#x27;) then
+        begin
+          /*
+          MRAKHMANOV
+        Групповой   208, 209, 334
+        Групповой Льготный  153, 156, 337
+        Групповой Мугалим   212, 213, 336
+        Групповой Мугалим Льготный  230, 231, 338
+        Фермер  252, 253, 296
+            
+        Кард Хасан  237, 269
+        
+        select * from product
+        where pr_code containing &#x27;.farmer.&#x27;      */
+          if (pr_code containing &#x27;.MUGALIM.&#x27;) then
+          begin
+            if (pr_code containing &#x27;.par.&#x27; and
+                pr_id_tmp in (230, 231, 338)) then
+            begin
+              is_ok = 1;
+            end
+            else
+            if (pr_id_tmp in (212, 213, 261, 336)) then
+            begin
+              is_ok = 1;
+            end
+          end
+          else
+          if (pr_code containing &#x27;.PAR.&#x27; and
+              pr_id_tmp in (153, 156, 337)) then
+          begin
+            is_ok = 1;
+          end
+          else
+          if (pr_code not containing &#x27;.PAR.&#x27; and
+              pr_id_tmp in (208, 209, 334, 260)) then  --260 добавлен отдельно, в письме от Алмаза не было
+          begin
+            is_ok = 1;
+          end
+        end
+        else
+        if (pr_code containing &#x27;.IPF.&#x27; and
+            pr_code containing &#x27;.KARDHASAN.&#x27; and
+            pr_id_tmp not in (237, 269)) then
+        begin
+          is_ok = 1;
+        end
+        else
+        if (pr_code containing &#x27;.farmer.&#x27; and
+            pr_id_tmp in (252, 253, 296)) then
+        begin
+          is_ok = 1;
+        end
+      end
+      if (is_ok = 0) then
+      begin
+        res_error_text = &#x27;Не найден активный заем по продукту: &#x27; || pr_name || --
+        iif(pr_code containing &#x27;.KARDHASAN.&#x27;, &#x27;. Рефинансирование ИПФ-займов возможно только по Карт-Хасан&#x27;, --
+        &#x27;. Рефинансирование классического займа возможно либо в рамках одного продукта либо через Бирге Стандарт&#x27;);
+        suspend;
+      end
+    end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

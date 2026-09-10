@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FSROBOT_SMS_SEND_DAILY — процедура — схема БД</title>
+<meta name="description" content="Процедура FSROBOT_SMS_SEND_DAILY: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FSROBOT_SMS_SEND_DAILY</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">8</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">8 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_cli_passport_actual_check.html"><div class="to">AAREP_CLI_PASSPORT_ACTUAL_CHECK</div></a><a class="ref-card" href="aarep_sms_birthday.html"><div class="to">AAREP_SMS_BIRTHDAY</div></a><a class="ref-card" href="aarep_sms_delinq.html"><div class="to">AAREP_SMS_DELINQ</div></a><a class="ref-card" href="aarep_sms_kont_delinq.html"><div class="to">AAREP_SMS_KONT_DELINQ</div></a><a class="ref-card" href="aarep_sms_repay_3day.html"><div class="to">AAREP_SMS_REPAY_3DAY</div></a><a class="ref-card" href="hp_contdata_get_cell_main.html"><div class="to">HP_CONTDATA_GET_CELL_MAIN</div></a><a class="ref-card" href="hp_fio_clear.html"><div class="to">HP_FIO_CLEAR</div></a><a class="ref-card" href="mc_send_push.html"><div class="to">MC_SEND_PUSH</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FSROBOT_SMS_SEND_DAILY
+AS
+declare variable DB_ID integer;
+declare variable USER_ID ID_TYPE;
+declare variable CLIENT_ID ID_TYPE;
+declare variable MSG_BODY varchar(255);
+declare variable MSG_MAIL_TO varchar(255);
+declare variable MSG_LIFETIME_DELINQ integer;
+declare variable MSG_LIFETIME_BIRTHDAY integer;
+declare variable MSG_LIFETIME_REPAY integer;
+declare variable MSG_COMMAND_KIND varchar(30);
+declare variable PUSH_BODY D_STR_LONG;
+declare variable CL_NAME STR_100;
+declare variable C_ALTERNAT_FIO STR_100;
+declare variable MSG_KIND D_STR_CODE;
+declare variable CFG_NAME D_STR_CODE;
+declare variable MSG_LIFETIME_EXP_PASS D_INTEGER;
+declare variable KC_ID D_ID;
+declare variable mcl_project d_integer;
+declare variable msg_sender_code d_str_code;
+declare variable k_id d_id;
+begin
+ if (exists(select * from smssendok -- если в данной таблице имеется запись на данную дату то СМС уже было отправлено
+ where sso_date = current_date)) then
+ begin
+   exit;
+ end
+
+  cl_name = &#x27;&#x27;;
+  -- Отправка ежедневных СМС (бывш. SmsSvc). Вызывается в FSROBOT_SH_MAIN
+
+  -- Отправка от имени пользователя FINSTART_ROBOT (id: 1000000000000)
+  user_id = 1000000000000;
+
+  -- Сроки хранения отправленных СМС:
+  msg_lifetime_delinq = 365 * 3; -- Уведомления о просрочках, 3 года
+  msg_lifetime_birthday = 1; -- Поздравления с днем рождения, 1 день
+  msg_lifetime_repay = 365; -- Напоминания о погашении, 1 год
+  msg_lifetime_exp_pass = 30; -- Уведомление об истечении паспорта 30 дней
+
+  -- Имя конфигурации отправки (эта процедура)
+  msg_command_kind = &#x27;fsrobot_sms_send_daily&#x27;;
+
+  db_id = f_get_db_id();
+
+  -- СМС для клиентов РФ об истечении паспорта гражданина РФ
+  if (db_id = 81001) then
+  begin
+    msg_body = &#x27;Уважаемый, клиент! В связи с истечением срока действия паспорта гражданина РФ, просим Вас обратиться в Компанию, предоставив документ, удостоверяющий личность.&#x27;;
+    push_body = msg_body;
+    for select distinct c_id
+        from aarep_cli_passport_actual_check(1000000, current_date)
+        where c_pass_date_expire = current_date - 1
+        into client_id
+    do
+    begin
+      msg_kind = f_get_msg_kind(client_id, &#x27;aarep_cli_passport_actual_check&#x27;, &#x27;&#x27;, db_id);
+      if (msg_kind = &#x27;sms&#x27; and
+          msg_body &lt;&gt; &#x27;&#x27; and
+          msg_mail_to starting &#x27;7&#x27;) then
+      begin
+        select cont_value
+        from hp_contdata_get_cell_main(0, :client_id)
+        into msg_mail_to;
+
+        mcl_project = f_get_mcl_project(f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;), client_id);
+        msg_sender_code = f_enum_code(&#x27;sms_sender&#x27;, iif(:mcl_project = 2, 1, 0));
+
+        f_send_sms(msg_mail_to, msg_body, &#x27;clients&#x27;, client_id,
+                   &#x27;aarep_cli_passport_actual_check&#x27;, msg_lifetime_exp_pass, user_id, 0, msg_sender_code);
+
+      end
+      else
+      if (msg_kind = &#x27;push&#x27; and
+          push_body &lt;&gt; &#x27;&#x27;) then
+        execute procedure mc_send_push(&#x27;clients&#x27;, client_id,
+            &#x27;Истек срок действия паспорта&#x27;, push_body,
+            msg_lifetime_exp_pass);
+
+      if (msg_kind in (&#x27;push&#x27;, &#x27;sms&#x27;)) then
+        insert into clipassdelaysms (cpds_date, cpds_timestamp, cpds_c_id,
+                                     cpds_msg_id)
+        values (current_date, current_timestamp, :client_id, 0);
+    end
+  end
+
+  -- Поздравление клиентов с днем рождения
+  for select distinct phone, client_id, c_alternat_fio
+      from aarep_sms_birthday(current_date)
+      into msg_mail_to, client_id, c_alternat_fio
+
+  do
+  begin
+    select txt2
+    from hp_fio_clear(:c_alternat_fio)
+    into :cl_name;
+
+    cl_name = coalesce(cl_name, &#x27;&#x27;);
+    if (cl_name = &#x27;&#x27;) then
+      cl_name = &#x27;klient&#x27;;
+
+    push_body = &#x27;&#x27;;
+
+    if (db_id = 94401) then
+      msg_body = &#x27;Hormetli mushteri, Sizin ad gunuzu tebrik edirik! &#x27; || &#x27;Ishlerinizde ugurlar ve can sagligi arzu edirik. Hormetle M Bulak.&#x27;;
+
+    if (db_id = 81001) then
+    begin
+      msg_body = :cl_name || &#x27;, pozdravlyaem s dnem rojdeniya! Jelaem zdorovya, dostatka i blagopoluchiya v semye. Budte schastlivy i uspeshny!&#x27;;
+      push_body = &#x27;Уважаемый &#x27; || :cl_name || &#x27;. Спешим поздравить Вас с днём рождения. В этот день мы хотим пожелать Вам благополучия, крепкого здоровья и успехов в любых начинаниях! Надеемся быть полезными Вам и в будущем&#x27;;
+    end
+
+    --RFCKG-2987
+    if (db_id in (39801, 41701)) then
+      push_body = &#x27;Уважаемый клиент М Булак, С днем рождения! Желаем счастья и удачи&#x27;;
+
+    msg_kind = f_get_msg_kind(client_id, &#x27;aarep_sms_birthday&#x27;, &#x27;&#x27;, db_id);
+
+    --RFCKG-2987
+    if (db_id in (39801, 41701)) then
+      msg_kind = &#x27;push&#x27;;
+
+    if (db_id &lt;&gt; 81001 or f_clientcom_allowed(client_id, 1, 1, 1) = 1) then
+    begin
+      if (msg_kind = &#x27;sms&#x27; and
+          msg_body &lt;&gt; &#x27;&#x27;) then
+      begin
+        msg_sender_code = null;
+
+        if (db_id = 81001) then
+        begin
+            mcl_project = f_get_mcl_project(f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;), client_id);
+            msg_sender_code = f_enum_code(&#x27;sms_sender&#x27;, iif(:mcl_project = 2, 1, 0));
+        end
+
+        f_send_sms(msg_mail_to, msg_body, &#x27;clients&#x27;, client_id, &#x27;aarep_sms_birthday&#x27;, msg_lifetime_birthday, user_id, 0, msg_sender_code);
+      end
+      else
+      if (msg_kind = &#x27;push&#x27; and
+          push_body &lt;&gt; &#x27;&#x27;) then
+        execute procedure mc_send_push(&#x27;clients&#x27;, client_id,
+            &#x27;Поздравление с днем рождения!&#x27;, push_body,
+            msg_lifetime_birthday);
+    end
+  end
+
+  if (db_id = 81001) then
+  begin
+    -- Напоминание на 1, 3, 5, 10 день просрочки
+    for select distinct phone, sms_message, push_message, client_id, &#x27;1&#x27;, kc_id
+        from aarep_sms_kont_delinq(current_date, 1)
+        union
+        select distinct phone, sms_message, push_message, client_id, &#x27;3&#x27;, kc_id
+        from aarep_sms_kont_delinq(current_date, 3)
+        union
+        select distinct phone, sms_message, push_message, client_id, &#x27;5&#x27;, kc_id
+        from aarep_sms_kont_delinq(current_date, 5)
+        union
+        select distinct phone, sms_message, push_message, client_id, &#x27;10&#x27;, kc_id
+        from aarep_sms_kont_delinq(current_date, 10)
+        into msg_mail_to, msg_body, push_body, client_id, cfg_name, kc_id
+    do
+    begin
+      msg_kind = f_get_msg_kind(client_id, &#x27;aarep_sms_kont_delinq&#x27;, cfg_name, db_id);
+      if (msg_kind = &#x27;sms&#x27; and
+          msg_body &lt;&gt; &#x27;&#x27;) then
+      begin
+        select kc.kc_from_k_id
+        from knclient kc
+        where kc.kc_id = :kc_id
+        into :k_id;
+
+        mcl_project = f_get_mcl_project(f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;), :k_id);
+        msg_sender_code = f_enum_code(&#x27;sms_sender&#x27;, iif(:mcl_project = 2, 1, 0));
+
+        f_send_sms(msg_mail_to, msg_body, &#x27;knclient&#x27;, kc_id, &#x27;aarep_sms_kont_delinq.&#x27; || cfg_name, msg_lifetime_delinq, user_id, 0, :msg_sender_code);
+      end
+      else
+      if (msg_kind = &#x27;push&#x27; and
+          push_body &lt;&gt; &#x27;&#x27;) then
+        f_send_push(&#x27;knclient&#x27;, kc_id, &#x27;Напоминание о просрочке&#x27;, push_body, &#x27;aarep_sms_kont_delinq.&#x27; || cfg_name, msg_lifetime_delinq, user_id);   -- RFCRU-4115
+    end
+  end
+
+  if (db_id = 94401) then
+  begin
+    -- Напоминание на 1, 5 день просрочки
+    for select distinct phone, sms_message, client_id
+        from aarep_sms_delinq(current_date, 1)
+        into msg_mail_to, msg_body, client_id
+    do
+    begin
+      insert into fsrobot_msgbox (msg_type, msg_mail_to, msg_subject, msg_body,
+                                  msg_lifetime_days, msg_from_un_id,
+                                  msg_command_kind, msg_object_kind,
+                                  msg_object_id)
+      values (1, :msg_mail_to, &#x27;&#x27;, :msg_body, :msg_lifetime_delinq, :user_id,
+              :msg_command_kind, 0, :client_id);
+    end
+  end
+
+  if (db_id = 81001) then
+  begin
+    -- Напоминание о погашении за 3 дня
+    for select distinct phone, sms_message, client_id, kontract_id, push_message
+        from aarep_sms_repay_3day(current_date, 3, 0)
+        into msg_mail_to, msg_body, client_id, :k_id, push_body
+    do
+    begin
+      msg_kind = f_get_msg_kind(client_id, &#x27;aarep_sms_repay_3day&#x27;, &#x27;3&#x27;, db_id);
+      if (msg_kind = &#x27;sms&#x27; and
+          msg_body &lt;&gt; &#x27;&#x27;) then
+      begin
+        mcl_project = f_get_mcl_project(f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;), :k_id);
+        msg_sender_code = f_enum_code(&#x27;sms_sender&#x27;, iif(:mcl_project = 2, 1, 0));
+
+        f_send_sms(msg_mail_to, msg_body, &#x27;clients&#x27;, client_id, &#x27;aarep_sms_repay_3day.3&#x27;, msg_lifetime_repay, user_id, 0, msg_sender_code);
+      end
+      else
+      if (msg_kind = &#x27;push&#x27; and
+          push_body &lt;&gt; &#x27;&#x27;) then
+        execute procedure mc_send_push(&#x27;clients&#x27;, client_id,
+            &#x27;Напоминание о погашении&#x27;, push_body,
+            msg_lifetime_repay);
+    end
+  end
+
+  if (db_id = 94401) then
+  begin
+    -- Напоминание о погашении, за 1 день
+    for select distinct phone, sms_message, client_id
+        from aarep_sms_repay_3day(current_date, 1, 0)
+        into msg_mail_to, msg_body, client_id
+    do
+    begin
+      insert into fsrobot_msgbox (msg_type, msg_mail_to, msg_subject, msg_body,
+                                  msg_lifetime_days, msg_from_un_id,
+                                  msg_command_kind, msg_object_kind,
+                                  msg_object_id)
+      values (1, :msg_mail_to, &#x27;&#x27;, :msg_body, :msg_lifetime_repay, :user_id,
+              :msg_command_kind, 0, :client_id);
+    end
+  end
+
+  if (db_id = 94401) then
+  begin
+    -- Напоминание об отпуске (Эльнара из отдела УЧР)
+    for select c_id,
+               &#x27;Hörmətli &#x27; || c_name_fio || &#x27;, &#x27; || right(&#x27;0&#x27; || extract(day from vr_date_begin), 2) || &#x27;.&#x27; || right(&#x27;0&#x27; || extract(month from vr_date_begin), 2) || &#x27;.&#x27; || extract(year from vr_date_begin) || &#x27;-ci il tarixindən &#x27; || right(&#x27;0&#x27; || extract(day from vr_date_end), 2) || &#x27;.&#x27; || right(&#x27;0&#x27; || extract(month from vr_date_end), 2) || &#x27;.&#x27; || extract(year from vr_date_end) || &#x27;-ci il tarixinə kimi məzuniyyətdə hesablanacaqsınız.&#x27;
+        from vacationrequest vr, hr_pstatus, clients
+        where current_date = vr_date_begin - 5 and
+              vr.vr_from_c_id = c_id and
+              ps_from_c_id = c_id and
+              current_date between ps_date_begin and ps_date_end and
+              ps_status = 1 and
+              ps_is_working = 1
+        into client_id, msg_body
+    do
+    begin
+      select cont_value
+      from hp_contdata_get_cell_main(0, :client_id)
+      into msg_mail_to;
+
+      if (msg_mail_to starting &#x27;994&#x27;) then
+      begin
+        insert into fsrobot_msgbox (msg_type, msg_mail_to, msg_subject,
+                                    msg_body, msg_lifetime_days, msg_from_un_id,
+                                    msg_command_kind, msg_object_kind,
+                                    msg_object_id)
+        values (1, :msg_mail_to, &#x27;&#x27;, :msg_body, 30, :user_id, :msg_command_kind,
+                0, :client_id);
+      end
+    end
+  end
+
+  -- Отчет об отправке
+  client_id = 1000000000000;
+  msg_mail_to = &#x27;finstart@mbfplanet.com&#x27;;
+  msg_body = &#x27;СМС поставлены в очередь на отправку &#x27; || &#x27;(Дни рождения, напоминания о погашении, уведомления о просрочках).&#x27;;
+
+  insert into fsrobot_msgbox (msg_type, msg_mail_to, msg_subject, msg_body,
+                              msg_lifetime_days, msg_from_un_id,
+                              msg_command_kind, msg_object_kind, msg_object_id)
+  values (0, :msg_mail_to, &#x27;СМС рассылка произведена&#x27;,
+          :msg_body, 1, :user_id, :msg_command_kind, 0, :client_id);
+
+  insert into smssendok (sso_date)
+  values (current_date);
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

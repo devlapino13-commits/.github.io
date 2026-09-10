@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MC_ONLINE_APP_CANCEL — процедура — схема БД</title>
+<meta name="description" content="Процедура MC_ONLINE_APP_CANCEL: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>MC_ONLINE_APP_CANCEL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_miniapp_status_change.html"><div class="to">HP_MINIAPP_STATUS_CHANGE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="mc_online_app_approve_disb.html"><div class="to">MC_ONLINE_APP_APPROVE_DISB</div></a><a class="ref-card" href="mc_online_app_to_express.html"><div class="to">MC_ONLINE_APP_TO_EXPRESS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MCL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ONLINE_APP_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ERROR_TEXT</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE MC_ONLINE_APP_CANCEL(
+    MCL_ID D_ID,
+    ONLINE_APP_ID D_ID)
+RETURNS (
+    ERROR_TEXT D_STR_LONG)
+AS
+declare variable MA_ID D_ID;
+declare variable K_ID D_ID;
+declare variable UN_ID D_ID;
+declare variable MCL_LANG_CODE D_STR_LANG;
+begin
+  error_text = &#x27;&#x27;;
+
+  select exa.exa_from_ma_id, exa.exa_from_k_id, exa.exa_from_un_id
+  from online_app oa
+  inner join expressapp exa on exa.exa_id = oa.oa_from_exa_id
+  where oa.oa_id = :online_app_id
+  into ma_id, k_id, un_id;
+
+  select mcl.mcl_lang_code
+  from mc_login mcl
+  where mcl.mcl_id = :mcl_id
+  into :mcl_lang_code;
+
+  if (exists(select *
+             from kontstate ks
+             where ks.ks_from_k_id = :k_id and
+                   ks.ks_state = 1 and
+                   ks.ks_ol_is_delete = 0)) then
+  begin
+    error_text = f_lang(:mcl_lang_code, &#x27;Аннулировать заявку не удалось.&#x27;);
+    suspend;
+    exit;
+  end 
+
+  if (coalesce(ma_id, 0) &lt;&gt; 0) then
+  begin
+    -- Инсертим запись в kontreslist со значением &quot;Перерегистрация клиента&quot;
+    insert into kontreslist (krl_id, krl_from_kr_id, krl_from_un_id, krl_from_k_id, krl_ma_reg_id, krl_ma_id,
+                             krl_datetime, krl_date_old, krl_date_new, krl_from_fs)
+    values (-1, 89, :un_id, null, 0, :ma_id, current_timestamp, current_date, current_date, 0);
+    execute procedure hp_miniapp_status_change(:ma_id, :un_id, 0);
+  end
+
+  if (coalesce(k_id, 0) &lt;&gt; 0) then
+  begin
+    --Таблица kontlog автоматически обновиться со статусом -1
+    update kontract kt
+    set kt.k_status = -1
+    where kt.k_id = :k_id;
+  end 
+
+  update online_app oa
+  set oa.oa_status = -1
+  where oa.oa_id = :online_app_id and
+        oa.oa_from_mcl_id = :mcl_id;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

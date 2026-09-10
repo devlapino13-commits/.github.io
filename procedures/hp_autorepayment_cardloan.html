@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_AUTOREPAYMENT_CARDLOAN — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_AUTOREPAYMENT_CARDLOAN: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_AUTOREPAYMENT_CARDLOAN</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_make_zad_list.html"><div class="to">AAREP_MAKE_ZAD_LIST</div></a><a class="ref-card" href="hp_do_repayment.html"><div class="to">HP_DO_REPAYMENT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_cardsync_action_exec_one.html"><div class="to">HP_CARDSYNC_ACTION_EXEC_ONE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CS_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_AUTOREPAYMENT_CARDLOAN(
+    CS_ID D_INTEGER = null)
+AS
+declare variable csc_id d_integer;
+declare variable card_id d_integer;
+declare variable cca_id d_integer;
+declare variable k_id d_id;
+declare variable c_id d_id;
+declare variable un_id d_id;
+declare variable reg_id d_integer;
+declare variable amount d_currency;
+declare variable cs_amount d_currency;
+declare variable dt_curr d_date;
+declare variable acc_dt d_str_20;
+declare variable ol_id d_id;
+begin
+  dt_curr = current_date;
+  un_id = 1000000000000;
+  csc_id = f_get_cardsynccfg_id(&#x27;check_balance_on_autorepayment&#x27;);
+
+  if (cs_id &gt; 0) then
+  begin
+    amount = coalesce((select arc_amount from autorepayment_cardloan where arc_from_cs_id = :cs_id), 0);
+    select
+      cs_card_id,
+      cs_from_cca_id,
+      cs_from_k_id,
+      cs_from_c_id,
+      cs_office_id,
+      cast(f_json_str_get_value(cs_answer_json, &#x27;data.availableAmount&#x27;, 0) as d_currency)
+    from cardsync
+    where cs_id = :cs_id
+      and cs_from_csc_id = :csc_id
+      and cs_status = 2
+    into
+      :card_id,
+      :cca_id,
+      :k_id,
+      :c_id,
+      :reg_id,
+      :cs_amount;
+    if (row_count = 1) then
+      in autonomous transaction do
+      begin
+        update cardsync set
+          cs_amount = :cs_amount
+        where cs_id = :cs_id;
+
+        update autorepayment_cardloan set
+          arc_cs_amount = :cs_amount,
+          arc_is_completed = 1
+        where arc_from_cs_id = :cs_id;
+
+        if (cs_amount &gt; 0 and amount &gt; 0) then
+        begin
+          if (amount &gt; cs_amount) then
+            amount = cs_amount;
+
+          acc_dt = (
+            select al_id from acc_list
+            where al_from_reg_id = :reg_id
+              and al_currency = &#x27;417&#x27;
+              and al_account = &#x27;20001/1&#x27;);
+          ol_id = (
+            select
+              ol_id
+            from hp_do_repayment (
+              :k_id,
+              0,              -- c_id
+              :dt_curr,       -- rep_date
+              :amount,        -- repay_amount
+              1,              -- repay_to_os
+              1,              -- repay_to_perc
+              1,              -- repay_to_fine
+              1,              -- repay_to_kommis
+              1,              -- need_save
+              0,              -- is_full_repay
+              0,              -- is_writeoff
+              :reg_id,        -- repay_fact_office_id
+              3,              -- repay_dt_account_kind
+              :acc_dt,        -- repay_dt_account_no
+              1,              -- repay_curr_rate
+              :un_id,         -- repay_user_id
+              :c_id,          -- repay_document_client
+              null,           -- repay_doc_client_name_reason
+              0,              -- repay_manager_c_id
+              0));             -- repay_from_rd_id
+          if (ol_id &gt; 0) then
+          begin
+            update operlist set
+              ol_memo = ol_memo || coalesce(f_format(&#x27; номер ID %1 (сч.%2)&#x27;, :card_id, :cca_id), &#x27;&#x27;)
+            where :ol_id in (ol_id, ol_parent_id);
+
+            update autorepayment_cardloan set
+              arc_from_ol_id = :ol_id,
+              arc_ol_date = :dt_curr
+            where arc_from_cs_id = :cs_id;
+          end
+        end
+      end
+  end
+  else
+  begin
+    for
+      select
+        clo_card_id,
+        clo_from_c_id,
+        k_id,
+        k_last_reg_id
+      from cardlistloan
+        inner join kontract
+          on k_id = clo_from_k_id
+            and (k_fact_closed_date is null or k_fact_closed_ol_id is null)
+            and exists (
+                  select *
+                  from operkred
+                  where ok_from_k_id = k_id
+                    and ok_sh_date = :dt_curr
+                    and ok_ol_is_active = 1
+                    and ok_sh_id &gt; 0
+                    and ok_type = 1)
+            and not exists (
+                  select *
+                  from autorepayment_cardloan
+                  where arc_from_k_id = k_id
+                    and arc_is_completed = 1
+                    and arc_amount &gt;= arc_cs_amount)
+    into
+      :card_id,
+      :c_id,
+      :k_id,
+      :reg_id
+    do
+    begin
+      amount = coalesce((
+        select
+          round(sum(zad_os) + round(1.02 * sum(zad_perc), 1) + sum(sh_calc_fine), 0)
+        from aarep_make_zad_list(:k_id, :dt_curr, 1)
+        where sh_date &lt;= :dt_curr), 0);
+
+      if (amount &gt; 0) then
+        in autonomous transaction do
+        begin
+          insert into cardsync(
+            cs_from_csc_id,
+            cs_card_id,
+            cs_from_cca_id,
+            cs_object_kind,
+            cs_object_id,
+            cs_request_json,
+            cs_office_id,
+            cs_from_k_id,
+            cs_from_c_id,
+            cs_from_un_id)
+          select first 1
+            :csc_id,
+            :card_id,
+            cs_from_cca_id,
+            9,
+            :k_id,
+            f_format(&#x27;{&quot;card_id&quot;: %1}&#x27;, cs_card_id),
+            :reg_id,
+            :k_id,
+            :c_id,
+            :un_id
+          from cardsync
+          where cs_card_id = :card_id
+            and cs_from_k_id = :k_id
+          order by cs_id desc
+          returning cs_id into :cs_id;
+
+          insert into autorepayment_cardloan (
+            arc_from_k_id,
+            arc_from_reg_id,
+            arc_from_cs_id,
+            arc_amount )
+          values (
+            :k_id,
+            :reg_id,
+            :cs_id,
+            :amount );
+        end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

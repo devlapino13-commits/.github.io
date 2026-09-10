@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_OVERPAYMENT_SEND_SMS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_OVERPAYMENT_SEND_SMS: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_OVERPAYMENT_SEND_SMS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_OVERPAYMENT_SEND_SMS
+AS
+declare variable sms_text d_str_long;
+declare variable phone d_str_20;
+declare variable c_id d_id;
+declare variable lifetime_days d_integer;
+declare variable k_kontract_no d_str_20;
+declare variable k_disb_date d_date;
+declare variable overpay_sum decimal(15,2);
+declare variable ovm_id d_id;
+declare variable msg_id d_integer;
+declare variable k_id d_id;
+begin
+  lifetime_days = -1;
+
+  for select ovm_id, kc_from_c_id, ok_cell_main, k_kontract_no, k_disb_date, k_id
+  from overpayment_msg ovm, knclient kc, continfo cci, kontract k
+  where ovm_status = 999        -- готовы к отправке
+    and ovm_from_msg_id is null -- еще не отправлено
+    and ovm_is_delete = 0
+    and kc_id = ovm_from_kc_id
+    and cci.cci_object_kind = 0
+    and cci_object_id = kc_from_c_id
+    and k_id = kc_from_k_id
+  rows 200                  -- максимальное количество СМС отправляемых за раз
+  into ovm_id, c_id, phone, k_kontract_no, k_disb_date, k_id
+  do
+  begin
+    if (coalesce(phone, &#x27;&#x27;) = &#x27;&#x27;) then
+    begin
+      update overpayment_msg ovm
+      set ovm.ovm_status = -2     -- нет основного номера телефона
+      where ovm_id = :ovm_id;
+
+      continue;
+    end
+
+    if (f_clientcom_allowed(c_id, 0, 1, 0) = 0) then
+      continue;
+
+    overpay_sum = (select -sum(ok_os)
+                  from operkred
+                  where ok_from_k_id = :k_id
+                    and ok_ol_is_active = 1
+                    and ok_type = 9);
+
+    if (coalesce(overpay_sum, 0) &lt; 1.00) then
+    begin
+      update overpayment_msg ovm
+      set ovm.ovm_status = -1     -- сумма меньше 1р
+      where ovm_id = :ovm_id;
+
+      continue;
+    end
+
+    sms_text = f_format(&#x27;Pri pogashenii vashego zaima po dogovoru №%1 ot %2 obrazovalas pereplata %3 rublei. Za vozvratom deneg obratites&#x27;&#x27; s pasportom v lyuboi ofis OOO &quot;MKK M Bulak&quot;.&#x27;,
+                        k_kontract_no,
+                        f_datetostr(k_disb_date),
+                        overpay_sum);
+
+    insert into fsrobot_msgbox (msg_type, msg_mail_to, msg_subject, msg_body, msg_lifetime_days, msg_from_un_id,
+                                msg_command_kind, msg_object_kind, msg_object_id)
+    values (1, :phone, &#x27;&#x27;, :sms_text, :lifetime_days, 1000000000000, &#x27;sms&#x27;, 0, :c_id)
+    returning msg_id
+    into msg_id;
+
+    update overpayment_msg
+    set ovm_from_msg_id = :msg_id
+    where (ovm_id = :ovm_id);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CLIENTCOMREG_SET — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CLIENTCOMREG_SET: 7 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CLIENTCOMREG_SET</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">7</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">4</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">4 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_clientcomreg_auto_fill.html"><div class="to">HP_CLIENTCOMREG_AUTO_FILL</div></a><a class="ref-card" href="hp_edoc_after_sign_action.html"><div class="to">HP_EDOC_AFTER_SIGN_ACTION</div></a><a class="ref-card" href="hp_edoc_cancel.html"><div class="to">HP_EDOC_CANCEL</div></a><a class="ref-card" href="hp_join_double_client_add_4.html"><div class="to">HP_JOIN_DOUBLE_CLIENT_ADD_4</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">7 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc">ID клиента</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc">ID пользователя</div></div><div class="prow"><div class="pname">ACTION_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc">Действие: add-добавить ограничения, remove-удалить ограничения</div></div><div class="prow"><div class="pname">LIMIT_38</div><div class="ptype">SMALLINT</div><div class="pdesc">1-внести изменения, 0-не менять</div></div><div class="prow"><div class="pname">LIMIT_152</div><div class="ptype">SMALLINT</div><div class="pdesc">1-внести изменения, 0-не менять</div></div><div class="prow"><div class="pname">LIMIT_230</div><div class="ptype">SMALLINT</div><div class="pdesc">1-внести изменения, 0-не менять</div></div><div class="prow"><div class="pname">REASON</div><div class="ptype">VARCHAR(50)</div><div class="pdesc">Причина добавления или исключения из реестра (enum: clientcom_reason)</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CLIENTCOMREG_SET(
+    C_ID D_ID NOT NULL,
+    UN_ID D_ID,
+    ACTION_KIND D_STR_CODE NOT NULL,
+    LIMIT_38 D_BOOL,
+    LIMIT_152 D_BOOL,
+    LIMIT_230 D_BOOL,
+    REASON D_STR_CODE = &#x27;manual&#x27;)
+AS
+declare variable ccr_id d_integer;
+declare variable ccl_action_kind d_smallint;
+declare variable ccl_reason_kind d_smallint;
+declare variable ccr_limit_38 d_bool;
+declare variable ccr_limit_152 d_bool;
+declare variable ccr_limit_230 d_bool;
+begin
+  if (action_kind not in (&#x27;add&#x27;, &#x27;remove&#x27;)) then
+    exception e_default &#x27;Incorrect action kind:&#x27; || coalesce (action_kind, &#x27;NULL&#x27;);
+
+
+  limit_38 = coalesce(limit_38, 0);
+  limit_152 = coalesce(limit_152, 0);
+  limit_230 = coalesce(limit_230, 0);
+
+  -- Если ничего менять не нужно, выходим
+  if (limit_38 = 0 and limit_152 = 0 and limit_230 = 0) then
+    exit;
+
+  select ccr_id
+  from clientcomreg
+  where ccr_from_c_id = :c_id
+  into ccr_id;
+
+  if (ccr_id is null) then
+  begin
+    -- Пока просто вставляем, далее скорректируем ограничения
+    insert into clientcomreg (
+      ccr_from_c_id, ccr_limit_38, ccr_limit_152, ccr_limit_230)
+    values (:c_id, 0, 0, 0)
+    returning ccr_id
+    into :ccr_id;
+  end
+
+  -- Запоминаем сохраненные в БД значения для проверки необходимости обновления
+  select ccr_limit_38, ccr_limit_152, ccr_limit_230
+  from clientcomreg
+  where ccr_id = :ccr_id
+  into ccr_limit_38, ccr_limit_152, ccr_limit_230;
+
+  if (action_kind = &#x27;add&#x27;) then
+    ccl_action_kind = f_enum_id(&#x27;clientcom_action&#x27;, &#x27;enabled&#x27;); -- 1
+  else
+    ccl_action_kind = f_enum_id(&#x27;clientcom_action&#x27;, &#x27;disabled&#x27;); -- 0
+
+  ccl_reason_kind = f_enum_id(&#x27;clientcom_reason&#x27;, reason);
+
+  -- Обновляем реестр, ccl_action_kind содержит 1 или 0, в зависимости от action_kind
+  update clientcomreg
+  set
+    ccr_limit_38 = iif(:limit_38 = 1, :ccl_action_kind, ccr_limit_38),
+    ccr_limit_152 = iif(:limit_152 = 1, :ccl_action_kind, ccr_limit_152),
+    ccr_limit_230 = iif(:limit_230 = 1, :ccl_action_kind, ccr_limit_230)
+  where ccr_id = :ccr_id;
+
+  -- Далее пишем логи, если устанавливаемое значение отличается от текущего
+  if (limit_38 = 1 and ccr_limit_38 &lt;&gt; ccl_action_kind) then
+    insert into clientcomlog (ccl_from_ccr_id, ccl_limit_kind, ccl_action_kind, ccl_reason_kind, ccl_from_un_id)
+    values (:ccr_id, f_enum_id(&#x27;clientcom_limit&#x27;, &#x27;limit_38&#x27;), :ccl_action_kind, :ccl_reason_kind, :un_id);
+
+  if (limit_152 = 1 and ccr_limit_152 &lt;&gt; ccl_action_kind) then
+    insert into clientcomlog (ccl_from_ccr_id, ccl_limit_kind, ccl_action_kind, ccl_reason_kind, ccl_from_un_id)
+    values (:ccr_id, f_enum_id(&#x27;clientcom_limit&#x27;, &#x27;limit_152&#x27;), :ccl_action_kind, :ccl_reason_kind, :un_id);
+
+  if (limit_230 = 1 and ccr_limit_230 &lt;&gt; ccl_action_kind) then
+    insert into clientcomlog (ccl_from_ccr_id, ccl_limit_kind, ccl_action_kind, ccl_reason_kind, ccl_from_un_id)
+    values (:ccr_id, f_enum_id(&#x27;clientcom_limit&#x27;, &#x27;limit_230&#x27;), :ccl_action_kind, :ccl_reason_kind, :un_id);
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

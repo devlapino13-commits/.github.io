@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CLIENTSHOPS_CHECKTSP — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CLIENTSHOPS_CHECKTSP: 3 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CLIENTSHOPS_CHECKTSP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_appregistrterm_new.html"><div class="to">HP_APPREGISTRTERM_NEW</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AGREEMENT_KIND</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DT_CHECK</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ERR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REG_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CLIENTSHOPS_CHECKTSP(
+    C_ID D_ID NOT NULL,
+    AGREEMENT_KIND D_STR_255,
+    DT_CHECK D_DATE = null)
+RETURNS (
+    ERR_TEXT D_STR_255,
+    REG_ID D_INTEGER)
+AS
+declare variable ag_id d_integer;
+declare variable c_name_fio d_str_100;
+declare variable dogovor_tsp d_integer;
+declare variable tsp_signed d_str_100;
+declare variable edoc_kind d_str_code;
+declare variable pdt_code d_str_100;
+begin
+  err_text = &#x27;&#x27;;
+  dt_check = cast(coalesce(dt_check, current_date) as date);
+  if (:agreement_kind = &#x27;AgreementKinds.tsp&#x27;) then
+  begin
+    edoc_kind = &#x27;tsp.agreement&#x27;;
+    pdt_code = &#x27;tsp_agreement&#x27;;
+  end
+  if (:agreement_kind = &#x27;AgreementKinds.installment_goods&#x27;) then
+  begin
+    edoc_kind = &#x27;installment_goods.agreement&#x27;;
+    pdt_code = &#x27;installment_goods_agreement&#x27;;
+  end
+
+  select ag_id, ag_from_init_reg_id, c_name_fio
+  from agreements
+  inner join clients on c_id = ag_object_id
+  where ag_object_kind = 0 and
+        ag_object_id = :c_id and
+        ag_from_rd_id = f_get_rd_id(:agreement_kind) and
+        ag_status = 1 and
+        :dt_check between coalesce(ag_date_begin, cast(&#x27;01.01.1900&#x27; as date)) and coalesce(ag_date_end, cast(&#x27;31.12.9999&#x27; as date))
+  order by ag_id desc
+  rows 1
+  into :ag_id, :reg_id, :c_name_fio;
+  tsp_signed = f_edoc_status(:edoc_kind, ag_id, :dt_check);
+  if (tsp_signed &lt;&gt; &#x27;signed&#x27;) then
+  begin
+    dogovor_tsp = 0;
+    select cdc.cds_id
+    from clientdocs cdc
+    inner join passkind pask on pask.pk_id = cdc.cds_from_pk_id
+    inner join passdoctype pdt on pdt.pdt_id = pask.pk_from_pdt_id
+    where cdc.cds_from_c_id = :c_id and
+          cdc.cds_is_delete = 0 and
+          pdt.pdt_code = :pdt_code and
+          :dt_check between coalesce(cdc.cds_doc_date_begin, cast(&#x27;01.01.1900&#x27; as date)) and coalesce(cdc.cds_doc_date_end, cast(&#x27;31.12.9999&#x27; as date))
+    order by cdc.cds_datetime desc
+    rows 1
+    into dogovor_tsp;
+    if (coalesce(dogovor_tsp, 0) = 0) then
+    begin
+      err_text = f_format(&#x27;Выбранный контрагент %1 не имеет активного %2&#x27;, c_name_fio, iif(agreement_kind = &#x27;AgreementKinds.tsp&#x27;, &#x27;договора ТСП&#x27;, &#x27;соглашения&#x27;));
+    end
+  end
+  else
+  begin
+    if (agreement_kind = &#x27;AgreementKinds.tsp&#x27; and
+        not exists(select *
+                   from agreement_feac
+                   inner join refdata on rd_id = afe_from_rd_id and
+                         trim(rd_str_id) &lt;&gt; &#x27;&#x27;
+                   where afe_from_ag_id = :ag_id)) then
+      err_text = f_format(&#x27;Для контрагента %1 не определен МСС-код по виду деятельности&#x27;, c_name_fio);
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

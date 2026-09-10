@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EDOC_WEB_LIST — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EDOC_WEB_LIST: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EDOC_WEB_LIST</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_uuid.html"><div class="to">HP_UUID</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UUID</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_JSON</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EDOC_WEB_LIST(
+    UUID D_STR_CODE)
+RETURNS (
+    RES_JSON D_STR_8100)
+AS
+declare variable str_list d_str_8100;
+declare variable edl_id d_id;
+declare variable eds_status d_integer;
+declare variable msg_text d_str_255;
+declare variable show_sign_button d_smallint;
+declare variable show_cancel_button d_smallint;
+declare variable sign_button_caption d_str_255;
+declare variable cancel_button_caption d_str_255;
+declare variable show_bankcard d_smallint;
+declare variable edl_status d_smallint;
+declare variable obj_id d_id;
+declare variable c_id d_id;
+declare variable c_name d_str_255;
+declare variable obj_code d_str_code;
+declare variable edf_print_name d_str_255;
+declare variable edb_id d_id;
+declare variable is_bold d_smallint;
+declare variable obj_kind d_integer;
+declare variable cv_status d_integer;
+declare variable edc_code d_str_code;
+declare variable edf_is_online d_bool;
+declare variable show_documents d_smallint;
+declare variable edl_blank_date d_date;
+declare variable edc_process_kind d_smallint;
+declare variable def_checked d_bool;
+declare variable eds_id d_id;
+declare variable edf_optional_sign d_bool;
+declare variable edb_checked d_bool;
+declare variable c_pin d_str_20;
+begin
+  res_json = &#x27;&#x27;;
+  msg_text = &#x27;&#x27;;
+  c_name = &#x27;&#x27;;
+  show_sign_button = 0;
+  show_cancel_button = 0;
+  show_bankcard = 0;
+  show_documents = 0;
+  sign_button_caption = &#x27;Подписать документы&#x27;;
+  cancel_button_caption = &#x27;Отказаться от подписания&#x27;;
+  def_checked = 1; -- По-умолчанию для каждого бланка выставлена галочка для подписания
+  str_list = &#x27;&#x27;;
+  obj_code = &#x27;&#x27;;
+  c_pin = &#x27;&#x27;;
+
+  select obj_kind, obj_id
+  from hp_uuid(:uuid)
+  into obj_kind, obj_id;
+
+  if (obj_id is null)
+  then msg_text = &#x27;Неверная ссылка&#x27;;
+  else obj_code = f_objkind(obj_kind, &#x27;name&#x27;);
+
+  if (obj_code = &#x27;edoc_sign&#x27;) then
+  begin
+    eds_id = obj_id;
+    select eds_from_edl_id, eds_status, eds_from_c_id, edc_code, edl_blank_date,
+           iif(coalesce(edl_date_end, current_date) &lt; current_date, -1, edl_status),
+           edc_process_kind
+    from edoc_sign, edoc_list, edoc_cfg
+    where eds_id = :eds_id and
+          eds_from_edl_id = edl_id and
+          edl_from_edc_id = edc_id
+    into edl_id, eds_status, c_id, edc_code, edl_blank_date, edl_status,
+         edc_process_kind;
+  
+    -- доп.соглашене по реструктуризации действует только 2 дня
+    if (msg_text = &#x27;&#x27; and edl_status = 0 and edc_code = &#x27;loan.reschedule&#x27;) then
+    begin
+      if (edl_blank_date &lt; (current_date - 1)) then
+      begin
+        edl_status = -1;
+
+        update edoc_list
+        set edl_status = :edl_status
+        where edl_id = :edl_id;
+      end
+    end
+
+    if (msg_text = &#x27;&#x27; and edl_status = -1) then msg_text = &#x27;Данные устарели&#x27;;
+  
+    if (not exists(
+                   select * from edoc_msg
+                   where edm_from_eds_id = :eds_id)) then msg_text = &#x27;Неверная ссылка&#x27;;
+
+    if (msg_text = &#x27;&#x27; and edc_code in (&#x27;bankcard.moneta&#x27;, &#x27;bankcard.elcart&#x27;)) then
+    begin
+      show_bankcard = 1;
+      show_sign_button = 1;
+      show_cancel_button = 1;
+      sign_button_caption = &#x27;Продолжить&#x27;;
+      cancel_button_caption = &#x27;Отказаться&#x27;;
+      msg_text = &#x27;Ввод данных банковской карты&#x27;;
+    end
+
+    if (msg_text = &#x27;&#x27;) then
+    begin
+      for select edb_id, edf_print_name, edf_is_online, edf_optional_sign,
+        iif(eds_status = 1, iif(eds_from_c_id is null, eds_status, edb_sign_status), :def_checked)
+      from edoc_sign, edoc_blank, edoc_frx
+      where eds_id = :eds_id and
+            edb_from_edl_id = eds_from_edl_id and
+            edb_from_edf_id = edf_id and
+            (edb_from_c_id is null or edb_from_c_id = :c_id) -- выдаем общие документы или конкретного участника
+      into edb_id, edf_print_name, edf_is_online, edf_optional_sign, edb_checked
+      do
+      begin
+        is_bold = 1;
+        if (exists(
+        select * from edoc_open
+        where edo_from_eds_id = :eds_id and
+              edo_from_edb_id = :edb_id and
+              (edo_before_sign_datetime is not null or
+               edo_after_sign_datetime is not null))) then is_bold = 0;
+
+        if (str_list &lt;&gt; &#x27;&#x27;) then str_list = str_list || &#x27;,&#x27;;
+        str_list = str_list || &#x27;{&#x27; || f_json_make_pair(&#x27;name&#x27;, edf_print_name, &#x27;str&#x27;) || &#x27;,&#x27; ||
+                                      f_json_make_pair(&#x27;bold&#x27;, is_bold, &#x27;num&#x27;) || &#x27;,&#x27; ||
+                                      f_json_make_pair(&#x27;id&#x27;, edb_id, &#x27;num&#x27;) || &#x27;,&#x27; ||
+                                      f_json_make_pair(&#x27;is_online&#x27;, edf_is_online, &#x27;num&#x27;) || &#x27;,&#x27; ||
+                                      f_json_make_pair(&#x27;checked&#x27;, edb_checked, &#x27;num&#x27;) || &#x27;,&#x27; ||
+                                      f_json_make_pair(&#x27;opt&#x27;, edf_optional_sign, &#x27;num&#x27;) || &#x27;}&#x27;;
+      end
+      if (str_list = &#x27;&#x27;) then
+        msg_text = &#x27;Нет документов для отображения&#x27;;
+
+    end
+  
+    if (msg_text = &#x27;&#x27;) then
+    begin
+      if (eds_status = 1)
+      then msg_text = &#x27;Документы уже подписаны&#x27;;
+      else
+      begin
+        msg_text = &#x27;Документы для подписания&#x27;;
+        show_sign_button = 1;
+        show_cancel_button = 1;
+      end
+    end
+  
+    if (c_id is not null) then
+    begin
+      select c_name_fio, c_pincode
+      from clients
+      where c_id = :c_id
+      into c_name, c_pin;
+      c_name = coalesce(c_name, &#x27;&#x27;);
+      c_pin = coalesce(c_pin, &#x27;&#x27;);
+    end
+    else
+      c_name = &#x27;Контролер&#x27;;
+  end
+
+  if (obj_code = &#x27;contverify&#x27;) then
+  begin
+    str_list = &#x27;&#x27;;
+    cancel_button_caption = &#x27;Отказаться&#x27;;
+    sign_button_caption = &#x27;Подтвердить&#x27;;
+
+    select cv_status, c_name_fio
+    from contverify, clients
+    where cv_id = :obj_id and
+          cv_object_kind = 0 and
+          cv_object_id = c_id
+    into cv_status, c_name;
+  
+    if (msg_text = &#x27;&#x27;) then
+    begin
+      if (cv_status &gt;= 1) then
+        msg_text = &#x27;Данные уже подтверждены&#x27;;
+      else
+      begin
+        msg_text = &#x27;Подтверждение данных&#x27;;
+        show_sign_button = 1;
+        show_cancel_button = 1;
+      end
+    end
+  end
+
+  if (obj_code = &#x27;contveri&#x27;) then
+  begin
+    str_list = &#x27;&#x27;;
+    sign_button_caption = &#x27;Подтвердить&#x27;;
+    cancel_button_caption = &#x27;Отказаться&#x27;;
+
+    select cvr_status, c_name_fio
+    from contveri, contdata, clients
+    where cvr_id = :obj_id and
+          cvr_from_cda_id = cda_id and
+          cda_from_c_id = c_id
+    into cv_status, c_name;
+  
+    if (msg_text = &#x27;&#x27;) then
+    begin
+      if (cv_status = 1) then
+        msg_text = &#x27;Данные уже подтверждены&#x27;;
+      else
+      begin
+        msg_text = &#x27;Подтверждение данных&#x27;;
+        show_sign_button = 1;
+        show_cancel_button = 1;
+      end
+    end
+  end
+
+  -- Когда подписание не требуется, контрольно убираем кнопку
+  if (edc_process_kind = 0) then
+  begin
+    show_sign_button = 0;
+    show_cancel_button = 0;
+  end
+
+  show_cancel_button = 0;
+  if (edc_code = &#x27;loan.express&#x27;) then
+    show_cancel_button = 1;
+
+  if (str_list is null) then str_list = &#x27;&#x27;;
+  res_json = &#x27;{&#x27; ||
+             f_json_make_pair(&#x27;message&#x27;, msg_text, &#x27;str&#x27;) || &#x27;,&#x27; ||
+             f_json_make_pair(&#x27;add_message&#x27;, c_name, &#x27;str&#x27;) || &#x27;,&#x27; ||
+             f_json_make_pair(&#x27;show_sign_button&#x27;, show_sign_button, &#x27;num&#x27;) || &#x27;,&#x27; ||
+             f_json_make_pair(&#x27;show_cancel_button&#x27;, show_cancel_button, &#x27;num&#x27;) || &#x27;,&#x27; ||
+             f_json_make_pair(&#x27;show_documents&#x27;, show_documents, &#x27;num&#x27;) || &#x27;,&#x27; ||
+             f_json_make_pair(&#x27;show_bankcard&#x27;, show_bankcard, &#x27;num&#x27;) || &#x27;,&#x27; ||
+             f_json_make_pair(&#x27;ds_provider&#x27;, f_get_const(&#x27;edoc_ds_provider&#x27;), &#x27;str&#x27;) || &#x27;,&#x27; ||
+             f_json_make_pair(&#x27;client_pin&#x27;, c_pin, &#x27;str&#x27;) || &#x27;,&#x27; ||
+             iif(show_bankcard = 1,
+               f_json_make_pair(&#x27;bankcard_code&#x27;, edc_code, &#x27;str&#x27;) || &#x27;,&#x27; ||
+               f_json_make_pair(&#x27;client_id&#x27;, c_id,  &#x27;num&#x27;) ||  &#x27;,&#x27;, &#x27;&#x27;) ||
+             f_json_make_pair(&#x27;sign_button_caption&#x27;, sign_button_caption, &#x27;str&#x27;) || &#x27;,&#x27; ||
+             f_json_make_pair(&#x27;cancel_button_caption&#x27;, cancel_button_caption, &#x27;str&#x27;) || &#x27;,&#x27; ||
+             &#x27;&quot;list&quot;:[&#x27;||str_list||&#x27;]}&#x27;;
+  
+  Suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FSROBOT_SMS_DISMISSED_LO — процедура — схема БД</title>
+<meta name="description" content="Процедура FSROBOT_SMS_DISMISSED_LO: 3 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FSROBOT_SMS_DISMISSED_LO</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_contdata_get_cell_valid.html"><div class="to">HP_CONTDATA_GET_CELL_VALID</div></a><a class="ref-card" href="hp_fio_clear.html"><div class="to">HP_FIO_CLEAR</div></a><a class="ref-card" href="mc_send_push.html"><div class="to">MC_SEND_PUSH</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_PARAMS</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_EMAIL</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">USER_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_SUBJECT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_BODY</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_MAILLIST</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FSROBOT_SMS_DISMISSED_LO(
+    REP_PARAMS VARCHAR(255),
+    REP_EMAIL VARCHAR(255),
+    USER_FIO VARCHAR(100))
+RETURNS (
+    RES_SUBJECT VARCHAR(255),
+    RES_BODY BLOB SUB_TYPE TEXT SEGMENT SIZE 80,
+    RES_MAILLIST VARCHAR(255),
+    RES_C_ID DECIMAL(18,0))
+AS
+declare variable OFFICE_PHONE varchar(100);
+declare variable KA_DATE D_DATE;
+declare variable DB_ID D_INTEGER;
+declare variable CL_NAME STR_100;
+declare variable CL_NAME_RUS STR_100;
+declare variable KAL_NEW_KF_OFFICER ID_TYPE;
+declare variable SVZ_NAME STR_100;
+declare variable SVZ_NAME_RUS STR_100;
+declare variable SVZ_PHONE STR_100;
+declare variable PUSH_BODY blob sub_type 1 segment size 80;
+declare variable MSG_KIND D_STR_10;
+declare variable MCL_PROJECT integer;
+begin
+-- Процедура вызывается из FSROBOT_ON_MAILING
+-- Процедура готовит список уведомлений для отправки роботом по почте или sms
+-- REP_COMMAND_KIND. Настройки сообщения хранятся в таблице RefData:
+-- справочник NotifyMail || &#x27;.&#x27; || Rep_Command_Kind - строка настроек email
+-- справочник NotifySMS  || &#x27;.&#x27; || Rep_Command_Kind - строка настроек SMS
+
+-- RefData.RD_Memo    - Список получателей
+-- RefData.RD_Tag     - Срок жизни сообщения
+-- RefData.RD_STR_ID  - Название хранимой процедуры, которая готовит текст сообщения
+
+-- Rep_Params - входящий параметры в зависимости от команды, ID-Акт прием-передачи
+-- Rep_UN_ID - пользователь
+
+  res_maillist = :rep_email;
+
+  db_id = f_get_db_id();
+
+  select reg_phone, ka_date
+  from region, knakt
+  where reg_unicode = ka_from_reg_id and
+        ka_id = :rep_params
+  into :office_phone, ka_date;
+
+  res_subject = &#x27;&#x27;;
+
+  for select distinct kc_from_c_id,
+                      (select cont_value
+                       from hp_contdata_get_cell_valid(0, kc_from_c_id)), kal_new_kf_officer
+      from knaktlist, kontract, oksummary, knclient
+      where kal_from_ka_id = :rep_params and
+            kal_from_ka_id &gt; 0 and
+            kal_from_kf_id = k_from_kf_id and
+            oks_from_k_id = k_id and
+            oks_date_begin &lt;= current_date and
+            oks_date_end &gt;= current_date and
+            oks_balance &gt; 0 and
+            oks_close_state = 0 and
+            kc_from_k_id = k_id and
+            kc_amount_approved &gt; 0
+      into :res_c_id, :res_maillist, kal_new_kf_officer
+  do
+  begin
+    if (res_maillist &lt;&gt; &#x27;&#x27; and db_id &lt;&gt; 81001) then
+      suspend;
+    if (res_maillist &lt;&gt; &#x27;&#x27; and db_id = 81001) then
+    begin
+
+    -- Определяем проект (М Булак / OiVO) по клиенту
+        mcl_project = f_get_mcl_project(f_objkind(&#x27;clients&#x27;,&#x27;id&#x27;), :res_c_id);
+
+        if (mcl_project = 1) then     -- М Булак  RFCRU-4257
+      begin
+    res_body = &#x27;Ваш специалист больше не работает в &#x27;||iif(f_get_db_id() = 81001, &#x27;М Булак&#x27;, &#x27;М Булак&#x27;)||&#x27;. &#x27;;
+    res_body = blob_append(res_body, &#x27;Чтобы получить повторный заём позвоните по &#x27;);
+    res_body = blob_append(res_body, &#x27;тел.&#x27; || :office_phone || &#x27; или приходите в офис. &#x27;);
+    res_body = blob_append(res_body, &#x27;Спасибо, что выбрали &#x27;||iif(f_get_db_id() = 81001, &#x27;М Булак&#x27;, &#x27;М Булак&#x27;)||&#x27;!!&#x27;);
+      end
+      else
+      if (mcl_project = 2) then     -- OiVO  RFCRU-4257
+      begin
+     res_body = &#x27;Ваш специалист больше не работает в &#x27;||iif(f_get_db_id() = 81001, &#x27;OiVO Кредит&#x27;, &#x27;OiVO Кредит&#x27;)||&#x27;. &#x27;;
+    res_body = blob_append(res_body, &#x27;Чтобы получить повторный заём позвоните по &#x27;);
+    res_body = blob_append(res_body, &#x27;тел.&#x27; || :office_phone || &#x27; или приходите в офис. &#x27;);
+    res_body = blob_append(res_body, &#x27;Спасибо, что выбрали &#x27;||iif(f_get_db_id() = 81001, &#x27;OiVO Кредит&#x27;, &#x27;OiVO Кредит&#x27;)||&#x27;!!&#x27;);
+      end
+        select (select txt2
+                from hp_fio_clear(c_alternat_fio)), (select txt2
+                                                     from hp_fio_clear(c_name_fio))
+        from clients
+        where c_id = :res_c_id
+        into cl_name, cl_name_rus;
+
+        select (select txt2
+                from hp_fio_clear(c_alternat_fio)), (select txt1 || &#x27; &#x27; || txt2
+                                                     from hp_fio_clear(c_name_fio)), (select cont_value
+                                                                                      from hp_contdata_get_cell_valid(0, :kal_new_kf_officer))
+        from clients
+        where c_id = :kal_new_kf_officer
+        into svz_name, svz_name_rus, svz_phone;
+
+        msg_kind = f_get_msg_kind(res_c_id, &#x27;fsrobot_sms_dismissed_lo&#x27;, &#x27;&#x27;, db_id);
+        if (f_clientcom_allowed(res_c_id, 1, 1, 1) = 1) then
+        begin
+          if ((msg_kind = &#x27;sms&#x27;) and (mcl_project = 1)) then     -- М Булак  RFCRU-4257
+          begin
+            res_body = cl_name || &#x27;, s &#x27; || f_datetostr(ka_date) || &#x27; s vami budet rabotat specialist &#x27; || svz_name || &#x27;! Po vsem voprosam zvonite po nomeru +&#x27; || svz_phone || &#x27;! S zabotoi o vas, M Bulak&#x27;;
+            suspend;
+          end
+          else
+          if ((msg_kind = &#x27;sms&#x27;)  and (mcl_project = 2)) then     -- OiVO  RFCRU-4257
+          begin
+            res_body = cl_name || &#x27;, s &#x27; || f_datetostr(ka_date) || &#x27; s vami budet rabotat specialist &#x27; || svz_name || &#x27;! Po vsem voprosam zvonite po nomeru +&#x27; || svz_phone || &#x27;! S zabotoi o vas, OiVO Kredit&#x27;;
+            suspend;
+          end
+          if ((msg_kind = &#x27;push&#x27;) and (mcl_project = 1)) then     -- М Булак  RFCRU-4257
+          begin
+            push_body = &#x27;Здравствуйте, &#x27; || cl_name_rus || &#x27;. С &#x27; || f_datetostr(ka_date) || &#x27; с вами будет работать специалист &#x27; || svz_name_rus || &#x27;! По всем вопросам звоните по номеру +&#x27; || coalesce(svz_phone, &#x27;&#x27;) || &#x27;! С заботой о вас, М Булак&#x27;;
+            execute procedure mc_send_push(&#x27;clients&#x27;, :res_c_id, &#x27;Новый Кредитный Специалист&#x27;, :push_body, 35);
+          end
+          else
+          if ((msg_kind = &#x27;push&#x27;) and (mcl_project = 2)) then     --  OiVO  RFCRU-4257
+          begin
+            push_body = &#x27;Здравствуйте, &#x27; || cl_name_rus || &#x27;. С &#x27; || f_datetostr(ka_date) || &#x27; с вами будет работать специалист &#x27; || svz_name_rus || &#x27;! По всем вопросам звоните по номеру +&#x27; || coalesce(svz_phone, &#x27;&#x27;) || &#x27;! С заботой о вас, OiVO Кредит&#x27;;
+            execute procedure mc_send_push(&#x27;clients&#x27;, :res_c_id, &#x27;Новый Кредитный Специалист&#x27;, :push_body, 35);
+          end
+        end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

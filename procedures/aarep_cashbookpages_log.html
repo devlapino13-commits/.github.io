@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_CASHBOOKPAGES_LOG — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_CASHBOOKPAGES_LOG: 2 входных, 8 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_CASHBOOKPAGES_LOG</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">8</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_REGION_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">8 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CBP_NUMBER</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CBP_DATETIME</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CBP_FIRST_PAGE_NUM</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CBP_LAST_PAGE_NUM</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CBP_FROM_UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_NAME_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OPER_NAME</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OPER_DESC</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_CASHBOOKPAGES_LOG(
+    REP_REGION_ID INTEGER,
+    REP_DATE DATE)
+RETURNS (
+    CBP_NUMBER INTEGER,
+    CBP_DATETIME TIMESTAMP,
+    CBP_FIRST_PAGE_NUM INTEGER,
+    CBP_LAST_PAGE_NUM INTEGER,
+    CBP_FROM_UN_ID ID_TYPE,
+    C_NAME_FIO VARCHAR(100),
+    OPER_NAME VARCHAR(50),
+    OPER_DESC VARCHAR(100))
+AS
+declare variable cbp_is_actual smallint;
+declare variable cbp_changed_date date;
+begin
+  /*
+  Возвращает историю печати кассовой книги
+  */
+  for select cbp_number, cbp_datetime, cbp_first_page_num, cbp_last_page_num, cbp_from_un_id, cbp_is_actual,
+             cbp_changed_date
+      from cashbookpages
+      where cbp_date = :rep_date and
+            cbp_from_reg_id = :rep_region_id
+      order by cbp_number
+      into :cbp_number, :cbp_datetime, :cbp_first_page_num, :cbp_last_page_num, :cbp_from_un_id, :cbp_is_actual,
+           :cbp_changed_date
+  do
+  begin
+    c_name_fio = &#x27;&#x27;;
+    select c_name_fio
+    from username, clients
+    where un_id = :cbp_from_un_id and
+          un_from_c_id = c_id
+    into c_name_fio;
+
+    if (cbp_is_actual = 0) then
+    begin
+      oper_name = &#x27;Сброс нумерации&#x27;;
+      oper_desc = &#x27;Сброс из-за изменения нумерации за &#x27; || right(100 + extract(day from cbp_changed_date), 2) || &#x27;.&#x27; || right(100 + extract(month from cbp_changed_date), 2) || &#x27;.&#x27; || extract(year from cbp_changed_date) || &#x27;г.&#x27;;
+    end
+    else
+    begin
+      oper_name = &#x27;Печать&#x27;;
+      oper_desc = &#x27;&#x27;;
+    end
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

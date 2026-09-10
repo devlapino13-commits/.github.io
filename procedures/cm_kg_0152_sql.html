@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_KG_0152_SQL — процедура — схема БД</title>
+<meta name="description" content="Проверка на заполнение &quot;Подробное описание по цели&quot;">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_KG_0152_SQL</code></h1>
+<p class="desc">Проверка на заполнение &quot;Подробное описание по цели&quot;</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_KG_0152_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable dt d_date;
+declare variable pr_code d_str_100;
+declare variable ma_id d_id;
+declare variable c_id d_id;
+declare variable temp_descr_of_loan d_str_255;
+declare variable loan_description d_str_255;
+begin
+  if (exists(select *
+             from expressapp exa
+             where exa.exa_from_k_id = :k_id)) then
+    exit;
+
+  select pr.pr_code, kt.k_from_ma_app_id
+  from kontract kt
+  inner join product pr on pr.pr_id = kt.k_from_pr_id
+  where kt.k_id = :k_id
+  into pr_code, ma_id;
+
+  if (pr_code containing &#x27;.express_similar.&#x27;) then
+    exit;
+
+  dt = (select max(kl_datetime)
+        from kontlog
+        where kl_from_k_id = :k_id and
+              kl_state = 1);
+  dt = coalesce(dt, current_date);
+  if (f_get_const(&#x27;clp_active&#x27;) = 1) then
+  begin
+    select mac.mac_from_c_id
+    from miniappclient mac
+    where mac.mac_from_ma_id = :ma_id and
+          mac.mac_amount &gt; 0 and
+          mac.mac_is_cashier = 1
+    into c_id;
+    temp_descr_of_loan = &#x27;&#x27;;
+    loan_description = &#x27;&#x27;;
+    -- генерирую новое значение для descr_of_loan
+    select clpq.cq_name || &#x27;; &#x27; || clpc.cc_name
+    from clp_miniappclient clpm
+    inner join clp_questions clpq on clpm.cmc_questions_id = clpq.cq_id
+    inner join clp_clarification clpc on clpm.cmc_clarification_id = clpc.cc_id
+    where clpm.cmc_from_c_id = :c_id and
+          clpm.cmc_from_ma_id = :ma_id
+    into :loan_description;
+
+    loan_description = coalesce(loan_description, &#x27;&#x27;);
+
+    if (:pr_code containing &#x27;.ipf.&#x27;) then
+    begin
+      for select ml.ml_name
+          from kontmat km
+          inner join matlist ml on ml.ml_id = km.kml_from_ml_id
+          where km.kml_object_kind = 9 and
+                km.kml_object_id = :k_id
+          into temp_descr_of_loan
+      do
+        :temp_descr_of_loan = :temp_descr_of_loan || &#x27;; &#x27; || :temp_descr_of_loan;
+
+      :loan_description = :loan_description || &#x27;; &#x27; || :temp_descr_of_loan;
+    end
+    if (coalesce(:loan_description, &#x27;&#x27;) = &#x27;&#x27;) then
+    begin
+      res_error_text = &#x27;Подробное описание по цели не заполнено!&#x27;;
+      res_error_is_critical = 2;
+      suspend;
+      exit;
+    end
+  end
+  else
+  if (exists(select *
+             from knclient
+             inner join hp_objectprops_anketa_get(&#x27;Clients&#x27;, kc_from_c_id, -1, &#x27;AnketaQuestions.descr_of_loan&#x27;, :dt, null) on res_str_values is null or res_str_values = &#x27;значение&#x27;
+             where kc_from_k_id = :k_id and
+                   kc_amount_approved &gt; 0)) then
+  begin
+    res_error_text = &#x27;Подробное описание по цели не заполнено!&#x27;;
+    res_error_is_critical = 2;
+    suspend;
+    exit;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

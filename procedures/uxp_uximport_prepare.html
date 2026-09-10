@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$UXIMPORT_PREPARE — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$UXIMPORT_PREPARE: 2 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$UXIMPORT_PREPARE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">DB_CONNECTION</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PASS</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EXP_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_UX_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_UX_FCODE</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_US_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$UXIMPORT_PREPARE(
+    DB_CONNECTION D_STR_LONG,
+    PASS D_STR_CODE)
+RETURNS (
+    EXP_ID D_INTEGER,
+    RES_UX_UUID D_UUID,
+    RES_UX_FCODE D_STR_100,
+    RES_US_CODE D_STR_CODE)
+AS
+declare variable is_external_db d_bool;
+declare variable ux_name d_str_100;
+declare variable us_uuid d_uuid;
+declare variable us_kind d_smallint;
+declare variable new_ux_uuid d_uuid;
+declare variable ufm_uuid d_uuid;
+declare variable exf_position_code d_str_code;
+declare variable ux_fcode d_str_100;
+declare variable rec_count d_smallint;
+declare variable exf_new_code d_str_code;
+declare variable ua_list varchar(8000) character set win1251;
+declare variable load_from_file d_bool;
+declare variable uxa_uuid d_uuid;
+declare variable ux_scode d_str_code;
+declare variable need_export d_bool;
+declare variable exf_new_kind d_smallint;
+declare variable new_ufm_uuid d_uuid;
+declare variable imp_clone_kind d_smallint;
+declare variable exf_clone_kind d_smallint;
+declare variable imported d_bool;
+begin
+  db_connection = trim(coalesce(db_connection, &#x27;&#x27;));
+
+  load_from_file = 0;
+  if (db_connection = &#x27;file&#x27;) then
+  begin
+    load_from_file = 1;
+    db_connection = &#x27;&#x27;;
+    uxf$syncmode(&#x27;on&#x27;);
+  end
+
+  if (db_connection &lt;&gt; &#x27;&#x27;) then
+  begin
+    uxf$pswd(pass);
+    uxf$syncpath(db_connection);
+  end
+
+  res_ux_uuid = null;
+  res_ux_fcode = &#x27;&#x27;;
+  res_us_code = &#x27;&#x27;;
+
+  is_external_db = 0;
+  if (db_connection &lt;&gt; &#x27;&#x27;) then
+    is_external_db = 1;
+
+  execute procedure uxp$uximport_pairs_prepare;
+
+  update ux$expoform
+  set exf_imported = 0
+  where 1 = 1;
+
+  exp_id = 0;
+
+  imported = 1;
+
+  while (imported = 1) do
+  begin
+    imported = 0;
+
+    for select exf_ufm_uuid, max(exf_position_code), max(exf_new_code), max(exf_new_kind), max(exf_clone_kind)
+    from ux$expoform
+    where exf_selected = 1 and
+          exf_imported = 0 and
+          exf_ufm_uuid is not null
+    group by 1
+    order by 2 desc
+    rows 1
+    into ufm_uuid, exf_position_code, exf_new_code, exf_new_kind, exf_clone_kind
+    do
+    begin
+      imported = 1;
+
+      if (exf_new_code is null) then
+        exf_new_code = &#x27;&#x27;;
+  
+      if (exf_clone_kind = 0 and load_from_file = 1) then
+        exf_clone_kind = 2;
+  
+      need_export = 1;
+      if (load_from_file = 1 or exf_new_kind = 0) then
+        need_export = 0;
+
+      if (need_export = 1) then
+      begin
+        ua_list = &#x27;&#x27;;
+        select list(uuid_to_char(exf_ua_uuid))
+        from ux$expoform
+        where exf_ua_uuid is not null and
+              exf_parent_id = uuid_to_char(:ufm_uuid) and
+              exf_selected = 1
+        into ua_list;
+    
+        if (is_external_db = 0) then
+        begin
+          select exp_id
+          from uxp$uxexport_prepare(:ufm_uuid, :ua_list, iif(:exf_clone_kind = 0, 0, 1), :exp_id)
+          into :exp_id;
+        end else
+        begin
+          execute statement (&#x27;select exp_id from uxp$uxexport_prepare(?, ?, 1, ?)&#x27;)
+          (:ufm_uuid, :ua_list, :exp_id)
+          on external :db_connection
+          as user current_user password :pass role &#x27;RDB$ADMIN&#x27;
+          into :exp_id;
+        end
+      end
+    
+      rec_count = 0;
+      for select exf_line_id, exf_parent_id, exf_ufm_uuid, exf_ua_uuid, exf_caption,
+                 exf_ux_uuid_exist, exf_ux_fcode_exist, exf_warning, exf_selected,
+                 exf_new_kind, exf_new_code, exf_new_name,
+                 exf_ux_uuid, exf_ux_kind, exf_ux_scode, exf_ux_fcode, exf_ux_name, exf_ux_release_uuid, exf_ux_draft_uuid,
+                 exf_us_code, exf_us_name, exf_us_is_table, exf_us_kind, exf_us_memo,
+                 exf_us_keyfields, exf_us_autoincfield, exf_us_lookup_id, exf_us_lookup_text, exf_us_main_table, exf_us_sql,
+                 exf_ua_uxa_uuid, exf_ua_uxa_code, exf_ua_uxa_fcode, exf_ua_uxa_name, exf_ua_uxa_kind,
+                 exf_ua_in_ui, exf_child_action_count, exf_use_release, exf_show_child_action,
+                 exf_ua_index, exf_position_code, exf_is_locked, exf_need_delete,
+                 exf_db_id, exf_db_is_actual, exf_db_path
+      from ux$expoform
+      where exf_ufm_uuid = :ufm_uuid and
+            exf_position_code = :exf_position_code
+      as cursor cur
+      do
+      begin
+        if (rec_count = 1) then
+          exception e_default &#x27;Multiple row for exf_position_code: &#x27; || exf_position_code;
+  
+        rec_count = 1;
+        exf_new_kind = cur.exf_new_kind;
+
+        ux_scode = cur.exf_new_code;
+        if (ux_scode = &#x27;&#x27;) then
+          ux_scode = cur.exf_ux_scode;
+
+        new_ux_uuid = cur.exf_ux_uuid;
+
+        if (not exists(select * from ux$pairuuid where up_old_uuid = :ufm_uuid)) then
+        begin
+          update or insert into ux$pairuuid (up_old_uuid)
+          values (:ufm_uuid)
+          returning up_new_uuid
+          into new_ufm_uuid;
+        end
+
+        us_uuid = null;
+
+        select us_uuid
+        from ux$source
+        where us_code = cur.exf_us_code
+        into us_uuid;
+
+        if (us_uuid is null) then
+        begin
+          if (exf_new_kind &lt;&gt; 0) then
+            exf_new_kind = 2;
+
+          insert into ux$source (us_code, us_name, us_is_table, us_kind,
+                                 us_memo, us_keyfields, us_autoincfield, us_lookup_id,
+                                 us_lookup_text, us_main_table, us_sql)
+          values (cur.exf_us_code, cur.exf_us_name, cur.exf_us_is_table, cur.exf_us_kind,
+                  cur.exf_us_memo, cur.exf_us_keyfields, cur.exf_us_autoincfield, cur.exf_us_lookup_id,
+                  cur.exf_us_lookup_text, cur.exf_us_main_table, cur.exf_us_sql)
+          returning us_uuid, us_kind
+          into us_uuid, us_kind;
+      
+          if (us_kind = 0) then
+            execute procedure uxp$uxsource_sync(:us_uuid, 1);
+        end
+
+        if (exf_new_kind = 0) then
+        begin
+          if (not exists(select * from ux$pairuuid where up_old_uuid = cur.exf_ux_uuid)) then
+          begin
+            update or insert into ux$pairuuid (up_old_uuid, up_new_uuid)
+            values (cur.exf_ux_uuid, cur.exf_ux_uuid);
+          end
+
+          if (exf_clone_kind &lt;&gt; 0 and coalesce(cur.exf_ua_uxa_fcode, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+          begin
+            uxa_uuid = null;
+            select uxa_uuid
+            from ux$alias
+            where uxa_owner = :new_ux_uuid and
+                  uxa_code = cur.exf_ua_uxa_code
+            into uxa_uuid;
+    
+            if (uxa_uuid is null) then
+            begin
+              insert into ux$alias (uxa_owner, uxa_code, uxa_name, uxa_kind)
+              values (:new_ux_uuid, cur.exf_ua_uxa_code, cur.exf_ua_uxa_name, cur.exf_ua_uxa_kind)
+              returning uxa_uuid
+              into :uxa_uuid;
+
+              update or insert into ux$pairuuid (up_old_uuid, up_new_uuid)
+              values (cur.exf_ua_uxa_uuid, :uxa_uuid);
+            end else
+            if (cur.exf_ua_uxa_uuid is not null) then
+            begin
+              if (not exists(select * from ux$pairuuid where up_old_uuid = cur.exf_ua_uxa_uuid)) then
+              begin
+                update or insert into ux$pairuuid (up_old_uuid, up_new_uuid)
+                values (cur.exf_ua_uxa_uuid, cur.exf_ua_uxa_uuid);
+              end
+            end
+          end
+        end else
+        begin
+          if (not exists(select * from ux$code
+          where ux_us_uuid = :us_uuid and
+                ux_scode = :ux_scode)) then
+            exf_new_kind = 2;
+
+          if (exf_new_kind = 2) then
+          begin
+            new_ux_uuid = null;
+  
+            if (trim(coalesce(cur.exf_new_name, &#x27;&#x27;)) &lt;&gt; &#x27;&#x27;) then
+              ux_name = cur.exf_new_name;
+            else
+            if (load_from_file = 1) then
+              ux_name = cur.exf_ux_name;
+            else
+              ux_name = cur.exf_ux_name;
+      
+            if (exf_clone_kind = 0) then
+            begin
+              insert into ux$uniq (uu_kind, uu_is_base)
+              values (cur.exf_ux_kind, 1)
+              returning uu_id
+              into :new_ux_uuid;
+            end else
+            begin
+              insert into ux$uniq (uu_id, uu_kind, uu_is_base)
+              values (cur.exf_ux_uuid, cur.exf_ux_kind, 1)
+              returning uu_id
+              into :new_ux_uuid;
+            end
+          
+            insert into ux$code (ux_uuid, ux_us_uuid, ux_scode, ux_name)
+            values (:new_ux_uuid, :us_uuid, :ux_scode, :ux_name)
+            returning ux_fcode
+            into ux_fcode;
+    
+            if (exf_clone_kind = 0) then
+            begin
+              for select uxa_uuid, uxa_code, uxa_name, uxa_kind, uxa_fs_inactive
+              from ux$alias
+              where uxa_owner = cur.exf_ux_uuid
+              as cursor uxa
+              do
+              begin
+                insert into ux$alias (uxa_owner, uxa_code, uxa_name, uxa_kind, uxa_fs_inactive)
+                values (:new_ux_uuid, uxa.uxa_code, uxa.uxa_name, uxa.uxa_kind, uxa.uxa_fs_inactive)
+                returning uxa_uuid
+                into :uxa_uuid;
+      
+                update or insert into ux$pairuuid (up_old_uuid, up_new_uuid)
+                values (uxa.uxa_uuid, :uxa_uuid);
+              end
+            end
+          end
+
+          if (exf_clone_kind &lt;&gt; 0 and coalesce(cur.exf_ua_uxa_fcode, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+          begin
+            uxa_uuid = null;
+            select uxa_uuid
+            from ux$alias
+            where uxa_owner = :new_ux_uuid and
+                  uxa_code = cur.exf_ua_uxa_code
+            into uxa_uuid;
+    
+            if (uxa_uuid is null) then
+            begin
+              insert into ux$alias (uxa_owner, uxa_code, uxa_name, uxa_kind)
+              values (:new_ux_uuid, cur.exf_ua_uxa_code, cur.exf_ua_uxa_name, cur.exf_ua_uxa_kind)
+              returning uxa_uuid
+              into :uxa_uuid;
+            end
+  
+            update or insert into ux$pairuuid (up_old_uuid, up_new_uuid)
+            values (cur.exf_ua_uxa_uuid, :uxa_uuid);
+          end
+
+          imp_clone_kind = 0;
+          if (db_connection &lt;&gt; &#x27;&#x27;) then
+            imp_clone_kind = 1;
+          else
+          if (load_from_file = 1) then
+            imp_clone_kind = 2;
+  
+          insert into ux$import (imp_ufm_uuid, imp_clone_kind, imp_src_ux_fcode, imp_src_ufm_uuid, imp_src_db_id,
+                                 imp_src_db_is_actual, imp_src_db_path, imp_src_exp_id)
+          values (:new_ufm_uuid, :imp_clone_kind, cur.exf_ux_fcode, cur.exf_ufm_uuid, cur.exf_db_id,
+                  cur.exf_db_is_actual, iif(:db_connection &lt;&gt; &#x27;&#x27;, :db_connection, coalesce(cur.exf_db_path, &#x27;&#x27;)), :exp_id);
+  
+          update or insert into ux$pairuuid (up_old_uuid, up_new_uuid)
+          values (cur.exf_ux_uuid, :new_ux_uuid);
+    
+          if (cur.exf_parent_id is null) then
+          begin
+            res_ux_uuid = new_ux_uuid;
+            res_ux_fcode = ux_fcode;
+            res_us_code = cur.exf_us_code;
+          end
+        end
+  
+        update ux$expoform
+        set exf_imported = 1
+        where current of cur;
+  
+        update ux$expoform
+        set exf_ux_uuid_exist = - 1
+        where 1 = 1;
+      end
+    end
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

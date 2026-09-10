@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_MAKE_ACCOUNT_BALANCES — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_MAKE_ACCOUNT_BALANCES: 2 входных, 9 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_MAKE_ACCOUNT_BALANCES</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">9</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REPORT_REGION_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REPORT_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">9 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">POB_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">POB_REGION_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">POB_REGION_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">POB_BRANCH_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">POB_AMOUNT_BALANCE</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">POB_AMOUNT_DIFF</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">POB_ACC_DT</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">POB_ACC_KT</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">POB_BOOK_MEMO</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_MAKE_ACCOUNT_BALANCES(
+    REPORT_REGION_ID INTEGER,
+    REPORT_DATE_END DATE)
+RETURNS (
+    POB_AMOUNT DECIMAL(18,4),
+    POB_REGION_NAME VARCHAR(100),
+    POB_REGION_ID INTEGER,
+    POB_BRANCH_ID INTEGER,
+    POB_AMOUNT_BALANCE DECIMAL(18,4),
+    POB_AMOUNT_DIFF DECIMAL(18,4),
+    POB_ACC_DT VARCHAR(20),
+    POB_ACC_KT VARCHAR(20),
+    POB_BOOK_MEMO VARCHAR(1024))
+AS
+declare variable report_period integer;
+begin
+  report_period = extract(year from :report_date_end) || extract(month from :report_date_end);
+-- Остаток портфеля
+  pob_book_memo = &#x27;Переклассификация сальдо счета 10931 и 10941&#x27;;
+  for with tabl1
+      as (select al_from_reg_id, al_currency, al_from_bg_id, al_account, sum(oks_balance) oks_balance,
+                 iif(pr_loan_type = 0, &#x27;Групп.&#x27;, &#x27;Индив&#x27;) loan_type,
+                 case pr_product_kind
+                   when 1 then &#x27;Групповой&#x27;
+                   when 2 then &#x27;Параллельный&#x27;
+                   when 3 then &#x27;Индивидуальный&#x27;
+                   when 4 then &#x27;Для сотрудников&#x27;
+                 end product_kind_str,
+                 pr_product_kind
+          from oksummary, kontract, standacc, acc_list, product
+          where :report_date_end between oks_date_begin and oks_date_end and
+                oks_balance &gt; 0 and
+                oks_from_k_id = k_id and
+                k_from_pr_id = sa_from_pr_id and
+                sa_account_type = 1 and
+                sa_account = al_id and
+                sa_from_reg_id = oks_region_id and
+                k_from_pr_id = pr_id and
+                oks_close_state = 0
+          group by al_from_reg_id, al_currency, al_from_bg_id, al_account, al_name, loan_type, product_kind_str, pr_product_kind),
+      tabl2
+      as (select al_from_reg_id, al_currency, al_account, oks_balance, loan_type, product_kind_str,
+                 iif(pr_product_kind in (1, 2), &#x27;10931/1&#x27;, iif(pr_product_kind = 3 or (pr_product_kind = 4 and al_currency = &#x27;417&#x27;), &#x27;10941/1&#x27;, iif(pr_product_kind = 4 and al_currency &lt;&gt; &#x27;417&#x27;, &#x27;10941/10&#x27;, &#x27;&#x27;))) new_account
+          from tabl1)
+      select al_from_reg_id, reg_code || &#x27; &#x27; || reg_name,
+             (select al.al_id new_al_id
+              from acc_list al
+              where al.al_account = t2.new_account and
+                    al.al_currency = t2.al_currency and
+                    al.al_from_reg_id = t2.al_from_reg_id) account_dt,
+             (select al.al_id new_al_id
+              from acc_list al
+              where al.al_account = t2.al_account and
+                    al.al_currency = t2.al_currency and
+                    al.al_from_reg_id = t2.al_from_reg_id) account_kt, oks_balance
+      from tabl2 t2, region
+      where t2.al_account &lt;&gt; t2.new_account and
+            al_from_reg_id = reg_unicode
+      into pob_region_id, pob_region_name, pob_acc_dt, pob_acc_kt, pob_amount
+  do
+  begin
+    pob_branch_id = pob_region_id;
+    pob_amount_balance = 0;
+    pob_amount_diff = pob_amount - pob_amount_balance;
+    suspend;
+  end
+
+-- Накопленные проценты
+  pob_book_memo = &#x27;Переклассификация сальдо счета 11437&#x27;;
+  for with tabl1
+      as (select al_from_reg_id, al_currency, al_from_bg_id, al_account, sum(kcp_perc_saldo) kcp_perc_saldo,
+                 iif(pr_loan_type = 0, &#x27;Групп.&#x27;, &#x27;Индив&#x27;) loan_type,
+                 case pr_product_kind
+                   when 1 then &#x27;Групповой&#x27;
+                   when 2 then &#x27;Параллельный&#x27;
+                   when 3 then &#x27;Индивидуальный&#x27;
+                   when 4 then &#x27;Для сотрудников&#x27;
+                 end product_kind_str
+--       ,pr_name
+                 ,
+                 pr_product_kind
+          from kontcalcperc, kontract, standacc, acc_list, product
+          where kcp_period = :report_period and
+                kcp_perc_saldo &gt; 0 and
+                kcp_from_k_id = k_id and
+                k_from_pr_id = sa_from_pr_id and
+                sa_account_type = 2 and
+                sa_account = al_id and
+                sa_from_reg_id = kcp_from_reg_id and
+                k_from_pr_id = pr_id
+          group by al_from_reg_id, al_currency, al_from_bg_id, al_account, al_name, loan_type, product_kind_str
+--         ,pr_name
+              , pr_product_kind),
+      tabl2
+      as (select al_from_reg_id, al_currency, al_account, kcp_perc_saldo, loan_type, product_kind_str,
+                 iif(pr_product_kind in (1, 2), &#x27;11437/1&#x27;, iif(pr_product_kind = 3 or (pr_product_kind = 4 and al_currency = &#x27;417&#x27;), &#x27;11437/2&#x27;, iif(pr_product_kind = 4 and al_currency &lt;&gt; &#x27;417&#x27;, &#x27;11437/10&#x27;, &#x27;&#x27;))) new_account
+          from tabl1)
+      select al_from_reg_id, reg_code || &#x27; &#x27; || reg_name,
+             (select al.al_id new_al_id
+              from acc_list al
+              where al.al_account = t2.new_account and
+                    al.al_currency = t2.al_currency and
+                    al.al_from_reg_id = t2.al_from_reg_id) account_dt,
+             (select al.al_id new_al_id
+              from acc_list al
+              where al.al_account = t2.al_account and
+                    al.al_currency = t2.al_currency and
+                    al.al_from_reg_id = t2.al_from_reg_id) account_kt, kcp_perc_saldo
+      from tabl2 t2, region
+      where t2.al_account &lt;&gt; t2.new_account and
+            al_from_reg_id = reg_unicode
+      into pob_region_id, pob_region_name, pob_acc_dt, pob_acc_kt, pob_amount
+  do
+  begin
+    pob_branch_id = pob_region_id;
+    pob_amount_balance = 0;
+    pob_amount_diff = pob_amount - pob_amount_balance;
+    suspend;
+  end
+--  Полученный ДБП
+  pob_book_memo = &#x27;Переклассификация сальдо счета 21141&#x27;;
+  for with tabl1
+      as (select al_from_reg_id, al_currency, al_from_bg_id, al_account, sum(kcp_kommis_saldo) kcp_kommis_saldo,
+                 iif(pr_loan_type = 0, &#x27;Групп.&#x27;, &#x27;Индив&#x27;) loan_type,
+                 case pr_product_kind
+                   when 1 then &#x27;Групповой&#x27;
+                   when 2 then &#x27;Параллельный&#x27;
+                   when 3 then &#x27;Индивидуальный&#x27;
+                   when 4 then &#x27;Для сотрудников&#x27;
+                 end product_kind_str
+--       ,pr_name
+                 ,
+                 pr_product_kind
+          from kontcalcperc, kontract, standacc, acc_list, product
+          where kcp_period = :report_period and
+                kcp_kommis_saldo &lt;&gt; 0 and
+                kcp_from_k_id = k_id and
+                k_from_pr_id = sa_from_pr_id and
+                sa_account_type = 7 and
+                sa_account = al_id and
+                sa_from_reg_id = kcp_from_reg_id and
+                k_from_pr_id = pr_id
+          group by al_from_reg_id, al_currency, al_from_bg_id, al_account, al_name, loan_type, product_kind_str
+--         ,pr_name
+              , pr_product_kind),
+      tabl2
+      as (select al_from_reg_id, al_currency, al_account, kcp_kommis_saldo, loan_type, product_kind_str,
+                 iif(pr_product_kind in (1, 2), &#x27;21141/101&#x27;, iif(pr_product_kind = 3 or (pr_product_kind = 4 and al_currency = &#x27;417&#x27;), &#x27;21141/102&#x27;, iif(pr_product_kind = 4 and al_currency &lt;&gt; &#x27;417&#x27;, &#x27;21141/102&#x27;, &#x27;&#x27;))) new_account
+          from tabl1)
+      select al_from_reg_id, reg_code || &#x27; &#x27; || reg_name,
+             (select al.al_id new_al_id
+              from acc_list al
+              where al.al_account = t2.new_account and
+                    al.al_currency = t2.al_currency and
+                    al.al_from_reg_id = t2.al_from_reg_id) account_dt,
+             (select al.al_id new_al_id
+              from acc_list al
+              where al.al_account = t2.al_account and
+                    al.al_currency = t2.al_currency and
+                    al.al_from_reg_id = t2.al_from_reg_id) account_kt, kcp_kommis_saldo
+      from tabl2 t2, region
+      where t2.al_account &lt;&gt; t2.new_account and
+            al_from_reg_id = reg_unicode
+      into pob_region_id, pob_region_name, pob_acc_dt, pob_acc_kt, pob_amount
+  do
+  begin
+    pob_branch_id = pob_region_id;
+    pob_amount_balance = 0;
+    pob_amount_diff = pob_amount - pob_amount_balance;
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_KIB_BASIC_DATA — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_KIB_BASIC_DATA: 2 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_KIB_BASIC_DATA</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_kibminiapp_last.html"><div class="to">HP_KIBMINIAPP_LAST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="get_kk_other_db_check.html"><div class="to">GET_KK_OTHER_DB_CHECK</div></a><a class="ref-card" href="hp_html_get_loan_status.html"><div class="to">HP_HTML_GET_LOAN_STATUS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OBJECT_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJECT_TYPE</div><div class="ptype">VARCHAR(10)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CLIENT_DATA</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_KIB_BASIC_DATA(
+    OBJECT_ID ID_TYPE,
+    OBJECT_TYPE VARCHAR(10))
+RETURNS (
+    C_ID ID_TYPE,
+    CLIENT_DATA BLOB SUB_TYPE TEXT SEGMENT SIZE 80)
+AS
+declare variable unpaid_own_amount curr_type;
+declare variable active_kont smallint;
+declare variable negative_status smallint;
+declare variable max_delinq_days integer;
+declare variable poruch_kont_qty integer;
+declare variable kbm_id id_type;
+declare variable kh_count integer;
+declare variable kh_debtor_count integer;
+declare variable kh_repaystatus str_100;
+declare variable kh_creditstatus str_100;
+declare variable kh_deliqdayscount integer;
+declare variable kh_dateaward date;
+declare variable own_amount curr_type;
+declare variable group_unpaid_amount curr_type;
+declare variable group_amount curr_type;
+declare variable cli_percent curr_type;
+declare variable cu_symbol varchar(3);
+declare variable cr_rate curr_type;
+declare variable cu_id varchar(3);
+declare variable kh_clients_kol integer;
+declare variable rep_date date;
+declare variable kh_is_debtor smallint;
+declare variable max_delinq_day integer;
+declare variable c_counter integer;
+declare variable kbm_ver_info smallint;
+declare variable kbm_checked_date date;
+declare variable kbm_checked_date_str varchar(10);
+declare variable c_name_fio varchar(100);
+declare variable ma_id d_integer;
+begin
+  rep_date = current_date;
+  object_type = trim(coalesce(object_type, &#x27;&#x27;));
+
+  if ((object_type is null) or (object_id is null)) then
+    exit;
+  client_data = &#x27;&#x27;;
+  c_counter = 0;
+
+  ma_id = 0;
+  if (object_type = &#x27;kontract&#x27;) then
+    select k_from_ma_app_id
+    from kontract
+    where k_id = :object_id
+    into ma_id;
+  else
+  if (object_type = &#x27;miniapp&#x27;) then
+    ma_id = object_id;
+
+      for select cl.c_id, cl.c_name_fio
+      from clients cl
+      where cl.c_id = cast(:object_id as id_type) and
+            cast(:object_type as varchar(10)) = &#x27;client&#x27;
+      union all
+      select macl.mac_from_c_id, &#x27;&#x27;
+      from miniappclient macl
+      where macl.mac_from_ma_id = cast(:object_id as id_type) and
+            --macl.mac_amount &gt; 0 and
+            macl.mac_from_reg_id = 0 and
+            cast(:object_type as varchar(10)) = &#x27;miniapp&#x27;
+      union all
+      select kncl.kc_from_c_id, &#x27;&#x27;
+      from knclient kncl
+      where kncl.kc_from_k_id = cast(:object_id as id_type) and
+            --kncl.kc_amount_approved &gt; 0 and
+            cast(:object_type as varchar(10)) = &#x27;kontract&#x27;
+      union all
+      select macl.mac_from_c_id, &#x27;&#x27;
+      from miniappclient macl
+      inner join kontract kont on kont.k_from_ma_app_id = macl.mac_from_ma_id
+      where kont.k_id = cast(:object_id as id_type) and
+            macl.mac_from_reg_id = 0 and
+            cast(:object_type as varchar(10)) = &#x27;kontract&#x27;
+            and macl.mac_is_poruch = -1
+      into :c_id, :c_name_fio
+  do
+  begin
+    if (c_name_fio = &#x27;&#x27;) then
+    begin
+      select c_name_fio
+      from clients cl
+      where cl.c_id = :c_id
+      into :c_name_fio;
+    end
+
+    if (c_counter &lt;&gt; 0) then
+    begin
+      client_data = BLOB_APPEND(client_data, &#x27;&lt;hr width=&quot;100%&quot;  noshade color=&quot;#0b7fab&quot;&gt;&#x27;);
+    end
+    c_counter = 1;
+    kbm_checked_date_str = &#x27;&#x27;;
+    kbm_checked_date = null;
+
+    client_data = BLOB_APPEND(client_data, &#x27;&lt;b&gt;&#x27; || c_name_fio || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;);
+
+    select kbm_id, kbm_ver_info, cast(kbm_checked_datetime as date)
+    from hp_kibminiapp_last(:c_id, :ma_id)
+    into kbm_id, kbm_ver_info, kbm_checked_date;
+
+    kh_count = 0;
+    unpaid_own_amount = 0;
+    active_kont = 0;
+    max_delinq_days = 0;
+    poruch_kont_qty = 0;
+    negative_status = 0;
+    kh_debtor_count = 0;
+
+    if (kbm_checked_date is not null) then
+    begin
+      kbm_checked_date_str = replace(iif(extract(day from kbm_checked_date) &lt; 10, &#x27;0&#x27;, &#x27;&#x27;) || extract(day from kbm_checked_date) || &#x27;.&#x27; || iif(extract(month from kbm_checked_date) &lt; 10, &#x27;0&#x27;, &#x27;&#x27;) || extract(month from kbm_checked_date) || &#x27;.&#x27; || extract(year from kbm_checked_date), &#x27; &#x27;, &#x27;&#x27;);
+    end
+
+    if (kbm_ver_info in (0, 2)) then
+    begin
+      client_data = BLOB_APPEND(client_data, &#x27;&amp;nbsp&amp;nbspКлиент еще не проверен&lt;br&gt;&#x27;);
+    end
+    else
+    if (kbm_ver_info = 7) then
+    begin
+      client_data = BLOB_APPEND(client_data, &#x27;&amp;nbsp&amp;nbspВо время проверки у КИБ возникла ошибка&lt;br&gt;&#x27;);
+    end
+    else
+    begin
+      for select trim(coalesce(kh.kh_repaystatus, &#x27;-- не выбран --&#x27;)), trim(coalesce(kh.kh_creditstatus, &#x27;&#x27;)),
+                 coalesce(kh.kh_ownamount, 0), coalesce(kh.kh_deliqdayscount, 0),
+                 iif(coalesce(kh_is_debtor, 0) = 1, coalesce(kh.kh_unpaidamount, 0), 0), coalesce(kh.kh_amount, 0),
+                 kh.kh_dateaward,
+                 (
+                 case kh_currency
+                   when &#x27;Сом (Кыргызский)&#x27; then &#x27;KGS&#x27;
+                   when &#x27;Доллар США&#x27; then &#x27;USD&#x27;
+                   when &#x27;Евро&#x27; then &#x27;EUR&#x27;
+                   when &#x27;Российский рубл&#x27; then &#x27;RUB&#x27;
+                   else &#x27;KGS&#x27;
+                 end),
+                 coalesce(kh_clients_kol, 0), coalesce(kh_is_debtor, 0)
+          from kibhistory kh
+          where kh.kh_from_kbm_id = :kbm_id and
+                kh_creditstatus not containing (&#x27;Отказано&#x27;) -- если отказано, это значит клиент кредит не получил
+                and
+                kh.kh_creditstatus not containing (&#x27;Рассмотрение заявки&#x27;) -- кредитный договор еще не оформлен
+                and
+                coalesce(kh.kh_is_our, 0) = 0 -- только в других  ФКУ
+          order by kh.kh_dateaward desc
+          into :kh_repaystatus, :kh_creditstatus, :own_amount, :kh_deliqdayscount, :group_unpaid_amount, :group_amount,
+               :kh_dateaward, :cu_symbol, :kh_clients_kol, :kh_is_debtor
+      do
+      begin
+        cr_rate = null;
+
+        if (kh_count = 0) then
+        begin
+          client_data = BLOB_APPEND(client_data, &#x27;&amp;nbsp&amp;nbspДата проверки: &lt;b&gt;&#x27; || kbm_checked_date_str || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;);
+        end
+
+        kh_count = kh_count + 1;
+        if (kh_is_debtor = 1) then
+        begin
+          kh_debtor_count = kh_debtor_count + 1;
+          kh_deliqdayscount = coalesce(kh_deliqdayscount, 0);
+
+          if ((kh_clients_kol = 1) and
+              (own_amount = 0)) then
+            own_amount = group_amount;
+
+          if (kh_debtor_count &lt;= 3) then -- проверяю статус только для посследних займов
+          begin
+            if (kh_deliqdayscount &gt; max_delinq_days) then
+              max_delinq_days = kh_deliqdayscount;
+            if (kh_repaystatus in (&#x27;Погашен гарантом&#x27;, &#x27;Погашен за счет обеспечения в судебном порядке&#x27;, &#x27;Погашен за счет обеспечения во внесудебном порядке&#x27;, &#x27;Погашен за счет обеспечения на добровольной основе&#x27;, &#x27;Погашен за счет обращ.взыск.на обесп.через суд.орг&#x27;, &#x27;Погашен за счет обращ.вызск.на обесп. во внесуд.по&#x27;, &#x27;Погашен за счет права уступки требования&#x27;, &#x27;Погашен через судебные органы (кредиты без залога&#x27;, &#x27;Списан через РППУ&#x27;,
+
+                               &#x27;120 дней просрочки и более&#x27;,
+                                   &#x27;60 дней до 89 дней просрочки&#x27;, &#x27;60 дней просрочки и более&#x27;, &#x27;90 дней  до 119 дней просрочки&#x27;, &#x27;90 дней просрочки и более&#x27;, &#x27;30 дней до 59 дней просрочки&#x27;, &#x27;30 дней просрочки и более&#x27;)) then
+            begin
+              if (negative_status = 0) then
+              begin
+                client_data = BLOB_APPEND(client_data, &#x27;&amp;nbsp&amp;nbspНарушения в трех последних займах в других ФКУ&lt;br&gt;&#x27;);
+                negative_status = 1;
+              end
+              client_data = BLOB_APPEND(client_data, &#x27;&amp;nbsp&amp;nbsp&amp;nbsp&amp;nbsp&lt;b&gt;&#x27; || kh_repaystatus || &#x27;; кредит от &#x27; || cast(kh_dateaward as str_100) || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;);
+            end
+            else
+            if (kh_creditstatus in (&#x27;Судебное разбирательство&#x27;, &#x27;Open_Under_Legal_Proceedings&#x27;, &#x27;Settled_Late&#x27;, &#x27;Sold_To_Third_Party&#x27;, &#x27;Written_Off&#x27;, &#x27;Fully_Paid_Collateral_Execution&#x27;, &#x27;Fully_Paid_Resolved_Through_Court&#x27;, &#x27;Fully_Paid_By_Guarantor&#x27;, &#x27;Fully_Paid_Collateral_Execution_Through_Court&#x27;, &#x27;Written_Off_Through_Loan_Loss_Provision&#x27;)) then
+            begin
+              if (negative_status = 0) then
+              begin
+                client_data = BLOB_APPEND(client_data, &#x27;&amp;nbsp&amp;nbspНарушения в трех последних займах в других ФКУ&lt;br&gt;&#x27;);
+                negative_status = 1;
+              end
+              client_data = BLOB_APPEND(client_data, &#x27;&amp;nbsp&amp;nbsp&amp;nbsp&amp;nbsp&lt;b&gt;&#x27; || kh_creditstatus || &#x27;; кредит от &#x27; || cast(kh_dateaward as str_100) || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;);
+            end
+          end
+        end
+
+        -- рассматриваю все активные кредиты по киб
+        if (kh_creditstatus in (&#x27;Выдан&#x27;, &#x27;Просрочен&#x27;, &#x27;Просрочен  - &lt;не выбрано&gt;&#x27;, &#x27;Просрочен  -&gt; Просрочки&#x27;, &#x27;Просрочен -&gt; Просрочки&#x27;, &#x27;Реструктуризирован&#x27;, &#x27;Своевременный платеж&#x27;, &#x27;Начисление процентов&#x27;,
+
+                            &#x27;Granted_And_Activated&#x27;, &#x27;Restructured&#x27;,
+                                &#x27;Open_Under_Legal_Proceedings&#x27;)) then
+        begin
+          if (kh_is_debtor = 1) then
+          begin
+            active_kont = active_kont + 1;
+            if ((own_amount &gt; 0) and
+                (group_unpaid_amount &gt; 0) and
+                (group_amount &gt; 0)) then
+            begin
+              select cl.cu_id
+              from currlist cl
+              where cl.cu_symbol = :cu_symbol
+              into :cu_id;
+
+              select opc.cr_rate
+              from opercurr opc
+              where opc.cr_from_cu_id = :cu_id and
+                    :rep_date between opc.cr_date and opc.cr_date_end
+              into :cr_rate;
+
+              cr_rate = coalesce(cr_rate, 1);
+
+              own_amount = own_amount * cr_rate;
+              group_unpaid_amount = group_unpaid_amount * cr_rate;
+              group_amount = group_amount * cr_rate;
+
+              cli_percent = (cast(own_amount as double precision) * 100) / group_amount; -- доля клиента в группе
+              unpaid_own_amount = unpaid_own_amount + (group_unpaid_amount * cli_percent / 100);
+            end
+          end
+          else
+          begin
+            poruch_kont_qty = poruch_kont_qty + 1;
+          end
+        end
+      end
+
+      if (kh_count = 0) then
+      begin
+        if (not exists(select * from knclient, kontstate -- добавлено по письму Алмаза, если имеется кр. история в своем ФКУ то не выводит сообщение об отстутствии кр. истории
+        where kc_from_c_id = :c_id
+        and kc_amount_approved &gt; 0
+        and kc_from_k_id = ks_from_k_id
+        and ks_ol_is_delete = 0
+        and ks_state = 1)) then
+        begin
+          client_data = BLOB_APPEND(client_data, &#x27;&amp;nbsp&amp;nbspКредитная история отсутствует&lt;br&gt;&#x27;);
+        end
+
+        client_data = BLOB_APPEND(client_data, &#x27;&amp;nbsp&amp;nbspДата проверки: &lt;b&gt;&#x27; || kbm_checked_date_str || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;);
+      end
+      else
+      begin
+        if (negative_status = 0) then
+          client_data = BLOB_APPEND(client_data, &#x27;&amp;nbsp&amp;nbsp&lt;b&gt;В других ФКУ нарушений не обнаружено&lt;/b&gt;&lt;br&gt;&#x27;);
+        client_data = BLOB_APPEND(client_data, &#x27;&amp;nbsp&amp;nbspМакс. дни просрочки в других ФКУ&lt;br&gt;&#x27; || &#x27;&amp;nbsp&amp;nbsp&amp;nbsp&amp;nbsp&lt;b&gt;&#x27; || cast(max_delinq_days as varchar(10)) || &#x27; дней&lt;/b&gt;&lt;br&gt;&#x27;);
+
+        client_data = BLOB_APPEND(client_data, &#x27;&amp;nbsp&amp;nbspАктивный баланс в других ФКУ&lt;br&gt;&#x27; || &#x27;&amp;nbsp&amp;nbsp&amp;nbsp&amp;nbsp&lt;b&gt;&#x27; || cast(round(unpaid_own_amount) as varchar(10)) || &#x27; сом&lt;/b&gt;&lt;br&gt;&#x27;);
+
+        client_data = BLOB_APPEND(client_data, &#x27;&amp;nbsp&amp;nbspАктивные займы в других ФКУ&lt;br&gt;&#x27; || &#x27;&amp;nbsp&amp;nbsp&amp;nbsp&amp;nbsp&lt;b&gt;&#x27; || cast(active_kont as varchar(10)) || &#x27; кредит(ов)&lt;/b&gt;&lt;br&gt;&#x27;);
+
+        client_data = BLOB_APPEND(client_data, &#x27;&amp;nbsp&amp;nbspАктивные в других ФКУ, где он(а) поручитель&lt;br&gt;&#x27; || &#x27;&amp;nbsp&amp;nbsp&amp;nbsp&amp;nbsp&lt;b&gt;&#x27; || cast(poruch_kont_qty as varchar(10)) || &#x27; кредит(ов)&lt;/b&gt;&lt;br&gt;&#x27;);
+      end
+      if (ma_id &lt;&gt; 0) then
+        client_data = BLOB_APPEND(client_data, f_uri_html(&#x27;Просмотр отчета&#x27;, &#x27;kib_report&#x27;,
+          &#x27;Отчет КИБ&#x27;, &#x27;miniapp&#x27;, :ma_id, current_date, current_date,
+          &#x27;{&quot;c_id&quot;:&#x27; || c_id || &#x27;}&#x27;) || &#x27;&lt;br&gt;&#x27;);
+    end
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

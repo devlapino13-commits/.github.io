@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EXTINFO_RESEND — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EXTINFO_RESEND: 3 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EXTINFO_RESEND</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_extinfo_insert_kontur.html"><div class="to">HP_EXTINFO_INSERT_KONTUR</div></a><a class="ref-card" href="hp_extinfo_insert_smevpass.html"><div class="to">HP_EXTINFO_INSERT_SMEVPASS</div></a><a class="ref-card" href="hp_permission_access_check.html"><div class="to">HP_PERMISSION_ACCESS_CHECK</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EIL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">EIC_ID_IN</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ERR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EXTINFO_RESEND(
+    EIL_ID D_ID,
+    UN_ID D_ID,
+    EIC_ID_IN D_ID = null)
+RETURNS (
+    ERR_TEXT D_STR_255)
+AS
+declare variable eic_name d_str_255;
+declare variable eic_code d_str_code;
+declare variable eic_id d_id;
+declare variable eic_name_tmp d_str_255;
+declare variable eic_code_tmp d_str_code;
+declare variable object_kind d_integer;
+declare variable object_id d_id;
+declare variable date_begin d_date;
+declare variable close_date d_date;
+declare variable agreement_date d_date;
+declare variable ks_state d_integer;
+declare variable ma_id d_id;
+declare variable edl_status d_integer;
+declare variable eic_kind d_integer;
+declare variable eic_kind_tmp d_integer;
+declare variable eic_date_end d_date;
+declare variable eic_date_end_tmp d_date;
+declare variable c_id d_id;
+begin
+  -- Переотправка запроса на внешние системы
+
+  err_text = &#x27;&#x27;;
+
+  select eic_id, eic_code, eic_name, eil_object_kind, eil_object_id, eic_date_end, eic_kind, eil_from_c_id
+  from extinfolist, extinfocfg
+  where eil_from_eic_id = eic_id
+    and eil_id = :eil_id
+  into eic_id, eic_code, eic_name, object_kind, object_id, eic_date_end, eic_kind, c_id;
+
+  if (eic_id_in is not null and eic_kind &gt; 0 and f_get_db_id() = 81001) then
+  begin
+    select eic_code, eic_name, eic_date_end, eic_kind
+    from extinfocfg
+    where eic_id = :eic_id_in
+    into eic_code_tmp, eic_name_tmp, eic_date_end_tmp, eic_kind_tmp;
+
+    if (eic_kind_tmp is distinct from eic_kind) then
+      err_text = f_format(&#x27;Нельзя переотправить запрос &quot;%1&quot; как &quot;%2&quot;&#x27;, eic_name, eic_name_tmp);
+    else
+    begin
+      eic_id = eic_id_in;
+      eic_code = eic_code_tmp;
+      eic_name = eic_name_tmp;
+      eic_date_end = eic_date_end_tmp;
+    end
+  end 
+
+  if (err_text = &#x27;&#x27; and eic_code is null) then
+    err_text = &#x27;Не выбран запрос для повторной отправки&#x27;;
+
+  if (err_text = &#x27;&#x27; and current_date &gt; eic_date_end) then
+    err_text = f_format(&#x27;Проект &quot;%1&quot; уже не активен.&#x27;, eic_name);
+
+  -- Проверяем права
+  if (err_text = &#x27;&#x27; and not exists(
+      select has_access
+      from hp_permission_access_check(:un_id, &#x27;PermActions&#x27;, 0, &#x27;ExtInfo.Ins.&#x27; || :eic_code)
+      where has_access = 1)) then
+    err_text = &#x27;У вас отсутствуют права для переотправки запросов: &#x27; || eic_name;
+
+  if (err_text = &#x27;&#x27; and eic_kind = 1 and f_get_db_id() = 81001) then
+  begin
+    -- проверка есть ли разрешение для отправки запроса в БКИ
+    if (object_kind = 9) then
+    begin
+      ma_id = (select k_from_ma_app_id from kontract where k_id = :object_id);
+
+      select ks_state
+      from kontstate
+      where ks_ol_is_delete = 0
+        and ks_from_k_id = :object_id
+        and current_date between ks_date_begin and ks_date_end
+      into ks_state;
+  
+      if (ks_state = 2) then
+        err_text = &#x27;Договор уже не активен.&#x27;;
+
+      if (err_text = &#x27;&#x27; and ks_state = 1) then
+        select ok_sh_date
+        from operkred
+        where ok_from_k_id = :object_id
+          and ok_type &lt; 7
+          and ok_ol_is_active = 1
+          and ok_ol_date &lt;= current_date
+        group by 1
+        having sum(ok_os + ok_perc + ok_sh_os + ok_sh_perc) &gt; 0
+        order by 1 desc
+        rows 1
+        into close_date;
+
+      if (err_text = &#x27;&#x27; and ks_state = 0) then
+      begin
+        select max(sh_date)
+        from schedule
+        where sh_from_k_id = :object_id
+        into close_date;
+      end
+    end
+    else if (object_kind = 11) then
+    begin
+      ma_id = object_id;
+
+      select max(sh_date)
+      from schedule
+      where sh_from_k_id = -:ma_id
+      into close_date;
+  
+      if (close_date is null) then
+      begin
+        select max(sh_date)
+        from schedule, kontract
+        where k_id = sh_from_k_id
+          and k_from_ma_app_id = :ma_id
+        into close_date;
+      end
+    end 
+
+    if (err_text = &#x27;&#x27; and close_date is null) then
+      err_text = &#x27;Не определен срок разрешения на запрос в БКИ.&#x27;;
+
+    if (err_text = &#x27;&#x27; and coalesce(ks_state, 0) = 0) then -- в процессе
+    begin
+      date_begin = (select ma_date_app from miniapp where ma_id = :ma_id order by ma_number rows 1);
+
+      select edl_status
+      from miniappclient mac, edoc_sign eds, edoc_list edl
+      where eds_from_c_id = mac_from_c_id
+        and edl_object_id = mac_from_ma_id
+        and eds_from_edl_id = edl_id
+        and edl_object_kind = f_objkind(&#x27;miniapp&#x27;, &#x27;id&#x27;)
+        and edl_object_id = :ma_id
+        and edl_from_edc_id = f_edoc_kind(&#x27;loan.application&#x27;,&#x27;id&#x27;) --заявка на займ
+        and eds_status = 1
+        and eds_status_datetime between :date_begin and current_timestamp
+      order by edl_status desc, eds_status_datetime desc
+      rows 1
+      into edl_status;
+
+      select eds_status_datetime
+      from miniappclient mac, edoc_sign eds, edoc_list edl
+      where eds_from_c_id = mac_from_c_id
+        and edl_object_id = mac_from_ma_id
+        and eds_from_edl_id = edl_id
+        and edl_object_kind = f_objkind(&#x27;miniapp&#x27;, &#x27;id&#x27;)
+        and edl_object_id = :ma_id
+        and edl_from_edc_id = f_edoc_kind(&#x27;bki.agreement&#x27;,&#x27;id&#x27;) --заявка на займ
+        and eds_status = 1
+        and edl_status = 1
+        and eds_status_datetime between :date_begin and current_timestamp
+      order by eds_status_datetime desc
+      rows 1
+      into agreement_date;
+
+      if (coalesce(edl_status, 0) = 0) then
+        err_text = &#x27;Нет подписанной заявки.&#x27;;
+      else if (agreement_date is null and f_get_const(&#x27;doc_optimize_pack2&#x27;) &lt;&gt; 1) then
+        err_text = &#x27;Отсутствует подписанное согласие на запрос кредитного отчета.&#x27;;
+      else if (edl_status = -1) then
+        close_date = dateadd(month, 6, agreement_date);  -- если заявка аннулирована, то срок действия согласия 6 месяцев.
+
+    end
+
+    if (err_text = &#x27;&#x27; and close_date &lt; current_date) then
+      err_text = &#x27;Истек срок разрешения на запрос в БКИ.&#x27;;
+  end
+
+  if (err_text = &#x27;&#x27;) then
+  begin
+    if (eic_code = &#x27;kontur&#x27;) then
+      execute procedure hp_extinfo_insert_kontur(:object_kind, :object_id, 1, :un_id);
+    else if (eic_code = &#x27;passport_smev&#x27;) then
+      execute procedure hp_extinfo_insert_smevpass(:c_id, 1, :un_id);
+    else
+      insert into extinfolist (eil_from_c_id, eil_from_eic_id, eil_date, eil_object_kind, eil_object_id, eil_is_json, eil_from_un_id)
+      select eil_from_c_id, :eic_id, current_date, eil_object_kind, eil_object_id, eil_is_json, :un_id
+      from extinfolist
+      where eil_id = :eil_id;
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

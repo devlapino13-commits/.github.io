@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$UXFORM_CLONE — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$UXFORM_CLONE: 3 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$UXFORM_CLONE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UX_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEW_SCODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UX_UUID_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UFM_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UFM_UUID_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$UXFORM_CLONE(
+    UX_UUID D_UUID,
+    NEW_SCODE D_STR_CODE = &#x27;$new_version$&#x27;,
+    UX_UUID_CODE D_STR_CODE = null)
+RETURNS (
+    UFM_UUID D_UUID,
+    UFM_UUID_CODE D_STR_CODE)
+AS
+declare variable tmp_uuid d_uuid;
+declare variable fr_uuid d_uuid;
+declare variable uxa_uuid d_uuid;
+declare variable ua_uuid d_uuid;
+declare variable ufm_owner d_uuid;
+declare variable new_owner d_uuid;
+declare variable new_uuid d_uuid;
+declare variable is_new_version d_bool; /* 0 - Новая копия (Новый базовый объект), 1 - новая версия */
+declare variable urt_import_kind d_smallint;
+declare variable urt_import_id d_integer;
+declare variable new_share_uuid d_uuid;
+declare variable ugr_uuid d_uuid;
+declare variable share_uuid d_uuid;
+declare variable ufb_img_uuid d_uuid;
+declare variable ufb_hide_menu d_bool;
+begin
+  if (coalesce(ux_uuid, &#x27;&#x27;) = &#x27;&#x27;) then
+    ux_uuid = uxf$uniq(ux_uuid_code);
+
+  delete from ux$pairuuid
+  where 1 = 1;
+
+  select urt_import_kind, urt_import_id
+  from ux$report
+  where urt_uuid = :ux_uuid and
+        urt_import_kind &lt;&gt; 0
+  into urt_import_kind, urt_import_id;
+
+  if (urt_import_kind is null) then
+    urt_import_kind = 0;
+
+  if (urt_import_kind = 1) then
+    exception e_message &#x27;Нельзя копировать импортированный отчет, это ссылка на отчет № &#x27; || urt_import_id;
+  else
+  if (urt_import_kind = 2) then
+    exception e_message &#x27;Нельзя копировать импортированный бланк, это ссылка на бланк № &#x27; || urt_import_id;
+
+  select ufm_ux_uuid
+  from ux$form
+  where ufm_uuid = :ux_uuid
+  into ufm_owner;
+
+  if (row_count = 0) then
+    exception e_message &#x27;Ux_Uuid is not a form&#x27;;
+
+  is_new_version = 0;
+  if (new_scode = &#x27;$new_version$&#x27;) then
+    is_new_version = 1;
+
+  if (is_new_version = 0) then
+  begin
+    select new_ux_uuid
+    from uxp$uxcode_clone(:ufm_owner, :new_scode)
+    into :new_owner;
+
+    delete from ux$alias
+    where uxa_owner = :new_owner;
+  end else
+  begin
+    if (exists(select * from ux$code
+    where ux_uuid = :ufm_owner and
+          ux_draft_uuid = :ux_uuid and
+          ux_release_uuid is distinct from ux_draft_uuid)) then
+      exception e_message &#x27;Исходная форма уже является драфтом&#x27;;
+
+    new_owner = ufm_owner;
+  end
+
+  execute procedure uxp$uxpairuuid_add(:ufm_owner, :new_owner);
+
+  insert into ux$form (ufm_ux_uuid, ufm_async_mode, ufm_updates_kind, ufm_use_report_db,
+                       ufm_lock_change_db, ufm_dont_prepare_on_show, ufm_source_refresh,
+                       ufm_lifetime_secs, ufm_close_on_save)
+  select :new_owner, ufm_async_mode, ufm_updates_kind, ufm_use_report_db,
+         ufm_lock_change_db, ufm_dont_prepare_on_show, ufm_source_refresh,
+         ufm_lifetime_secs, ufm_close_on_save
+  from ux$form
+  where ufm_uuid = :ux_uuid
+  returning ufm_uuid
+  into ufm_uuid;
+
+  execute procedure uxp$uxpairuuid_add(:ux_uuid, :ufm_uuid);
+
+  for select ua_uuid, ua_owner, ua_uxa_uuid, ua_uxa_fcode, ua_name, ua_hint, ua_disable_on_edit, ua_readonly, ua_inactive,
+             ua_menu_index, ua_usr_id_field, ua_usr_text_field, ua_img_uuid,
+             ua_ext_component, ua_ext_dataset, ua_ext_action, ua_ext_replace_kind,
+             ua_hotkey, ua_add_delimiter, ua_auto_refresh_seconds, ua_is_group, ua_alias_group,
+             ua_trigger_kind, ua_preblank_kind, ua_preblank_code, ua_preblank_save
+  from ux$action
+  where ua_owner = :ux_uuid
+  as cursor cur
+  do
+  begin
+    insert into ux$action (ua_owner, ua_uxa_uuid, ua_uxa_fcode, ua_name, ua_hint, ua_disable_on_edit, ua_readonly,
+                           ua_inactive, ua_menu_index, ua_usr_id_field, ua_usr_text_field, ua_img_uuid,
+                           ua_ext_component, ua_ext_dataset, ua_ext_action,ua_ext_replace_kind,
+                           ua_hotkey, ua_add_delimiter, ua_auto_refresh_seconds, ua_is_group, ua_alias_group,
+                           ua_trigger_kind, ua_preblank_kind, ua_preblank_code, ua_preblank_save)
+    values (:ufm_uuid, cur.ua_uxa_uuid, cur.ua_uxa_fcode, cur.ua_name, cur.ua_hint, cur.ua_disable_on_edit, cur.ua_readonly,
+            cur.ua_inactive, cur.ua_menu_index, cur.ua_usr_id_field, cur.ua_usr_text_field, cur.ua_img_uuid,
+            cur.ua_ext_component, cur.ua_ext_dataset, cur.ua_ext_action, cur.ua_ext_replace_kind,
+            cur.ua_hotkey, cur.ua_add_delimiter, cur.ua_auto_refresh_seconds, cur.ua_is_group, cur.ua_alias_group,
+            cur.ua_trigger_kind, cur.ua_preblank_kind, cur.ua_preblank_code, cur.ua_preblank_save)
+    returning ua_uuid
+    into :ua_uuid;
+
+    execute procedure uxp$uxpairuuid_add(cur.ua_uuid, :ua_uuid);
+  end
+  ua_uuid = null;
+
+  ufm_uuid_code = uuid_to_char(ufm_uuid);
+
+  delete from ux$submenu
+  where usm_ufm_uuid = :ufm_uuid;
+
+  for select ufr_uuid
+  from ux$frame
+  where ufr_owner = :ux_uuid
+  into fr_uuid
+  do
+  begin
+    select fr_uuid
+    from uxp$uxframe_clone(:fr_uuid, :ufm_uuid, 0)
+    into :tmp_uuid;
+  end
+
+  for select ufr_uuid, ufr_master_ufr_uuid
+  from ux$frame
+  where ufr_owner = :ux_uuid and
+        ufr_master_ufr_uuid is not null
+  into fr_uuid, tmp_uuid
+  do
+  begin
+    tmp_uuid = uxf$pair(tmp_uuid);
+
+    update ux$frame
+    set ufr_master_ufr_uuid = :tmp_uuid
+    where ufr_uuid = uxf$pair(:fr_uuid);
+  end
+
+  for select cmd_open_kind, cmd_source_rows, cmd_source_refresh, cmd_message_field, cmd_commit_dialog
+  from ux$command
+  where cmd_uuid = :ux_uuid
+  as cursor cur
+  do
+  begin
+    update or insert into ux$command (cmd_uuid, cmd_open_kind, cmd_source_rows,
+                                      cmd_source_refresh, cmd_message_field, cmd_commit_dialog)
+    values (:ufm_uuid, cur.cmd_open_kind, cur.cmd_source_rows,
+            cur.cmd_source_refresh, cur.cmd_message_field, cur.cmd_commit_dialog)
+    matching (cmd_uuid);
+
+    execute procedure uxp$uxexpression_clone(:ufm_uuid, :ux_uuid);
+  end
+
+  insert into ux$submenu (usm_ufm_uuid, usm_menu_index, usm_caption)
+  select :ufm_uuid, usm_menu_index, usm_caption
+  from ux$submenu
+  where usm_ufm_uuid = :ux_uuid;
+
+  execute procedure uxp$uxaction_clone(:ux_uuid, :ufm_uuid);
+
+  for select ufi_uuid, ufi_parent_uuid, ufi_owner, ufi_ufr_uuid, ufi_uf_uuid, ufi_kind, ufi_control, ufi_position,
+             ufi_name, ufi_caption_align, ufi_hint, ufi_hidden, ufi_readonly,
+             ufi_group_direction, ufi_h_align, ufi_v_align, ufi_width, ufi_height,
+             ufi_sizable, ufi_order_index, ufi_group_index, ufi_fixed_kind, ufi_summary_kind, ufi_font_size, ufi_value_align
+  from ux$fritem
+  where ufi_owner = :ux_uuid and
+        ufi_parent_uuid is null
+  as cursor cur
+  do
+  begin
+    tmp_uuid = cur.ufi_uuid;
+
+    update or insert into ux$fritem (ufi_parent_uuid, ufi_owner, ufi_ufr_uuid, ufi_uf_uuid, ufi_kind, ufi_control,
+                                     ufi_position, ufi_name, ufi_caption_align, ufi_hint, ufi_hidden, ufi_readonly,
+                                     ufi_group_direction, ufi_h_align, ufi_v_align, ufi_width, ufi_height,
+                                     ufi_sizable, ufi_order_index, ufi_group_index, ufi_fixed_kind, ufi_summary_kind,
+                                     ufi_font_size, ufi_value_align)
+    values (null, :ufm_uuid, null, cur.ufi_uf_uuid, cur.ufi_kind, cur.ufi_control,
+            cur.ufi_position, cur.ufi_name, cur.ufi_caption_align, cur.ufi_hint, cur.ufi_hidden, cur.ufi_readonly,
+            cur.ufi_group_direction, cur.ufi_h_align, cur.ufi_v_align, cur.ufi_width, cur.ufi_height,
+            cur.ufi_sizable, cur.ufi_order_index, cur.ufi_group_index, cur.ufi_fixed_kind, cur.ufi_summary_kind,
+            cur.ufi_font_size, cur.ufi_value_align)
+    matching (ufi_owner, ufi_parent_uuid)
+    returning (ufi_uuid)
+    into new_uuid;
+
+    execute procedure uxp$uxpairuuid_add(:tmp_uuid, :new_uuid);
+
+    delete from ux$fritem
+    where ufi_parent_uuid = :new_uuid;
+
+    execute procedure uxp$uxfritem_clone_tree(:ufm_uuid, :new_uuid, :tmp_uuid);
+  end
+
+  for select ufb_ufi_uuid, ufb_ua_uuid, ufb_img_uuid, ufb_hide_menu
+  from ux$fritem, ux$frbutton
+  where ufi_owner = :ux_uuid and
+        ufi_uuid = ufb_ufi_uuid
+  into tmp_uuid, ua_uuid, ufb_img_uuid, ufb_hide_menu
+  do
+  begin
+    update or insert into ux$frbutton (ufb_ufi_uuid, ufb_ua_uuid, ufb_img_uuid, ufb_hide_menu)
+    values (uxf$pair(:tmp_uuid), uxf$pair(:ua_uuid), :ufb_img_uuid, :ufb_hide_menu)
+    matching (ufb_ufi_uuid);
+  end
+
+  for select urt_uuid, urt_kind, urt_fastrep, urt_excel
+  from ux$report
+  where urt_uuid = :ux_uuid
+  as cursor cur
+  do
+  begin
+    update or insert into ux$report (urt_uuid, urt_kind, urt_fastrep, urt_excel)
+    values (:ufm_uuid, cur.urt_kind, cur.urt_fastrep, cur.urt_excel)
+    matching (urt_uuid);
+  end
+
+  if (is_new_version = 0) then
+  begin
+    for select ugr_uuid, ugr_share_uuid
+    from ux$grid, ux$frame
+    where ufr_owner = :ux_uuid and
+          ugr_ufr_uuid = ufr_uuid
+    into ugr_uuid, share_uuid
+    do
+    begin
+      tmp_uuid = uxf$pair(ugr_uuid);
+      new_share_uuid = null;
+
+      select ugr_share_uuid
+      from ux$grid
+      where ugr_uuid = :tmp_uuid
+      into new_share_uuid;
+
+      if (new_share_uuid is not null and new_share_uuid is distinct from share_uuid) then
+      begin
+        for select ugs_un_id, ugs_owner_un_id
+        from ux$grshare
+        where ugs_ugr_uuid = :share_uuid
+        as cursor sh
+        do
+        begin
+          if (not exists(select * from ux$grshare
+          where ugs_ugr_uuid = :new_share_uuid and
+                ugs_un_id = sh.ugs_un_id)) then
+          begin
+            insert into ux$grshare (ugs_ugr_uuid, ugs_un_id, ugs_owner_un_id)
+            values (:new_share_uuid, sh.ugs_un_id, sh.ugs_owner_un_id);
+          end
+        end
+      end
+    end
+
+    for select uxa_uuid, uxa_owner, uxa_code, uxa_kind
+    from ux$alias
+    where uxa_owner = :ufm_owner
+    as cursor cur
+    do
+    begin
+      tmp_uuid = cur.uxa_uuid;
+
+      select ux_uuid
+      from uxp$uxuniq_insert(null, &#x27;uxalias&#x27;)
+      into :uxa_uuid;
+
+      insert into ux$alias (uxa_uuid, uxa_owner, uxa_code, uxa_kind)
+      values (:uxa_uuid, :new_owner, cur.uxa_code, cur.uxa_kind);
+  
+      execute procedure uxp$uxpairuuid_add(:tmp_uuid, :uxa_uuid);
+
+      insert into ux$paramdef (upd_ufp_uuid, upd_uxa_uuid, upd_def_value, upd_locked)
+      select uxf$pair(upd_ufp_uuid), :uxa_uuid, upd_def_value, upd_locked
+      from ux$paramdef
+      where upd_uxa_uuid = :tmp_uuid;
+
+      for select uaa_ua_uuid, uaa_is_default, ua_uxa_uuid, ua_usr_id_field
+      from ux$aliasaction, ux$action
+      where uaa_uxa_uuid = :tmp_uuid and
+            ua_uuid = uaa_ua_uuid
+      as cursor ua
+      do
+      begin
+        ua_uuid = uxf$pair(ua.uaa_ua_uuid);
+
+        if (ua_uuid is null) then
+          exception e_default &#x27;UxAction not found&#x27;;
+  
+        insert into ux$aliasaction (uaa_uxa_uuid, uaa_ua_uuid, uaa_is_default)
+        values (:uxa_uuid, :ua_uuid, ua.uaa_is_default);
+      end
+    end
+  end
+
+  for select ufi_uuid
+  from ux$fritem
+  where ufi_owner = :ux_uuid
+  into tmp_uuid
+  do
+    execute procedure uxp$uxevent_clone(:tmp_uuid);
+
+  for select up_new_uuid, umo_memo
+  from ux$memo, ux$pairuuid
+  where umo_uuid = up_old_uuid
+  as cursor cur
+  do
+  begin
+    update or insert into ux$memo (umo_uuid, umo_memo)
+    values (cur.up_new_uuid, cur.umo_memo)
+    matching (umo_uuid);
+  end
+
+  delete from ux$pairuuid
+  where 1 = 1;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

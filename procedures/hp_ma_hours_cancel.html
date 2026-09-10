@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_MA_HOURS_CANCEL — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_MA_HOURS_CANCEL: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_MA_HOURS_CANCEL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fsrobot_insert_event.html"><div class="to">FSROBOT_INSERT_EVENT</div></a><a class="ref-card" href="hp_miniapp_for_penalty_update.html"><div class="to">HP_MINIAPP_FOR_PENALTY_UPDATE</div></a><a class="ref-card" href="hp_miniapp_status_change.html"><div class="to">HP_MINIAPP_STATUS_CHANGE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_MA_HOURS_CANCEL
+AS
+declare variable RD_ID integer;
+declare variable UN_ID ID_TYPE;
+declare variable C_ID ID_TYPE;
+declare variable MA_ID integer;
+declare variable KF_ID ID_TYPE;
+declare variable KF_NAME STR_100;
+declare variable MFP_DATE_SAVE timestamp;
+declare variable MINUTES_DIFF integer;
+declare variable FIRST_WARNING_MINUT integer;
+declare variable PENALTY_MINUT integer;
+declare variable SECOND_WARNING_MINUT integer;
+declare variable SAVE_PENALTY smallint;
+begin
+  if (current_date &lt; &#x27;01.08.2018&#x27;) then
+  begin
+    penalty_minut = 1440; -- 24 часа
+
+-- Первое уведомление за 12 часов до начисления штрафа ------------------&gt;
+    first_warning_minut = 720; -- 720/60 = 12 (т.к. первое уведомление за 12 часов, т.е. с момента оформления заявки прошло 12 часов)
+
+-- Второе уведомление за 4 часа до начисления штрафа --------------------&gt;
+    second_warning_minut = 1200; -- 1200/60 = 20 , т.е.  с момента оформления заявки прошло 20 часов
+  end
+  else
+  begin
+    penalty_minut = 4320; -- 4320/12 - это 72 часа
+
+-- Первое уведомление за 24 часа до начисления штрафа ------------------&gt;
+    first_warning_minut = 1440; -- = 24 часа, т.е. с момента оформления заявки прошло 24 часа
+
+-- Второе уведомление за 48 часа до начисления штрафа --------------------&gt;
+    second_warning_minut = 2880; -- 2880/60 = 48, т.е. с момента оформления заявки прошло 48 часов
+  end
+
+  select rd.rd_id
+  from refdata rd
+  where rd.rd_code = &#x27;LOPenaltyReason.Miniapp_24_Hours&#x27;
+  into :rd_id;
+
+  un_id = 1000000000000;
+
+  for select hps.ps_from_c_id
+      from hr_pstatus hps
+      inner join joblist jl on jl.jl_id = ps_from_jl_id
+      inner join jobkind jk on jk.jk_id = jl.jl_kind
+      where current_date between ps_date_begin and ps_date_end and
+            ps_is_working = 1 and
+            jk.jk_system_code = &#x27;JobSystem.LO_Standart&#x27;
+      into :c_id
+  do
+  begin
+-- Первое уведомление за XXX часов (в зависимости от даты) до начисления штрафа ------------------&gt;
+    for select mfp.mfp_date_save, mfp.mfp_ma_id, mfp.mfp_from_kf_id,
+               datediff(minute, mfp_date_save, current_timestamp)
+        from miniapp_for_penalty mfp
+        where mfp.mfp_state = 0 and
+              mfp.mfp_current_lo_id = :c_id and
+              coalesce(mfp.mfp_inform_status, 0) = 0 -- &lt; важно!
+        into :mfp_date_save, :ma_id, :kf_id, minutes_diff
+    do
+    begin
+      if (minutes_diff between :first_warning_minut and :penalty_minut - 1) then
+      begin
+        execute procedure hp_miniapp_for_penalty_update(&#x27;miniapp&#x27;, ma_id); -- контрольная обработка
+
+        if (exists(select *
+                   from miniapp_for_penalty mfp
+                   where mfp.mfp_ma_id = :ma_id and
+                         mfp.mfp_state = 0)) then
+        begin
+          update miniapp_for_penalty mfp
+          set mfp.mfp_inform_status = iif(:minutes_diff between :first_warning_minut and :second_warning_minut - 1, 1, 2)
+          where mfp.mfp_ma_id = :ma_id;
+
+          select kal.kal_new_kf_name
+          from knaktlist kal
+          where kal.kal_from_kf_id = :kf_id and
+                current_date between kal.kal_date and kal.kal_date_end and
+                kal.is_delete = 0 rows 1
+          into :kf_name;
+
+          minutes_diff = penalty_minut - minutes_diff;
+
+          execute procedure fsrobot_insert_event(&#x27;domailing&#x27;, &#x27;push_svz_ma_notification&#x27;,
+              :c_id || &#x27;;&#x27; || 0 || &#x27;;&#x27; || :kf_name || &#x27;;24_hours_inform;&#x27; || minutes_diff, :un_id);
+        end
+      end
+    end
+-------------------------------------------------------------------------&lt;
+-- Второе уведомлениеза XXX часов (в зависимости от даты) до начисления штрафа --------------------&gt;
+    for select mfp.mfp_date_save, mfp.mfp_ma_id, mfp.mfp_from_kf_id,
+               datediff(minute, mfp_date_save, current_timestamp)
+        from miniapp_for_penalty mfp
+        where mfp.mfp_state = 0 and
+              mfp.mfp_current_lo_id = :c_id and
+              coalesce(mfp.mfp_inform_status, 1) = 1 -- &lt; важно!
+        into :mfp_date_save, :ma_id, :kf_id, :minutes_diff
+    do
+    begin
+      if (minutes_diff between :second_warning_minut and :penalty_minut - 1) then
+      begin
+        execute procedure hp_miniapp_for_penalty_update(&#x27;miniapp&#x27;, ma_id); -- контрольная обработка
+
+        if (exists(select *
+                   from miniapp_for_penalty mfp
+                   where mfp.mfp_ma_id = :ma_id and
+                         mfp.mfp_state = 0)) then
+        begin
+          update miniapp_for_penalty mfp
+          set mfp.mfp_inform_status = 2
+          where mfp.mfp_ma_id = :ma_id;
+
+          select kal.kal_new_kf_name
+          from knaktlist kal
+          where kal.kal_from_kf_id = :kf_id and
+                current_date between kal.kal_date and kal.kal_date_end and
+                kal.is_delete = 0 rows 1
+          into :kf_name;
+
+          minutes_diff = penalty_minut - minutes_diff;
+
+          execute procedure fsrobot_insert_event(&#x27;domailing&#x27;, &#x27;push_svz_ma_notification&#x27;,
+              :c_id || &#x27;;&#x27; || 0 || &#x27;;&#x27; || :kf_name || &#x27;;24_hours_inform;&#x27; || minutes_diff, :un_id);
+        end
+      end
+    end
+-------------------------------------------------------------------------&lt;
+
+    for select mfp.mfp_date_save, mfp.mfp_ma_id, mfp.mfp_from_kf_id
+        from miniapp_for_penalty mfp
+        where mfp.mfp_state = 0 and
+              mfp.mfp_current_lo_id = :c_id and
+              datediff(minute, mfp_date_save, current_timestamp) &gt; :penalty_minut
+        into :mfp_date_save, :ma_id, :kf_id
+    do
+    begin
+      execute procedure hp_miniapp_for_penalty_update(&#x27;miniapp&#x27;, ma_id); -- контрольная обработка
+
+      if (exists(select *
+                 from miniapp_for_penalty mfp
+                 where mfp.mfp_ma_id = :ma_id and
+                       mfp.mfp_state = 0)) then
+      begin
+        save_penalty = 1;
+
+-- до 1 августа, я знал что заявка аннулируется и miniapp_for_penalty  update-ится, после 1.08 этого происходить не будет.
+        if (current_date &gt;= &#x27;01.08.2018&#x27;) then
+        begin
+          if (exists(select *
+                     from lo_penalty lp
+                     where lp.lp_from_ma_id = :ma_id)) then
+            save_penalty = 0;
+        end
+        -- убираем из штрафа продукт Доверия
+        if (save_penalty = 1) then
+        begin
+          if (exists(select * from miniapp, product
+          where ma_id = :ma_id
+          and ma_is_active = 1
+          and ma_date_end = &#x27;31.12.9999&#x27;
+          and ma_from_pr_id = pr_id
+          and pr_code containing &#x27;.express_online.&#x27;)) then save_penalty = 0;
+        end
+
+        if (save_penalty = 1) then
+        begin
+          insert into lo_penalty (lp_from_c_id, lp_from_ma_id, lp_days, lp_ma_date, lp_amount, lp_reason)
+          values (:c_id, :ma_id, 0, null, 1000, :rd_id);
+
+          select kal.kal_new_kf_name
+          from knaktlist kal
+          where kal.kal_from_kf_id = :kf_id and
+                current_date between kal.kal_date and kal.kal_date_end and
+                kal.is_delete = 0 rows 1
+          into :kf_name;
+
+          execute procedure fsrobot_insert_event(&#x27;domailing&#x27;, &#x27;push_svz_ma_notification&#x27;,
+              :c_id || &#x27;;&#x27; || 0 || &#x27;;&#x27; || :kf_name || &#x27;;24_hours;0&#x27;, :un_id);
+
+          if (current_date &lt; &#x27;01.08.2018&#x27;) then -- с 1 августа я перестаю аннулировать заявки после начисления штрафов, согласно пиьма от Зары
+          begin
+            execute procedure hp_miniapp_status_change(:ma_id, :un_id, 0);
+
+            insert into kontreslist (krl_from_kr_id, krl_from_un_id, krl_from_k_id, krl_ma_reg_id, krl_ma_id)
+            values (10, :un_id, null, 0, :ma_id);
+
+            update kontract kont
+            set kont.k_status = -1
+            where kont.k_status = 0 and
+                  kont.k_from_ma_app_id = :ma_id;
+          end
+        end
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

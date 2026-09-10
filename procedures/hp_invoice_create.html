@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_INVOICE_CREATE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_INVOICE_CREATE: 2 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_INVOICE_CREATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_PERIOD</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_USER_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">INVOICE_NO_MIN</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">INVOICE_NO_MAX</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">INVOICE_COUNT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_INVOICE_CREATE(
+    REP_PERIOD INTEGER,
+    REP_USER_ID DECIMAL(18,0))
+RETURNS (
+    INVOICE_NO_MIN INTEGER,
+    INVOICE_NO_MAX INTEGER,
+    INVOICE_COUNT INTEGER)
+AS
+declare variable k_year integer;
+declare variable im_id decimal(18,0);
+declare variable reg_id integer;
+declare variable k_id decimal(18,0);
+declare variable reg_id_prior integer;
+begin
+  k_year = rep_period / 100;
+  invoice_no_min = 0;
+  invoice_no_max = 0;
+  invoice_count = 0;
+  select im_invoice_no
+  from invoicemain
+  where im_period starting :k_year
+  order by im_period desc, im_invoice_no desc
+  rows 1
+  into :invoice_no_min;
+  if (invoice_no_min is null) then
+    invoice_no_min = 0;
+  invoice_no_max = invoice_no_min;
+  reg_id_prior = 0;
+  for select kcp_from_reg_id, kcp_from_k_id
+      from kontcalcperc
+      left join(invoicekont left join invoicemain on (im_id = ik_from_im_id and
+            im_period = :rep_period)) on (ik_from_k_id = kcp_from_k_id)
+      where kcp_period = :rep_period and
+            (kcp_perc_calced &lt;&gt; 0 or
+            kcp_kommis_calced &lt;&gt; 0) and
+            ik_from_k_id is null
+      order by kcp_from_reg_id, kcp_from_k_id
+      into :reg_id, :k_id
+  do
+  begin
+    if (reg_id_prior &lt;&gt; reg_id) then
+    begin
+      insert into invoicelog (il_id, il_from_reg_id, il_period, il_from_un_id, il_timestamp)
+      values (-1, :reg_id, :rep_period, :rep_user_id, current_timestamp);
+      reg_id_prior = reg_id;
+    end
+    invoice_count = invoice_count + 1;
+    invoice_no_max = invoice_no_max + 1;
+    insert into invoicemain (im_id, im_invoice_no, im_period, im_from_reg_id)
+    values (-1, :invoice_no_max, :rep_period, :reg_id)
+    returning (im_id)
+    into :im_id;
+
+    insert into invoicekont (ik_from_im_id, ik_from_k_id)
+    values (:im_id, :k_id);
+  end
+
+  if (invoice_count &gt; 0) then
+  begin
+    invoice_no_min = invoice_no_min + 1;
+  end
+  else
+  begin
+    invoice_no_min = 0;
+    invoice_no_max = 0;
+  end
+  suspend;
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

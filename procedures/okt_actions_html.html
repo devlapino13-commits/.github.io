@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OKT_ACTIONS_HTML — процедура — схема БД</title>
+<meta name="description" content="Процедура OKT_ACTIONS_HTML: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>OKT_ACTIONS_HTML</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_anketa_print.html"><div class="to">HP_ANKETA_PRINT</div></a><a class="ref-card" href="hp_html_delinq_anketa.html"><div class="to">HP_HTML_DELINQ_ANKETA</div></a><a class="ref-card" href="okt_dialog_verification.html"><div class="to">OKT_DIALOG_VERIFICATION</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACL_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_HTML</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE OKT_ACTIONS_HTML(
+    UN_ID DECIMAL(18,0),
+    ACL_ID DECIMAL(18,0))
+RETURNS (
+    RES_HTML BLOB SUB_TYPE TEXT SEGMENT SIZE 80)
+AS
+declare variable c_id decimal(18,0);
+declare variable anketa_code varchar(255);
+declare variable res_acl_id decimal(18,0);
+declare variable res_object_kind integer;
+declare variable res_object_id decimal(18,0);
+declare variable anketa_id integer;
+declare variable k_id decimal(18,0);
+declare variable str varchar(255);
+declare variable res_html_tmp blob sub_type 1 segment size 80;
+declare variable res_date date;
+declare variable res_date_tmp date;
+declare variable repay_amount decimal(18,4) = 0;
+declare variable oks_delinq_date date;
+declare variable oks_delinq_date_tmp date;
+declare variable res_html2 blob sub_type 1 segment size 80;
+begin
+  /* Procedure Text */
+  res_html = (select res_style
+              from fm_html_styles) || &#x27;&lt;body&gt;&#x27;;
+  res_html2 = &#x27;&#x27;;
+  select un_from_c_id
+  from username
+  where un_id = :un_id
+  into :c_id;
+
+  if (coalesce(acl_id, 0) = 0) then
+  begin
+    suspend;
+    exit;
+  end
+
+-- Уточняем детали задачи
+  res_acl_id = :acl_id;
+  select acl_object_kind, acl_object_id, acl_from_rd_id, rd_code
+  from actionlist, refdata
+  where acl_id = :res_acl_id and
+        acl_from_rd_id = rd_id
+  into :res_object_kind, :res_object_id, :anketa_id, :anketa_code;
+
+  if (anketa_code = &#x27;OKTELL.Projects.Verification&#x27;) then
+  begin
+    select res_html
+    from okt_dialog_verification(:res_object_id)
+    into :res_html2;
+  end
+
+  if (anketa_code = &#x27;Anketa.Delinq.1&#x27;) then
+  begin
+    if (res_object_kind in (0, 8)) then
+    begin
+      res_date = null;
+      oks_delinq_date = null;
+      repay_amount = 0;
+      k_id = null;
+      for select oks_from_k_id, oks_date_begin, oks_delinq_date
+          from oksummary, knclient
+          where oks_close_state = 0 and
+                oks_date_begin &lt;= current_date and
+                oks_date_end &gt;= current_date and
+                oks_balance &gt; 0 and
+                oks_delinq_date &lt; current_date and
+                oks_from_k_id = kc_from_k_id and
+                kc_amount_approved &gt; 0 and
+                kc_from_c_id = :res_object_id
+          into :k_id, res_date_tmp, oks_delinq_date_tmp
+      do
+      begin
+        if (res_date is null) then
+          res_date = res_date_tmp;
+        if (oks_delinq_date is null) then
+          oks_delinq_date = oks_delinq_date_tmp;
+
+        if (res_date &lt;= res_date_tmp) then
+        begin
+          res_date = maxvalue(res_date, res_date_tmp);
+          select sum(-ok_os - ok_perc - ok_fine - ok_tax)
+          from operkred
+          where ok_from_k_id = :k_id and
+                ok_ol_is_active = 1 and
+                ok_type in (4, 9) and
+                ok_ol_date = :res_date
+          into :repay_amount;
+          if (repay_amount is null) then
+            repay_amount = 0;
+
+          oks_delinq_date = minvalue(oks_delinq_date, oks_delinq_date_tmp);
+        end
+      end
+
+      if (k_id is not null) then
+      begin
+        res_html_tmp = &#x27;&lt;font color=&quot;red&quot;&gt;Просрочка от &#x27; || coalesce(right(&#x27;0&#x27; || extract(day from oks_delinq_date), 2) || &#x27;.&#x27; || right(&#x27;0&#x27; || extract(month from oks_delinq_date), 2) || &#x27;.&#x27; || extract(year from oks_delinq_date), &#x27;хх.хх.хххх&#x27;) || &#x27; г.&lt;/font&gt;&lt;br&gt;&#x27;;
+
+        res_html_tmp = BLOB_APPEND(res_html_tmp, &#x27;&lt;font color=&quot;#02B316&quot;&gt;Последний раз платили &#x27; || coalesce(right(&#x27;0&#x27; || extract(day from res_date), 2) || &#x27;.&#x27; || right(&#x27;0&#x27; || extract(month from res_date), 2) || &#x27;.&#x27; || extract(year from res_date), &#x27;хх.хх.хххх&#x27;) || &#x27; г., сумма: &#x27; || round(repay_amount, 0) || &#x27;&lt;/font&gt;&#x27;);
+
+        select res_text
+        from hp_html_delinq_anketa(:un_id, current_date, :k_id, :res_object_id)
+        into :res_html2;
+        res_html2 = BLOB_APPEND(res_html_tmp, &#x27;&lt;br&gt;&lt;br&gt;&#x27;, res_html2);
+
+        res_html_tmp = &#x27;&#x27;;
+        res_date = null;
+        for select ques_text || &#x27;: &lt;b&gt;&#x27; || res_text || &#x27;&lt;/b&gt;&#x27;, res_date
+            from hp_anketa_print(:res_object_kind, :res_object_id, :anketa_code, null)
+            into :str, res_date_tmp
+        do
+        begin
+          if (res_date is null) then
+            res_date = res_date_tmp;
+          if (res_date_tmp is not null) then
+            res_date = minvalue(res_date, res_date_tmp);
+          res_html_tmp = BLOB_APPEND(res_html_tmp, str || &#x27;&lt;br&gt;&#x27;);
+        end
+        if (res_html_tmp &lt;&gt; &#x27;&#x27;) then
+          res_html2 = BLOB_APPEND(res_html2, &#x27;&lt;br&gt;&lt;font color=&quot;#02B316&quot;&gt;&lt;b&gt;Инфо от &#x27; || coalesce(right(&#x27;0&#x27; || extract(day from res_date), 2) || &#x27;.&#x27; || right(&#x27;0&#x27; || extract(month from res_date), 2) || &#x27;.&#x27; || extract(year from res_date), &#x27;хх.хх.хххх&#x27;) || &#x27;&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&#x27;, res_html_tmp);
+      end
+      else
+        res_html2 = &#x27;На данный момент у клиента нет просрочки.&#x27;;
+    end
+  end
+  str = &#x27;&#x27;;
+  if (anketa_code = &#x27;Anketa.Main&#x27;) then
+  begin
+    select c_name_fio
+    from clients
+    where c_id = :res_object_id
+    into :str;
+    res_html2 = BLOB_APPEND(res_html2, &#x27;ФИО: &#x27; || str);
+  end
+
+  if (anketa_code = &#x27;CheckAnketa.Home&#x27;) then
+  begin
+    str = &#x27;&#x27;;
+    select c_name_fio
+    from clients
+    where c_id = :res_object_id
+    into :str;
+    res_html2 = BLOB_APPEND(res_html2, &#x27;ФИО: &#x27; || str || &#x27;&lt;br&gt;&#x27;);
+
+    str = &#x27;&#x27;;
+    select adl_address_str
+    from addrlist, addrclient
+    where adc_from_c_id = :res_object_id and
+          adc_address_type = 1 and
+          adc_from_adl_id = adl_id
+    into :str;
+    res_html2 = BLOB_APPEND(res_html2, &#x27;Прописан: &#x27; || str || &#x27;&lt;br&gt;&#x27;);
+
+    str = &#x27;&#x27;;
+    select adl_address_str
+    from addrlist, addrclient
+    where adc_from_c_id = :res_object_id and
+          adc_address_type = 2 and
+          adc_from_adl_id = adl_id
+    into :str;
+    res_html2 = BLOB_APPEND(res_html2, &#x27;Место проживания: &#x27; || str || &#x27;&lt;br&gt;&#x27;);
+  end
+  if (anketa_code = &#x27;CheckAnketa.Business&#x27;) then
+  begin
+    select c_name_fio
+    from clients
+    where c_id = :res_object_id
+    into :str;
+    res_html2 = BLOB_APPEND(res_html2, &#x27;ФИО: &#x27; || str || &#x27;&lt;br&gt;&#x27;);
+
+    str = &#x27;&#x27;;
+    select adl_address_str
+    from addrlist, addrclient
+    where adc_from_c_id = :res_object_id and
+          adc_address_type = 1 and
+          adc_from_adl_id = adl_id
+    into :str;
+    res_html2 = BLOB_APPEND(res_html2, &#x27;Прописан: &#x27; || str || &#x27;&lt;br&gt;&#x27;);
+
+    str = &#x27;&#x27;;
+    select adl_address_str
+    from addrlist, addrclient
+    where adc_from_c_id = :res_object_id and
+          adc_address_type = 3 and
+          adc_from_adl_id = adl_id
+    into :str;
+    res_html2 = BLOB_APPEND(res_html2, &#x27;Место работы: &#x27; || str || &#x27;&lt;br&gt;&#x27;);
+  end
+-- Делает шрифт поменьше для всей страниы
+  res_html = BLOB_APPEND(res_html, res_html2, &#x27;&lt;/body&gt;&#x27;);
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

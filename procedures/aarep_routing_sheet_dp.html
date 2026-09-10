@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_ROUTING_SHEET_DP — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_ROUTING_SHEET_DP: 4 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_ROUTING_SHEET_DP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OFFICE_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KS_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">TRAVEL_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DEPARTURE_PLACE</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_ADDR</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ARRIVAL_PLACE</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_ROUTING_SHEET_DP(
+    OFFICE_ID INTEGER,
+    KS_ID ID_TYPE,
+    REP_DATE_BEGIN DATE,
+    REP_DATE_END DATE)
+RETURNS (
+    TRAVEL_DATE DATE,
+    DEPARTURE_PLACE STR_255,
+    C_ADDR STR_255,
+    ARRIVAL_PLACE STR_255)
+AS
+declare variable reg_address str_255;
+declare variable k_id id_type;
+declare variable address_str str_255;
+declare variable pos integer;
+declare variable counter integer;
+declare variable c_qty integer;
+declare variable kont_disb_date date;
+begin
+  /*    igusev 18.12.2014
+        процедура предназначена для детальной части (Detail data) &quot;Маршрутного листа&quot;
+  */
+  select adl.adl_address_str
+  from region reg
+  inner join addrlist adl on adl.adl_id = reg.reg_address_fact
+  where reg.reg_unicode = :office_id
+  into :reg_address;
+
+  -- вытаскиваю все кредиты, выданные за период по СВЗ из процедуры AAREP_ROUTING_SHEET
+  for select kont.k_id, ks.ks_date_begin
+      from kontstate ks
+      inner join kontract kont on kont.k_id = ks.ks_from_k_id
+      inner join knaktlist kal on kal.kal_from_kf_id = kont.k_from_kf_id
+      where kont.k_last_reg_id = :office_id and
+            ks.ks_date_begin between :rep_date_begin and :rep_date_end and
+            ks.ks_ol_is_delete = 0 and
+            ks.ks_state = 1 and
+            kal.is_delete = 0 and
+            kal_new_kf_officer = :ks_id --  &lt;&lt;
+            and
+            ks.ks_date_begin between kal.kal_date and kal.kal_date_end
+      order by kont.k_id
+      into :k_id, :kont_disb_date
+  do
+  begin
+    travel_date = :kont_disb_date; -- дата поездки
+    departure_place = reg_address; -- место отправления
+    counter = 0;
+    arrival_place = &#x27;&#x27;; -- место прибытия
+    c_qty = 0;
+    select count(*)
+    from knclient kncl
+    where kncl.kc_amount_approved &gt; 0 and
+          kncl.kc_from_k_id = :k_id
+    into :c_qty;
+
+    for select adl.adl_address_str
+        from knclient kncl
+        inner join clients cl on kncl.kc_from_c_id = cl.c_id
+        inner join addrclient adcl on adcl.adc_from_c_id = cl.c_id
+        inner join addrlist adl on adl.adl_id = adcl.adc_from_adl_id
+        where kncl.kc_amount_approved &gt; 0 and
+              kncl.kc_from_k_id = :k_id and
+              adcl.adc_address_type = 2 -- адрес фактич. прожив
+        into :address_str
+    do
+    begin
+      counter = counter + 1;
+
+      if (counter &gt; 1) then
+      begin
+        departure_place = &#x27;&#x27;;
+        travel_date = null;
+      end
+
+      if (counter = c_qty) then
+        arrival_place = reg_address;
+      else
+        arrival_place = &#x27;&#x27;;
+
+      -- из адреса беру все до номера дома, все что после номера дома вырезаю.
+      -- Номер дома, квартира, корпус - не отображаю!
+      c_addr = &#x27;&#x27;;
+      pos = position(&#x27;, д.&#x27; in address_str);
+
+      if (pos &gt; 0) then
+      begin
+        c_addr = substring(address_str from 1 for pos - 1);
+      end
+      else
+        c_addr = :address_str;
+
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

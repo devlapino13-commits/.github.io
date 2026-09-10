@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MC_UI_VISIBILITY — процедура — схема БД</title>
+<meta name="description" content="Процедура MC_UI_VISIBILITY: 3 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>MC_UI_VISIBILITY</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_oivo_online_loan_visibility.html"><div class="to">HP_OIVO_ONLINE_LOAN_VISIBILITY</div></a><a class="ref-card" href="hp_phone_change_is_allowed.html"><div class="to">HP_PHONE_CHANGE_IS_ALLOWED</div></a><a class="ref-card" href="mc_cli_extminiapp_list.html"><div class="to">MC_CLI_EXTMINIAPP_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MCL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LOAN_QTY</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">EXTMINIAPP_QTY</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UI_PART</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UI_PART_DESCRIPTION</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">IS_VISIBLE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MESSAGE_TXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE MC_UI_VISIBILITY(
+    MCL_ID D_ID,
+    LOAN_QTY D_INTEGER,
+    EXTMINIAPP_QTY D_INTEGER)
+RETURNS (
+    UI_PART D_STR_100,
+    UI_PART_DESCRIPTION D_STR_255,
+    IS_VISIBLE D_SMALLINT,
+    MESSAGE_TXT D_STR_255)
+AS
+declare variable EXTMINIAPP_QTY_PROCESS D_SMALLINT;
+declare variable EXTMINIAPP_QTY_ALL D_SMALLINT;
+declare variable MAX_REJECT_DATE D_DATE;
+declare variable DB_ID D_INTEGER;
+declare variable LANG_CODE D_STR_LANG;
+declare variable C_ID D_ID;
+declare variable C_VERIFY_STATUS D_SMALLINT;
+declare variable USER_CODE D_INTEGER;
+declare variable EDS_EXIST D_INTEGER; /* Наличие договора ЭЦП */
+declare variable OS D_INTEGER;
+declare variable HIDE_IOS_PRODUCTS D_INTEGER;
+declare variable MCL_PROJECT D_STR_20;
+begin
+  db_id = f_get_db_id();
+  lang_code = f_get_lang_code(null, :mcl_id);
+  hide_ios_products = f_get_const(&#x27;hide_ios_products&#x27;);
+  /*
+        Примечание: изначально рассматривался вариант, что в данную процедуру будут передаваться:
+        1)число активных кредитов и
+        2) число активных заявок (процедура MC_CLI_EXTMINIAPP_LIST),
+        Но, потом, было принято решение, что процедура MC_CLI_EXTMINIAPP_LIST будет возращать заявки, по которым был в итоге отказ. Т.е. не только активные.
+        Поэтому, EXTMINIAPP_QTY я перезатираю внутри процедуры и вычисляю сам.
+        Т.к. мне нужно исключать заявки, с негативным статусом, возможно логика поменяется и их так же нужно будет учитывать.
+        Что касается LOAN_QTY, его я не перезатираю, т.к. в него попадает число активный кредитов.
+   */
+
+  mcl_id = coalesce(mcl_id, 0);
+
+  if (mcl_id &lt;= 0) then
+    exception e_default &#x27;parametr &quot;mcl_id&quot; has invalid value&#x27;;
+
+  if ((loan_qty is null) or (loan_qty &lt; 0)) then
+    exception e_default &#x27;parametr &quot;loan_qty&quot; has invalid value&#x27;;
+
+  if ((extminiapp_qty is null) or (extminiapp_qty &lt; 0)) then
+    exception e_default &#x27;parametr &quot;extminiapp_qty&quot; has invalid value&#x27;;
+
+  extminiapp_qty = 0;
+
+  select
+    mcl.mcl_from_c_id,
+    mcl.mcl_user_code,
+    mcl.mcl_os,
+    f_enum(&#x27;mcl_project&#x27;, mcl.mcl_project, &#x27;code&#x27;, 0)
+  from mc_login mcl
+  where mcl.mcl_id = :mcl_id
+  into
+    :c_id,
+    :user_code,
+    :os,
+    :mcl_project;
+
+  select c.c_verify_status
+  from clients c
+  where c.c_id = :c_id
+  into c_verify_status;
+
+  if (db_id in (39801, 41701) and
+      c_id is not null) then
+  begin
+    eds_exist = f_asp_signed(:c_id, current_date);
+  end
+
+  select sum(iif(point_3_state = 0, 1, 0)), count(point_3_state),
+         max(iif(point_3_state = -1, cast(point_3_date as date), null))
+  from mc_cli_extminiapp_list(:mcl_id)
+  into :extminiapp_qty_process, :extminiapp_qty_all, :max_reject_date;
+
+  ---------------------------------------------&gt;
+  ui_part = &#x27;mc_ui_parts.loan_calculate&#x27;;
+  ui_part_description = f_lang(lang_code, &#x27;Рассчитать заем&#x27;);
+  message_txt = &#x27;&#x27;;
+
+  is_visible = 1;
+  --if (db_id = 81001 or db_id in (39801, 41701)) then  -- деактивировали по запросу от Акинай и Жыпара
+  --is_visible = 0;
+
+  if (db_id = 81001) then
+  begin
+    if (max_reject_date is not null) then
+    begin
+      if ((dateadd(day, 30, max_reject_date)) &gt; current_date) then -- для РФ через 30 дней.
+      begin
+        is_visible = 0;
+        message_txt = f_lang(lang_code, &#x27;С последнего отказа не прошло 30 дней. Подача новой онлайн-заявки через приложение возможна: &#x27;) || f_datetostr(dateadd(day, 30, max_reject_date)) || &#x27;. Чтобы подать заявку на заем обратитесь в офис Компании или к своему специалисту.&#x27;;
+      end
+    end
+    if (extminiapp_qty_process &gt;= 1) then
+    begin
+      is_visible = 0;
+      message_txt = f_lang(lang_code, &#x27;Есть активная заявка, подача новой онлайн-заявки пока невозможна&#x27;);
+    end
+
+    -- RFCRU-3766
+    if (mcl_project = &#x27;oivo&#x27;) then
+    begin
+        is_visible = 0;
+        message_txt = &#x27;&#x27;;
+    end
+
+  end
+  else
+  begin
+    is_visible = 1;
+    if (extminiapp_qty_process &gt;= 1) then
+    begin
+      is_visible = 0;
+      message_txt = f_lang(lang_code, &#x27;Есть активная заявка, подача новой онлайн-заявки пока невозможна&#x27;);
+    end
+
+    if (max_reject_date is not null) then
+    begin
+      if ((dateadd(day, 7, max_reject_date)) &gt; current_date) then
+      begin
+        is_visible = 0;
+        message_txt = f_lang(lang_code, &#x27;С последнего отказа не прошло 7 дней. Подача новой онлайн-заявки возможна: &#x27;) || f_datetostr(dateadd(day, 7, max_reject_date));
+      end
+    end
+    if ((db_id = 41701)
+        and (f_get_const(&#x27;ces_active&#x27;) = 0 or c_verify_status &lt;&gt; 2)
+    ) then
+    begin
+      if ((select cv.cv_value
+           from const_var cv
+           where cv.cv_code = &#x27;mc_facerecog&#x27;) = 1) then
+      begin
+        if (c_id is not null and
+            (:eds_exist = 0)) then
+        begin
+          message_txt = f_lang(lang_code, &#x27;Вам необходимо подойти в ближайший офис. Адреса и режим работы можно посмотреть по кнопке &quot;На карте&quot;. Подача новой онлайн-заявки пока невозможна.&#x27;);
+          is_visible = 0; -- для клиентов у которых нет активный ЭЦП или не авторизован
+        end
+      end
+    end
+  end
+
+  if (db_id = 39801) then
+  begin
+     is_visible = 1;
+  end
+
+  suspend;
+  ---------------------------------------------&lt;
+  ---------------------------------------------&gt;
+  ui_part = &#x27;mc_ui_parts.loan_list&#x27;;
+
+  ui_part_description = f_lang(lang_code, &#x27;Текущий заем&#x27;);
+  message_txt = &#x27;&#x27;;
+
+  is_visible = 1;
+
+  if (loan_qty = 0) then
+    is_visible = 0;
+  suspend;
+  ---------------------------------------------&lt;
+  ---------------------------------------------&gt;
+  ui_part = &#x27;mc_ui_parts.hide_product_list&#x27;;
+
+  ui_part_description = f_lang(lang_code, &#x27;Карусель продуктов&#x27;);
+  message_txt = &#x27;&#x27;;
+
+  is_visible = 1;
+
+  if (db_id = 39801) then
+    is_visible = 0;
+  suspend;
+  ---------------------------------------------&lt;
+  ---------------------------------------------&gt;
+  ui_part = &#x27;mc_ui_parts.extminiapp_list&#x27;;
+  ui_part_description = f_lang(lang_code, &#x27;Ваша заявка&#x27;);
+  message_txt = &#x27;&#x27;;
+
+  is_visible = 1;
+
+  if (extminiapp_qty_all = 0) then
+    is_visible = 0;
+
+  suspend;
+  ---------------------------------------------&lt;
+  --------------------------------------------&gt;
+
+  ui_part = &#x27;mc_ui_parts.client_rating&#x27;;
+  ui_part_description = &#x27;Надежный клиент&#x27;;
+  message_txt = &#x27;&#x27;;
+
+  if (db_id in (94401, 41701)) then --kg az
+    is_visible = 1;
+
+  -- RFCRU-3766
+  if (db_id = 81001) then --rf
+  begin
+    if (mcl_project = &#x27;kmp&#x27;) then
+      is_visible = 1;
+
+    if (mcl_project = &#x27;oivo&#x27;) then
+      is_visible = 0;
+
+  end
+
+  if (db_id = 39801) then --kz
+    is_visible = 0;
+
+  if (hide_ios_products = 1 and os = 2) then
+    is_visible = 0;
+
+  suspend;
+  ---------------------------------------------&lt;
+  ---------------------------------------------&gt;
+
+  ui_part = &#x27;mc_ui_parts.legal_advice&#x27;;
+  ui_part_description = &#x27;Юридические консультации&#x27;;
+  message_txt = &#x27;&#x27;;
+  is_visible = 0;
+
+  -- RFCRU-3766
+  if (db_id = 81001) then --rf
+  begin
+    if (mcl_project = &#x27;kmp&#x27;) then
+      is_visible = 1;
+
+    if (mcl_project = &#x27;oivo&#x27;) then
+      is_visible = 0;
+
+  end
+
+  suspend;
+  ---------------------------------------------&lt;
+  ---------------------------------------------&gt;
+  if (db_id in (39801, 41701)) then
+  begin
+    ui_part = &#x27;mc_ui_parts.my_point&#x27;;
+    ui_part_description = &#x27;Мои баллы&#x27;;
+    message_txt = &#x27;&#x27;;
+    is_visible = 0;
+
+    suspend;
+  end
+  ---------------------------------------------&lt;
+  --------------------------------------------&gt;
+  is_visible = 0;
+  ui_part = &#x27;mc_ui_parts.installment_goods&#x27;;
+  ui_part_description = &#x27;Товары в рассрочку&#x27;;
+  message_txt = &#x27;&#x27;;
+
+
+  if ((db_id = 41701) and
+     (f_get_const(&#x27;installment_goods_is_active&#x27;) = 1)) then
+  begin
+    if (f_get_const(&#x27;installment_goods_add_asp&#x27;) = 1) then
+        is_visible = 1;
+    else if (eds_exist &gt;= 1) then
+        is_visible = 1;
+  end
+
+  -- RFCKG-3447
+  if ((f_get_const(&#x27;installment_goods_add_asp&#x27;) = 0) and
+     (F_ASP_SIGNED(c_id, current_date) = 0)) then
+  begin
+    is_visible = 0;
+  end
+
+  suspend;
+  ---------------------------------------------&lt;
+  ---------------------------------------------&gt;
+  is_visible = 1;
+
+  ui_part = &#x27;mc_ui_parts.total_points&#x27;; --вкладка &quot;Всего баллов&quot; недоступны если вход как агент
+  ui_part_description = &#x27;Всего баллов&#x27;;
+  message_txt = &#x27;&#x27;;
+
+  if (:user_code = 1) then --kg, агент
+    is_visible = 0;
+
+  -- RFCRU-3766
+  if (db_id = 81001) then --rf
+  begin
+    if (mcl_project = &#x27;kmp&#x27;) then
+      is_visible = 1;
+
+    if (mcl_project = &#x27;oivo&#x27;) then
+      is_visible = 0;
+
+    if (hide_ios_products = 1 and os = 2) then
+      is_visible = 0;
+  end
+
+  suspend;
+  ---------------------------------------------&lt;
+  ---------------------------------------------&gt;
+ is_visible = 0;
+
+  ui_part = &#x27;mc_ui_parts.edit_personal_phone&#x27;;
+  ui_part_description = &#x27;Редактирвоание телефонного номера&#x27;;
+  message_txt = &#x27;&#x27;;
+
+  if (c_id is not null) then
+    is_visible = 1;
+
+  if (db_id = 81001) then
+  begin
+    if (c_id is not null and is_visible = 1) then
+      is_visible = (select phone_change_allowed from hp_phone_change_is_allowed(:mcl_id));
+
+    if (is_visible = 1
+        and exists
+        (
+            select *
+            from hr_pstatus
+            where ps_from_c_id = :c_id
+                and ps_date_begin &lt;= current_date
+                and ps_date_end &gt;= current_date
+                and ps_is_working = 1
+        )
+    ) then
+      is_visible = 0;
+
+  end
+
+  suspend;
+  ---------------------------------------------&lt;
+  ---------------------------------------------&gt;
+  ui_part = &#x27;mc_ui_parts.partner_program_show&#x27;;
+  ui_part_description = &#x27;Отображение элементов по партнерской программе РФ&#x27;;
+  message_txt = &#x27;&#x27;;
+  is_visible = 0;
+
+  if (db_id = 81001 and
+      c_id is not null) then
+  begin
+    if (mcl_project = &#x27;kmp&#x27; and
+        not exists
+        (
+            select ps_from_jl_id
+            from hr_pstatus
+            where ps_from_c_id = :c_id and
+                current_date between ps_date_begin and ps_date_end and
+                ps_is_working = 1 and
+                ps_status = 1
+        )
+    ) then
+      is_visible = 1;
+
+    if (mcl_project = &#x27;oivo&#x27;) then
+      is_visible = 0;
+
+  end
+
+  if (hide_ios_products = 1 and
+      os = 2) then
+    is_visible = 0;
+  --  if (c_id in (1010100347157)) then is_visible = 1; -- для теста Бекбоева Кулуя
+
+  suspend;
+  ---------------------------------------------&lt;
+  ---------------------------------------------&gt;
+  ui_part = &#x27;mc_ui_parts.partner_recommend&#x27;;
+  ui_part_description = &#x27;Вместо получить заем отобразить рекомендовать РФ&#x27;;
+  message_txt = &#x27;&#x27;;
+  is_visible = 0;
+
+  if (db_id = 81001) then
+  begin
+    -- Если у клиента имеется активный заем то вместо получить заем нужно отбразить рекомендовать
+    if (mcl_project = &#x27;kmp&#x27; and
+        exists(select *
+               from kontstate, knclient
+               where ks_ol_is_delete = 0 and
+                     ks_state = 1 and
+                     current_date between ks_date_begin and ks_date_end and
+                     ks_from_k_id = kc_from_k_id and
+                     kc_amount_approved &gt; 0 and
+                     kc_from_c_id = :c_id)
+    ) then
+      is_visible = 1;
+
+    if (mcl_project = &#x27;oivo&#x27;) then
+      is_visible = 0;
+
+    --    if (c_id in (1010100347157)) then is_visible = 1; -- для теста Бекбоева Кулуя
+  end
+  suspend;
+  ---------------------------------------------&lt;
+  ---------------------------------------------&gt;
+
+  ui_part = &#x27;mc_ui_parts.loans_for_ref&#x27;;
+  ui_part_description = &#x27;Отображение &quot;История займов&quot; в РФ&#x27;;
+  message_txt = &#x27;&#x27;;
+  is_visible = 0;
+
+  if (db_id = 81001) then
+    is_visible = 1;
+  suspend;
+  ---------------------------------------------&lt;
+
+  ui_part = &#x27;mc_ui_parts.cards_tokenization&#x27;;
+  ui_part_description = &#x27;Токенизация карт&#x27;;
+  message_txt = &#x27;&#x27;;
+  is_visible = 0;
+
+  -- RFCKG-4370
+  if (db_id = 39801) then
+    is_visible = 1;
+
+  suspend;
+  ---------------------------------------------&lt;
+
+  ui_part = &#x27;mc_ui_parts.show_loan_limit&#x27;;
+  ui_part_description = &#x27;Показывать кредитный лимит&#x27;;
+  message_txt = &#x27;&#x27;;
+  is_visible = 0;
+
+  if ((db_id = 41701) and
+      exists(select *
+             from knclient kc
+             inner join kontract k on k.k_id = kc.kc_from_k_id
+             inner join product pr on pr.pr_id = k.k_from_pr_id
+             inner join kontstate ks on ks.ks_from_k_id = kc.kc_from_k_id and
+                   ks.ks_ol_is_delete = 0 and
+                   current_date between ks.ks_date_begin and ks.ks_date_end and
+                   ks.ks_state in (1, 2)
+             where kc.kc_from_c_id = :c_id and
+                   pr.pr_code not containing &#x27;.installment_goods.&#x27; and
+                   pr_code not containing &#x27;.sugarmill.&#x27; and
+                   kc.kc_amount_approved &gt; 0)) then
+    is_visible = 1;
+
+  suspend;
+  ---------------------------------------------&lt;
+
+  ui_part = &#x27;mc_ui_parts.online_loan&#x27;;
+  ui_part_description = &#x27;Онлайн-займ в OiVO&#x27;;
+  message_txt = &#x27;&#x27;;
+  is_visible = 0;
+
+  -- Пока отключаем эту часть, чтобы не делать каждый раз лишний запрос. Включу уже перед запуском проекта
+--  if (db_id = 81001 and mcl_project = &#x27;oivo&#x27;) then
+--    is_visible = (select is_visible from hp_oivo_online_loan_visibility(:mcl_id));
+
+  suspend;
+  ---------------------------------------------&lt;
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

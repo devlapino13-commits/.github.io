@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_ACCESSCASHROOM_SIGN — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_ACCESSCASHROOM_SIGN: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_ACCESSCASHROOM_SIGN</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_edoc_after_sign_action.html"><div class="to">HP_EDOC_AFTER_SIGN_ACTION</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ACR_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ERR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_ACCESSCASHROOM_SIGN(
+    ACR_ID D_INTEGER,
+    C_ID D_ID = null)
+RETURNS (
+    ERR_TEXT D_STR_255)
+AS
+declare variable dt_curr d_datetime;
+declare variable status d_smallint;
+declare variable edl_id d_id;
+declare variable issuer_id d_id;
+declare variable cashier_id d_id;
+declare variable person_id d_id;
+declare variable director_id d_id;
+declare variable issuer_datesign d_datetime;
+declare variable cashier_datesign d_datetime;
+declare variable person_datesign d_datetime;
+declare variable director_datesign d_datetime;
+declare variable num_sign d_smallint;
+begin
+  err_text = &#x27;&#x27;;
+  dt_curr = current_timestamp;
+
+  for
+    select
+      acr_status,
+      acr_edl_id,
+      acr_issuer_id,
+      acr_cashier_id,
+      acr_person_id,
+      acr_director_id,
+      acr_issuer_datesign,
+      acr_cashier_datesign,
+      acr_person_datesign,
+      acr_director_datesign
+    from accesscashroom
+    where acr_id = :acr_id
+  into
+    :status,
+    :edl_id,
+    :issuer_id,
+    :cashier_id,
+    :person_id,
+    :director_id,
+    :issuer_datesign,
+    :cashier_datesign,
+    :person_datesign,
+    :director_datesign
+  do
+  begin
+    if (c_id is null) then
+    begin
+      if (cashier_datesign is null) then
+        cashier_datesign = (
+          select eds_status_datetime
+          from edoc_sign
+          where eds_from_edl_id = :edl_id
+            and eds_from_c_id = :cashier_id
+            and eds_status = 1);
+      if (person_datesign is null) then
+        person_datesign = (
+          select eds_status_datetime
+          from edoc_sign
+          where eds_from_edl_id = :edl_id
+            and eds_from_c_id = :person_id
+            and eds_status = 1);
+      if (director_datesign is null) then
+        director_datesign = (
+          select eds_status_datetime
+          from edoc_sign
+          where eds_from_edl_id = :edl_id
+            and eds_from_c_id = :director_id
+            and eds_status = 1);
+    end else
+    begin
+      if (issuer_id = c_id and issuer_datesign is null and status = 0)
+        then issuer_datesign = dt_curr;
+      else
+      if (cashier_id = c_id and cashier_datesign is null and status in (1, 2)) then
+      begin
+        cashier_datesign = dt_curr;
+        if (edl_id &gt; 0) then
+          update edoc_sign set
+            eds_status = 1,
+            eds_enum_edoc_sign_kind = 5,
+            eds_status_datetime = :cashier_datesign
+          where eds_from_edl_id = :edl_id
+            and eds_from_c_id = :cashier_id
+            and eds_status = 0;
+      end else
+      if (person_id = c_id and person_datesign is null and status in (1, 2)) then
+      begin
+        person_datesign = dt_curr;
+        if (edl_id &gt; 0) then
+          update edoc_sign set
+            eds_status = 1,
+            eds_enum_edoc_sign_kind = 5,
+            eds_status_datetime = :person_datesign
+          where eds_from_edl_id = :edl_id
+            and eds_from_c_id = :person_id
+            and eds_status = 0;
+      end else
+      if (director_id = c_id and director_datesign is null and status in (1, 2)) then
+      begin
+        director_datesign = dt_curr;
+        if (edl_id &gt; 0) then
+          update edoc_sign set
+            eds_status = 1,
+            eds_enum_edoc_sign_kind = 5,
+            eds_status_datetime = :director_datesign
+          where eds_from_edl_id = :edl_id
+            and eds_from_c_id = :director_id
+            and eds_status = 0;
+      end else
+        err_text = f_format(&#x27;Ошибка подписания &quot;распоряжения о допуске&quot; №%1&#x27;, :acr_id);
+    end
+
+    if (err_text = &#x27;&#x27;) then
+    begin
+      num_sign =
+        iif(issuer_datesign is null, 0, 1) +
+        iif(cashier_datesign is null, 0, 1) +
+        iif(person_datesign is null, 0, 1) +
+        iif(director_datesign is null, 0, 1);
+      update accesscashroom set
+        acr_issuer_datesign = :issuer_datesign,
+        acr_cashier_datesign = :cashier_datesign,
+        acr_person_datesign = :person_datesign,
+        acr_director_datesign = :director_datesign,
+        acr_status =
+          case :num_sign
+            when 1 then 1
+            when 4 then 3
+          else 2 end
+      where acr_id = :acr_id;
+    end
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

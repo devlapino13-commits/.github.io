@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DO_CHECK_KN_OPERMONEY — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DO_CHECK_KN_OPERMONEY: 1 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DO_CHECK_KN_OPERMONEY</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_al_obor.html"><div class="to">HP_AL_OBOR</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ACC_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OB_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KOB_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DO_CHECK_KN_OPERMONEY(
+    REP_DATE_END D_DATE)
+RETURNS (
+    ACC_ID D_ID,
+    OB_AMOUNT D_CURRENCY,
+    KOB_AMOUNT D_CURRENCY)
+AS
+declare variable sab_id d_id;
+declare variable al_id d_str_code;
+declare variable rep_date_begin d_date;
+begin
+  rep_date_begin = rep_date_end - extract(day from rep_date_end) + 1;
+
+  kob_amount = 0;
+  for select al_id, al_from_acc_id
+      from acc_list
+      where al_from_bg_id in (&#x27;50-01&#x27;, &#x27;51-01&#x27;, &#x27;55-04&#x27;)
+      into al_id, acc_id
+  do
+  begin
+    ob_amount = f_al_bal(al_id, rep_date_end);
+    suspend;
+  end
+
+  ob_amount = 0;
+  for select sab_id
+      from sys_accbalance
+      where sab_full_code in (&#x27;Деньги.Нал.Касса&#x27;, &#x27;Деньги.Безнал.Банк.РасчСчет&#x27;, &#x27;Деньги.Безнал.Банк.СпецСчет&#x27;)
+      into sab_id
+  do
+  begin
+    for select acc_id
+        from ref_account
+        where acc_from_sab_id = :sab_id
+        into acc_id
+    do
+    begin
+      kob_amount = f_acc_bal(acc_id, rep_date_end);
+      suspend;
+    end
+  end
+
+  kob_amount = 0;
+  for select al_id, al_from_acc_id
+      from acc_list
+      where al_from_bg_id = &#x27;57-01&#x27;
+      into al_id, acc_id
+  do
+  begin
+    select dt_ekv - kt_ekv
+    from hp_al_obor(:al_id, :rep_date_begin, :rep_date_end)
+    into :ob_amount;
+
+    suspend;
+  end
+
+  select sab_id
+  from sys_accbalance
+  where sab_full_code = &#x27;Деньги.Нал.вПути&#x27;
+  into sab_id;
+
+  ob_amount = 0;
+  for select acc_id
+      from ref_account
+      where acc_from_sab_id = :sab_id
+      into acc_id
+  do
+  begin
+    kob_amount = 0;
+    select sum(kobs_dt_sum - kobs_kt_sum)
+    from kn_obsummary
+    where kobs_acc_id = :acc_id and
+          kobs_date between :rep_date_begin and :rep_date_end
+    into kob_amount;
+    if (kob_amount is null) then
+      kob_amount = 0;
+
+    suspend;
+  end
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

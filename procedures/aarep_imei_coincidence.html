@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_IMEI_COINCIDENCE — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_IMEI_COINCIDENCE: 3 входных, 7 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_IMEI_COINCIDENCE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">7</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_REG_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">7 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REG_NAME</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KONTRAGENT_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KF_OFFICER_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FOUND_IMEI</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">EXISTING_KONTRACT</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FINAL_IMEI</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CLIENT_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_IMEI_COINCIDENCE(
+    REP_REG_ID D_INTEGER,
+    REP_DATE_BEGIN D_DATE,
+    REP_DATE_END D_DATE)
+RETURNS (
+    REG_NAME D_STR_CODE,
+    KONTRAGENT_FIO D_STR_100,
+    KF_OFFICER_FIO D_STR_100,
+    FOUND_IMEI D_ID,
+    EXISTING_KONTRACT D_STR_20,
+    FINAL_IMEI D_STR_255,
+    CLIENT_FIO D_STR_100)
+AS
+declare variable K_ID D_ID;
+declare variable KMI_IMEI D_ID;
+begin
+  ----RFCKG-4855 Отчет по совпадениям IMEI
+  for select reg.reg_name, c.c_name_fio, k.k_kontract_no, c2.c_name_fio, kmi.kmi_imei, di.di_from_k_id
+  from duplicated_imei di
+  inner join region_list(:rep_reg_id, 1, 3, 1) rl on di.di_last_reg_id = rl.id_list
+  inner join region reg on reg.reg_unicode = di.di_last_reg_id
+  inner join clients c on c.c_id = di.di_kf_officer
+  inner join kontmat kml on kml.kml_id = di.di_from_kml_id
+  inner join kontmat_imei kmi on kmi.kmi_kml_id = kml.kml_id
+  inner join kontract k on k.k_id = kml.kml_object_id
+  inner join agreements ag on ag.ag_id = kml.kml_from_ag_id
+  inner join clients c2 on c2.c_id = ag.ag_object_id
+  where di.di_datetime between :rep_date_begin and (:rep_date_end + 1)
+  into: reg_name, kf_officer_fio, existing_kontract, kontragent_fio, found_imei, k_id
+  do
+  begin
+    final_imei = &#x27;&#x27;;
+    select c.c_name_fio
+    from knclient kc
+    inner join clients c on c.c_id = kc.kc_from_c_id
+    where kc.kc_amount_approved &gt; 0
+      and kc.kc_from_k_id = :k_id
+    into :client_fio;
+
+    for select kmi.kmi_imei
+    from kontmat km
+    inner join kontmat_imei kmi on kmi.kmi_kml_id = km.kml_id
+    where km.kml_object_kind = f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;)
+      and km.kml_object_id = :k_id
+      and km.kml_status = 1
+    into :kmi_imei
+    do
+    begin
+      if (row_count &gt; 0) then
+        final_imei = final_imei || kmi_imei || &#x27;; &#x27;;
+    end
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

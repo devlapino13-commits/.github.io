@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_RECALC_PDN — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_RECALC_PDN: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_RECALC_PDN</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="get_cfp_kpd.html"><div class="to">GET_CFP_KPD</div></a><a class="ref-card" href="mc_send_push.html"><div class="to">MC_SEND_PUSH</div></a><a class="ref-card" href="save_cfp_kpd.html"><div class="to">SAVE_CFP_KPD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_RECALC_PDN
+AS
+declare variable mac_id d_id;
+declare variable kpd_err d_str_255;
+declare variable monthly_income decimal(15,2);
+declare variable extra_amount decimal(15,2);
+declare variable repayment_obligations decimal(15,2);
+declare variable amount_monthly_payments decimal(15,2);
+declare variable pdn decimal(15,2);
+declare variable ma_id d_integer;
+declare variable k_kontract_no d_str_20;
+declare variable k_disb_date d_date;
+declare variable c_id d_id;
+declare variable ca_id d_id;
+declare variable acl_id d_id;
+begin
+  for select ca.ca_id,
+             ca.ca_avr_income,
+             iif(f_objkind(ca.ca_object_kind, &#x27;code&#x27;) = &#x27;miniappclient&#x27;, ca.ca_object_id, 0),
+             ca.ca_from_acl_id
+  from cfp_anketa ca
+  where coalesce(ca.ca_from_acl_id, 0) &lt;&gt; 0 and
+        ca.ca_date = current_date and
+        ca.ca_datetime between dateadd(-10 minute to current_timestamp) and current_timestamp
+  into ca_id,
+       monthly_income,
+       mac_id,
+       acl_id
+  do
+  begin
+
+    if (coalesce(mac_id, 0) = 0) then
+      continue;
+
+      -- Если КПД уже посчитан
+    if (exists(select *
+               from cfp_anketa_kpd cak
+               where cak.cak_from_ca_id = :ca_id)) then
+      continue;
+
+    select kpd_err
+    from save_cfp_kpd(:mac_id, :acl_id)
+    into :kpd_err;
+
+    if (coalesce(kpd_err, &#x27;&#x27;) = &#x27;&#x27;) then
+    begin
+      select mac.mac_from_ma_id,
+             mac.mac_from_c_id
+      from miniappclient mac
+      where mac.mac_id = :mac_id
+      into ma_id,
+           c_id;
+
+      select k.k_kontract_no,
+             k.k_disb_date
+      from kontract k
+      where k.k_from_ma_app_id = :ma_id
+      into k_kontract_no,
+           k_disb_date;
+
+      select extra_amount, repayment_obligations, amount_monthly_payments
+      from get_cfp_kpd(:mac_id)
+      into :extra_amount, :repayment_obligations, :amount_monthly_payments;
+
+      pdn = (repayment_obligations + amount_monthly_payments)/ (monthly_income + extra_amount) * 100;
+
+      if (:pdn &gt; 60) then
+      begin
+        execute procedure mc_send_push(&#x27;clients&#x27;, :c_id, &#x27;Новый показатель долговой нагрузки&#x27;, f_format(&#x27;Уважаемый клиент, Ваш показатель долговой нагрузки по контракту № %1 от %2 превышает 60%&#x27;, :k_kontract_no, f_datetostr(:k_disb_date)));
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

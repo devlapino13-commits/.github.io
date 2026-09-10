@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GET_RECOMMENDED_PAY_SUM — процедура — схема БД</title>
+<meta name="description" content="Процедура GET_RECOMMENDED_PAY_SUM: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>GET_RECOMMENDED_PAY_SUM</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">8</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_get_restructuring.html"><div class="to">AAREP_GET_RESTRUCTURING</div></a><a class="ref-card" href="aarep_make_zad_list.html"><div class="to">AAREP_MAKE_ZAD_LIST</div></a><a class="ref-card" href="hp_opercash_loan_other_amount.html"><div class="to">HP_OPERCASH_LOAN_OTHER_AMOUNT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">8 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_html_client_zadol.html"><div class="to">FM_HTML_CLIENT_ZADOL</div></a><a class="ref-card" href="hp_edoc_web_get_cl_info.html"><div class="to">HP_EDOC_WEB_GET_CL_INFO</div></a><a class="ref-card" href="hp_extsys_oper.html"><div class="to">HP_EXTSYS_OPER</div></a><a class="ref-card" href="hp_extsys_pay.html"><div class="to">HP_EXTSYS_PAY</div></a><a class="ref-card" href="hp_get_extsys_pay_loan_data.html"><div class="to">HP_GET_EXTSYS_PAY_LOAN_DATA</div></a><a class="ref-card" href="mc_data_for_payment.html"><div class="to">MC_DATA_FOR_PAYMENT</div></a><a class="ref-card" href="mc_loan_list.html"><div class="to">MC_LOAN_LIST</div></a><a class="ref-card" href="okt_data_for_consultation.html"><div class="to">OKT_DATA_FOR_CONSULTATION</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RECOM_PAY_SUM</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE GET_RECOMMENDED_PAY_SUM(
+    K_ID ID_TYPE,
+    REP_DATE DATE)
+RETURNS (
+    RECOM_PAY_SUM CURR_TYPE)
+AS
+declare variable rep_date_limit date;
+declare variable min_sh_date date;
+declare variable db_id integer;
+declare variable sh_date date;
+declare variable temp_pay_sum curr_type;
+declare variable pr_code d_str_100;
+declare variable insurance_amount curr_type;
+begin
+  /*
+    Igusev: Логика согласованная с Зарой (02.04.2019):
+    если просрочка есть, тогда: вся просроченная сумма + сумма ближайшего платежа (ОС + проценты по графику), который наступит в пределах текущая дата + 10 дней, причем если сегодня 02.04, то +10 дней должна быть 11.04
+    если просроченного платежа нет, то должна отображаться сумма ближайшего платежа по графику (ОС + проценты по графику), причем не важно чз сколько дней этот платеж настанет.
+  */
+  db_id = f_get_db_id();
+
+  /*
+  select oks_delinq_date
+  from oksummary oks
+  where oks_from_k_id = :k_id and
+        :rep_date between oks_date_begin and oks_date_end
+  into min_sh_date;
+  */
+
+  -- т.к. возможна ситуация когда по платежу есть долг только по пеням и этот платеж прочрочен
+  -- и чз  oksummary  его не понймать, решил искать дату самого раннего активного платежа чз aarep_make_zad_list
+  -- письмо: Subject: RE: Re: группа 4-15-19-116 - из-за округления возникла разница в 1 рубль. .
+
+  if (db_id in (39801, 41701)) then
+  begin
+    select min(coalesce(sh_date, cast(&#x27;01.01.1900&#x27; as date)))
+    from aarep_make_zad_list(:k_id, :rep_date, 1)
+    where sh_date is not null
+    into :min_sh_date;
+
+    rep_date_limit = rep_date + 20;
+
+    if (min_sh_date &lt; rep_date or min_sh_date is null ) then
+    begin
+      select sum(zad_os + iif(coalesce(sh_date, :rep_date) &lt;= :rep_date, sh_calc_perc, zad_perc) + sh_calc_fine + zad_kommis + iif(:db_id &lt;&gt; 39801, round(zad_perc * 2 / 100,0), 0))
+      from aarep_make_zad_list(:k_id, :rep_date, 1)
+      where coalesce(sh_date, :rep_date_limit) &lt;= :rep_date_limit
+      into recom_pay_sum;
+    end else
+    begin
+      select sh_date, zad_os + zad_perc + iif(:db_id &lt;&gt; 39801, round(zad_perc * 2 / 100,0), 0)
+      from aarep_make_zad_list(:k_id, :rep_date, 0)
+      where sh_date &gt;= :rep_date
+      rows 1
+      into sh_date, recom_pay_sum;
+
+      -- Для КЗ при реструктуризации выводим сумму первого платежа, не учитывая условие с 20 днями
+      if (not(db_id = 39801 and
+              exists(select *
+                     from aarep_get_restructuring(:k_id, :rep_date, :db_id)
+                     where is_restruct = 1))) then
+      begin
+        if (:rep_date &lt;= :sh_date - 20) then recom_pay_sum = 0;
+      end
+    end
+  end else
+  begin
+    select min(coalesce(sh_date, cast(&#x27;01.01.1900&#x27; as date)))
+    from aarep_make_zad_list(:k_id, :rep_date, 1)
+    into :min_sh_date;
+
+    --  если было расторжение договора то отображаем всю задолженность.
+    if (exists(select *
+               from kontract, operlist
+               where k_id = :k_id and
+                     k_stopped_perc_ol_id = ol_id and
+                     operlist.is_delete = 0 and
+                     ol_date &lt;= :rep_date)) then
+        
+    begin
+      select sum(zad_os + sh_calc_perc + sh_calc_fine + zad_kommis)
+      from aarep_make_zad_list(:k_id, :rep_date, 1)
+      into recom_pay_sum;
+    end
+    else
+    if (min_sh_date &lt; rep_date or min_sh_date is null) then
+    begin
+      -- RFCRU-4811: Новая логика расчета рекомендуемой суммы платежа (только для РФ)
+      if (db_id = 81001) then
+      begin
+        -- Общая сумма просроченной задолженности
+        select sum(zad_os + iif(coalesce(sh_date, :rep_date) &lt;= :rep_date, sh_calc_perc, zad_perc) + sh_calc_fine + zad_kommis)
+        from aarep_make_zad_list(:k_id, :rep_date, 1)
+        where coalesce(sh_date, &#x27;01.01.1900&#x27;) &lt; :rep_date
+        into recom_pay_sum;
+
+        -- Сумма ближайшего платежа по графику
+        select first 1 zad_os + zad_perc
+        from aarep_make_zad_list(:k_id, :rep_date, 1)
+        where sh_date &gt;= :rep_date
+        order by sh_date
+        into :temp_pay_sum;
+
+        recom_pay_sum = recom_pay_sum + coalesce(:temp_pay_sum, 0);
+      end
+      else
+      begin
+        rep_date_limit = rep_date + 9;
+  
+        select sum(zad_os + iif(coalesce(sh_date, :rep_date) &lt;= :rep_date, sh_calc_perc, zad_perc) + sh_calc_fine + zad_kommis)
+        from aarep_make_zad_list(:k_id, :rep_date, 1)
+        where coalesce(sh_date, :rep_date_limit) &lt;= :rep_date_limit
+        into recom_pay_sum;
+      end
+    end
+    else
+      select zad_os + zad_perc
+      from aarep_make_zad_list(:k_id, :rep_date, 0)
+      where sh_date &gt;= :rep_date
+      rows 1
+      into recom_pay_sum;
+  end
+
+  recom_pay_sum = coalesce(recom_pay_sum, 0);
+
+  select pr.pr_code
+  from kontract k
+  inner join product pr on pr.pr_id = k.k_from_pr_id
+  where k.k_id = :k_id
+  into :pr_code;
+
+  if (db_id = 41701 and             -- RFCKG-5391
+      pr_code containing &#x27;.ipf.&#x27; and
+      pr_code not containing &#x27;.ignore_insurance.&#x27; and
+      f_get_const(&#x27;kont_insurance_active&#x27;) = 1) then
+  begin
+    if (exists(select 1
+               from kontstate ks
+               where ks.ks_from_k_id = :k_id and
+                     ks.ks_ol_is_delete = 0 and
+                     ks.ks_state = 1 and
+                     current_date between ks.ks_date_begin and ks.ks_date_end)) then
+    begin
+      select coalesce(res_amount, 0)
+      from hp_opercash_loan_other_amount(:k_id, &#x27;CashTransactionIncom.Insurance&#x27;)
+      into :insurance_amount;   -- сумма страхового полиса к оплате
+
+      if (insurance_amount &gt; 0) then
+          recom_pay_sum = recom_pay_sum + insurance_amount;  -- добавляем сумма страхового полиса к рекомендуемой сумме
+    end
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

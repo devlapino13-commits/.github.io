@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_GENERATE_C_UNIQ_ID — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_GENERATE_C_UNIQ_ID: 4 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_GENERATE_C_UNIQ_ID</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_fix_uniq_acc.html"><div class="to">HP_FIX_UNIQ_ACC</div></a><a class="ref-card" href="hp_fix_uniq_acc_res.html"><div class="to">HP_FIX_UNIQ_ACC_RES</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_BIRTH_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_ACTION</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_GENERATE_C_UNIQ_ID(
+    C_ID DECIMAL(18,0),
+    C_BIRTH_DATE DATE,
+    C_ACTION INTEGER,
+    UN_ID DECIMAL(18,0))
+AS
+declare variable cunq_ext_id_new integer;
+declare variable cunq_ext_id_curr integer;
+declare variable cul_ext_id integer;
+begin
+-- c_action отрицательный - убрать лицевой счет,
+-- c_action положительный - вычислить лицевой счет
+  cunq_ext_id_new = 0;
+  if (c_action = 0) then
+    exit;
+
+-- Получаем текущий лицевой счет
+  select coalesce(cunq_ext_id, 0)
+  from clientuniq
+  where cunq_from_c_id = :c_id
+  into :cunq_ext_id_curr;
+
+-- Если у него имеется положительный лицевой счет, то не меняем
+  if ((c_action &gt; 0) and
+      (cunq_ext_id_curr &gt; 0)) then
+    exit;
+
+  if (c_action &gt; 0) then
+  begin
+    cul_ext_id = null;
+
+-- Сначала ищем среди старых лицевых счетов этого контрагента
+    select cul_ext_id
+    from clientulog
+    where cul_from_c_id = :c_id and
+          cul_birth_date = :c_birth_date and
+          cul_ext_id &gt; 0
+    order by cul_id desc
+    rows 1
+    into :cul_ext_id;
+    if (cul_ext_id is null) then
+      cul_ext_id = 0;
+
+-- если имеется старый лицевой счет, уточняем, не занято ли он
+    if (cul_ext_id &gt; 0) then
+    begin
+      if (exists(select *
+                 from clientuniq
+                 where cunq_birth_date = :c_birth_date and
+                       cunq_ext_id = :cul_ext_id)) then
+        cul_ext_id = 0;
+    end
+
+    if (cul_ext_id &gt; 0) then
+      cunq_ext_id_new = cul_ext_id; -- если не занят, присваиваем старое
+    else
+    begin
+-- если занят, генерируем новый лицевой счет
+      select cunq_ext_id
+      from clientuniq
+      where cunq_birth_date = :c_birth_date and
+            cunq_ext_id &gt; 0
+      order by cunq_birth_date desc, cunq_ext_id desc
+      rows 1
+      into :cunq_ext_id_new;
+      cunq_ext_id_new = coalesce(cunq_ext_id_new, 0) + 1;
+    end
+  end
+  else
+  begin
+    if (c_birth_date is not null) then
+    begin
+      select cunq_ext_id
+      from clientuniq
+      where cunq_birth_date = :c_birth_date and
+            cunq_ext_id &lt; 0
+      order by cunq_birth_date asc, cunq_ext_id asc
+      rows 1
+      into :cunq_ext_id_new;
+      cunq_ext_id_new = coalesce(cunq_ext_id_new, 0) - 1;
+    end
+    else
+    begin
+      select cunq_ext_id
+      from clientuniq
+      where cunq_birth_date is null and
+            cunq_ext_id &lt; 0
+      order by cunq_birth_date asc, cunq_ext_id asc
+      rows 1
+      into :cunq_ext_id_new;
+      cunq_ext_id_new = coalesce(cunq_ext_id_new, 0) - 1;
+    end
+  end
+
+  update or insert into clientuniq (cunq_from_c_id, cunq_birth_date, cunq_ext_id, cunq_from_un_id)
+  values (:c_id, :c_birth_date, :cunq_ext_id_new, :un_id)
+  matching (cunq_from_c_id);
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_PERSVALUE_UPDATE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_PERSVALUE_UPDATE: 4 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_PERSVALUE_UPDATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="uxp_persfield_prepare_triggers.html"><div class="to">UXP$PERSFIELD_PREPARE_TRIGGERS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">TABLE_NAME</div><div class="ptype">VARCHAR(50)</div><div class="pdesc">Таблица где меняется данные</div></div><div class="prow"><div class="pname">FIELD_NAME</div><div class="ptype">VARCHAR(50)</div><div class="pdesc">Поле где меняется информация</div></div><div class="prow"><div class="pname">TABLE_KEY_ID</div><div class="ptype">BIGINT</div><div class="pdesc">Значение ключевого поля</div></div><div class="prow"><div class="pname">FIELD_NEW_VALUE</div><div class="ptype">VARCHAR(255)</div><div class="pdesc">Новое значение</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_PERSVALUE_UPDATE(
+    TABLE_NAME D_STR_CODE NOT NULL,
+    FIELD_NAME D_STR_CODE NOT NULL,
+    TABLE_KEY_ID D_ID NOT NULL,
+    FIELD_NEW_VALUE D_STR_255)
+AS
+declare variable pif_uuid d_uuid;
+declare variable pif_indexed d_bool;
+declare variable pda_id d_id;
+declare variable pva_id d_id;
+declare variable curr_value d_str_255;
+declare variable pda_value_id d_id;
+declare variable pva_is_null d_bool;
+declare variable pva_is_delete d_bool;
+declare variable pin_id d_id;
+declare variable pif_inactive d_bool;
+begin
+  if (f_get_db_id() &lt;&gt; 81001) then
+    exit;
+
+  select pif_uuid, pif_indexed, pif_inactive
+  from ux$persfield
+  where pif_source = :table_name and
+        pif_field_name = :field_name
+  into pif_uuid, pif_indexed, pif_inactive;
+
+  if (row_count = 0) then
+    exception e_default f_format(&#x27;Поле %1.%2 не зарегистрирован как персональные данные в ux$persfield&#x27;, Upper(table_name), Upper(field_name));
+
+  if (pif_inactive = 1) then
+    exit;
+
+  select pin_id
+  from persinfo
+  where pin_object_kind = 0 and
+        pin_object_id = :table_key_id
+  into pin_id;
+
+  if (pin_id is null) then
+  begin
+    insert into persinfo (pin_object_kind, pin_object_id)
+    values (0, :table_key_id)
+    returning pin_id
+    into :pin_id;
+  end
+
+  select pda_id, pda_value_id
+  from persdata
+  where pda_from_pif_uuid = :pif_uuid and
+        pda_from_pin_id = :pin_id
+  into :pda_id, pda_value_id;
+
+  if (pda_id is null) then
+  begin
+    insert into persdata (pda_from_pif_uuid, pda_from_pin_id)
+    values (:pif_uuid, :pin_id)
+    returning pda_id
+    into :pda_id;
+  end
+
+  if (pda_value_id is not null) then
+  begin
+    pva_is_delete = 0;
+
+    select pva_is_null, pva_is_delete
+    from persvalue v
+    where pva_id = :pda_value_id
+    into pva_is_null, pva_is_delete;
+
+    if (pva_is_delete = 0 and pva_is_null = 1 and field_new_value is null) then
+      exit;
+
+    if (pif_indexed = 0) then
+    begin
+      select pvs_value
+      from persvalstr
+      where pvs_pva_id = :pda_value_id
+      into curr_value;
+    end else
+    begin
+      select pvx_value
+      from persvalidx
+      where pvx_pva_id = :pda_value_id
+      into curr_value;
+    end
+
+    if (pva_is_delete = 0 and curr_value is not distinct from field_new_value) then
+      exit;
+  end
+
+  insert into persvalue (pva_from_pda_id, pva_is_null)
+  values (:pda_id, iif(:field_new_value is null, 1, 0))
+  returning pva_id
+  into :pva_id;
+
+  if (field_new_value is not null) then
+  begin
+    if (pif_indexed = 0) then
+    begin
+      insert into persvalstr (pvs_pva_id, pvs_value)
+      values (:pva_id, :field_new_value);
+    end else
+    begin
+      insert into persvalidx (pvx_pva_id, pvx_value)
+      values (:pva_id, :field_new_value);
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

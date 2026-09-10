@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DO_KN_OPERBOOK_FRAUD_STORNO — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DO_KN_OPERBOOK_FRAUD_STORNO: 4 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DO_KN_OPERBOOK_FRAUD_STORNO</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">6 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_calc_perc_fill_one.html"><div class="to">AAREP_CALC_PERC_FILL_ONE</div></a><a class="ref-card" href="aarep_calc_perc_one_cls.html"><div class="to">AAREP_CALC_PERC_ONE_CLS</div></a><a class="ref-card" href="aarep_make_zad_list_temp.html"><div class="to">AAREP_MAKE_ZAD_LIST_TEMP</div></a><a class="ref-card" href="hp_do_kn_operbook_one_online.html"><div class="to">HP_DO_KN_OPERBOOK_ONE_ONLINE</div></a><a class="ref-card" href="hp_kn_oksummary_insert.html"><div class="to">HP_KN_OKSUMMARY_INSERT</div></a><a class="ref-card" href="hp_operrepeat_set_status.html"><div class="to">HP_OPERREPEAT_SET_STATUS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ONE_OFR_ID</div><div class="ptype">INTEGER</div><div class="pdesc">ID займа</div></div><div class="prow"><div class="pname">NEED_DELETE</div><div class="ptype">SMALLINT</div><div class="pdesc">Если OL_ID есть, то аннулирует операцию</div></div><div class="prow"><div class="pname">OL_MEMO</div><div class="ptype">VARCHAR(255)</div><div class="pdesc">Детали</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DO_KN_OPERBOOK_FRAUD_STORNO(
+    ONE_OFR_ID D_INTEGER NOT NULL,
+    NEED_DELETE D_BOOL NOT NULL,
+    OL_MEMO D_STR_255 NOT NULL,
+    UN_ID D_ID NOT NULL)
+AS
+declare variable al_id d_str_code;
+declare variable acc_id d_id;
+declare variable orp_id d_integer;
+declare variable orp_state d_integer;
+declare variable ol_id d_id;
+declare variable reg_id d_integer;
+declare variable k_disb_date d_date;
+declare variable kc_id d_id;
+declare variable main_ol_id d_id;
+declare variable tmp_ol_id d_id;
+declare variable bal_perc d_currency;
+declare variable max_number d_integer;
+declare variable k_id d_id;
+declare variable rep_date d_date; /* Дата сторнирования */
+declare variable fraud_c_id d_id; /* C_ID сотрудника-мошеника */
+declare variable ofr_id d_integer;
+declare variable ofr_kk_date d_date;
+declare variable ofr_kk_no d_str_code;
+declare variable k_kontract_no d_str_code;
+declare variable kcp_period d_integer;
+declare variable need_generate_memo boolean;
+begin
+  -- Процедура по сторнированию выданного займа из-за мошеничества сотрудника
+  -- Все действия, включая выдачи отменяются
+  -- &#x27;fraud_2020_12&#x27;
+  need_generate_memo = (coalesce(ol_memo, &#x27;&#x27;) = &#x27;&#x27;);
+
+  if (one_ofr_id is null) then
+    one_ofr_id = 0;
+
+  if (need_delete = 1 and one_ofr_id = 0) then
+      exception e_message f_format(&#x27;Нельзя запускать с параметром Need_delete = 1 и One_Ofr_ID = 0&#x27;);
+
+  for select ofr_id, ofr_from_k_id, ofr_storno_date, ofr_fraud_c_id, ofr_from_al_id,
+             ofr_from_acc_id, ofr_storno_ol_id, ofr_kk_date, ofr_kk_no
+  from operfraud
+  where (:one_ofr_id = 0 or ofr_id = :one_ofr_id)
+  into :ofr_id, :k_id, :rep_date, :fraud_c_id, :al_id, :acc_id, ol_id, ofr_kk_date, ofr_kk_no
+  do
+  begin
+    if (rep_date is null) then
+      exception e_default f_format(&#x27;storno date is null, ofr_id: &#x27;, ofr_id);
+
+    select kc_id
+    from knclient
+    where kc_from_k_id = :k_id and
+          kc_amount_approved &gt; 0
+    into kc_id;
+
+    if (ol_id is not null) then
+    begin
+      if (need_delete = 0) then
+      begin
+        if (exists(select * from operlist where ol_id = :ol_id and is_delete = 0)) then
+          Continue;
+      end else
+      begin
+        update operlist
+        set is_delete = 1
+        where ol_id = :ol_id;
+
+        delete from kn_operbook
+        where kob_from_kc_id = :kc_id and
+              kob_ol_date &gt;= :rep_date and
+              kob_ol_is_active = 1;
+      end
+
+      ol_id = null;
+    end
+
+    if (al_id is null) then
+      exception e_default f_format(&#x27;76-02/5 al_id not found, reg_id: %1&#x27;, reg_id);
+  
+    if (al_id is null) then
+      exception e_default f_format(&#x27;60323 acc_id not found, c_id: %1&#x27;, fraud_c_id);
+
+    -- Определяем офис где числится займ
+    select kal_new_reg_id, k_disb_date, k_kontract_no
+    from kontract, knaktlist kal
+    where k_id = :k_id and
+          k_from_kf_id = kal.kal_from_kf_id and
+          kal.is_delete = 0 and
+          kal.kal_date &lt;= :rep_date and
+          kal.kal_date_end &gt;= :rep_date
+    into reg_id, k_disb_date, k_kontract_no;
+
+    if (need_generate_memo) then
+    begin
+      ol_memo = f_format(&#x27;СТОРНО проводки по договору займа %1, протокол %2 от %3 г.&#x27;,
+                         k_kontract_no, ofr_kk_no, f_datetostr(ofr_kk_date));
+    end
+  
+    -- Создаем новую операцию
+    insert into operlist (ol_from_reg_id, ol_oper_type, ol_oper_subtype, ol_date, ol_doc_kind,
+                          ol_memo, ol_parent_id, is_delete, ol_user_id)
+    values (:reg_id, 1, 13, :rep_date, 9, :ol_memo, null, 0, :un_id)
+    returning ol_id
+    into :ol_id;
+
+    update or insert into operloan (opl_from_ol_id, opl_acc_kind, opl_from_al_id, opl_from_acc_id)
+    values (:ol_id, 3, :al_id, :acc_id)
+    matching (opl_from_ol_id);
+  
+    -- На дату сторнирования пересчитываем данные
+    if (not exists(select * from kn_oksummary where oks_from_k_id = :k_id and oks_date_begin = :rep_date))
+    then
+      execute procedure hp_kn_oksummary_insert(:kc_id, :rep_date, 1);
+    else
+    begin
+      update kn_oksummary
+      set oks_is_fix_bal_perc = 0,
+          oks_need_recalc = 1
+      where oks_from_k_id = :k_id and
+            oks_date_begin = :rep_date;
+    end
+
+    -- На дату сторнирования пересчитываем проводки
+    execute procedure hp_do_kn_operbook_one_online(:k_id, current_date, null, :rep_date - 1);
+  
+    -- Все движения после даты сторнирования аннулируем, их нужно вручную перепринят на 60323
+    for select distinct iif(ol_parent_id is not null, ol_parent_id, ol_id)
+    from operkred, operlist
+    where ok_from_k_id = :k_id and
+          ok_ol_is_active = 1 and
+          ok_ol_date &gt; :rep_date and
+          ok_from_ol_id = ol_id
+    into main_ol_id
+    do
+    begin
+      update operlist
+      set is_delete = 1
+      where ol_id = :main_ol_id;
+    end
+
+    for select distinct iif(ol_parent_id is not null, ol_parent_id, ol_id)
+    from operkroff, operlist
+    where oko_from_k_id = :k_id and
+          oko_ol_is_active = 1 and
+          oko_ol_date &gt; :rep_date and
+          oko_from_ol_id = ol_id
+    into main_ol_id
+    do
+    begin
+      update operlist
+      set is_delete = 1
+      where ol_id = :main_ol_id;
+    end
+  
+    -- Сторнируем движения по займу
+    insert into operkred (ok_from_ol_id, ok_number, ok_from_k_id, ok_sh_id, ok_sh_date, ok_type, ok_os, ok_perc, ok_fine,
+                          ok_pay_type, ok_kommis, ok_sh_os, ok_sh_perc, ok_kommis_adv, ok_tax)
+    select :ol_id, -1, ok_from_k_id, ok_sh_id, ok_sh_date, ok_type, -ok_os, -ok_perc, -ok_fine, ok_pay_type,
+           -ok_kommis, -ok_sh_os, -ok_sh_perc, -ok_kommis_adv, -ok_tax
+    from operkred
+    where ok_from_k_id = :k_id and
+          ok_ol_is_active = 1 and
+          ok_ol_date &lt;= :rep_date and
+          ok_from_ol_id &lt;&gt; :ol_id
+    order by ok_ol_date, ok_from_ol_id, ok_number;
+
+    -- Убираем пени
+    insert into operkred (ok_from_ol_id, ok_number, ok_from_k_id, ok_sh_id, ok_sh_date, ok_type, ok_os, ok_perc, ok_fine,
+                          ok_pay_type, ok_kommis, ok_sh_os, ok_sh_perc, ok_kommis_adv, ok_tax)
+    select :ol_id, -1, :k_id, sh_id, sh_date, 5, 0, 0, -sh_calc_fine, 3, 0, 0, 0, 0, 0
+    from aarep_make_zad_list_temp(:k_id, :rep_date, 0, 1)
+    where sh_calc_fine &lt;&gt; 0;
+
+    -- Сторнируем движения по займу
+    insert into operkroff (oko_from_ol_id, oko_from_k_id, oko_from_c_id, oko_type, oko_os, oko_perc, oko_other,
+                           oko_sh_os, oko_sh_perc, oko_sh_other, oko_ol_is_active, oko_ol_date)
+    select :ol_id, oko_from_k_id, oko_from_c_id, oko_type, -oko_os, -oko_perc, -oko_other, -oko_sh_os,
+           -oko_sh_perc, -oko_sh_other, 1, :rep_date
+    from operkroff
+    where oko_from_k_id = :k_id and
+          oko_ol_is_active = 1 and
+          oko_ol_date &lt;= :rep_date and
+          oko_from_ol_id &lt;&gt; :ol_id
+    order by oko_ol_date, oko_from_ol_id, oko_id;
+
+    for select distinct iif(ol_parent_id is not null, ol_parent_id, ol_id)
+    from operkred, operlist
+    where ok_from_k_id = :k_id and
+          ok_ol_is_active = 1 and
+          ok_ol_date &lt;= :rep_date and
+          ok_from_ol_id = ol_id and
+          ok_from_ol_id &lt;&gt; :ol_id
+    union
+    select iif(ol_parent_id is not null, ol_parent_id, ol_id)
+    from operkroff, operlist
+    where oko_from_k_id = :k_id and
+          oko_ol_is_active = 1 and
+          oko_ol_date &lt;= :rep_date and
+          oko_from_ol_id = ol_id and
+          oko_from_ol_id &lt;&gt; :ol_id
+    into main_ol_id
+    do
+    begin
+      insert into operbook (ob_from_ol_id, ob_number, ob_currency, ob_curr_rate, ob_client_dt, ob_account_dt, ob_summa_val,
+                            ob_summa, ob_from_pc_id, ob_from_kp_id, ob_oper_mask, ob_account_kt, ob_client_kt, ob_detail)
+      select :ol_id, -1, ob_currency, ob_curr_rate, ob_client_dt, ob_account_dt, -ob_summa_val, -ob_summa,
+             ob_from_pc_id, ob_from_kp_id, ob_oper_mask, ob_account_kt, ob_client_kt, &#x27;Сторнирование: &#x27; || coalesce(ob_detail, &#x27;&#x27;)
+      from operbook
+      where ob_from_ol_id = :main_ol_id;
+  
+      for select ol_id
+      from operlist
+      where ol_parent_id = :main_ol_id and
+            ol_id &lt;&gt; :main_ol_id
+      into tmp_ol_id
+      do
+      begin
+        insert into operbook (ob_from_ol_id, ob_number, ob_currency, ob_curr_rate, ob_client_dt, ob_account_dt, ob_summa_val,
+                              ob_summa, ob_from_pc_id, ob_from_kp_id, ob_oper_mask, ob_account_kt, ob_client_kt, ob_detail)
+        select :ol_id, -1, ob_currency, ob_curr_rate, ob_client_dt, ob_account_dt, -ob_summa_val, -ob_summa,
+               ob_from_pc_id, ob_from_kp_id, ob_oper_mask, ob_account_kt, ob_client_kt, &#x27;Сторнирование: &#x27; || coalesce(ob_detail, &#x27;&#x27;)
+        from operbook
+        where ob_from_ol_id = :tmp_ol_id;
+      end
+    end
+
+    select result_perc_end
+    from aarep_calc_perc_one_cls(:k_id, :rep_date, :rep_date, 0, 1, 1)
+    into bal_perc;
+  
+    insert into operkred (ok_from_ol_id, ok_number, ok_from_k_id, ok_sh_id, ok_sh_date, ok_type, ok_os, ok_perc, ok_fine,
+                          ok_pay_type, ok_kommis, ok_sh_os, ok_sh_perc, ok_kommis_adv, ok_tax)
+    values (:ol_id, -1, :k_id, 0, :k_disb_date, 7, 0, -:bal_perc, 0,
+            3, 0, 0, 0, 0, 0);
+  
+    if (not exists(select * from kontstate
+    where ks_from_k_id = :k_id and
+          ks_date_begin &lt;= :rep_date and
+          ks_state = 2 and
+          ks_ol_is_delete = 0)) then
+    begin
+      insert into kontstate (ks_from_ol_id, ks_from_k_id, ks_date_begin, ks_ol_is_delete, ks_state)
+      values (:ol_id, :k_id, :rep_date, 0, 2);
+    end
+
+    kcp_period = extract(year from rep_date) * 100 + extract(month from rep_date);
+    if (exists(select * from kontcalcperc where kcp_from_k_id = :k_id and kcp_period = :kcp_period)) then
+      execute procedure aarep_calc_perc_fill_one(:k_id, :kcp_period, :kcp_period);
+  
+    update operfraud
+    set ofr_storno_ol_id = :ol_id
+    where ofr_id = :ofr_id;
+
+    update kn_oksummary
+    set oks_bal_perc_fixed = 0,
+        oks_is_fix_bal_perc = 1,
+        oks_need_recalc = 1
+    where oks_from_k_id = :k_id and
+          oks_date_begin = :rep_date;
+  
+    insert into kn_operbook (kob_currency, kob_curr_rate, kob_acc_dt, kob_acc_kt, kob_summa, kob_summa_val,
+                             kob_summa_tax_dt, kob_summa_tax_kt,
+                             kob_detail_id, kob_client_dt, kob_client_kt, kob_from_ol_id, kob_from_kc_id, kob_from_rml_id)
+    select kob_currency, kob_curr_rate, kob_acc_dt, kob_acc_kt, -kob_summa, -kob_summa_val, -kob_summa_tax_dt,
+           -kob_summa_tax_kt, kob_detail_id, kob_client_dt, kob_client_kt,
+           :ol_id, kob_from_kc_id, kob_from_rml_id
+    from kn_operbook
+    where kob_from_kc_id = :kc_id and
+          kob_ol_is_active = 1 and
+          kob_ol_date &lt;= :rep_date and
+          kob_from_ol_id &lt;&gt; :ol_id;
+  
+    max_number = 0;
+    select max(ob_number)
+    from operbook
+    where ob_from_ol_id = :ol_id
+    into max_number;
+    if (max_number is null) then
+      max_number = 0;
+  
+    -- Сажаем денежные операции на 76-02/5
+    insert into operbook (ob_from_ol_id, ob_number, ob_currency, ob_curr_rate, ob_client_dt, ob_account_dt, ob_summa_val,
+                          ob_summa, ob_from_pc_id, ob_from_kp_id, ob_oper_mask, ob_account_kt, ob_client_kt, ob_detail)
+    select :ol_id, -1, ob_currency, ob_curr_rate, ob_client_dt, :al_id, -ob_summa_val, -ob_summa,
+           ob_from_pc_id, ob_from_kp_id, ob_oper_mask, ob_account_kt, ob_client_kt, ob_detail
+    from operbook
+    where ob_from_ol_id = :ol_id and
+          ob_number &lt;= :max_number and
+          (ob_account_kt containing &#x27;50-01&#x27; or
+           ob_account_kt containing &#x27;51-01&#x27; or
+           ob_account_kt containing &#x27;76-10&#x27;);
+  
+    insert into operbook (ob_from_ol_id, ob_number, ob_currency, ob_curr_rate, ob_client_dt, ob_account_dt, ob_summa_val,
+                          ob_summa, ob_from_pc_id, ob_from_kp_id, ob_oper_mask, ob_account_kt, ob_client_kt, ob_detail)
+    select :ol_id, -1, ob_currency, ob_curr_rate, ob_client_dt, ob_account_dt, -ob_summa_val, -ob_summa,
+           ob_from_pc_id, ob_from_kp_id, ob_oper_mask, :al_id, ob_client_kt, ob_detail
+    from operbook
+    where ob_from_ol_id = :ol_id and
+          ob_number &lt;= :max_number and
+          (ob_account_dt containing &#x27;50-01&#x27; or
+           ob_account_dt containing &#x27;51-01&#x27; or
+           ob_account_dt containing &#x27;76-10&#x27;);
+  
+    max_number = 0;
+    select max(kob_id)
+    from kn_operbook
+    where kob_from_ol_id = :ol_id
+    into max_number;
+    if (max_number is null) then
+      max_number = 0;
+  
+    insert into kn_operbook (kob_currency, kob_curr_rate, kob_acc_dt, kob_acc_kt, kob_summa, kob_summa_val,
+                             kob_summa_tax_dt, kob_summa_tax_kt,
+                             kob_detail_id, kob_client_dt, kob_client_kt, kob_from_ol_id, kob_from_kc_id, kob_from_rml_id)
+    select kob_currency, kob_curr_rate, :acc_id, kob_acc_kt, -kob_summa, -kob_summa_val, -kob_summa_tax_dt,
+           -kob_summa_tax_kt, kob_detail_id, kob_client_dt, kob_client_kt,
+           :ol_id, kob_from_kc_id, kob_from_rml_id
+    from kn_operbook, ref_account, sys_accbalance
+    where kob_from_kc_id = :kc_id and
+          kob_ol_is_active = 1 and
+          kob_ol_date &lt;= :rep_date and
+          kob_from_ol_id = :ol_id and
+          kob_id &lt;= :max_number and
+          kob_acc_kt = acc_id and
+          acc_from_sab_id = sab_id and
+          (sab_full_code starting &#x27;Деньги.&#x27; or
+           sab_full_code starting &#x27;ПлатСистемы.&#x27;);
+  
+    insert into kn_operbook (kob_currency, kob_curr_rate, kob_acc_dt, kob_acc_kt, kob_summa, kob_summa_val,
+                             kob_summa_tax_dt, kob_summa_tax_kt,
+                             kob_detail_id, kob_client_dt, kob_client_kt, kob_from_ol_id, kob_from_kc_id, kob_from_rml_id)
+    select kob_currency, kob_curr_rate, kob_acc_dt, :acc_id, -kob_summa, -kob_summa_val, -kob_summa_tax_dt,
+           -kob_summa_tax_kt, kob_detail_id, kob_client_dt, kob_client_kt,
+           :ol_id, kob_from_kc_id, kob_from_rml_id
+    from kn_operbook, ref_account, sys_accbalance
+    where kob_from_kc_id = :kc_id and
+          kob_ol_is_active = 1 and
+          kob_ol_date &lt;= :rep_date and
+          kob_from_ol_id = :ol_id and
+          kob_id &lt;= :max_number and
+          kob_acc_dt = acc_id and
+          acc_from_sab_id = sab_id and
+          (sab_full_code starting &#x27;Деньги.&#x27; or
+           sab_full_code starting &#x27;ПлатСистемы.&#x27;);
+
+    delete from kn_operbook
+    where kob_from_kc_id = :kc_id and
+          kob_ol_date &gt; :rep_date and
+          kob_ol_is_active = 1;
+
+    -- Включаем в список сторно-проводок
+    insert into operrepeat (orp_from_k_id, orp_memo, orp_ol_date, orp_begin_date,
+                            orp_book_reverse, orp_loan_reverse, orp_sql)
+    values (:k_id, :ol_memo, :rep_date, :rep_date, 1, 1, &#x27;EMPTY&#x27;)
+    returning orp_id, orp_state
+    into :orp_id, orp_state;
+  
+    execute procedure hp_operrepeat_set_status(:orp_id, :orp_state, :un_id);
+    execute procedure hp_operrepeat_set_status(:orp_id, 4, :un_id);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

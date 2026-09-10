@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_GET_RESCHEDULE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_GET_RESCHEDULE: 2 входных, 6 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_GET_RESCHEDULE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_kn_oksummary_akt.html"><div class="to">AAREP_KN_OKSUMMARY_AKT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">KC_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">KOL_RESH_NOT_KK</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FIRST_RESH_DATE_NOT_KK</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FIRST_RESH_DATE_KK</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KOL_RESH_KK</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RESH_KIND_STR</div><div class="ptype">VARCHAR(10)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LAST_RESH_DATE_NOT_KK</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_GET_RESCHEDULE(
+    KC_ID D_ID,
+    REP_DATE D_DATE)
+RETURNS (
+    KOL_RESH_NOT_KK D_SMALLINT,
+    FIRST_RESH_DATE_NOT_KK D_DATE,
+    FIRST_RESH_DATE_KK D_DATE,
+    KOL_RESH_KK D_SMALLINT,
+    RESH_KIND_STR D_STR_10,
+    LAST_RESH_DATE_NOT_KK D_DATE)
+AS
+declare variable K_ID D_ID;
+declare variable RD_CODE3 D_STR_255;
+begin
+
+  select kc_from_k_id from knclient
+  where kc_id = :kc_id
+  into k_id;
+
+  kol_resh_not_kk = null;
+
+  with tabl1 as (
+    select distinct oks_last_resh_date, 1 schet, null rd_code from kn_oksummary
+    where oks_from_kc_id = :kc_id
+    and oks_last_resh_date is not null
+    and oks_date_begin &lt;= :rep_date
+    union
+    select or_ol_date, -1, rd_code
+    from operrest, refdata
+    where or_from_k_id = :k_id
+    and or_ol_is_active = 1
+    and or_ol_date &lt;= :rep_date
+    and or_from_rd_id = rd_id
+    and rd_code in (&#x27;Reason_Reschedule.8790&#x27;, &#x27;Reason_Reschedule.10086&#x27;)
+    ),
+  tabl2 as (
+    select oks_last_resh_date,
+           sum(schet) schet2,
+           max(rd_code) rd_code2
+    from tabl1
+    group by 1
+    ),
+  tabl3 as (
+    select tabl2.*,
+           -- сортирует по дате где rd_code не нул и берет первый запись
+           iif( (dense_rank() over (order by iif(rd_code2 is not null, oks_last_resh_date, &#x27;31.12.9999&#x27;))) = 1, rd_code2, null ) rd_code3
+    from tabl2
+  )
+  select sum(iif(schet2 = 1, 1, 0)), -- 19.1 &quot;Кол-во реструктуризаций (кроме КК)&quot;
+         min(iif(schet2 = 1, oks_last_resh_date, null)), -- 19.2 &quot;Дата первой реструктуризации (кроме КК)&quot;
+         min(iif(schet2 &lt;= 0, oks_last_resh_date, null)), -- 19.3 &quot;Дата первой реструктуризации КК&quot;
+         sum(iif(schet2 &lt;= 0, 1, 0)), -- 19.4 &quot;Кол-во реструктуризаций КК&quot;
+         max(rd_code3), -- 19.5 &quot;Вид последней рестртуктуризации КК&quot;
+         max(iif(schet2 = 1, oks_last_resh_date, null)) --19. &quot;Дата последней реструктуризации (кроме КК)&quot;
+
+  from tabl3
+  into kol_resh_not_kk,
+       first_resh_date_not_kk,
+       first_resh_date_kk,
+       kol_resh_kk,
+       rd_code3,
+       last_resh_date_not_kk
+       ;
+
+  resh_kind_str = null;
+  if (rd_code3 = &#x27;Reason_Reschedule.8790&#x27;) then resh_kind_str = &#x27;КК СВО&#x27;;
+  else if (rd_code3 = &#x27;Reason_Reschedule.10086&#x27;) then resh_kind_str = &#x27;КК ТЖС&#x27;;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

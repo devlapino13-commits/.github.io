@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_NUMBER_ACTUALITY_STATUS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_NUMBER_ACTUALITY_STATUS: 1 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_NUMBER_ACTUALITY_STATUS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_html_client_info.html"><div class="to">FM_HTML_CLIENT_INFO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT_LINK</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">STATUS</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_NUMBER_ACTUALITY_STATUS(
+    C_ID D_ID)
+RETURNS (
+    RES_TEXT_LINK D_STR_8100,
+    STATUS D_SMALLINT)
+AS
+declare variable cell_no d_str_100;
+declare variable const_minus_days d_datetime;
+declare variable eds_status_datetime d_datetime;
+declare variable cnc_is_sucsess d_smallint;
+declare variable mcl_google_id d_str_255;
+begin
+  -- RFCRU-3522 возвращает ссылку и статус актуальности номера телефона клиента
+  res_text_link = &#x27;&#x27;;
+  status = 0;
+  cell_no = f_cont_info(&#x27;clients&#x27;, :c_id, &#x27;cell_main&#x27;, &#x27;ok&#x27;);
+
+  select mcl.mcl_google_id
+  from mc_login mcl
+  where mcl.mcl_from_c_id = :c_id
+    and mcl.mcl_login = :cell_no
+    and mcl.mcl_is_delete = 0
+  order by mcl.mcl_last_login_datetime desc
+  rows 1
+  into mcl_google_id;
+
+  const_minus_days = dateadd(f_get_const(&#x27;const_minus_days&#x27;) day to current_timestamp); -- константа для сколько времени прошло с даты подписания посл. документа
+
+  select eds.eds_status_datetime
+  from edoc_sign eds
+  inner join edoc_msg edm on edm.edm_from_eds_id = eds.eds_id
+  inner join fsrobot_msgbox msg on msg.msg_id = edm.edm_from_msg_id
+  where eds.eds_from_c_id = :c_id
+   and eds.eds_status = 1                                       -- последний подписанный документ через СМС
+   and msg.msg_type in (1, 2, 3)
+   and msg.msg_mail_to in (:cell_no, :mcl_google_id)
+  order by eds.eds_status_datetime desc
+  rows 1
+  into eds_status_datetime;
+
+  eds_status_datetime = coalesce(eds_status_datetime, current_timestamp); -- Если клиент ничего не подписал значит кл. новый
+
+  select cnc.cnc_is_sucsess
+  from check_number_code cnc
+  where cnc.cnc_from_c_id = :c_id
+    and cnc.cnc_is_active = 1
+    and cnc.cnc_cell_main = :cell_no
+    and cnc.cnc_create_datetime between :eds_status_datetime and current_timestamp -- между посл. док и сегодня
+  order by cnc.cnc_create_datetime
+  rows 1
+  into cnc_is_sucsess;
+
+  cnc_is_sucsess = coalesce(cnc_is_sucsess, -1);
+
+  if (const_minus_days &gt;= eds_status_datetime and cnc_is_sucsess not in (1, 0)) then
+  begin
+    res_text_link = BLOB_APPEND(res_text_link, f_uri_sql(&#x27;Отправить запрос на проверку доступа клиента к верифицированному номеру&#x27;, &#x27;send_check_code&#x27;, &#x27;Clients&#x27;, c_id, &#x27;none&#x27;, &#x27;Подтверждаете&#x27;, &#x27;&#x27;, 1, 4, &#x27;&#x27;, &#x27;&#x27;, &#x27;dialog&#x27;, &#x27;null&#x27;));
+  end
+  else if (cnc_is_sucsess = 0) then
+  begin
+    res_text_link = BLOB_APPEND(res_text_link, f_uri_sql(&#x27;Отправить смс повторно&#x27;, &#x27;send_check_code&#x27;, &#x27;Clients&#x27;, c_id, &#x27;none&#x27;, &#x27;Подтверждаете&#x27;, &#x27;&#x27;, 1, 4, &#x27;&#x27;, &#x27;&#x27;, &#x27;dialog&#x27;, &#x27;null&#x27;));
+    res_text_link = BLOB_APPEND(res_text_link, &#x27;&lt;br&gt;&#x27;);
+    res_text_link = BLOB_APPEND(res_text_link, f_uri_sql(&#x27;Ввести код подтверждения&#x27;, &#x27;Check_number_actuality&#x27;, &#x27;Clients&#x27;, c_id, &#x27;text&#x27;, &#x27;Введите код&#x27;, &#x27;&#x27;, 1, 4, &#x27;&#x27;, &#x27;&#x27;, &#x27;dialog&#x27;, &#x27;null&#x27;));
+  end
+  else if (cnc_is_sucsess = 1 or cnc_is_sucsess = -1) then
+    status = 1;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

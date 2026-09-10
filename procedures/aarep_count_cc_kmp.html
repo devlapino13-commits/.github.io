@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_COUNT_CC_KMP — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_COUNT_CC_KMP: 3 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_COUNT_CC_KMP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_REGION_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">COUNT_BLOCKED_VIPS_KMP</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">COUNT_UNBLOCKED_VIPS_KMP</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">COUNT_UNBLOCK_VIPS_CC</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">COUNT_BLOCK_VIPS_CC</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_COUNT_CC_KMP(
+    REP_REGION_ID D_ID,
+    REP_DATE_BEGIN D_DATE,
+    REP_DATE_END D_DATE)
+RETURNS (
+    COUNT_BLOCKED_VIPS_KMP D_INTEGER,
+    COUNT_UNBLOCKED_VIPS_KMP D_INTEGER,
+    COUNT_UNBLOCK_VIPS_CC D_INTEGER,
+    COUNT_BLOCK_VIPS_CC D_INTEGER)
+AS
+begin
+  --не заблокировано випсом
+  count_unblocked_vips_kmp = null;
+  select count(*)
+  from extminiapp ex
+  inner join ticket tk on tk.tkt_id = ex.ema_from_tkt_id
+  inner join region rg on rg.reg_unicode = ex.ema_office_id
+  inner join region_list(:rep_region_id, 1, 3, 1) t on t.id_list = cast(rg.reg_unicode as d_integer)
+  where ex.ema_from_c_id is not null and
+        ex.ema_date between :rep_date_begin and :rep_date_end and
+        ex.ema_block_datetime is null and
+        tk.tkt_source = 2
+        and ex.ema_result_rd_id = 8786
+  into count_unblocked_vips_kmp;
+
+  --Заблокированные заявки
+  count_blocked_vips_kmp = null;
+  select count(*)
+  from extminiapp ex
+  inner join ticket tk on tk.tkt_id = ex.ema_from_tkt_id
+  inner join region rg on rg.reg_unicode = ex.ema_office_id
+  inner join region_list(:rep_region_id, 1, 3, 1) t on t.id_list = cast(rg.reg_unicode as d_integer)
+  where ex.ema_from_c_id is not null and
+        ex.ema_date between :rep_date_begin and :rep_date_end and
+        ex.ema_block_datetime is not null and
+        ex.ema_lo_id is not null  and
+        tk.tkt_source = 2
+        and ex.ema_result_rd_id = 8787
+  into count_blocked_vips_kmp;
+
+
+   ---    незаблокированные КЦ заявки
+   select count(*)
+   from CC_WEBSITE_MINIAPP CWA
+   inner join ticket tk on tk.tkt_id = cwa.wma_from_tkt_id
+   inner join extminiapp ex on ex.ema_from_tkt_id = tk.tkt_id
+   inner join region rg on rg.reg_unicode = ex.ema_office_id
+   inner join region_list(:rep_region_id, 1, 3, 1) t on t.id_list = cast(rg.reg_unicode as d_integer)
+   where --cwa.wma_status = 2
+          tk.tkt_source = 3
+         and ex.ema_block_datetime is  null
+         and cwa.wma_date between :rep_date_begin and :rep_date_end
+         and ex.ema_result_rd_id = 8786
+   into count_unblock_vips_cc;
+
+   --- Заблокированные КЦ заявки
+   select count(*)
+   from CC_WEBSITE_MINIAPP CWA
+   inner join ticket tk on tk.tkt_id = cwa.wma_from_tkt_id
+   inner join extminiapp ex on ex.ema_from_tkt_id = tk.tkt_id
+   inner join region rg on rg.reg_unicode = ex.ema_office_id
+   inner join region_list(:rep_region_id, 1, 3, 1) t on t.id_list = cast(rg.reg_unicode as d_integer)
+   where cwa.wma_status = 2
+         and  tk.tkt_source = 3
+         and ex.ema_block_datetime is not null
+         and ex.ema_lo_id is not null
+         and cwa.wma_date between :rep_date_begin and :rep_date_end
+         and ex.ema_result_rd_id = 8787
+   into count_block_vips_cc;
+
+
+
+suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

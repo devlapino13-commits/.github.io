@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_SEND_EDOC_LOAN — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_SEND_EDOC_LOAN: 3 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_SEND_EDOC_LOAN</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_kontsign_access.html"><div class="to">AAREP_KONTSIGN_ACCESS</div></a><a class="ref-card" href="hp_check_loan_konditions.html"><div class="to">HP_CHECK_LOAN_KONDITIONS</div></a><a class="ref-card" href="hp_edoc_ins_loan_agreement.html"><div class="to">HP_EDOC_INS_LOAN_AGREEMENT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OBJ_KIND</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_DISB_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_NAME</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_SEND_EDOC_LOAN(
+    OBJ_KIND VARCHAR(100),
+    OBJ_ID DECIMAL(18,0),
+    UN_ID DECIMAL(18,0))
+RETURNS (
+    K_DISB_DATE DATE,
+    UN_NAME VARCHAR(50),
+    RES_TEXT VARCHAR(1024))
+AS
+declare variable cm_database_id integer;
+declare variable k_id decimal(18,0);
+declare variable ksr_id integer;
+declare variable reg_id integer;
+declare variable edoc_status d_str_code;
+begin
+  -- Процедура для формирования электронного документа (договор займа и прочие бланки).
+
+  cm_database_id = f_get_db_id();
+
+  res_text = &#x27;&#x27;;
+
+  if (obj_kind = &#x27;Miniapp&#x27;) then
+  begin
+    res_text = iif(cm_database_id &lt;&gt; 94401, &#x27;Отмена. Электронные документы можно формировать только по договорам в процессе&#x27;, &#x27;Ləğv olunur. Elektron sənədlər ancaq prossesdə olan müqavilələrde yaradıla bilər&#x27;);
+    suspend;
+    exit;
+  end
+
+  select distinct k_id, k_last_reg_id, k_disb_date
+  from kontract, knclient
+  where kc_from_k_id = k_id and
+        k_status = 0 and
+        kc_amount_approved &gt; 0 and
+        kc_from_c_id = :obj_id
+  union
+  select k_id, k_last_reg_id, k_disb_date
+  from kontract
+  where k_id = :obj_id and
+        k_status = 0
+  order by 3 desc
+  rows 1
+  into :k_id, reg_id, k_disb_date;
+
+  if (k_id is null) then
+  begin
+    res_text = iif(cm_database_id &lt;&gt; 94401, &#x27;Отмена. Не найден договор в процессе.&#x27;, &#x27;Ləğv olunur. Prossesdə olan müqavilə mövcud deyil&#x27;);
+    suspend;
+    exit;
+  end
+  else
+  begin
+    obj_kind = &#x27;Kontract&#x27;;
+    obj_id = :k_id;
+  end
+
+  if (k_disb_date &lt; current_date) then
+  begin
+    res_text = iif(cm_database_id &lt;&gt; 94401, &#x27;Отмена. Дата выдачи меньше сегодняшней даты.&#x27;, &#x27;Ləğv olunur.  Buraxılış tarixi bu günün tarixindən fərqlənir.&#x27;);
+    suspend;
+    exit;
+  end
+
+  edoc_status = f_edoc_status(&#x27;loan.agreement&#x27;, obj_id, k_disb_date);
+
+  -- Возможные варианта функции:
+  -- inactive
+  -- empty
+  -- signed
+  -- unsigned
+  -- cancelled
+
+  if (edoc_status = &#x27;inactive&#x27;) then
+    res_text = &#x27;Отмена. Проект не активен&#x27;;
+
+  if (edoc_status = &#x27;signed&#x27;) then
+    res_text = &#x27;Отмена. Электронные документы уже подписаны. Сначала аннулируйте их.&#x27;;
+
+  if (edoc_status = &#x27;unsigned&#x27;) then
+    res_text = &#x27;Отмена. Электронные документы уже сформированы. Сначала аннулируйте их.&#x27;;
+
+  if (res_text &lt;&gt; &#x27;&#x27;) then
+  begin
+    Suspend;
+    Exit;
+  end
+
+  -- Проверка прав пользователя
+  ksr_id = 0;
+  select ksr_id
+  from aarep_kontsign_access(:k_id, :un_id, :reg_id, &#x27;&#x27;)
+  into :ksr_id;
+  if (ksr_id = 0) then
+  begin
+    res_text = iif(cm_database_id &lt;&gt; 94401, &#x27;Отмена. У вас нет прав на этот регион.&#x27;, &#x27;Ləğv olunur. Sizin bu reqion(filial) üzrə müqaviləye hüququnuz yoxdur.&#x27;);
+    suspend;
+    exit;
+  end
+
+  -- Проверка условий
+
+  select un_name
+  from username
+  where un_id = :un_id
+  into un_name;
+
+  begin
+    rdb$set_context(&#x27;USER_SESSION&#x27;, &#x27;FINSTART_USER_LOGIN&#x27;, un_name);
+
+    if (exists(select *
+               from hp_check_loan_konditions(:k_id, 0, 0, &#x27;Loan_Approve&#x27;, :un_id)
+               where kf_error_is_critical &gt; 0)) then
+    begin
+      res_text = iif(cm_database_id &lt;&gt; 94401, &#x27;Отмена. Имеются критические несоответствия. Устраните их изучив детали.&#x27;, &#x27;Ləğv olunur. Kritik uyğunsuzluqlar mövcuddur. Məlumatları dəqiqləşdirib səhvləri aradan qaldırın.&#x27;);
+      suspend;
+      exit;
+    end
+
+    when any do
+    begin
+      rdb$set_context(&#x27;USER_SESSION&#x27;, &#x27;FINSTART_USER_LOGIN&#x27;, null);
+      exception;
+    end
+  end
+
+
+  if (res_text = &#x27;&#x27;) then
+  begin
+    -- Формирование электронных документов.
+    select res_text
+    from hp_edoc_ins_loan_agreement(:obj_id, :un_id)
+    into :res_text;
+
+    if (res_text = &#x27;&#x27;) then
+      res_text = &#x27;Успешно. Подготовка электронных документов в процессе, по готовности будет отправлен СМС&#x27;;
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

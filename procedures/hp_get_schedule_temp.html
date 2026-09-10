@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_GET_SCHEDULE_TEMP — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_GET_SCHEDULE_TEMP: 2 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_GET_SCHEDULE_TEMP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_make_zad_list.html"><div class="to">AAREP_MAKE_ZAD_LIST</div></a><a class="ref-card" href="hp_do_reschedule_kz.html"><div class="to">HP_DO_RESCHEDULE_KZ</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">JSON_TEXT</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_IS_ERROR</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_GET_SCHEDULE_TEMP(
+    K_ID D_ID,
+    REP_DATE D_DATE)
+RETURNS (
+    JSON_TEXT D_BLOB_TEXT,
+    RES_IS_ERROR D_BOOL,
+    RES_TEXT D_STR_255)
+AS
+declare variable sh_id d_integer;
+declare variable sh_calc_fine curr_type;
+declare variable sh_calc_perc curr_type;
+declare variable zad_os curr_type;
+declare variable zad_perc curr_type;
+declare variable s_perc curr_type;
+declare variable s_os curr_type;
+declare variable s_all curr_type;
+declare variable sh_repay_type d_integer;
+declare variable sh_date d_date;
+declare variable is_first_row d_smallint;
+declare variable sh_date_before d_date;
+declare variable delinq_start_date d_date;
+declare variable fine curr_type;
+declare variable month_add d_integer;
+declare variable sh_balance_before curr_type;
+declare variable k_period d_integer;
+declare variable kd_percent_effect_fifd d_percent;
+begin
+  json_text = &#x27;{&#x27;;
+
+    select sum(ok_os)
+    from operkred
+    where ok_ol_is_active = 1
+      and ok_from_k_id = :k_id
+      and ok_from_c_id = 0
+    into :sh_balance_before;
+
+
+  select res_is_error, res_text, delinq_start_date, sh_date, fine
+  from hp_do_reschedule_kz(:k_id, :rep_date)
+  into :res_is_error, :res_text, delinq_start_date, sh_date_before, fine;
+
+  delinq_start_date = dateadd(1 day to delinq_start_date);
+
+  select iif(kn.k_period - kn.k_kolich_repay &lt; 0, 0, kn.k_period - kn.k_kolich_repay), kn.k_period -- тоже, что и в балансе кредита. Если k_period = 22,6 то округляется до 23. В FS также  
+  from kontract kn
+  where kn.k_id = :k_id
+  into :month_add, k_period;
+
+  
+  select kd_percent_effect_fifd
+  from kontdata
+  where kd_from_k_id = :k_id
+        and kd_ol_is_delete = 0
+  order by kd_ol_Date desc
+  rows 1
+  into kd_percent_effect_fifd;
+
+  json_text = blob_append(json_text, f_format(&#x27;&quot;sh_date_before&quot;:&quot;%1&quot;, &quot;delinq_start_date&quot;:&quot;%2&quot; , &quot;fine&quot;:%3, &quot;month_add&quot;:%4, &quot;sh_balance_before&quot;:%5 ,&#x27;, f_datetostr(:sh_date_before), f_datetostr(:delinq_start_date), :fine,:month_add, :sh_balance_before));
+  json_text = blob_append(json_text, f_format(&#x27; &quot;k_period&quot;:&quot;%1&quot;, &quot;k_effect_rate&quot;:&quot;%2&quot;,&#x27;,:k_period, :kd_percent_effect_fifd));
+
+
+
+  json_text = blob_append(json_text, &#x27; &quot;schedule&quot;: [&#x27;);
+  is_first_row = 1;
+  for select sh_id, sh_date, sh_calc_fine, sh_calc_perc, zad_os, zad_perc, sh_repay_type, s_os, s_perc, s_all
+      from aarep_make_zad_list(:k_id, current_date, 1)
+      into sh_id, sh_date, sh_calc_fine, sh_calc_perc, zad_os, zad_perc, sh_repay_type, s_os, s_perc, s_all
+  do
+  begin
+    if (is_first_row = 0) then
+      json_text = blob_append(json_text,&#x27;,&#x27;);
+    json_text = blob_append(json_text, &#x27;{&#x27; || f_json_make_pair(&#x27;sh_id&#x27;, :sh_id, &#x27;str&#x27;) || &#x27;, &#x27; || --
+    f_json_make_pair(&#x27;sh_date&#x27;, :sh_date, &#x27;str&#x27;) || &#x27;, &#x27; || --
+    f_json_make_pair(&#x27;sh_calc_fine&#x27;, :sh_calc_fine, &#x27;str&#x27;) || &#x27;, &#x27; || --
+    f_json_make_pair(&#x27;sh_calc_perc&#x27;, :sh_calc_perc, &#x27;str&#x27;) || &#x27;, &#x27; || --
+    f_json_make_pair(&#x27;zad_os&#x27;, :zad_os, &#x27;str&#x27;) || &#x27;, &#x27; || --
+    f_json_make_pair(&#x27;zad_perc&#x27;, :zad_perc, &#x27;str&#x27;) || &#x27;, &#x27; || --
+    f_json_make_pair(&#x27;sh_repay_type&#x27;, :sh_repay_type, &#x27;str&#x27;) || &#x27;, &#x27; || --
+    f_json_make_pair(&#x27;s_os&#x27;, :s_os, &#x27;str&#x27;) || &#x27;, &#x27; || --
+    f_json_make_pair(&#x27;s_perc&#x27;, :s_perc, &#x27;str&#x27;) || &#x27;, &#x27; || --
+    f_json_make_pair(&#x27;s_all&#x27;, :s_all, &#x27;str&#x27;) || &#x27;}&#x27;); --
+
+    if (is_first_row = 1) then
+      is_first_row = 0;
+  end
+  json_text = blob_append(json_text, &#x27;]}&#x27;);
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

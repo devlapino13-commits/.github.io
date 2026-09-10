@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_SMSDIALOG_ACTION_BALANCE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_SMSDIALOG_ACTION_BALANCE: 1 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_SMSDIALOG_ACTION_BALANCE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_make_zad_list.html"><div class="to">AAREP_MAKE_ZAD_LIST</div></a><a class="ref-card" href="hp_fix_uniq_acc.html"><div class="to">HP_FIX_UNIQ_ACC</div></a><a class="ref-card" href="hp_show_clientuniq_acc_no.html"><div class="to">HP_SHOW_CLIENTUNIQ_ACC_NO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_smsdialog_action.html"><div class="to">HP_SMSDIALOG_ACTION</div></a><a class="ref-card" href="okt_smsdialog_action_balance.html"><div class="to">OKT_SMSDIALOG_ACTION_BALANCE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SMS_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">HTML_BLOB</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_SMSDIALOG_ACTION_BALANCE(
+    C_ID DECIMAL(18,0))
+RETURNS (
+    SMS_TEXT VARCHAR(255),
+    HTML_BLOB BLOB SUB_TYPE TEXT SEGMENT SIZE 80)
+AS
+declare variable uniq_acc varchar(50);
+declare variable sh_date date;
+declare variable sh_sum curr_type;
+declare variable k_id id_type;
+declare variable ks_date_end date;
+declare variable okr_sum curr_type;
+declare variable all_zad_sum integer;
+declare variable txt1 varchar(100);
+declare variable sh_date_txt varchar(20);
+declare variable k_kontract_no varchar(50);
+declare variable sh_date_tmp date;
+declare variable sh_sum1 curr_type;
+declare variable sh_sum2 curr_type;
+declare variable has_termination smallint;
+declare variable is_delinq integer;
+declare variable txt1_ru str_255;
+declare variable txt2 str_255;
+declare variable has_problem_1 smallint;
+declare variable delinq_sum curr_type;
+declare variable full_debt curr_type;
+declare variable c_fio str_100;
+declare variable full_debt_total curr_type;
+declare variable undelinq_sh_date date;
+declare variable undelinq_sh_date_txt str_100;
+declare variable delinq_days integer;
+declare variable cm_name str_255;
+begin
+  select cm.cm_name
+  from company cm
+  into :cm_name;
+
+  sms_text = &#x27;&#x27;;
+  if (c_id is null) then
+  begin
+    sms_text = &#x27;Ваш номер не зарегистрирован в системе МолБулак&#x27;;
+    html_blob = &#x27;&lt;b&gt;Номер не зарегистрирован в системе МолБулак&lt;/b&gt;&#x27;;
+    suspend;
+    exit;
+  end
+
+  uniq_acc = -1;
+
+  select uniq_acc
+  from hp_show_clientuniq_acc_no(:c_id)
+  into :uniq_acc;
+  if (uniq_acc = -1) then
+  begin
+    -- присваиваю лицевой счет если он ранее не был присовен
+    select uniq_acc_str
+    from hp_fix_uniq_acc(:c_id)
+    into :uniq_acc;
+  end
+
+  html_blob = &#x27;&lt;b&gt;Лицевой счет&lt;/b&gt;...&#x27; || :uniq_acc || &#x27;&lt;br&gt;&#x27;;
+
+  c_fio = &#x27;&#x27;;
+
+  select cl.c_name_fio
+  from clients cl
+  where cl.c_id = :c_id
+  into :c_fio;
+
+  html_blob = BLOB_APPEND(html_blob, &#x27;&lt;b&gt;ФИО&lt;/b&gt;..................&#x27; || :c_fio || &#x27;&lt;br&gt;&#x27;);
+
+  full_debt_total = 0;
+
+  for select kc_from_k_id, ks_date_end
+      from kontstate, knclient
+      where ks_ol_is_delete = 0 and
+            ks_state = 1 and
+            ks_date_begin &lt;= current_date and
+            ks_from_k_id = kc_from_k_id and
+            kc_amount_approved &gt; 0 and
+            kc_from_c_id = :c_id
+      order by ks_date_begin desc
+      into :k_id, :ks_date_end
+  do
+  begin
+    has_termination = 0;
+
+    select k_kontract_no, iif(ol.ol_id is null, 0, 1)
+    from kontract kont
+    left join operlist ol on ol.ol_id = k_stopped_perc_ol_id and
+          ol.is_delete = 0
+    where k_id = :k_id
+    into k_kontract_no, has_termination;
+
+    sh_date = null;
+    sh_sum = 0;
+    sh_date_tmp = null;
+    is_delinq = 0;
+
+    delinq_sum = 0;
+    full_debt = 0;
+
+    undelinq_sh_date = null;
+
+    if (ks_date_end &gt; current_date) then --Если кредит активный
+    begin
+      for select sh_date, sum(zad_os + sh_calc_perc + sh_calc_fine), -- сумма для смс, на случай просроченной задолженности
+                 sum(zad_os + zad_perc) -- сумма для смс, на случай если нет просроченной задолженности
+          from aarep_make_zad_list(:k_id, current_date, 1)
+          where sh_date is not null
+          group by sh_date
+          order by sh_date
+          into sh_date_tmp, sh_sum1, sh_sum2
+      do
+      begin
+        if (has_termination = 0) then -- если не расторгнут
+        begin
+          if (sh_date_tmp &lt; current_date) then -- если просрочка (получаю всю просроченную сумму)
+          begin
+            if (sh_date is null) then
+              sh_date = current_date;
+            sh_sum = sh_sum + sh_sum1;
+          end
+          else
+          begin
+            if (sh_date is null) then -- если нет просрочки (получаю сумму ближайшего платежа)
+            begin
+              sh_date = sh_date_tmp;
+              sh_sum = sh_sum + sh_sum2;
+            end
+          end
+        end
+        else
+        begin
+          if (sh_date is null) then
+            sh_date = current_date;
+          sh_sum = sh_sum + sh_sum1;
+        end
+        ---------
+
+        if (sh_date_tmp &lt; current_date) then -- если просрочка (получаю всю просроченную сумму)
+        begin
+          is_delinq = 1;
+          delinq_sum = delinq_sum + sh_sum1;
+        end
+        else
+        begin
+          if (undelinq_sh_date is null) then
+            undelinq_sh_date = sh_date_tmp;
+        end
+
+        full_debt = full_debt + sh_sum1;
+      end
+    end
+
+    sh_date_txt = right(0 || extract(day from sh_date), 2) || &#x27;.&#x27; || right(0 || extract(month from sh_date), 2) || &#x27;.&#x27; || right(extract(year from sh_date), 2);
+
+    sh_sum = coalesce(sh_sum, 0);
+
+    okr_sum = null;
+    select sum(oko_os + oko_perc + oko_other + oko_sh_os + oko_sh_perc + oko_sh_other)
+    from operkroff okf, operlist ol
+    where okf.oko_from_k_id = :k_id and
+          okf.oko_from_c_id = :c_id and
+          okf.oko_type in (1, 4) and
+          okf.oko_from_ol_id = ol.ol_id and
+          ol.is_delete = 0 and
+          ol.ol_date &lt;= current_date
+    into okr_sum;
+
+    okr_sum = coalesce(okr_sum, 0);
+
+    all_zad_sum = cast((sh_sum + okr_sum) as integer);
+    full_debt = full_debt + okr_sum;
+
+    full_debt_total = full_debt_total + full_debt;
+
+    if (all_zad_sum &gt; 0) then
+    begin
+      html_blob = BLOB_APPEND(html_blob, &#x27;&lt;br&gt;&#x27;);
+      html_blob = BLOB_APPEND(html_blob, &#x27;&lt;b&gt;Договор №&lt;/b&gt;....................................&#x27; || :k_kontract_no || &#x27;&lt;br&gt;&#x27;);
+
+      if (has_termination = 1) then
+        html_blob = BLOB_APPEND(html_blob, &#x27;&lt;b&gt;договор расторгнут в связи с нарушением графика платежей&#x27; || &#x27;&lt;br&gt;&#x27;);
+
+      if (undelinq_sh_date is not null) then -- если есть непросроченные платежи
+      begin
+        undelinq_sh_date_txt = right(0 || extract(day from undelinq_sh_date), 2) || &#x27;.&#x27; || right(0 || extract(month from undelinq_sh_date), 2) || &#x27;.&#x27; || right(extract(year from undelinq_sh_date), 2);
+
+        --html_blob = BLOB_APPEND(html_blob,&#x27;&lt;b&gt;Сумма ближайшего платежа&lt;/b&gt;....&#x27;||&#x27;XXX&#x27;||&#x27;р. &lt;br&gt;&#x27;);
+
+        if (has_termination = 0) then -- если не расторгнут
+        begin
+          html_blob = BLOB_APPEND(html_blob, &#x27;&lt;b&gt;Дата ближайшего платежа&lt;/b&gt;........&#x27; || :undelinq_sh_date_txt || &#x27;&lt;br&gt;&#x27;);
+          html_blob = BLOB_APPEND(html_blob, &#x27;&lt;b&gt;Сумма ближайшего ежемесячного платежа&lt;/b&gt;...&#x27; || round(:sh_sum) || &#x27; р. &lt;br&gt;&#x27;);
+        end
+        else
+          html_blob = BLOB_APPEND(html_blob, &#x27;&lt;b&gt;Дата платежа&lt;/b&gt;........&#x27; || :undelinq_sh_date_txt || &#x27;&lt;br&gt;&#x27;);
+      end
+
+      delinq_days = 0;
+
+      if (is_delinq = 1) then
+      begin
+        select current_date - oks.oks_delinq_date
+        from oksummary oks
+        where oks.oks_from_k_id = :k_id and
+              oks.oks_close_state = 0 and
+              current_date between oks.oks_date_begin and oks.oks_date_end and
+              current_date &gt; oks.oks_delinq_date
+        into :delinq_days;
+
+        html_blob = BLOB_APPEND(html_blob, &#x27;&lt;b&gt;Продолжительность просрочки&lt;/b&gt;...&#x27; || :delinq_days || &#x27; дней/дня &lt;br&gt;&#x27;);
+      end
+
+      html_blob = BLOB_APPEND(html_blob, &#x27;&lt;b&gt;Общая сумма задолженности&lt;/b&gt;...&#x27; || round(full_debt) || &#x27; р.&lt;br&gt;&#x27;);
+
+      if ((is_delinq = 0) and
+          (okr_sum = 0)) then
+      begin
+        html_blob = BLOB_APPEND(html_blob, &#x27;&lt;b&gt;По договору нет активной просроки.&lt;/b&gt;&lt;br&gt;&#x27;);
+        html_blob = BLOB_APPEND(html_blob, &#x27;&lt;b&gt;В случае полного досрочного закрытия долга требуется заявление, иначе штраф&lt;/b&gt;&#x27;);
+      end
+
+      if (is_delinq = 1) then
+      begin
+        html_blob = BLOB_APPEND(html_blob, &#x27;&lt;b&gt;Заем просрочен.&lt;/b&gt;&lt;br&gt;&#x27;);
+      end
+
+      --html_blob = BLOB_APPEND(html_blob,&#x27;&lt;b&gt;Сумма просрочки&lt;/b&gt;........................&#x27;||round(:delinq_sum )||&#x27;р.&lt;br&gt;&#x27;);
+
+      if (txt1 is null) then
+      begin
+        /*1)    «Лиц.счет__. Долг на ДД/ММ/ГГг._____руб. ООО «МКК М Булак» тел. 88005559348»
+          (высылается в следующих случаях:
+          1) если договор расторгнут;
+          2) если задолженность списана на «вне баланс»;
+          3) если договор не расторгнут, но по нему есть активная просрочка);*/
+
+        has_problem_1 = 0;
+
+        if ((is_delinq = 1) or (coalesce(okr_sum, 0) &lt;&gt; 0) or (has_termination = 1)) then
+        begin
+          sms_text = &#x27;Лиц.счет&#x27; || :uniq_acc || &#x27;. Долг на &#x27; || :sh_date_txt || &#x27;г.&#x27; || :all_zad_sum || &#x27;руб. &#x27; || :cm_name || &#x27; тел. 88005559348&#x27;;
+          txt1 = &#x27;Дог.№&#x27; || :k_kontract_no || &#x27;, долг на &#x27; || :sh_date_txt || &#x27;г.&#x27; || :all_zad_sum || &#x27;руб.&#x27;;
+          txt1_ru = txt1;
+          has_problem_1 = 1;
+        end
+        else
+        /*2)    «Lits.schet___. Blijaishii platej ДД/ММ/ГГg. _____ rub.»
+          (если клиент не имеет просроченной задолженности перед Компанией).*/
+        begin
+          sms_text = &#x27;Lits.schet&#x27; || :uniq_acc || &#x27;. Blijaishee pogashenie &#x27; || :sh_date_txt || &#x27;g. &#x27; || replace(:all_zad_sum, &#x27;.&#x27;, &#x27;,&#x27;) || &#x27; rub.&#x27;;
+          txt1 = &#x27;Dog. №&#x27; || :k_kontract_no || &#x27;. Blijaishee pogashenie &#x27; || :sh_date_txt || &#x27;. &#x27; || replace(:all_zad_sum, &#x27;.&#x27;, &#x27;,&#x27;) || &#x27; rub.&#x27;;
+          txt1_ru = &#x27;Дог.№&#x27; || :k_kontract_no || &#x27;, ближ. платеж &#x27; || :sh_date_txt || &#x27;. &#x27; || :all_zad_sum || &#x27; руб.&#x27;;
+        end
+      end
+      else
+      begin
+        if ((is_delinq = 1) or (coalesce(okr_sum, 0) &lt;&gt; 0) or (has_termination = 1)) then
+        begin
+          txt2 = &#x27;Дог.№&#x27; || :k_kontract_no || &#x27;, долг на &#x27; || :sh_date_txt || &#x27;г.&#x27; || :all_zad_sum || &#x27;руб.&#x27;;
+
+          sms_text = &#x27;Лиц.счет:&#x27; || :uniq_acc || &#x27;. &#x27; || :txt1_ru || &#x27; &#x27; || :txt2 || &#x27; &#x27; || :cm_name || &#x27; тел. 88005559348&#x27;;
+        end
+        else
+        begin
+          if (has_problem_1 = 0) then
+          begin
+            txt2 = &#x27;Dog. №&#x27; || :k_kontract_no || &#x27; blijaishii pogashenie &#x27; || :sh_date_txt || &#x27;. &#x27; || replace(:all_zad_sum, &#x27;.&#x27;, &#x27;,&#x27;) || &#x27; rub.&#x27;;
+            sms_text = &#x27;Lits.schet&#x27; || :uniq_acc || &#x27;. &#x27; || :txt1 || &#x27; &#x27; || :txt2;
+          end
+          else
+          begin
+            txt2 = &#x27;Дог.№&#x27; || :k_kontract_no || &#x27;, ближ. платеж &#x27; || :sh_date_txt || &#x27;. &#x27; || :all_zad_sum || &#x27; руб.&#x27;;
+            sms_text = &#x27;Лиц.счет:&#x27; || :uniq_acc || &#x27;. &#x27; || :txt1_ru || &#x27; &#x27; || :txt2 || &#x27; &#x27; || :cm_name || &#x27; тел. 88005559348&#x27;;
+          end
+        end
+      end
+
+      html_blob = BLOB_APPEND(html_blob, &#x27;&lt;br&gt;&#x27;);
+    end
+  end
+
+  if ((full_debt_total &lt;&gt; 0) and
+      (coalesce(txt2, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;)) then
+    html_blob = BLOB_APPEND(html_blob, &#x27;&lt;br&gt;&lt;b&gt;ИТОГО задолженность, по всем договорам&lt;/b&gt;...&#x27; || round(full_debt_total) || &#x27; р. &lt;br&gt;&#x27;);
+
+  if (sms_text = &#x27;&#x27;) then
+    sms_text = &#x27;Активный заем не обнаружен&#x27;;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

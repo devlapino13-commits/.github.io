@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_GET_USER_PRINTERS — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_GET_USER_PRINTERS: 2 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_GET_USER_PRINTERS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_print_action.html"><div class="to">FM_PRINT_ACTION</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_IP_ADDRESS</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RP_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RP_PRINTER_CODE</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RP_PRINTER_NAME</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RP_IS_DEFAULT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_GET_USER_PRINTERS(
+    UN_ID DECIMAL(18,0),
+    UN_IP_ADDRESS VARCHAR(100))
+RETURNS (
+    RP_ID INTEGER,
+    RP_PRINTER_CODE VARCHAR(255),
+    RP_PRINTER_NAME VARCHAR(255),
+    RP_IS_DEFAULT INTEGER)
+AS
+declare variable is_found integer;
+declare variable i integer;
+declare variable found_dot integer;
+declare variable ip_mask varchar(100);
+declare variable reg_id integer;
+begin
+  if (un_ip_address is null) then
+    un_ip_address = &#x27;&#x27;;
+  is_found = 0;
+
+  if (un_ip_address &lt;&gt; &#x27;&#x27;) then
+  begin
+    i = char_length(un_ip_address);
+    found_dot = 0;
+    while (i &gt; 0 and found_dot = 0) do
+    begin
+      if (substring(un_ip_address from i for 1) = &#x27;.&#x27;) then
+        found_dot = i;
+      i = i - 1;
+    end
+    if (found_dot &gt; 0) then
+    begin
+      ip_mask = left(un_ip_address, found_dot - 1);
+      for select distinct rad_from_reg_id
+          from regipaddr
+          where rad_ip_address starting :ip_mask
+          into reg_id
+      do
+      begin
+        is_found = 1;
+        for select rp_id, rp_printer_code, rp_printer_name || &#x27; (&#x27; || reg_code || &#x27;)&#x27;
+            from regprinters, region
+            where rp_from_reg_id = :reg_id and
+                  (rp_printer_status = &#x27;online&#x27; or
+                  rp_printer_status = &#x27;active&#x27;) and
+                  reg_unicode = :reg_id
+            into :rp_id, :rp_printer_code, rp_printer_name
+        do
+        begin
+          rp_is_default = 0;
+          if (exists(select *
+                     from regprintusers
+                     where rpu_from_un_id = :un_id and
+                           rpu_from_reg_id = :reg_id and
+                           rpu_from_rp_id = :rp_id)) then
+            rp_is_default = 1;
+
+          suspend;
+        end
+      end
+    end
+  end
+  if (is_found = 0 and
+      coalesce(un_id, 0) &lt;&gt; 0) then
+  begin
+    for select ps_from_reg_id
+        from username, hr_pstatus
+        where un_id = :un_id and
+              ps_from_c_id = un_from_c_id and
+              ps_date_begin &lt;= current_date and
+              ps_date_end &gt;= current_date and
+              ps_status = 1 and
+              ps_is_working = 1
+        into :reg_id
+    do
+    begin
+      for select rp_id, rp_printer_code, rp_printer_name || &#x27; (&#x27; || reg_code || &#x27;)&#x27;
+          from regprinters, region
+          where rp_from_reg_id = :reg_id and
+                reg_unicode = :reg_id
+          into :rp_id, :rp_printer_code, rp_printer_name
+      do
+      begin
+        rp_is_default = 0;
+        if (exists(select *
+                   from regprintusers
+                   where rpu_from_un_id = :un_id and
+                         rpu_from_reg_id = :reg_id and
+                         rpu_from_rp_id = :rp_id)) then
+          rp_is_default = 1;
+        else
+          rp_is_default = 0;
+
+        suspend;
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

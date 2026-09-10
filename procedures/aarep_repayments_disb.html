@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_REPAYMENTS_DISB — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_REPAYMENTS_DISB: 0 входных, 5 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_REPAYMENTS_DISB</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REG_NAME</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_FACT_DISB_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_KONTRACT_NO</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_AMOUNT_APPROVED</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PRIZNAK</div><div class="ptype">VARCHAR(10)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_REPAYMENTS_DISB
+RETURNS (
+    REG_NAME D_STR_CODE,
+    K_FACT_DISB_DATE D_DATE,
+    K_KONTRACT_NO D_STR_20,
+    K_AMOUNT_APPROVED D_CURRENCY,
+    PRIZNAK D_STR_10)
+AS
+declare variable K_ID D_ID;
+declare variable PAYED_AMMOUNT D_CURRENCY;
+declare variable K_FACT_CLOSED_DATE D_DATE;
+declare variable REP_DATE D_DATE;
+begin
+    rep_date = current_date;
+
+    for select r.reg_name,
+               ks.ks_date_begin,
+               k.k_kontract_no,
+               k.k_amount_approved,
+               k.k_id,
+               k.k_fact_closed_date
+    from kontstate ks
+    inner join kontract k on k.k_id = ks.ks_from_k_id
+    inner join region r on r.reg_unicode = ks.ks_region_id
+    where ks.ks_date_begin = :rep_date - 1
+    and ks.ks_ol_is_delete = 0
+    and ks.ks_state  = 1
+    into :reg_name,
+         :k_fact_disb_date,
+         :k_kontract_no,
+         :k_amount_approved,
+         :k_id,
+         :k_fact_closed_date
+    do
+    begin
+       payed_ammount = null;
+
+       select -sum(ok.ok_os + ok_perc)
+       from operkred ok
+       where ok.ok_type = 4
+       and ok.ok_ol_is_active = 1
+       and ok.ok_ol_date = :k_fact_disb_date
+       and ok.ok_from_k_id = :k_id
+       into :payed_ammount;
+
+       payed_ammount = coalesce(payed_ammount, 0);
+
+       if (payed_ammount &lt;&gt; 0) then
+       begin
+           priznak = &#x27;ЧДП&#x27;;
+
+           if (k_fact_closed_date = k_fact_disb_date) then
+             priznak = &#x27;ПДП&#x27;;
+
+           suspend;
+       end
+    end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

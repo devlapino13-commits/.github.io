@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_HTML_PLAN_INDICATOR — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_HTML_PLAN_INDICATOR: 3 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_HTML_PLAN_INDICATOR</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_planoper_mgr_info.html"><div class="to">HP_GET_PLANOPER_MGR_INFO</div></a><a class="ref-card" href="hp_tmp_plandata_show.html"><div class="to">HP_TMP_PLANDATA_SHOW</div></a><a class="ref-card" href="region_list.html"><div class="to">REGION_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_html_main.html"><div class="to">FM_REPORT_HTML_MAIN</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REG_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_HTML_PLAN_INDICATOR(
+    UN_ID ID_TYPE,
+    REP_DATE_END DATE,
+    REG_ID INTEGER)
+RETURNS (
+    RES_TEXT BLOB SUB_TYPE TEXT SEGMENT SIZE 80)
+AS
+declare variable SUM_PLAN decimal(18,2);
+declare variable SUM_FACT decimal(18,2);
+declare variable SUM_OST decimal(18,2);
+declare variable RD_NAME STR_255;
+declare variable DT_BEG date;
+declare variable DT_END date;
+declare variable YR_CALC integer;
+declare variable MN_CALC integer;
+declare variable RD_ID integer;
+declare variable RD_CODE STR_255;
+declare variable IS_IPF STR_255;
+declare variable C_ID ID_TYPE;
+declare variable K_ID ID_TYPE;
+declare variable K_AMOUNT_APPROVED CURR_TYPE;
+declare variable SUM_AHEAD decimal(18,2);
+declare variable HTML_BODY D_BLOB_TEXT;
+declare variable DELIM STR_10;
+declare variable JK_SYSTEM_CODE varchar(100);
+declare variable IS_KM smallint;
+declare variable DB_ID integer;
+declare variable VISIBLE smallint;
+declare variable office_title d_str_255;
+declare variable regions_str d_str_4096;
+declare variable temp_reg_id d_integer;
+begin
+  visible = 1;
+  res_text = (select res_style
+              from fm_html_styles) || &#x27;&lt;body&gt;&#x27;;
+
+  c_id = (select un_from_c_id
+          from username
+          where un_id = :un_id);
+
+  if (c_id is null) then
+  begin
+    suspend;
+    exit;
+  end
+
+  select reg.reg_code || &#x27; &#x27; || reg.reg_name
+  from region reg
+  where reg.reg_unicode = :reg_id
+  into :office_title;
+
+  if (coalesce(:office_title, &#x27;&#x27;) = &#x27;&#x27;) then
+  begin
+    res_text = BLOB_APPEND(res_text, &#x27;Регион не передан, обратитесь к техподдержке &lt;br&gt;&#x27;);
+    suspend;
+    exit;
+  end
+
+  regions_str = &#x27;.&#x27;;
+
+  for select id_list
+      from region_list(:reg_id, 1, 3, 1)
+      into :temp_reg_id
+  do
+  begin
+    regions_str = regions_str || temp_reg_id || &#x27;.&#x27;;
+  end
+
+  :db_id = f_get_db_id();
+
+  select jk_system_code
+  from hr_pstatus, joblist, jobkind
+  where :rep_date_end between ps_date_begin and ps_date_end and
+        ps_from_c_id = :c_id and
+        ps_status = 1 and
+        ps_is_working = 1 and
+        ps_from_jl_id = jl_id and
+        jl_kind = jk_id
+  into :jk_system_code;
+
+  if ((jk_system_code not in (&#x27;JobSystem.LO_Standart&#x27;, &#x27;JobSystem.Region_KM&#x27;)) or (jk_system_code is null)) then
+  begin
+    visible = 0;
+  end
+  else
+  begin
+    if (jk_system_code = &#x27;JobSystem.Region_KM&#x27;) then
+    begin
+      is_km = 1;
+    end
+    else
+    begin
+      reg_id = 1000000;
+      is_km = 0;
+    end
+
+    dt_beg = dateadd(1 - extract(day from rep_date_end) day to rep_date_end);
+    dt_end = dateadd(month, 1, dt_beg) - 1;
+
+    yr_calc = extract(year from rep_date_end);
+    mn_calc = extract(month from rep_date_end);
+    delim = ascii_char(13) || ascii_char(10);
+
+    res_text = BLOB_APPEND(res_text, &#x27;&lt;br&gt;&lt;h1 class=&quot;green_text&quot;&gt;Планы по показателям&lt;/h1&gt;&#x27; || delim || &#x27;&lt;font color=&quot;black&quot;&gt;На дату: &#x27; || f_datetostr(:rep_date_end) || &#x27;&lt;/font&gt;&lt;br&gt;&#x27; || delim || &#x27;&lt;font color=&quot;black&quot;&gt;Офис: &#x27; || :office_title || &#x27;&lt;/font&gt;&lt;br&gt;&#x27; || delim);
+    html_body = &#x27;&#x27;;
+    for select rd_id, rd_code, rd_name
+        from refdata
+        where rd_code in (&#x27;PlanIndicators.Disb_Amount&#x27;, &#x27;PlanIndicators.Disb_Amount_IPF&#x27;, &#x27;PlanIndicators.Disb_amount_bonus&#x27;, &#x27;PlanIndicators.LO_Count&#x27;, &#x27;PlanIndicators.BalancePar31_360&#x27;,
+                          &#x27;PlanIndicators.Portfolio_amount&#x27;)
+        order by rd_id
+        into :rd_id, :rd_code, :rd_name
+    do
+    begin
+      if (db_id &lt;&gt; 81001) then
+      begin
+        if (rd_code in (&#x27;PlanIndicators.Disb_amount_bonus&#x27;, &#x27;PlanIndicators.LO_Count&#x27;, &#x27;PlanIndicators.BalancePar31_360&#x27;)) then
+          continue;
+      end
+
+      if (db_id = 81001) then
+      begin
+        if (is_km = 0 and
+            rd_code in (&#x27;PlanIndicators.Disb_Amount_IPF&#x27;, &#x27;PlanIndicators.Disb_amount_bonus&#x27;, &#x27;PlanIndicators.LO_Count&#x27;, &#x27;PlanIndicators.BalancePar31_360&#x27;)) then
+          continue; --свз видит только отчет по объему выдач
+
+        if (is_km = 1 and
+            rd_code in (&#x27;PlanIndicators.Disb_Amount&#x27;, &#x27;PlanIndicators.Disb_Amount_IPF&#x27;)) then
+          continue; --мо видит все отчеты кроме объема выдач вместо этого попросили отображать объем выдач в целях бонуса
+
+      end
+      is_ipf = iif(rd_code in (&#x27;PlanIndicators.Disb_Amount&#x27;, &#x27;PlanIndicators.Disb_amount_bonus&#x27;), 0, 1);
+
+      if (rd_code &lt;&gt; &#x27;PlanIndicators.BalancePar31_360&#x27;) then
+      begin
+        if (is_km = 1 and db_id = 81001) then
+        begin
+          sum_plan = coalesce((select sum(po_amount)
+           from hp_get_planoper_mgr_info(:reg_id, :c_id , :rd_code, :rep_date_end, 100 * :yr_calc + :mn_calc)), 0);
+        end else
+          sum_plan = coalesce((select sum(pd_data_1)
+                             from hp_tmp_plandata_show(:reg_id, :rep_date_end, :rd_id, 100 * :yr_calc + :mn_calc, 1, :un_id) -- было  1000000, :rep_date_end, :rd_id, 100 * :yr_calc + :mn_calc, 1, :un_id)
+                             where pd_from_c_id = :c_id or
+                                   (:is_km = 1 and
+                                   pd_from_c_id = 0)), 0);
+      end else
+        if (is_km = 1 and db_id = 81001) then
+        begin
+          sum_plan = coalesce((select sum(po_amount)
+           from hp_get_planoper_mgr_info(:reg_id, :c_id , :rd_code, :rep_date_end, 100 * :yr_calc + :mn_calc)), 0);
+        end else
+          sum_plan = coalesce((select sum(pd_data_1)
+                             from hp_tmp_plandata_show(:reg_id, null, :rd_id, 100 * :yr_calc + :mn_calc, 0, 0)
+                             where pd_is_office = 1), 0);
+
+      if (sum_plan = 0) then
+        continue;
+      if (rd_code in (&#x27;PlanIndicators.Disb_Amount&#x27;, &#x27;PlanIndicators.Disb_Amount_IPF&#x27;,&#x27;PlanIndicators.Disb_amount_bonus&#x27;, &#x27;PlanIndicators.Portfolio_amount&#x27;)) then
+      begin
+        sum_fact = 0;
+        sum_ahead = 0;
+
+        if (rd_code in ( &#x27;PlanIndicators.Portfolio_amount&#x27;)) then
+        begin
+          select sum(oks_balance) from oksummary, region
+          where :rep_date_end between oks_date_begin and oks_date_end
+          and oks_close_state = 0
+          and oks_region_id = reg_unicode
+          and :rep_date_end - oks_delinq_date &lt; 361
+          and ((coalesce(reg_logic_label, &#x27;&#x27;) not containing &#x27;.mega_office.&#x27; and :regions_str containing &#x27;.&#x27; || oks_region_id || &#x27;.&#x27;)
+               or (:c_id = f_lo_mgr_c_id(f_lo_mgr_id(oks_from_k_id, :rep_date_end, oks_kc_id, oks_region_id))))
+          into sum_fact;
+          sum_fact = coalesce(sum_fact, 0);
+        end else
+        begin
+          for select k_id, k_amount_approved
+              from kontract
+              inner join product on pr_id = k_from_pr_id and
+                    iif(pr_code containing &#x27;.ipf.&#x27;, 1, 0) = :is_ipf
+              inner join kontstate on ks_from_k_id = k_id
+              inner join region on reg_unicode = ks_region_id and
+                    ks_ol_is_delete = 0 and
+                    ks_state = 1 and
+                    ks_date_begin between :dt_beg and :dt_end and
+                    (ks_kc_id = :c_id or (:is_km = 1 and ((coalesce(reg_logic_label, &#x27;&#x27;) not containing &#x27;.mega_office.&#x27; and :regions_str containing &#x27;.&#x27; || ks_region_id || &#x27;.&#x27;)
+                                                          or (:c_id = f_lo_mgr_c_id(f_lo_mgr_id(k_id, :rep_date_end, ks_kc_id,ks_region_id)))
+                                                           ))
+                    )
+              into :k_id, :k_amount_approved
+          do
+          begin
+            sum_fact = sum_fact + k_amount_approved;
+          end
+        end
+
+        if (rd_code in (&#x27;PlanIndicators.Disb_Amount&#x27;, &#x27;PlanIndicators.Disb_Amount_IPF&#x27;)) then
+        BEGIN
+
+          select -sum(ok_os)
+          from operkred, kontract, knaktlist, product, region
+          where ok_ol_is_active = 1 and
+                ok_ol_date between :dt_beg and :dt_end and
+                ok_os &lt; 0 and
+                ok_type in (4, 9) and
+                ok_sh_date &gt; :dt_end and
+                ok_from_k_id = k_id and
+                k_from_kf_id = kal_from_kf_id and
+                knaktlist.is_delete = 0 and
+                ok_ol_date between kal_date and kal_date_end and
+                kal_new_reg_id = reg_unicode and
+                k_from_pr_id = pr_id and
+                ((:is_ipf = 1 and
+                pr_code containing &#x27;.ipf.&#x27;) or
+                (:is_ipf = 0 and
+                pr_code not containing &#x27;.ipf.&#x27;)) and
+                (kal_new_kf_officer = :c_id or (:is_km = 1 and ((coalesce(reg_logic_label, &#x27;&#x27;) not containing &#x27;.mega_office.&#x27; and :regions_str containing &#x27;.&#x27; || kal_new_reg_id || &#x27;.&#x27;)
+                                                        or (:c_id = f_lo_mgr_c_id(f_lo_mgr_id(k_id, :rep_date_end, kal_new_kf_officer,kal_new_reg_id)))
+                                                         )))
+          into sum_ahead;
+          if (sum_ahead is null) then
+            sum_ahead = 0;
+
+        END
+        sum_ost = sum_plan + sum_ahead - sum_fact;
+
+        sum_ost = iif(sum_ost &gt; 0, sum_ost, 0);
+
+        sum_plan = round(sum_plan/1000,2);
+        sum_fact = round(sum_fact/1000,2);
+        sum_ost =  round(sum_ost/1000,2);
+      end
+
+      if (rd_code in (&#x27;PlanIndicators.LO_Count&#x27;)) then
+      begin
+        select --count(h.ps_from_c_id) --общее количество СВЗ   -- заменил на ниже следующее
+--               sum(iif(jk_system_code = &#x27;JobSystem.LO_Standart&#x27;,1,0.5))
+               sum(iif(jk_name = &#x27;СВЗ 0,5&#x27;,0.5,1))
+        from hr_pstatus h
+        inner join region r on r.reg_unicode = h.ps_from_reg_id
+        inner join joblist jl on jl.jl_id = h.ps_from_jl_id
+        inner join jobkind jk on jk.jk_id = jl.jl_kind
+        where :rep_date_end between h.ps_date_begin and h.ps_date_end and
+              h.ps_is_working = 1 and
+              jk.jk_system_code = &#x27;JobSystem.LO_Standart&#x27; and  -- заменил на ниже следующее
+--              jk.jk_system_code in (&#x27;JobSystem.LO_Standart&#x27;,&#x27;JobSystem.LO_Standart05&#x27;) and
+
+              ((coalesce(reg_logic_label, &#x27;&#x27;) not containing &#x27;.mega_office.&#x27; and :regions_str containing &#x27;.&#x27; || r.reg_unicode || &#x27;.&#x27;)
+                or :c_id = f_lo_mgr_c_id(f_lo_mgr_id(0, :rep_date_end, ps_from_c_id, ps_from_reg_id)))
+              and
+              ps_from_c_id not in (select hrv.hrv_from_c_id -- ИСКЛЮЧАЕМ
+                                   from hr_voctravel hrv, sa_worktype swt, hr_orders hr --  •    Отпуск без содержания по уходу за ребенком
+                                   where hrv.hrv_date_begin &lt;= hrv.hrv_date_end_fact and --  •    Приказ_отпуск_по_уходу_за_ребенком
+                                         hrv.hrv_status = 1 and --  •    Декретный отпуск.
+                                         ho_order_type = sawt_id and
+                                         hrv_from_ho_id = ho_id and --     sawt_base_type =5 чтобы исключить 21-ю позицию в кг и  аз
+                                         :rep_date_end between hrv.hrv_date_begin and hrv.hrv_date_end_fact and
+                                         swt.sawt_id in (16, 17, 18, 21) and
+                                         swt.sawt_base_type = 5)
+        into :sum_fact;
+        sum_fact = coalesce(sum_fact,0);
+        sum_ost = sum_plan - sum_fact; --     sum_fact_1 = sum_plan - sum_fact;
+        sum_ost = iif(sum_ost &gt; 0, sum_ost, 0);
+
+        sum_plan = round(sum_plan,2);
+        sum_fact = round(sum_fact,2);
+        sum_ost =  round(sum_ost,2);
+      end
+
+      if (rd_code in (&#x27;PlanIndicators.BalancePar31_360&#x27;)) then
+      begin
+        select sum(oks_balance) oks_balance_par30
+        from oksummary oks, region 
+        where :rep_date_end between oks.oks_date_begin and oks.oks_date_end and
+               oks_region_id = reg_unicode and
+              ((coalesce(reg_logic_label, &#x27;&#x27;) not containing &#x27;.mega_office.&#x27; and :regions_str containing &#x27;.&#x27; || oks.oks_region_id || &#x27;.&#x27;)
+               or :c_id = f_lo_mgr_c_id(f_lo_mgr_id(oks_from_k_id, :rep_date_end, oks_kc_id, oks_region_id))) and
+              :rep_date_end - oks_delinq_date between 31 and 360 and
+              oks_close_state = 0
+        into :sum_fact;
+        sum_fact = coalesce(sum_fact,0);
+        sum_ost = sum_fact - sum_plan;
+        sum_ost = iif(sum_ost &gt; 0, sum_ost, 0);
+
+        sum_plan = round(sum_plan/1000,2);
+        sum_fact = round(sum_fact/1000,2);
+        sum_ost =  round(sum_ost/1000,2);
+      end
+
+
+      html_body = html_body || &#x27;&lt;tr&gt; &lt;td&gt;&#x27; || rd_name || &#x27;&lt;/td&gt; &lt;td&gt;&#x27; || sum_plan || &#x27;&lt;/td&gt; &lt;td&gt;&#x27; || sum_fact || &#x27;&lt;/td&gt; &lt;td&gt;&#x27; || sum_ost || &#x27;&lt;/td&gt; &lt;/tr&gt;&#x27;;
+    end
+  end
+  if (visible = 1) then
+    res_text = BLOB_APPEND(res_text, &#x27;&lt;table width=&quot;100%&quot;&gt;
+       &lt;col width=&quot;55%&quot;&gt;
+       &lt;col width=&quot;15%&quot;&gt;
+       &lt;col width=&quot;15%&quot;&gt;
+       &lt;col width=&quot;15%&quot;&gt;
+       &lt;tr&gt;&#x27; || f_format(&#x27;&lt;th&gt;%1&lt;/th&gt;&lt;th&gt;%2&lt;/th&gt;&lt;th&gt;%3&lt;/th&gt;&lt;th&gt;%4&lt;/th&gt;&#x27;, iif(db_id &lt;&gt; 94401, &#x27;Показатель&#x27;, &#x27;Göstərici&#x27;), iif(db_id &lt;&gt; 94401, &#x27;План&#x27;, &#x27;Plan&#x27;),iif(db_id &lt;&gt; 94401, &#x27;Факт&#x27;, &#x27;Fakt&#x27;), iif(db_id &lt;&gt; 94401, &#x27;Осталось&#x27;, &#x27;Qalib&#x27;)) || html_body || &#x27;&lt;/table&gt;&lt;/body&gt;&#x27;);
+  else
+    res_text = BLOB_APPEND(res_text, &#x27;Данный отчет доступен для МО И СВЗ&#x27;);
+    suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

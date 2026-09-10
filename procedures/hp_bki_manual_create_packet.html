@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_BKI_MANUAL_CREATE_PACKET — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_BKI_MANUAL_CREATE_PACKET: 4 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_BKI_MANUAL_CREATE_PACKET</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_bki_get_packet_name.html"><div class="to">HP_BKI_GET_PACKET_NAME</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">BMM_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">THIS_DATES_ONLY</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHANGE_REASON</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_BKI_MANUAL_CREATE_PACKET(
+    BMM_ID D_ID,
+    THIS_DATES_ONLY D_BOOL,
+    CHANGE_REASON D_INTEGER,
+    UN_ID D_ID)
+AS
+declare variable bkk_id d_id;
+declare variable action_code d_str_code;
+declare variable c_id d_id;
+declare variable k_id d_id;
+declare variable ma_id d_id;
+declare variable bkp_id d_id;
+declare variable object_id d_id;
+declare variable object_kind d_integer;
+declare variable counter d_integer;
+declare variable event_date d_date;
+declare variable packet_date d_date;
+declare variable packet_name d_str_code;
+declare variable bkk_code d_str_code;
+declare variable bkt_id d_id;
+declare variable bke_id d_id;
+declare variable bkc_id d_id;
+declare variable bkl_id d_id;
+declare variable bmm_from_bkk_id d_id;
+declare variable bkc_add d_str_long;
+declare variable packet_format d_smallint;
+begin
+  select f_enum(&#x27;bki_packet_action&#x27;, bkt_action, &#x27;code&#x27;), bkt_from_bkk_id, bkk_code, bkt_id, bmm_from_bkk_id, bkt_format
+  from bki_manual_main, bki_packet_type, bki_kind
+  where bkt_id = bmm_from_bkt_id
+    and bkk_id = bkt_from_bkk_id
+    and bmm_id = :bmm_id
+    and bmm_status = 0
+  into action_code, bkk_id, bkk_code, bkt_id, bmm_from_bkk_id, packet_format;
+
+  if (bkk_id is null) then
+    exception e_default &#x27;not found packet with bmm_id = &#x27; || coalesce(bmm_id, &#x27;&lt;NULL&gt;&#x27;);
+
+  if (bmm_from_bkk_id is distinct from bkk_id) then
+    exception e_message &#x27;Тип пакета не соответствует БКИ&#x27;;
+
+  packet_name = null;
+  packet_date = current_date;
+  counter = 0;
+
+  select packet_name, new_counter
+  from hp_bki_get_packet_name(:packet_date, :bkk_code, :counter, :packet_format)
+  into packet_name, counter;
+
+  insert into bki_packet (bkp_code, bkp_from_bkk_id, bkp_date, bkp_number, bkp_from_bkt_id)
+  values (:packet_name, :bkk_id, :packet_date, :counter, :bkt_id)
+  returning bkp_id
+  into :bkp_id;
+
+  for select distinct bml_object_kind, bml_object_id
+  from bki_manual_list
+  where bml_from_bmm_id = :bmm_id
+  order by 1,2
+  into object_kind, object_id
+  do
+  begin
+    if (object_kind = 11) then
+    begin
+      ma_id = object_id;
+      k_id = null;
+
+      select k_id from kontract
+      where k_from_ma_app_id = :ma_id
+        and k_status &gt;= 0
+      into k_id;
+
+      select mac_from_c_id
+      from miniappclient
+      where mac_from_ma_id = :ma_id
+      rows 1
+      into c_id;
+    end
+    else
+    begin
+      k_id = object_id;
+      ma_id = null;
+
+      select k_from_ma_app_id
+      from kontract
+      where k_id = :k_id
+      into ma_id;
+
+      select kc_from_c_id
+      from knclient kc
+      where kc_from_k_id = :k_id
+        and kc_amount_approved &gt; 0
+      rows 1
+      into c_id;
+    end
+
+    insert into bki_loans (bkl_from_bkp_id, bkl_object_kind, bkl_object_id)
+    values (:bkp_id, :object_kind, :object_id)
+    returning bkl_id
+    into bkl_id;
+
+    -- найдем самую младшую дату для объекта
+    select min(bml_date)
+    from bki_manual_list
+    where bml_from_bmm_id = :bmm_id
+      and bml_object_kind = :object_kind
+      and bml_object_id = :object_id
+    into event_date;
+
+    if (event_date is null) then
+      exception e_default &#x27;Not found min event_date for object_id = &#x27; || coalesce(object_id, &#x27;&lt;NULL&gt;&#x27;);
+
+    bkc_add = iif(action_code in (&#x27;reset&#x27;, &#x27;recreate&#x27;), f_format(&#x27;{&quot;start_date&quot;:&quot;%1&quot;, &quot;change_reason&quot;:&quot;%2&quot;}&#x27;, event_date, coalesce(change_reason, 1)), iif(action_code = &#x27;delete&#x27;, f_format(&#x27;{&quot;change_reason&quot;:&quot;%1&quot;}&#x27;, coalesce(change_reason, 1)), null));
+
+    insert into bki_clients (bkc_from_bkl_id, bkc_from_c_id, bkc_add)
+    values (:bkl_id, :c_id, :bkc_add)
+    returning bkc_id
+    into bkc_id;
+  
+    for select bke_id
+    from bki_errors, bki_events, bki_clients, bki_loans
+    where bke_from_bev_id = bev_id
+      and bkc_id = bev_from_bkc_id
+      and bkl_id = bkc_from_bkl_id
+      and bkl_object_kind = :object_kind
+      and bkl_object_id = :object_id
+      and bke_fixed = 0
+    into bke_id
+    do
+      update bki_errors
+      set bke_fixed = 1,
+          bke_fixed_un_id = :un_id
+      where bke_id = :bke_id;
+
+    for select distinct bml_date
+    from bki_manual_list
+    where bml_from_bmm_id = :bmm_id
+      and bml_object_kind = :object_kind
+      and bml_object_id = :object_id
+    order by 1
+    into event_date
+    do
+    begin
+      if (action_code = &#x27;recreate&#x27;) then
+        select k_disb_date
+        from kontract
+        where k_id = :k_id
+        into event_date;
+
+      insert into bki_events (bev_from_bkc_id, bev_event_date, bev_tag)
+      values (:bkc_id, :event_date, iif(:this_dates_only = 1, 55, 5));
+
+      if (action_code in (&#x27;reset&#x27;, &#x27;recreate&#x27;)) then
+        break;
+    end
+  end
+
+  update bki_manual_main
+  set bmm_status = 1,
+      bmm_from_bkp_id = :bkp_id
+  where bmm_id = :bmm_id;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

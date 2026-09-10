@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_FINCERT_GET_FILE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_FINCERT_GET_FILE: 3 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_FINCERT_GET_FILE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">4</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">4 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_fincert_inn_check.html"><div class="to">HP_FINCERT_INN_CHECK</div></a><a class="ref-card" href="hp_fincert_passport_check.html"><div class="to">HP_FINCERT_PASSPORT_CHECK</div></a><a class="ref-card" href="hp_fincert_phone_check.html"><div class="to">HP_FINCERT_PHONE_CHECK</div></a><a class="ref-card" href="hp_fincert_snils_check.html"><div class="to">HP_FINCERT_SNILS_CHECK</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">KIND</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_DATE_TIME</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SHIFT_DATETIME</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">FF_FILE_BODY</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FF_CREATE_DATETIME</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FF_FILE_DATETIME</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_FINCERT_GET_FILE(
+    KIND D_STR_255,
+    CHECK_DATE_TIME D_DATETIME = null,
+    SHIFT_DATETIME D_BOOL = null)
+RETURNS (
+    FF_FILE_BODY D_BLOB_TEXT,
+    FF_CREATE_DATETIME D_DATETIME,
+    FF_FILE_DATETIME D_DATETIME)
+AS
+declare variable ff_file_kind d_integer;
+begin
+  ff_file_kind = f_enum_id(&#x27;fincert_file&#x27;, kind);
+
+  if (check_date_time is null) then  --RFCRU-5763
+    check_date_time = localtimestamp;
+
+  if (shift_datetime is null) then
+    shift_datetime = 0; -- делать сдвиг времени
+
+  if (shift_datetime = 1) then
+    check_date_time = dateadd(hour, -1, check_date_time);
+
+  -- берем текущий загруженный файл, если время его действия наступило
+  select ff_file_body, ff_create_datetime, ff_file_datetime
+  from fincert_files
+  where ff_file_kind = :ff_file_kind
+    and ff_create_datetime &lt;= :check_date_time
+  into ff_file_body, ff_create_datetime, ff_file_datetime;
+
+  -- иначе ищем в архиве
+  if (ff_file_body is null) then
+    select ff_file_body, ff_create_datetime, ff_file_datetime
+    from fincert_files_arch
+    where ff_file_kind = :ff_file_kind
+      and ff_create_datetime &lt;= :check_date_time
+    order by ff_create_datetime desc
+    rows 1
+    into ff_file_body, ff_create_datetime, ff_file_datetime;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

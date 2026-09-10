@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CONSULT_INSTALLMENT_AMOUNT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CONSULT_INSTALLMENT_AMOUNT: 1 входных, 7 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CONSULT_INSTALLMENT_AMOUNT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">7</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="clt_get_price_for_consultation.html"><div class="to">CLT_GET_PRICE_FOR_CONSULTATION</div></a><a class="ref-card" href="hp_consult_payment_info.html"><div class="to">HP_CONSULT_PAYMENT_INFO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_edoc_web_get_cl_info.html"><div class="to">HP_EDOC_WEB_GET_CL_INFO</div></a><a class="ref-card" href="hp_extsys_process_one.html"><div class="to">HP_EXTSYS_PROCESS_ONE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">7 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">KC_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AMOUNT_TOTAL</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AMOUNT_BALANCE</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AMOUNT_RECOM</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">TEXT_RECOM</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">TEXT_INFO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_INFO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CONSULT_INSTALLMENT_AMOUNT(
+    K_ID D_ID)
+RETURNS (
+    KC_ID D_ID,
+    AMOUNT_TOTAL D_CURRENCY,
+    AMOUNT_BALANCE D_CURRENCY,
+    AMOUNT_RECOM D_CURRENCY,
+    TEXT_RECOM D_STR_100,
+    TEXT_INFO D_STR_100,
+    K_INFO D_STR_100)
+AS
+declare variable k_cons_kind d_smallint;
+declare variable res_amount d_currency;
+declare variable payed_amount d_currency;
+declare variable delinq_amount d_currency;
+begin
+  -- возвращает kc_id и суммы конс. услуг в рассрочку (RFCKG-4900)
+  -- amount_total - полная стоимость конс. услуг
+  -- amount_balance - общая задолженность (остаток долга от полной стоимости за вычетом погашений)
+  -- amount_recom - рекомендуемая сумма к оплате (сумма ближайщего планового платежа + сумма просрочек)
+  -- text_recom - текстовка к рекомендуемой сумме
+  -- text_info - текстовка к типу оплаты
+
+  amount_total = 0;
+  amount_balance = 0;
+  amount_recom = 0;
+  text_recom = &#x27;&#x27;;
+  text_info = &#x27;&#x27;;
+
+  select k_cons_kind,
+         k_kontract_no || &#x27; от &#x27; || f_datetostr(k_fact_disb_date)
+  from kontract
+  where k_id = :k_id
+  into k_cons_kind,
+       k_info;
+
+  if (k_cons_kind is null) then
+    k_cons_kind = 0;
+
+  if (k_cons_kind = 0) then
+  begin
+    suspend;
+    exit;
+  end
+
+  select kc_id
+  from knclient
+  where kc_from_k_id = :k_id and
+        kc_amount_approved &gt; 0 rows 1
+  into kc_id;
+
+  select price
+  from clt_get_price_for_consultation(:kc_id)
+  into res_amount;
+
+  amount_total = res_amount;
+
+  if (res_amount &gt; 0) then
+  begin
+    select sum(opk.ok_amount)
+    from operkontract opk
+    inner join operlist ol on ol.ol_id = opk.ok_from_ol_id and ol.is_delete = 0
+    where opk.ok_from_k_id = :k_id and
+          opk.ok_operation_type = f_get_rd_id(&#x27;CashTransactionIncom.Consultation&#x27;)
+    into payed_amount;
+
+    if (payed_amount is null) then
+      payed_amount = 0;
+
+    amount_balance = res_amount - payed_amount;
+
+    if (amount_balance &gt; 0) then -- есть задолженность
+    begin
+      select next_sh_amount + delinq_amount
+      from hp_consult_payment_info(:k_id)
+      into amount_recom;
+
+      text_recom = &#x27;Рекомендуемая сумма &#x27; || round(amount_recom, 2) || &#x27; coм&#x27;;
+      text_info = &#x27;Оплата консультационных услуг &#x27;;
+    end
+  end
+
+  if (kc_id is null) then
+    kc_id = 0;
+
+  if (amount_total is null) then
+    amount_total = 0;
+
+  if (amount_balance is null) then
+    amount_balance = 0;
+
+  if (amount_recom is null) then
+    amount_recom = 0;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

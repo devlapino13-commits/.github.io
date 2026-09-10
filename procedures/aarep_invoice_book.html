@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_INVOICE_BOOK — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_INVOICE_BOOK: 4 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_INVOICE_BOOK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REPORT_REGION_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REPORT_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REPORT_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REPORT_CURRENCY</div><div class="ptype">VARCHAR(3)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">AAREP_INV_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AAREP_INV_NO</div><div class="ptype">VARCHAR(15)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AAREP_INV_CUSTOMER</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AAREP_INV_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_INVOICE_BOOK(
+    REPORT_REGION_ID INTEGER,
+    REPORT_DATE_BEGIN DATE,
+    REPORT_DATE_END DATE,
+    REPORT_CURRENCY VARCHAR(3))
+RETURNS (
+    AAREP_INV_DATE DATE,
+    AAREP_INV_NO VARCHAR(15),
+    AAREP_INV_CUSTOMER VARCHAR(100),
+    AAREP_INV_AMOUNT DECIMAL(18,4))
+AS
+declare variable rep_period_begin integer;
+declare variable rep_period_end integer;
+declare variable reg_code varchar(10);
+declare variable k_id decimal(18,0);
+declare variable c_id decimal(18,0);
+begin
+-- Книга продаж (счета-фактуры)
+  rep_period_begin = 0;
+  rep_period_end = 0;
+  if (extract(day from :report_date_begin) = 1) then
+    rep_period_begin = extract(year from :report_date_begin) * 100 + extract(month from :report_date_begin);
+  if (extract(day from (:report_date_end + 1)) = 1) then
+    rep_period_end = extract(year from :report_date_end) * 100 + extract(month from :report_date_end);
+-- По ТЗ печатается на всю РФ, только за один период - целый месяц
+  if ((rep_period_begin = 0) or (rep_period_end = 0) or (rep_period_begin &lt;&gt; rep_period_end) or (report_region_id &lt;&gt; 1000000)) then
+    exit;
+
+  aarep_inv_date = report_date_end;
+
+  for select im_invoice_no, reg_code, sum(kcp_perc_calced - kcp_kommis_calced), kcp_from_k_id
+      from kontcalcperc, invoicemain, invoicekont, region
+      where im_id = ik_from_im_id and
+            im_period = :rep_period_end and
+            kcp_period = :rep_period_end and
+            ik_from_k_id = kcp_from_k_id and
+            kcp_from_reg_id = reg_unicode
+      group by im_invoice_no, reg_code, kcp_from_k_id
+      into aarep_inv_no, reg_code, aarep_inv_amount, k_id
+  do
+  begin
+    aarep_inv_customer = null;
+
+    select c_name_fio
+    from kontract, clients
+    where k_clients_cashier_id = c_id and
+          k_id = :k_id
+    into aarep_inv_customer;
+
+    if (aarep_inv_customer is null) then
+      select c_name_fio
+      from knclient, clients
+      where kc_from_k_id = :k_id and
+            kc_amount_approved &gt; 0
+      order by kc_status desc
+      rows 1
+      into aarep_inv_customer;
+
+    aarep_inv_no = right(&#x27;000000000&#x27; || aarep_inv_no, 9) || &#x27;/&#x27; || left(reg_code, 2) || &#x27;-&#x27; || substring(reg_code from 3 for 2);
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

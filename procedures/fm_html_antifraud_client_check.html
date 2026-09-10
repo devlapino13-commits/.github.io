@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_HTML_ANTIFRAUD_CLIENT_CHECK — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_HTML_ANTIFRAUD_CLIENT_CHECK: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_HTML_ANTIFRAUD_CLIENT_CHECK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_html_client_info.html"><div class="to">FM_HTML_CLIENT_INFO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_HTML_ANTIFRAUD_CLIENT_CHECK(
+    C_ID D_ID,
+    UN_ID D_ID)
+RETURNS (
+    RES_TEXT D_BLOB_TEXT)
+AS
+declare variable IS_WORKING D_BOOL;
+declare variable C_INN D_STR_20;
+declare variable AC_ID D_STR_CODE;
+declare variable AC_STATUS D_STR_CODE;
+declare variable AC_STATUS_STR D_STR_255;
+declare variable AC_DATE D_DATE;
+declare variable NEED_CHECK D_BOOL;
+begin
+    res_text = &#x27;&#x27;;
+
+    -- Если, механизм антифрода выключен - тогда ничего не отображаем на стороне МП
+    :is_working = (select is_working from antifraud_api_working_status);
+    if (coalesce(:is_working, 0) = 0) then
+    begin
+        suspend;
+        exit;
+    end
+
+    res_text = blob_append(res_text, &#x27;&lt;br&gt;&lt;b&gt;Проверка на антифрод&lt;/b&gt;&lt;br&gt;&#x27;);
+    :c_inn = (select c.c_inn from clients c where c.c_id = :c_id);
+
+    -- Получаем информацию о последней проверке
+    select first 1
+        f_enum(&#x27;antifraud_status&#x27;, ac.ac_status, &#x27;code&#x27;),
+        ac.ac_date
+    from antifraud_check ac
+    where ac.ac_inn = :c_inn
+    order by ac.ac_id desc
+    into
+        :ac_status,
+        :ac_date;
+
+    ac_status_str =
+        case :ac_status
+            when &#x27;not_found&#x27; then &#x27;В списке не найден&#x27;
+            when &#x27;was_found&#x27; then &#x27;В списке найден&#x27;
+            when &#x27;client_error&#x27; then &#x27;При попытке проверки в АЦ возникла ошибка.&#x27;
+            when &#x27;server_error&#x27; then &#x27;При попытке проверки в АЦ возникла ошибка.&#x27;
+            when &#x27;format_error&#x27; then &#x27;При попытке проверки в АЦ возникла ошибка.&#x27;
+            when &#x27;in_process&#x27; then &#x27;Запрос в обработке&#x27;
+        end;
+
+    if (coalesce(:ac_status, &#x27;&#x27;) = &#x27;&#x27;) then
+    begin
+        res_text = blob_append(res_text, &#x27;Проверка не проводилась&lt;br&gt;&#x27;);
+    end
+    else
+    begin
+        res_text = blob_append(res_text, f_format(&#x27;Последняя проверка: %1&lt;br&gt;&#x27;, f_datetostr(:ac_date)));
+        res_text = blob_append(res_text, f_format(&#x27;Статус: %1&lt;br&gt;&#x27;, :ac_status_str));
+    end
+
+    -- Определяем нужно ли показывать кнопку &quot;Проверить&quot;
+    need_check = f_need_antifraud_check(:c_id);
+    
+    if (:need_check = 1) then
+    begin
+        -- отправить запрос
+        res_text = blob_append(res_text, 
+            f_uri_sql
+            (
+                &#x27;Проверить&#x27;,
+                &#x27;start_antifraud_check&#x27;, 
+                &#x27;&#x27;,
+                0,
+                &#x27;none&#x27;,
+                &#x27;Запустить проверку антифрода?&#x27;,
+                &#x27;&#x27;,
+                0,
+                0,
+                &#x27;&#x27;,
+                &#x27;&#x27;,
+                &#x27;dialog&#x27;,
+                :c_inn,
+                0
+            ) || &#x27;&lt;br&gt;&#x27;);
+    end
+
+    suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

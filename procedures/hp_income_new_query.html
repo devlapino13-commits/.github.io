@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_INCOME_NEW_QUERY — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_INCOME_NEW_QUERY: 3 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_INCOME_NEW_QUERY</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">6</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_extinfo_insert.html"><div class="to">HP_EXTINFO_INSERT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">6 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_cmd.html"><div class="to">FM_REPORT_CMD</div></a><a class="ref-card" href="hp_extinfolist_asp_update.html"><div class="to">HP_EXTINFOLIST_ASP_UPDATE</div></a><a class="ref-card" href="hp_extinfolist_income_update.html"><div class="to">HP_EXTINFOLIST_INCOME_UPDATE</div></a><a class="ref-card" href="hp_extinfo_asp_process.html"><div class="to">HP_EXTINFO_ASP_PROCESS</div></a><a class="ref-card" href="hp_extinfo_pension_process.html"><div class="to">HP_EXTINFO_PENSION_PROCESS</div></a><a class="ref-card" href="hp_extinfo_salary_process.html"><div class="to">HP_EXTINFO_SALARY_PROCESS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MAC_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CONFIG</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_INCOME_NEW_QUERY(
+    MAC_ID D_ID,
+    UN_ID D_ID,
+    CONFIG D_STR_CODE)
+AS
+declare variable inn d_str_20;
+declare variable eic_id d_id;
+declare variable eil_id d_id;
+declare variable icq_json d_str_255;
+declare variable c_id d_id;
+declare variable counter d_integer;
+declare variable un_fio d_str_100;
+declare variable requestId d_str_code;
+begin
+-- RFCKG-4255 Отправка запроса на получение Справки о доходах (ЗП, пенсия).
+-- RFCRU-3940 Справка АСП
+  counter = 0;
+
+  select un.un_fio
+  from username un
+  where un.un_id = :un_id
+  into un_fio;
+
+  for select mac.mac_from_c_id, c.c_inn
+  from miniappclient mac
+  inner join clients c on c.c_id = mac.mac_from_c_id
+  where mac.mac_id = :mac_id and
+        mac.mac_amount &gt; 0
+  into c_id, inn
+  do
+  begin
+    if (coalesce(:inn, &#x27;&#x27;) = &#x27;&#x27;) then
+      exception e_message &#x27;у клиента отсутствует ИНН&#x27;;
+
+    select cfg.eic_id
+    from extinfocfg cfg
+    where cfg.eic_code = :config
+    into :eic_id;
+  
+    if (coalesce(:eic_id, &#x27;&#x27;) = &#x27;&#x27;) then
+      exception e_message f_format(&#x27;Конфигурация extinfocfg = %1 не найдена&#x27;, config);
+  
+    execute procedure hp_extinfo_insert(:config, &#x27;clients&#x27;, :c_id, 0, :un_id);
+  
+    select eil.eil_id
+    from extinfolist eil
+    where eil.eil_from_c_id = :c_id
+    and eil.eil_from_eic_id = :eic_id
+    order by eil.eil_id desc
+    rows 1
+    into :eil_id;
+  
+    requestId = uuid_to_char(f_md5_uuid(:eil_id));
+    icq_json = f_format(&#x27;{&quot;iin&quot;: &quot;%1&quot;, &quot;employee_name&quot;: &quot;%2&quot;, &quot;requestId&quot;: &quot;%3&quot;, &quot;consent&quot;: 5, &quot;request_type&quot;: &quot;DEDUCTION_6&quot;, &quot;consent_token_term&quot;: &quot;120&quot;}&#x27;, inn, un_fio, requestId);
+
+
+    insert into income_check_querys (icq_from_un_id, icq_from_c_id, icq_from_mac_id, icq_from_eil_id, icq_json, icq_config)
+    values (:un_id, :c_id, :mac_id, :eil_id, :icq_json, :config);
+
+    counter = counter + 1;
+  end
+  if (counter &gt; 0) then
+    post_event :config;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

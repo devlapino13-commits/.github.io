@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0015_SQL — процедура — схема БД</title>
+<meta name="description" content="Отсутствуют необходимые документы. Приказ от 07.02.2015 №04-02-15о/д, пункт 2.2">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0015_SQL</code></h1>
+<p class="desc">Отсутствуют необходимые документы. Приказ от 07.02.2015 №04-02-15о/д, пункт 2.2</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0015_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare kc_amount curr_type;
+declare variable dopusk integer;
+declare variable c_citizen integer;
+declare variable kc_circle integer;
+declare variable c_id id_type;
+declare variable last_k_id id_type;
+declare variable ks_date_end date;
+declare variable max_delinq_day integer;
+declare variable kol_delinq integer;
+declare variable delinq_day integer;
+begin
+-- Разработка по приказу от 6го марта 2015года
+-- каждого участника проверяет, что гражданин КР и не имеет в предыдущем цикле просрочку
+   dopusk = 1;
+   for
+   select c_id, c_citizen, kc_circle
+   from knclient, clients
+   where kc_from_k_id = :k_id
+   and kc_amount_approved &gt; 0
+   and kc_from_c_id = c_id
+   into c_id, c_citizen, kc_circle
+   do
+   begin
+     if (dopusk = 1) then
+     begin
+--   если не гражданин КР или новый клиент или не имеет действующую регср. карту и временную регистрацию то условие по приказ от 6 марта не будет срабатывать
+       if (c_citizen &lt;&gt; 8 or kc_circle &lt; 2
+           or not exists(select * from CLIENTDOCS, PASSKIND, PASSDOCTYPE
+                        where CDS_FROM_C_ID = :c_id
+                        and cds_from_pk_id = pk_id
+                        and pk_from_pdt_id = pdt_id
+                        and cds_is_delete = 0
+                        and current_date between CDS_DOC_DATE_BEGIN and CDS_DOC_DATE_END
+                        and pdt_code in (&#x27;registration_fiz&#x27;, -- Временная регистрация, физ.лицо
+                                         &#x27;magration_card&#x27;))  -- Миграционная карта
+       ) then
+       begin
+         dopusk = 0;
+       end 
+     end
+--   если не имеются выше ограничение то проверяется следующее
+     if (dopusk = 1) then
+     begin
+--     Проверка просрочки предыдущего цикла
+--     вычисление предыдущего контракта
+       last_k_id = null;
+       select ks_from_k_id, ks_date_end
+       from kontstate, knclient
+       where ks_ol_is_delete = 0
+       and ks_state = 1
+       and ks_from_k_id = kc_from_k_id
+       and kc_amount_approved &gt; 0
+       and kc_from_c_id = :c_id
+       and ks_from_k_id &lt;&gt; :k_id
+       and ks_date_begin &lt; current_date
+       order by ks_date_begin desc
+       rows 1
+       into last_k_id, ks_date_end;
+       if (last_k_id is null) then
+       begin
+         res_error_is_critical = 1;
+         res_error_text = &#x27;У клиента цикл не правильно указан, прошу исправить!&#x27;;
+         suspend;
+       end 
+--     проверка предыдущего контракта
+       if (last_k_id is not null) then
+       begin
+--       вычисление максимальное кол-во просроченных дней предыдущего цикла
+         max_delinq_day = null;
+         kol_delinq = null;
+         select max(ok_ol_date - ok_sh_date), count(*)
+         from operkred
+         where ok_ol_is_active = 1
+         and ok_from_c_id = 0
+         and ok_ol_date &gt; ok_sh_date
+         and ok_from_k_id = :last_k_id
+         and ok_type in (4,5,9) -- просроченные выплаты или списании
+         and ok_os + ok_perc &lt; 0
+         into max_delinq_day, kol_delinq;
+         if (max_delinq_day is null) then max_delinq_day = 0;
+         if (kol_delinq is null) then kol_delinq = 0;
+         if (kol_delinq &gt; 1 or max_delinq_day &gt; 14) then
+         begin
+           dopusk = 0;
+         end 
+--       если предыдущий контракт активный то проверяет на просрочку
+         if (ks_date_end &gt;= current_date and dopusk = 1) then
+         begin
+           delinq_day = 0;
+           select current_date - oks_delinq_date
+           from oksummary
+           where oks_from_k_id = :last_k_id
+           and oks_close_state = 0
+           and current_date between oks_date_begin and oks_date_end
+           and current_date &gt; oks_delinq_date
+           into delinq_day;
+           if (delinq_day is null) then delinq_day = 0;
+--         Если имеется просрочка то по приказу не будет работать
+           if (delinq_day &gt; 14) then dopusk = 0;
+         end
+       end
+     end
+   end
+   if (dopusk = 0) then -- добавлено от 06.02.2015 Улан
+   begin
+     res_error_is_critical = 0;
+     res_error_text = &#x27;1. Отсутствуют необходимые документы. Приказ от 07.02.2015 №04-02-15о/д, пункт 2.2&#x27;;
+     suspend;
+   end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

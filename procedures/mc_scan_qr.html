@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MC_SCAN_QR — процедура — схема БД</title>
+<meta name="description" content="Процедура MC_SCAN_QR: 2 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>MC_SCAN_QR</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="mc_credit_limit.html"><div class="to">MC_CREDIT_LIMIT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MCL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UID</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ERROR_TXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">JSON_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SUCCESS_SCAN</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE MC_SCAN_QR(
+    MCL_ID D_ID,
+    UID D_STR_CODE)
+RETURNS (
+    ERROR_TXT D_STR_255,
+    JSON_TEXT D_STR_255,
+    SUCCESS_SCAN D_BOOL)
+AS
+declare variable object_kind d_str_10;
+declare variable object_id d_id;
+declare variable has_access_to_scan d_integer;
+begin
+  success_scan = 0;
+  begin
+    select udl_object_kind, udl_object_id
+    from uuidlist
+    where udl_uuid = char_to_uuid(:uid)
+    into object_kind, object_id;
+    when any do
+    begin
+      error_txt = &#x27;Не товар: &#x27; || uid;
+      suspend;
+      exit;
+    end
+  end
+
+  has_access_to_scan = (select has_access_to_scan
+                        from mc_credit_limit(:mcl_id));
+  if (has_access_to_scan = 0) then
+  begin
+    error_txt = &#x27;У вас нет доступа к скану QR. Кредитный лимит не расчитан или равен нулю.&#x27;;
+    suspend;
+    exit;
+  end
+
+  if (coalesce(:object_id, -777) = -777) then
+  begin
+    error_txt = &#x27;Ошибка&#x27;;
+    suspend;
+    exit;
+  end
+
+  if (f_objkind(:object_kind, &#x27;name&#x27;) = &#x27;mc_purchase&#x27;) then
+  begin
+    if (exists(select *
+               from mc_purchase mp
+               where mp.mp_id = :object_id and
+                     (mp.mp_is_finished = 1 or
+                     mp.mp_from_mcl_id is not null))) then
+    begin
+      json_text = &#x27;&#x27;;
+      error_txt = &#x27;Операция недоступна&#x27;;
+      suspend;
+      exit;
+    end
+
+    begin
+      update mc_purchase mp
+      set mp.mp_from_mcl_id = :mcl_id
+      where mp.mp_id = :object_id and
+            mp.mp_status = 1 and
+            mp.mp_from_ma_id is null; --QR может отсканиться только если он еще не выдан
+      when any do
+      begin
+        error_txt = &#x27;Операция не найдена&#x27;;
+        suspend;
+        exit;
+      end
+    end
+
+    success_scan = 1;
+    json_text = &#x27;{ &quot;mp_id&quot;:&quot;&#x27; || :object_id || &#x27;&quot;}&#x27;;
+    error_txt = &#x27;&#x27;;
+    suspend;
+    exit;
+  end
+  else
+  begin
+    json_text = &#x27;&#x27;;
+    error_txt = &#x27;Операция не найдена&#x27;;
+    suspend;
+    exit;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

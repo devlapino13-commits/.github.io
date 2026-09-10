@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KONTRACT_CLIENT_STATUS — процедура — схема БД</title>
+<meta name="description" content="Процедура KONTRACT_CLIENT_STATUS: 2 входных, 9 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>KONTRACT_CLIENT_STATUS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">9</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_client_status_str.html"><div class="to">HP_GET_CLIENT_STATUS_STR</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="print_payment_monitoring_client.html"><div class="to">PRINT_PAYMENT_MONITORING_CLIENT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">KONT_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DD</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">9 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_NAME_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_CIRCLE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_STATUS_BEGIN</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_STATUS_AFTER</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_LOANS_ACTIVE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_LOANS_PROCESS</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_LOANS_CLOSED</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE KONTRACT_CLIENT_STATUS(
+    KONT_ID DECIMAL(18,0),
+    DD DATE)
+RETURNS (
+    C_NAME_FIO VARCHAR(100),
+    C_AMOUNT DECIMAL(18,4),
+    C_CIRCLE INTEGER,
+    C_STATUS_BEGIN VARCHAR(100),
+    C_STATUS_AFTER VARCHAR(100),
+    C_LOANS_ACTIVE INTEGER,
+    C_LOANS_PROCESS INTEGER,
+    C_LOANS_CLOSED INTEGER,
+    C_ID DECIMAL(18,0))
+AS
+declare variable c_last_bonus_status integer;
+declare variable c_curr_bonus_status integer;
+declare variable db_id integer;
+begin
+
+  :db_id = f_get_db_id();
+  for select c_id, c_name_fio, kc_amount_approved, kc_circle
+      from knclient, clients
+      where kc_from_k_id = :kont_id and
+            kc_from_c_id = c_id and
+            kc_amount_approved &gt; 0
+      into :c_id, :c_name_fio, :c_amount, :c_circle
+  do
+  begin
+    select c_last_status, c_curr_status, c_last_status_str, c_curr_status_str
+    from hp_get_client_status_str(:c_id, :dd)
+    into :c_last_bonus_status, :c_curr_bonus_status, :c_status_begin, :c_status_after;
+
+
+    c_loans_active = 0;
+    select count(*)
+    from knclient, kontstate
+    where ks_from_k_id = kc_from_k_id and
+          ks_ol_is_delete = 0 and
+          ks_date_end &gt;= &#x27;31.12.2999&#x27; and
+          ks_state = 1 and
+          kc_from_c_id = :c_id and
+          kc_amount_approved &gt; 0
+    into :c_loans_active;
+    if (c_loans_active is null) then
+      c_loans_active = 0;
+
+    c_loans_process = 0;
+    select count(*)
+    from knclient, kontstate
+    where ks_from_k_id = kc_from_k_id and
+          ks_ol_is_delete = 0 and
+          ks_date_end &gt;= &#x27;31.12.2999&#x27; and
+          ks_state = 0 and
+          kc_from_c_id = :c_id and
+          kc_amount_approved &gt; 0
+    into :c_loans_process;
+    if (c_loans_process is null) then
+      c_loans_process = 0;
+
+    c_loans_closed = 0;
+    select count(*)
+    from knclient, kontstate
+    where ks_from_k_id = kc_from_k_id and
+          ks_ol_is_delete = 0 and
+          ks_date_end &gt;= &#x27;31.12.2999&#x27; and
+          ks_state = 2 and
+          kc_from_c_id = :c_id and
+          kc_amount_approved &gt; 0
+    into :c_loans_closed;
+    if (c_loans_closed is null) then
+      c_loans_closed = 0;
+
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

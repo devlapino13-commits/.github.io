@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_FT_CHECKED_DAYS_INFO — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_FT_CHECKED_DAYS_INFO: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_FT_CHECKED_DAYS_INFO</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="print_ft_info.html"><div class="to">PRINT_FT_INFO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">FIL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FIC_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">TXT</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_FT_CHECKED_DAYS_INFO(
+    FIL_ID D_ID,
+    FIC_DATE D_DATE)
+RETURNS (
+    TXT D_STR_8100)
+AS
+declare variable c_id d_id;
+declare variable fib_id d_id;
+declare variable fil_date_open d_date;
+declare variable fil_date_close d_date;
+declare variable fisl_date_begin d_date;
+declare variable fisl_date_end d_date;
+declare variable fisl_for_check_days_txt d_str_long;
+declare variable not_in_stop_list d_str_8100;
+declare variable fid_check_date_tmp d_str_8100;
+declare variable txt_not_in_stop_list d_str_8100;
+declare variable in_stop_list d_str_8100;
+declare variable txt_in_stop_list d_str_8100;
+declare variable fib_kind d_smallint;
+begin
+  select fil_from_fib_id,
+         fil_date_open,
+         coalesce(fil_date_close, cast(&#x27;31.12.9999&#x27; as date)),
+         fil_from_c_id,
+         fib_kind
+  from ft_infolist, ft_infoblank
+  where fil_id = :fil_id
+    and fil_from_fib_id = fib_id
+  into fib_id, fil_date_open, fil_date_close, c_id, fib_kind;
+  if (fil_date_close &lt; fic_date) then fic_date = fil_date_close;
+
+  select fisl_date_begin, fisl_date_end, fisl_for_check_days_txt
+  from ft_info_stoplist sl
+  where sl.fisl_from_c_id = :c_id
+  into fisl_date_begin, fisl_date_end, fisl_for_check_days_txt;
+
+  fisl_date_begin = coalesce(fisl_date_begin, &#x27;31.12.9999&#x27;);
+  fisl_date_end = coalesce(fisl_date_end, &#x27;31.12.9999&#x27;);
+  fisl_for_check_days_txt = coalesce(fisl_for_check_days_txt, &#x27;&#x27;);
+
+  not_in_stop_list = &#x27;&#x27;;
+
+  for select f_datetostr(fid_check_date)
+      from ft_infodate, ft_infoblank
+      where fid_from_fib_id = fib_id and
+            fid_check_date &lt; :fisl_date_begin and
+            fid_check_date &gt; :fil_date_open and
+            fid_check_date &lt;= :fic_date and
+            fib_kind = :fib_kind
+      order by fid_check_date
+      into :fid_check_date_tmp
+  do
+  begin
+    not_in_stop_list = not_in_stop_list || fid_check_date_tmp || &#x27;, &#x27;;
+  end
+  if (not_in_stop_list &lt;&gt; &#x27;&#x27;) then
+    not_in_stop_list = substring(not_in_stop_list from 1 for character_length(not_in_stop_list) - 2);
+
+  txt_not_in_stop_list = &#x27;&#x27;;
+
+  if (fil_date_open not between :fisl_date_begin and :fisl_date_end) then
+    txt_not_in_stop_list = &#x27;ДАТА ПРОВЕРКИ: &#x27; || f_datetostr(fil_date_open) || &#x27;, &#x27;;
+
+  if (position(&#x27;ДАТА ПРОВЕРКИ&#x27; in txt_not_in_stop_list) &gt; 0) then
+    txt_not_in_stop_list = txt_not_in_stop_list || not_in_stop_list;
+  else
+  if (not_in_stop_list &lt;&gt; &#x27;&#x27;) then
+    txt_not_in_stop_list = &#x27;ДАТА ПРОВЕРКИ: &#x27; || not_in_stop_list;
+
+  if (position(&#x27;ДАТА ПРОВЕРКИ&#x27; in txt_not_in_stop_list) &gt; 0) then
+    txt_not_in_stop_list = txt_not_in_stop_list || ascii_char(13) || ascii_char(10) || &#x27;РЕЗУЛЬТАТ ПРОВЕРКИ:  КЛИЕНТ ОТСУТСТВУЕТ В ПЕРЕЧНЕ РОСФИНМОНИТОРИНГА ТЕРРОРИСТОВ/ЭКСТРЕМИСТОВ И В ПЕРЕЧНЕ ЛИЦ, В ОТНОШЕНИИ КОТОРЫХ ПРИНЯТЫ РЕШЕНИЯ О ПРИМЕНЕНИИ МЕР ПО ЗАМОРАЖИВАНИЮ/БЛОКИРОВАНИЮ ДЕНЕЖНЫХ СРЕДСТВ И ИНОГО ИМУ�©ЕСТВА &#x27;||trim(iif(fib_id &gt;= 7, &#x27; И ПЕРЕЧНЕ ОНН&#x27;, &#x27;&#x27;))|| ascii_char(13) || ascii_char(10);
+
+  in_stop_list = &#x27;&#x27;;
+
+  for select f_datetostr(fid_check_date)
+      from ft_infodate, ft_infoblank
+      where fid_from_fib_id = fib_id and
+            fid_check_date between :fisl_date_begin and :fisl_date_end and
+            fid_check_date &gt; :fil_date_open and
+            fid_check_date &lt;= :fic_date and
+            fib_kind = :fib_kind
+      order by fid_check_date
+      into :fid_check_date_tmp
+  do
+  begin
+    in_stop_list = in_stop_list || fid_check_date_tmp || &#x27;, &#x27;;
+  end
+  if (in_stop_list &lt;&gt; &#x27;&#x27;) then
+    in_stop_list = substring(in_stop_list from 1 for character_length(in_stop_list) - 2);
+
+  txt_in_stop_list = &#x27;&#x27;;
+
+  if (fil_date_open between :fisl_date_begin and :fisl_date_end) then
+    txt_in_stop_list = &#x27;ДАТА ПРОВЕРКИ: &#x27; || f_datetostr(fil_date_open) || &#x27;, &#x27;;
+
+  if (position(&#x27;ДАТА ПРОВЕРКИ&#x27; in txt_in_stop_list) &gt; 0) then
+    txt_in_stop_list = txt_in_stop_list || in_stop_list;
+  else
+  if (in_stop_list &lt;&gt; &#x27;&#x27;) then
+    txt_in_stop_list = &#x27;ДАТА ПРОВЕРКИ: &#x27; || in_stop_list;
+
+  if (position(&#x27;ДАТА ПРОВЕРКИ&#x27; in txt_in_stop_list) &gt; 0) then
+  begin
+    txt_in_stop_list = txt_in_stop_list || ascii_char(13) || ascii_char(10) || fisl_for_check_days_txt;
+  end
+
+  txt = txt_not_in_stop_list || txt_in_stop_list;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

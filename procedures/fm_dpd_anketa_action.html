@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_DPD_ANKETA_ACTION — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_DPD_ANKETA_ACTION: 5 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_DPD_ANKETA_ACTION</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">6 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="dpd_anketa_check.html"><div class="to">DPD_ANKETA_CHECK</div></a><a class="ref-card" href="hp_pdn_getinfo_add.html"><div class="to">HP_PDN_GETINFO_ADD</div></a><a class="ref-card" href="pdn_get_min_sufficient_income.html"><div class="to">PDN_GET_MIN_SUFFICIENT_INCOME</div></a><a class="ref-card" href="pdn_info_action.html"><div class="to">PDN_INFO_ACTION</div></a><a class="ref-card" href="pdn_save_json.html"><div class="to">PDN_SAVE_JSON</div></a><a class="ref-card" href="pdn_verified_avg_monthly_income.html"><div class="to">PDN_VERIFIED_AVG_MONTHLY_INCOME</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACTION_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACTION_DATA</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_CODE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_DPD_ANKETA_ACTION(
+    UN_ID D_ID,
+    ACTION_KIND D_STR_CODE,
+    OBJ_KIND D_STR_CODE,
+    OBJ_ID D_ID,
+    ACTION_DATA D_STR_8100)
+RETURNS (
+    RES_CODE D_SMALLINT,
+    RES_TEXT D_BLOB_TEXT)
+AS
+declare variable jso1 d_integer;  
+declare variable jso2 d_integer;
+declare variable jsa1 d_integer;
+declare variable jso_tmp d_integer;
+declare variable survey_json d_str_8100;
+declare variable iterator d_integer;
+declare variable monthly_count d_smallint;
+declare variable monthly_info d_str_long;
+declare variable income d_currency;
+declare variable kc_id d_id;
+declare variable kc_date d_date;
+declare variable last_date d_date;
+declare variable dtjob d_str_20;
+declare variable dtlastm_idx d_integer;
+declare variable first_date d_date;
+declare variable i d_integer = 0;
+declare variable found boolean = false;
+declare variable cur_date d_date;
+begin
+    res_code = 1;
+    res_text = &#x27;&#x27;;
+    survey_json = &#x27;{}&#x27;;
+
+    if (:obj_kind not in (&#x27;miniappclient_income&#x27;)) then
+    begin
+        res_code = -1;
+        res_text = &#x27;Неверный obj_kind&#x27;;
+
+        suspend;
+        exit;
+    end
+
+    if (action_kind = &#x27;pdn_info&#x27;) then
+    begin
+        select res_code, res_text
+        from pdn_get_min_sufficient_income(:obj_kind, :obj_id)
+        into res_code, res_text;
+
+        suspend;
+        exit;
+    end
+
+    if (action_kind = &#x27;booklet&#x27;) then
+    begin
+        select res_code, res_text
+        from pdn_verified_avg_monthly_income(:obj_kind, :obj_id)
+        into res_code, res_text;
+
+        suspend;
+        exit;
+    end 
+
+    if (action_kind = &#x27;employer_info&#x27;) then
+    begin
+        select kc_id,
+               survey_json
+        from pdn_info_action(:obj_kind, :obj_id)
+        into :kc_id,
+             :survey_json;
+       
+        select kc_date
+        from hp_pdn_getinfo_add(:kc_id)
+        into :kc_date;
+
+        if (kc_date is null) then
+        begin
+            res_code = -1;
+            res_text = &#x27;Ошибка получения данных клиента&#x27;;
+            suspend;
+            exit;
+        end
+
+        jso2 = json.parse(:survey_json);
+
+        jso1 = json.obj_create();
+        jsa1 = json.arr_create();
+
+        json.obj_set_arr(jso1, &#x27;gdoc_list&#x27;, jsa1);
+
+        jso_tmp = json.obj_create(); 
+        json.arr_set_obj(jsa1, -1, jso_tmp); 
+        json.obj_set_i(jso_tmp, &#x27;id&#x27;, 0); 
+        json.obj_set_s(jso_tmp, &#x27;name&#x27;, &#x27;Справка(и) о ЗП по форме по КНД 1175018 (бывшая 2-НДФЛ)&#x27;);
+    
+        jso_tmp = json.obj_create(); 
+        json.arr_set_obj(jsa1, -1, jso_tmp); 
+        json.obj_set_i(jso_tmp, &#x27;id&#x27;, 1); 
+        json.obj_set_s(jso_tmp, &#x27;name&#x27;, &#x27;Справка(и) о ЗП по форме работодателя (в т.ч. ИП)&#x27;);
+    
+        jso_tmp = json.obj_create(); 
+        json.arr_set_obj(jsa1, -1, jso_tmp); 
+        json.obj_set_i(jso_tmp, &#x27;id&#x27;, 2); 
+        json.obj_set_s(jso_tmp, &#x27;name&#x27;, &#x27;Банковская выписка по поступлениям по карте / счету&#x27;);
+    
+        jsa1 = json.arr_create();
+        json.obj_set_arr(jso1, &#x27;dtlastm_list&#x27;, jsa1);
+    
+        begin
+          last_date = dateadd(-13 month to f_date_month_begin(:kc_date));
+          i = 0;
+          while (i &lt; 14) do
+          begin
+            jso_tmp = json.obj_create();
+            json.arr_set_obj(jsa1, -1, jso_tmp);
+            json.obj_set_i(jso_tmp, &#x27;id&#x27;, :i);
+            json.obj_set_s(jso_tmp, &#x27;name&#x27;, f_convert_datetostr(:last_date, &#x27;&#x27;));
+        
+            last_date = dateadd(1 month to :last_date);
+            i = i + 1;
+          end
+        end
+
+        json.obj_set_s(jso1, &#x27;head&#x27;,  &#x27;АНКЕТА РАСЧЕТА ДОКУМЕНТАЛЬНО ПОДТВЕРЖДЕННОГО ДОХОДА&#x27;);
+        json.obj_set_s(jso1, &#x27;text1&#x27;, &#x27;1.1 Какой из следующих видов документов может предоставить клиент?&#x27;);
+        json.obj_set_s(jso1, &#x27;text2&#x27;, &#x27;1.2 Укажите месяц последнего полученного дохода согласно документам, подтверждающим доход, полученным от клиента&#x27;);
+        json.obj_set_s(jso1, &#x27;text3&#x27;, &#x27;1.3 Укажите дату приема на работу&#x27;);
+        json.obj_set_s(jso1, &#x27;text4&#x27;, &#x27;ВНИМАНИЕ! Заполнить только, если клиент работает у единственного работодателя менее 12 мес. но более 3-х полных мес., если дата начала работы находится в указанном диапазоне дат:&#x27;);
+
+        json.obj_set_i(jso1, &#x27;gdoc&#x27;, cast(coalesce(f_json_str_get_value(:survey_json, &#x27;gdoc&#x27;, &#x27;0&#x27;), &#x27;0&#x27;) as integer));
+
+        if (coalesce(f_json_str_get_value(:survey_json, &#x27;dtlastm&#x27;, &#x27;&#x27;), &#x27;&#x27;) = &#x27;&#x27;) then
+            json.obj_set_i(jso1, &#x27;dtlastm&#x27;, 13);
+        else
+            json.obj_set_s(jso1, &#x27;dtlastm&#x27;, f_json_str_get_value(:survey_json, &#x27;dtlastm&#x27;, &#x27;&#x27;));
+
+        json.obj_set_s(jso1, &#x27;dtpdn_txt&#x27;,  f_convert_datetostr(:kc_date, &#x27;.lower.&#x27;));
+        json.obj_set_d(jso1, &#x27;dtjobb&#x27;, f_date_month_begin(dateadd(-1 year to f_date_month_begin(:kc_date))));
+        json.obj_set_d(jso1, &#x27;dtjobe&#x27;, f_date_month_end(dateadd(-4 month to f_date_month_begin(:kc_date))));
+        json.obj_set_s(jso1, &#x27;dtjob&#x27;, f_json_str_get_value(:survey_json, &#x27;dtjob&#x27;, null));
+        json.obj_set_s(jso1, &#x27;employer&#x27;, f_json_str_get_value(:survey_json, &#x27;employer&#x27;, &#x27;&#x27;));
+    
+        res_text = json.obj_to_json(jso1);
+        suspend;
+        exit;
+    end
+
+    if (action_kind = &#x27;monthly_info&#x27;) then
+    begin
+        select kc_id, survey_json
+        from pdn_info_action(:obj_kind, :obj_id)
+        into :kc_id, :survey_json;
+    
+        select kc_date
+        from hp_pdn_getinfo_add(:kc_id)
+        into :kc_date;
+    
+        if (:kc_date is null) then
+        begin
+            res_code = -1;
+            res_text = &#x27;Не указан месяц расчета ПДН!&#x27;;
+            suspend;
+            exit;
+        end
+
+        dtlastm_idx = cast(coalesce(f_json_str_get_value(:survey_json, &#x27;dtlastm&#x27;, &#x27;13&#x27;), &#x27;13&#x27;) as integer);
+        dtjob       = f_json_str_get_value(:survey_json, &#x27;dtjob&#x27;, &#x27;&#x27;);
+        last_date = dateadd(iif(dtlastm_idx &gt; 11, -1, -13 + dtlastm_idx) month to f_date_month_begin(:kc_date));
+        last_date = f_date_month_begin(:last_date);
+
+        if (coalesce(dtjob, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+            first_date = f_date_month_begin(dateadd(1 month to f_date_month_begin(cast(:dtjob as d_date))));
+        else
+            first_date = f_date_month_begin(dateadd(iif(dtlastm_idx &gt; 11, -12, -13) month to :kc_date));
+
+        jso1 = json.obj_create();
+        jsa1 = json.arr_create();
+        json.obj_set_arr(jso1, &#x27;data&#x27;, jsa1);
+    
+        income = 0;
+        cur_date = :last_date;
+    
+        while (:cur_date &gt;= :first_date) do
+        begin
+            jso_tmp = json.obj_create();
+    
+            json.obj_set_s(jso_tmp, &#x27;nmonth&#x27;, f_convert_datetostr(:cur_date, &#x27;&#x27;));
+            json.obj_set_i(jso_tmp, &#x27;vmonth&#x27;, extract(year from :cur_date)*100 + extract(month from :cur_date));
+    
+            iterator = 0;
+            found = false;
+            monthly_count = f_json_str_get_count(:survey_json, &#x27;data&#x27;);
+    
+            while (iterator &lt; :monthly_count) do
+            begin
+                monthly_info = f_json_str_get_value(:survey_json, f_format(&#x27;data[%1].vmonth&#x27;, :iterator), &#x27;0&#x27;);
+    
+                if (cast(:monthly_info as integer) = extract(year from :cur_date)*100 + extract(month from :cur_date)) then
+                begin
+                    json.obj_set_s(jso_tmp, &#x27;sum1&#x27;, f_json_str_get_value(:survey_json, f_format(&#x27;data[%1].sum1&#x27;, :iterator), &#x27;0&#x27;));
+                    json.obj_set_s(jso_tmp, &#x27;sum2&#x27;, f_json_str_get_value(:survey_json, f_format(&#x27;data[%1].sum2&#x27;, :iterator), &#x27;0&#x27;));
+                    json.obj_set_s(jso_tmp, &#x27;sum3&#x27;, f_json_str_get_value(:survey_json, f_format(&#x27;data[%1].sum3&#x27;, :iterator), &#x27;0&#x27;));
+                    json.obj_set_s(jso_tmp, &#x27;sum4&#x27;, f_json_str_get_value(:survey_json, f_format(&#x27;data[%1].sum4&#x27;, :iterator), &#x27;0&#x27;));
+                    json.obj_set_s(jso_tmp, &#x27;sumt&#x27;, f_json_str_get_value(:survey_json, f_format(&#x27;data[%1].sumt&#x27;, :iterator), &#x27;0&#x27;));
+                    found = true;
+                    break;
+                end
+                iterator = iterator + 1;
+            end
+    
+            if (not found) then
+            begin
+                json.obj_set_s(jso_tmp, &#x27;sum1&#x27;, &#x27;0&#x27;);
+                json.obj_set_s(jso_tmp, &#x27;sum2&#x27;, &#x27;0&#x27;);
+                json.obj_set_s(jso_tmp, &#x27;sum3&#x27;, &#x27;0&#x27;);
+                json.obj_set_s(jso_tmp, &#x27;sum4&#x27;, &#x27;0&#x27;);
+                json.obj_set_s(jso_tmp, &#x27;sumt&#x27;, &#x27;0&#x27;);
+            end
+    
+            income = :income + cast(f_json_str_get_value(json.obj_to_json(jso_tmp), &#x27;sumt&#x27;, &#x27;0&#x27;) as decimal(18,2));
+            json.arr_set_obj(jsa1, -1, jso_tmp);
+            cur_date = dateadd(-1 month to :cur_date);
+        end
+    
+        json.obj_set_s(jso1, &#x27;text1&#x27;, f_format(&#x27;Заполните сведения о доходах клиента. Наименование предприятия &quot;%1&quot;&#x27;, f_json_str_get_value(:survey_json, &#x27;employer&#x27;, &#x27;&#x27;)));
+        json.obj_set_f(jso1, &#x27;income&#x27;, :income);
+    
+        res_text = json.obj_to_json(jso1);
+    
+        suspend;
+        exit;
+    end
+
+    if (action_kind = &#x27;final_info&#x27;) then
+    begin
+        select survey_json
+        from pdn_info_action(:obj_kind, :obj_id)
+        into :res_text;
+
+        suspend;
+        exit;
+    end
+
+    if (action_kind = &#x27;employer_save&#x27;) then
+    begin
+        execute procedure pdn_save_json(:obj_id, :un_id, :action_data, :action_kind);
+
+--        select res_code, res_text 
+--        from dpd_anketa_check(:obj_kind, :obj_id, 1) 
+--        into res_code, res_text;
+
+        suspend;
+        exit;
+    end
+
+    if (action_kind = &#x27;monthly_save&#x27;) then
+    begin
+        execute procedure pdn_save_json(:obj_id, :un_id, :action_data, :action_kind);
+
+        select res_code, res_text 
+        from dpd_anketa_check(:obj_kind, :obj_id, 2) 
+        into res_code, res_text;
+
+        suspend;
+        exit;
+    end
+
+    if (action_kind = &#x27;final_save&#x27;) then
+    begin
+        select res_code, res_text 
+        from dpd_anketa_check(:obj_kind, :obj_id, 0) 
+        into res_code, res_text;
+
+        suspend;
+        exit;
+    end
+
+    res_code = -1;
+    res_text = &#x27;Unknown action_kind = &#x27; || coalesce(action_kind, &#x27;&lt;NULL&gt;&#x27;);
+
+    suspend;
+    exit;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MC_RESTRUCT_QUERY — процедура — схема БД</title>
+<meta name="description" content="Процедура MC_RESTRUCT_QUERY: 2 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>MC_RESTRUCT_QUERY</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_edoc_insert.html"><div class="to">HP_EDOC_INSERT</div></a><a class="ref-card" href="hp_extinfo_insert.html"><div class="to">HP_EXTINFO_INSERT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MCL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE MC_RESTRUCT_QUERY(
+    MCL_ID D_ID NOT NULL,
+    K_ID D_ID NOT NULL)
+RETURNS (
+    RES_CODE D_STR_CODE,
+    RES_TEXT D_STR_255)
+AS
+declare variable KFR_ID D_INTEGER;
+declare variable KRD_ID D_INTEGER;
+declare variable KRD_IS_DONE D_SMALLINT;
+declare variable EDL_ID D_ID;
+declare variable EDL_STATUS D_STR_CODE;
+begin
+    -- RFCKZ-587
+
+    select first 1 kfr.kfr_id, krd.krd_is_done
+    from kont_for_restruct_kz kfr
+    left join kont_for_restruct_kz_dtl krd on krd.krd_from_kfr_id = kfr.kfr_id
+    where kfr.kfr_from_k_id = :k_id
+    order by kfr.kfr_id desc, krd.krd_is_done desc
+    into :kfr_id, :krd_is_done;
+
+    if (coalesce(:kfr_id, 0) = 0 or coalesce(:krd_is_done, 0) = 1) then
+    begin
+        res_code = &#x27;error&#x27;;
+        res_text = &#x27;Возникли непредвиденные трудности, просим обратиться к Тех. Поддержке&#x27;;
+        suspend;
+        exit;
+    end
+
+
+    edl_status = f_edoc_status(&#x27;restruct_application&#x27;, :k_id, current_date);
+    if (edl_status = &#x27;signed&#x27;) then
+    begin
+        -- Если &quot;Заявление на реструктуризацию&quot; было подписано, тогда создаём график
+        execute procedure hp_extinfo_insert(&#x27;restruct_schedule&#x27;, &#x27;kontract&#x27;, :k_id, 1, 1000000000000);
+
+        res_code = &#x27;success&#x27;;
+        res_text = &#x27;Запрос принят в обработку. Вам будет отправлен электронный документ&#x27;;
+        suspend;
+    end
+    else if (edl_status = &#x27;unsigned&#x27;) then
+    begin
+        -- Данное условие вообще не является действительным, но сделано для предосторожности
+        -- Если &quot;Заявление на реструктуризацию&quot; находится в состоянии &quot;создан, но ещё не подписан&quot;
+        -- Тогда просто показываем клиенту текстовку
+        res_code = &#x27;success&#x27;;
+        res_text = &#x27;Эл. Документ &quot;Заявление на реструктуризацию&quot; ждет подписания&#x27;;
+        suspend;
+    end
+    else
+    begin
+        -- Иначе создаём эл. докумен &quot;Заявление на реструктуризацию&quot;
+        select edl_id
+        from hp_edoc_insert(&#x27;restruct_application&#x27;, &#x27;kontract&#x27;, :k_id, 1000000000000)
+        into :edl_id;
+
+        if (coalesce(:edl_id, 0) = 0) then
+        begin
+            res_code = &#x27;error&#x27;;
+            res_text = &#x27;Возникли непредвиденные трудности, просим обратиться к Тех. Поддержке&#x27;;
+            suspend;
+            exit;
+        end
+    
+        insert into kont_for_restruct_kz_dtl (krd_from_kfr_id, krd_from_edl_id, krd_from_mcl_id)
+        values (:kfr_id, :edl_id, :mcl_id)
+        returning krd_id into :krd_id;
+    
+        update kont_for_restruct_kz_dtl krd
+        set krd.krd_is_done = -1
+        where krd.krd_from_kfr_id = :kfr_id
+            and krd.krd_id &lt;&gt; :krd_id
+            and krd.krd_is_done &lt;&gt; -1;
+    
+        res_code = &#x27;success&#x27;;
+        res_text = &#x27;Запрос принят в обработку. Вам будет отправлен электронный документ&#x27;;
+        suspend;
+    end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

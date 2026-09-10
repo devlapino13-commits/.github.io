@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_ZALOGAUTO_DISB_CREATE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_ZALOGAUTO_DISB_CREATE: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_ZALOGAUTO_DISB_CREATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_zalogauto_edit.html"><div class="to">HP_ZALOGAUTO_EDIT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_ZALOGAUTO_DISB_CREATE(
+    K_ID D_ID,
+    UN_ID D_ID)
+AS
+declare variable Z_ID D_INTEGER;
+declare variable Z_FROM_C_ID D_ID;
+declare variable Z_COST_MARKET D_CURRENCY;
+declare variable Z_COST_LIKVID D_CURRENCY;
+declare variable Z_COST_KONTRACT D_CURRENCY;
+declare variable K_DISB_DATE D_DATE;
+declare variable C_ID D_ID;
+declare variable ZAL_ID D_INTEGER;
+declare variable ZAP_ID D_INTEGER;
+declare variable PR_CODE D_STR_255;
+declare variable RES_IS_ERROR D_SMALLINT;
+declare variable RES_TEXT D_STR_255;
+declare variable ZA_ID D_INTEGER;
+declare variable KS_FROM_OL_ID D_ID;
+declare variable STS_ID D_ID;
+declare variable PTS_ID D_ID;
+begin
+  -- Восстановление данных о профсуждении из таблицы Zalog при выдаче займа
+
+  select ks_date_begin, pr_code, ks_from_ol_id
+  from kontstate, kontract, product
+  where k_id = :k_id and
+        ks_from_k_id = k_id and
+        ks_state = 1 and
+        ks_ol_is_delete = 0 and
+        k_from_pr_id = pr_id
+  into k_disb_date, pr_code, ks_from_ol_id;
+
+  if (position(&#x27;.zalog_car.&#x27;, pr_code) = 0 and position(&#x27;.zalog.&#x27;, pr_code) = 0) then
+    exit;
+
+
+  select z_id, z_from_c_id, z_cost_market, z_cost_likvid, z_cost_kontract
+  from zalog
+  where z_from_k_id = :k_id and
+        z_type = 1 and
+        z_subtype = 4
+  order by z_id
+  rows 1
+  into z_id, z_from_c_id, z_cost_market, z_cost_likvid, z_cost_kontract;
+
+  if (z_id is null) then
+    exception e_default f_format(&#x27;Zalog not found, k_id: %1&#x27;, k_id);
+
+  select za_id, za_from_zal_id
+  from zalogauto
+  where za_from_k_id = :k_id
+  into za_id, zal_id;
+
+  if (za_id is null or zal_id is null) then
+  begin
+    select kc_from_c_id
+    from knclient
+    where kc_from_k_id = :k_id and
+          kc_amount_approved &gt; 0
+    into c_id;
+
+    -- Создаем первичное проф.суждение при выдаче
+    select res_is_error, res_text
+    from hp_zalogauto_edit(null, &#x27;kontract&#x27;, :k_id, :z_from_c_id, :z_cost_kontract, 0, 0, null, null, &#x27;&#x27;, :un_id)
+    into res_is_error, res_text;
+  
+    if (res_is_error = 1) then
+      exception e_default res_text;
+
+    update zalogauto
+    set za_from_z_id = :z_id
+    where za_from_k_id = :k_id
+    returning za_id, za_from_zal_id
+    into za_id, zal_id;
+
+    select cds_id
+    from clientdocs
+    where cds_from_c_id in (:c_id, :z_from_c_id) and
+          cds_from_pk_id = 310 and -- СТС
+          cds_doc_date_begin &lt;= (:k_disb_date) and
+          (cds_is_delete = 0 or
+          (cds_is_delete = 1 and
+          cds_delete_datetime &gt; :k_disb_date)) and
+          cds_verify_status = 2
+    order by cds_create_datetime desc
+    rows 1
+    into sts_id;
+    if (sts_id is null) then
+      exception e_message &#x27;В документах клиента не найден верифицированный СТС&#x27;;
+
+    select cds_id
+    from clientdocs
+    where cds_from_c_id in (:c_id, :z_from_c_id) and
+          cds_from_pk_id = 315 and -- ПТС
+          cds_doc_date_begin &lt;= (:k_disb_date) and
+          (cds_is_delete = 0 or
+          (cds_is_delete = 1 and
+          cds_delete_datetime &gt; :k_disb_date)) and
+          cds_verify_status = 2
+    order by cds_create_datetime desc
+    rows 1
+    into pts_id;
+
+    if (pts_id is null) then
+      exception e_message &#x27;В документах клиента не найден верифицированный ПТС&#x27;;
+
+    update zalogauto
+    set za_orig_sts_id = :sts_id,
+        za_orig_pts_id = :pts_id
+    where za_id = :za_id;
+
+    insert into zalogautoblob (zab_from_zal_id, zab_from_bls_id)
+    select :zal_id, cds_doc_blob_1
+    from clientdocs
+    where cds_from_c_id = :c_id and
+          cds_from_pk_id = 317 and
+          cds_verify_status &gt;= 2 and
+          cds_is_delete = 0 and
+          cds_doc_blob_1 is not null
+    union
+    select :zal_id, cds_doc_blob_2
+    from clientdocs
+    where cds_from_c_id = :c_id and
+          cds_from_pk_id = 317 and
+          cds_verify_status &gt;= 2 and
+          cds_is_delete = 0 and
+          cds_doc_blob_2 is not null;
+  end
+
+  update zalogautolist
+  set zal_status = 2
+  where zal_id = :zal_id
+  returning zal_from_zap_id
+  into zap_id;
+
+  update zalogautoprof
+  set zap_date = :k_disb_date,
+      zap_avg_cost = :z_cost_market,
+      zap_zalog_cost = :z_cost_likvid,
+      zap_status = 2,
+      zap_from_ol_id = :ks_from_ol_id
+  where zap_id = :zap_id;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0079_SQL — процедура — схема БД</title>
+<meta name="description" content="Проверка ПОД ФТ (контракт)">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0079_SQL</code></h1>
+<p class="desc">Проверка ПОД ФТ (контракт)</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_check_client_fio_ft.html"><div class="to">HP_CHECK_CLIENT_FIO_FT</div></a><a class="ref-card" href="hp_send_quick_message.html"><div class="to">HP_SEND_QUICK_MESSAGE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0079_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable C_ID ID_TYPE;
+declare variable Z_FROM_C_ID ID_TYPE;
+declare variable C_NAME_FIO STR_100;
+declare variable C_COMMENT STR_255;
+declare variable K_KONTRACT_NO D_STR_20;
+begin
+  -- проверка под фт на уровне контракта
+  for select kncl.kc_from_c_id, k.k_kontract_no
+      from kontract k
+      inner join knclient kncl on k.k_id = kncl.kc_from_k_id
+      where k.k_id = :k_id and
+            kncl.kc_amount_approved &gt; 0
+      into :c_id, k_kontract_no
+  do
+  begin
+    for select c_name_fio, c_comment
+        from hp_check_client_fio_ft(:c_id, 1)
+        into :c_name_fio, :c_comment
+    do
+    begin
+      select cl.c_name_fio
+      from clients cl
+      where cl.c_id = :c_id
+      into :res_info_text;
+      --            if (c_comment=&#x27;рфм (сфр): фио&#x27;) then
+      res_error_is_critical = 2;
+      --            else
+      --                res_error_is_critical = 2;
+      res_error_text = &#x27;Совпадение с лицом по &#x27; || c_comment || &#x27; &#x27; || c_name_fio;
+
+      if (check_kind = &#x27;.loan_disb.&#x27;) then
+      begin
+        --письмо комплайенс  RFCRU-4399
+        execute procedure hp_send_quick_message(&#x27;email&#x27;, &#x27;ru.oft@molbulak.com&#x27;, &#x27;Совпадение с лицом по &#x27; || c_comment,
+          &#x27;клиент &#x27; || :c_name_fio ||
+          &#x27;, совпадение с лицом по: &#x27; ||  :c_comment ||
+          &#x27;, номер договора: &#x27; || :k_kontract_no,
+          &#x27;&#x27;, null, :un_id);
+      end
+      suspend;
+    end
+  end
+  for select z.z_from_c_id, cl.c_name_fio
+      from zalog z
+      inner join clients cl on  z.z_from_c_id = cl.c_id
+      where z.z_from_k_id = :k_id
+      into :z_from_c_id, :res_info_text
+  do
+  begin
+    for select c_name_fio, c_comment
+        from hp_check_client_fio_ft(:z_from_c_id, 1)
+        into :c_name_fio, :c_comment
+    do
+    begin
+      res_error_is_critical = 2;
+      res_error_text = &#x27;Залогодатель в списке ФТ, выдача кредита запрещена&#x27;;
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

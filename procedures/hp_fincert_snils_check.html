@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_FINCERT_SNILS_CHECK — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_FINCERT_SNILS_CHECK: 2 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_FINCERT_SNILS_CHECK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_fincert_get_file.html"><div class="to">HP_FINCERT_GET_FILE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_fincert_get_result.html"><div class="to">HP_FINCERT_GET_RESULT</div></a><a class="ref-card" href="hp_fincert_get_result_history.html"><div class="to">HP_FINCERT_GET_RESULT_HISTORY</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SNILS</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_DATE_TIME</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_STATUS</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FF_CREATE_DATETIME</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_FINCERT_SNILS_CHECK(
+    SNILS D_STR_CODE,
+    CHECK_DATE_TIME D_DATETIME)
+RETURNS (
+    RES_DATE D_DATE,
+    RES_STATUS D_SMALLINT,
+    FF_CREATE_DATETIME D_DATETIME)
+AS
+declare variable hash_snils d_str_100;
+declare variable ff_file_body d_str_255;
+declare variable res_datetime d_datetime;
+begin
+    -- RFCRU-3628
+  res_status = 0;
+  hash_snils = f_fincert_snils_hash(:snils);
+  ff_file_body = &#x27;&#x27;;
+
+  if(coalesce(hash_snils, &#x27;&#x27;) = &#x27;&#x27;) then
+    exit;
+
+  select ff_create_datetime,
+    case
+        when position(:hash_snils in t.ff_file_body) &gt; 0 then
+          -- найдена позиция номера
+          case
+            when position(&#x27;,&#x27; in substring(t.ff_file_body from position(:hash_snils in t.ff_file_body))) &gt; 0 then
+              -- есть запятая после номера — берем до неё
+              substring(
+                t.ff_file_body from position(:hash_snils in t.ff_file_body)
+                for position(&#x27;,&#x27; in substring(t.ff_file_body from position(:hash_snils in t.ff_file_body))) - 1
+              )
+            else
+              -- запятая не найдена — берем до конца
+              substring(t.ff_file_body from position(:hash_snils in t.ff_file_body))
+          end
+        else
+          &#x27;&#x27;
+    end
+  from hp_fincert_get_file(&#x27;snils&#x27;, :check_date_time, 1) t
+  into ff_create_datetime, ff_file_body;
+
+  if (ff_file_body &lt;&gt; &#x27;&#x27;) then
+  begin
+    res_status = 1;
+
+    res_datetime = cast(substring(ff_file_body from
+                                  position(&#x27;|&#x27;, ff_file_body) + 1 for
+                                  position(&#x27;|&#x27;, substring(ff_file_body from position(&#x27;|&#x27;, ff_file_body) + 1)) - 1) as d_datetime);
+
+    res_date = cast(res_datetime as d_date);
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

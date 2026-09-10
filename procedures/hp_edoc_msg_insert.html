@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EDOC_MSG_INSERT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EDOC_MSG_INSERT: 3 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EDOC_MSG_INSERT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">3</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_edoc_msg_send_draft.html"><div class="to">HP_EDOC_MSG_SEND_DRAFT</div></a><a class="ref-card" href="hp_edoc_msg_send_replica.html"><div class="to">HP_EDOC_MSG_SEND_REPLICA</div></a><a class="ref-card" href="hp_edoc_sms_text.html"><div class="to">HP_EDOC_SMS_TEXT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_edoc_send_sms.html"><div class="to">FM_EDOC_SEND_SMS</div></a><a class="ref-card" href="fm_report_cmd.html"><div class="to">FM_REPORT_CMD</div></a><a class="ref-card" href="hp_overpay_forced_send_sms.html"><div class="to">HP_OVERPAY_FORCED_SEND_SMS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EDL_ID</div><div class="ptype">BIGINT</div><div class="pdesc">ID эл.документа</div></div><div class="prow"><div class="pname">FORCE_EDS_ID</div><div class="ptype">BIGINT</div><div class="pdesc">ID подписанта, кому нужно отправить</div></div><div class="prow"><div class="pname">FORCE_SMS</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc">Текст ошибки</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EDOC_MSG_INSERT(
+    EDL_ID D_ID,
+    FORCE_EDS_ID D_ID = null,
+    FORCE_SMS D_SMALLINT = 0)
+RETURNS (
+    RES_TEXT D_STR_255)
+AS
+declare variable msg_datetime d_datetime;
+declare variable eds_id d_id;
+declare variable edm_status d_smallint;
+declare variable edl_status d_smallint;
+declare variable c_id d_id;
+declare variable edc_state d_smallint;
+declare variable edl_blank_status d_smallint;
+declare variable retry_time d_smallint;
+declare variable db_id d_id;
+begin
+  -- Отправляет сообщение всем, кто не подписал при параметре EDS_ID = null
+  -- Иначе отправляет только указанному подписанту
+  db_id = f_get_db_id();
+  res_text = &#x27;&#x27;;
+  retry_time = iif(db_id in (39801, 41701), 5, 3);
+
+  select edc_state
+  from edoc_cfg, edoc_list
+  where edl_id = :edl_id and
+        edl_from_edc_id = edc_id
+  into edc_state;
+
+  if (edc_state = 0) then
+    exit;
+
+  if (edc_state in (1, 2)) then
+  begin
+    select res_text
+    from hp_edoc_msg_send_draft(:edl_id)
+    into res_text;
+
+    if (res_text = &#x27;&#x27; and edc_state = 2) then
+      execute procedure hp_edoc_msg_send_replica(:edl_id);
+
+    suspend;
+    exit;
+  end
+
+  -- Боевой режим для обычной рассылки СМС
+  for select eds_id, eds_from_c_id, edl_status, edl_blank_status
+  from edoc_sign, edoc_list
+  where edl_id = :edl_id and
+        eds_from_edl_id = edl_id and
+        eds_from_c_id is not null and
+        ((eds_status = 0 and :force_eds_id is null) or -- не подписанные записи
+         (eds_id = :force_eds_id)) -- или явно указанный подписант
+  into eds_id, c_id, edl_status, edl_blank_status
+  do
+  begin
+    if (res_text = &#x27;&#x27; and edl_status = 0 and edl_blank_status &lt; 0) then
+      res_text = &#x27;Ошибка при формировании эл. документа. Ожидайте 15 минут, затем обратитесь в тех. поддержку&#x27;;
+
+    if (res_text = &#x27;&#x27; and edl_status = 0 and edl_blank_status = 0) then
+      res_text = &#x27;Электронный документ формируется. Подождите 1 минуту&#x27;;
+
+    if (res_text = &#x27;&#x27; and edl_status = 1 and force_eds_id is null) then
+      res_text = &#x27;Электронный документ уже подписан&#x27;;
+
+    if (res_text = &#x27;&#x27; and edl_status = -1) then
+      res_text = &#x27;Электронный документ аннулирован&#x27;;
+
+    if (res_text = &#x27;&#x27;) then
+    begin
+      msg_datetime = null;
+      select edm_status, msg_datetime
+      from edoc_msg, fsrobot_msgbox
+      where edm_from_eds_id = :eds_id and
+            edm_from_msg_id = msg_id and
+            msg_object_kind = f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;) and
+            msg_object_id + 0 = :c_id -- +0 чтобы не использовать индекс по msg_object_id
+      order by msg_datetime desc
+      rows 1
+      into edm_status, msg_datetime;
+
+      if (edm_status = 1 and force_eds_id is null) then
+        res_text = &#x27;Подтверждение уже получено&#x27;;
+      else
+      if (msg_datetime is not null and datediff(minute, msg_datetime, current_timestamp) &lt; :retry_time) then
+        res_text = &#x27;Со времени предыдущей отправки прошло менее &#x27; || :retry_time || &#x27; минут.&#x27;;
+      else if (db_id not in (39801, 41701) and exists(
+        select edm_from_eds_id
+        from edoc_msg
+          left join fsrobot_msgbox on msg_id = edm_from_msg_id
+        where edm_from_eds_id = :eds_id
+          and datediff(minute, msg_datetime, current_timestamp) &lt; 60
+        group by edm_from_eds_id
+        having count(*) &gt; 2
+        )) then
+          res_text = &#x27;Нельзя отправлять более 3-х сообщений (PUSH, SMS) в течение часа&#x27;;
+    end
+  end
+
+  if (res_text = &#x27;&#x27;) then
+  begin
+    for select eds_id
+    from edoc_sign
+    where eds_from_edl_id = :edl_id and
+          eds_from_c_id is not null and
+          ((eds_status = 0 and :force_eds_id is null) or -- не подписанные записи
+           (eds_id = :force_eds_id)) -- или явно указанный подписант
+    into eds_id
+    do
+    begin
+      if (res_text = &#x27;&#x27;) then
+      begin
+        select res_text
+        from hp_edoc_sms_text(:eds_id, null, :force_sms)
+        into res_text;
+      end
+    end
+  end
+
+  if (res_text = &#x27;&#x27;) then
+    execute procedure hp_edoc_msg_send_replica(:edl_id);
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

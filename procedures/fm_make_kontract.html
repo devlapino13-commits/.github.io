@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_MAKE_KONTRACT — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_MAKE_KONTRACT: 2 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_MAKE_KONTRACT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_check_loan_konditions.html"><div class="to">HP_CHECK_LOAN_KONDITIONS</div></a><a class="ref-card" href="make_new_kontract.html"><div class="to">MAKE_NEW_KONTRACT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_cmd.html"><div class="to">FM_REPORT_CMD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_RESULT_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_RESULT_TXT</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_MAKE_KONTRACT(
+    UN_ID DECIMAL(18,0),
+    MA_ID INTEGER)
+RETURNS (
+    RES_RESULT_ID INTEGER,
+    RES_RESULT_TXT BLOB SUB_TYPE TEXT SEGMENT SIZE 80)
+AS
+declare variable RES_FIELD_NAME varchar(255);
+declare variable RES_FIELD_VALUES varchar(2048);
+declare variable IS_CRITICAL integer;
+declare variable RES_FIELD_NAME_PRIOR varchar(255);
+declare variable K_KONTRACT_NO varchar(20);
+declare variable DB_ID integer;
+declare variable MIN_CRITICAL integer;
+declare variable HEADER_ADDED integer;
+begin
+  res_result_id = 1;
+  header_added = 0;
+  res_result_txt = (select res_style
+                    from FM_HTML_STYLES) || &#x27;&lt;body&gt;&#x27;;
+  :db_id = f_get_db_id();
+  -- РКЗ: показываем и некритичные сообщения, остальные БД - как раньше
+  min_critical = iif(db_id = 39801, 0, 1);
+  select k_kontract_no
+  from KONTRACT
+  where k_from_ma_app_id = :ma_id and
+        k_status &lt;&gt; -2
+  order by k_disb_date desc
+  rows 1
+  into :k_kontract_no;
+  if (k_kontract_no is not null) then
+  begin
+    res_result_txt = BLOB_APPEND(res_result_txt, f_format(&#x27;&lt;h1 class=&quot;red_text&quot;&gt;%1&lt;/h1&gt;&#x27;, trim(iif(db_id &lt;&gt; 94401, &#x27;Внимание!&#x27;, &#x27;Diqqət!&#x27;))));
+    res_result_txt = BLOB_APPEND(res_result_txt, f_format(&#x27;&lt;br&gt;%1.&#x27;, trim(iif(db_id &lt;&gt; 94401, &#x27;Заявка ранее была переведена в договор&#x27;, &#x27;Ərizə əvvəlcə müqaviləyə keçirilmişdir&#x27;))));
+    res_result_txt = BLOB_APPEND(res_result_txt, f_format(&#x27;&lt;br&gt;%1: &lt;b&gt;%2&lt;/b&gt;&#x27;, trim(iif(db_id &lt;&gt; 94401, &#x27;Номер договора&#x27;, &#x27;Müqavilə nömrəsi&#x27;)), k_kontract_no));
+    res_result_txt = BLOB_APPEND(res_result_txt, &#x27;&lt;/body&gt;&#x27;);
+    suspend;
+    exit;
+  end
+  res_field_name_prior = &#x27;&#x27;;
+  for select coalesce(kf_client_fio, &#x27;&#x27;), coalesce(kf_error_text, &#x27;&#x27;), kf_error_is_critical
+      from HP_CHECK_LOAN_KONDITIONS(0, 1000000, :ma_id, &#x27;Create_Loan&#x27;, :un_id)
+      where kf_error_is_critical &gt;= :min_critical
+      order by kf_error_is_critical desc, kf_client_fio
+      into res_field_name, res_field_values, is_critical
+  do
+  begin
+    if (header_added = 0) then
+    begin
+      res_result_txt = BLOB_APPEND(res_result_txt, f_format(&#x27;&lt;h1 class=&quot;green_text&quot;&gt;%1&lt;/h1&gt;&#x27;, iif(db_id &lt;&gt; 94401, &#x27;Результаты проверки&#x27;, &#x27;Yoxlamanın nəticələri&#x27;)));
+      header_added = 1;
+    end
+    if (is_critical &gt;= 1) then
+      res_result_id = -1;
+    if (res_field_name_prior = &#x27;&#x27; or res_field_name &lt;&gt; res_field_name_prior) then
+    begin
+      res_result_txt = BLOB_APPEND(res_result_txt, &#x27;&lt;br&gt;&lt;br&gt;&lt;b&gt;&#x27; || res_field_name || &#x27;&lt;/b&gt;:&#x27;);
+    end
+    if (res_field_values &lt;&gt; &#x27;&#x27;) then
+    begin
+      if (is_critical = 0) then
+        res_result_txt = BLOB_APPEND(res_result_txt, &#x27;&lt;br&gt;&lt;font color=&quot;#808080&quot;&gt;Информация&lt;/font&gt;: &#x27; || res_field_values);
+      else if (is_critical = 1) then
+        res_result_txt = BLOB_APPEND(res_result_txt, f_format(&#x27;&lt;br&gt;&lt;font color=&quot;#F08205&quot;&gt;%1&lt;/font&gt;: &#x27;, iif(db_id &lt;&gt; 94401, &#x27;Критично&#x27;, &#x27;Kritik&#x27;)) || res_field_values);
+      else
+        res_result_txt = BLOB_APPEND(res_result_txt, f_format(&#x27;&lt;br&gt;&lt;font color=&quot;red&quot;&gt;%1&lt;/font&gt;: &#x27;, iif(db_id &lt;&gt; 94401, &#x27;Очень критично&#x27;, &#x27;Kritik hədd&#x27;)) || res_field_values);
+      res_result_txt = BLOB_APPEND(res_result_txt, &#x27;&lt;br&gt;&#x27;);
+    end
+    res_field_name_prior = res_field_name;
+  end
+  if (res_result_id = -1) then
+  begin
+    res_result_txt = BLOB_APPEND(res_result_txt, &#x27;&lt;/body&gt;&#x27;);
+    suspend;
+    exit;
+  end
+  select k_kontract_no
+  from MAKE_NEW_KONTRACT(:ma_id, 0, :un_id)
+  into :k_kontract_no;
+  res_result_txt = BLOB_APPEND(res_result_txt, f_format(&#x27;&lt;h1 class=&quot;green_text&quot;&gt;%1&lt;/h1&gt;&#x27;, iif(db_id &lt;&gt; 94401, &#x27;Успешно&#x27;, &#x27;Uğurlu&#x27;)));
+  res_result_txt = BLOB_APPEND(res_result_txt, f_format(&#x27;&lt;br&gt;%1.&#x27;, iif(db_id &lt;&gt; 94401, &#x27;Заявка успешно переведена в договор&#x27;, &#x27;Ərizə uğurla müqaviləyə dəyişdirildi&#x27;)));
+  res_result_txt = BLOB_APPEND(res_result_txt, f_format(&#x27;&lt;br&gt;%1: &lt;b&gt;%2&lt;/b&gt;&#x27;, iif(db_id &lt;&gt; 94401, &#x27;Номер договора&#x27;, &#x27;Müqavilə nömrəsi&#x27;), k_kontract_no));
+  res_result_txt = BLOB_APPEND(res_result_txt, &#x27;&lt;/body&gt;&#x27;);
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

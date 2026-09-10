@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$UXSOURCE_SYNC_INDEX — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$UXSOURCE_SYNC_INDEX: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$UXSOURCE_SYNC_INDEX</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">US_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">US_UUID_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$UXSOURCE_SYNC_INDEX(
+    US_UUID D_UUID,
+    US_UUID_CODE D_STR_CODE = null)
+AS
+declare variable us_is_table d_bool;
+declare variable index_name d_str_code;
+declare variable us_source d_str_code;
+declare variable us_kind d_smallint;
+declare variable source_name d_str_code;
+begin
+  -- Сихронизирует индексы БД с таблицей uxIndex
+
+  if (coalesce(us_uuid, &#x27;&#x27;) = &#x27;&#x27;) then
+    us_uuid = uxf$uniq(us_uuid_code);
+
+  select us_code, us_is_table, us_kind
+  from ux$source
+  where us_uuid = :us_uuid
+  into us_source, us_is_table, us_kind;
+
+  update ux$index
+  set uix_state = -2
+  where uix_source = :us_source and
+        uix_virtual = 0;
+
+  if (us_kind = 0 and us_is_table = 1) then
+  begin
+    for select i.rdb$index_name
+    from rdb$indices i
+    where rdb$relation_name = upper(:us_source) and
+          (i.rdb$unique_flag = 1 or i.rdb$foreign_key is not null)
+    into index_name
+    do
+    begin
+      source_name = &#x27;&#x27;;
+      select source_name
+      from uxp$index_load(:index_name)
+      into :source_name;
+  
+      if (source_name = &#x27;&#x27;) then
+        exception e_default f_format(&#x27;Index source not found: %1&#x27;, index_name);
+    end
+  end
+
+  delete from ux$index
+  where uix_source = :us_source and
+        uix_state = -2;
+
+  update ux$index
+  set uix_state = 0
+  where uix_source = :us_source and
+        uix_state &lt;&gt; 0;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

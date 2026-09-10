@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>INN_AUTO_QUERYS — процедура — схема БД</title>
+<meta name="description" content="Процедура INN_AUTO_QUERYS: 3 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>INN_AUTO_QUERYS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_extinfo_insert.html"><div class="to">HP_EXTINFO_INSERT</div></a><a class="ref-card" href="inn_check_queries_populate.html"><div class="to">INN_CHECK_QUERIES_POPULATE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CREATION_STAGE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE INN_AUTO_QUERYS(
+    C_ID D_ID,
+    UN_ID D_ID,
+    CREATION_STAGE D_STR_CODE)
+AS
+declare variable fname d_str_code;
+declare variable sname d_str_code;
+declare variable patronimic d_str_code;
+declare variable doc_no d_str_20;
+declare variable pass_number d_str_code;
+declare variable pass_seria d_str_10;
+declare variable doc_date d_date;
+declare variable birth_date d_date;
+declare variable doc_type d_smallint;
+declare variable eic_id d_id;
+declare variable eil_id d_id;
+declare variable counter d_integer;
+declare variable inn_ru_source d_integer;
+declare variable cfg d_str_20;
+begin
+  counter = 0;
+  inn_ru_source = f_get_const(&#x27;inn_ru_source&#x27;);
+
+  -- таблица с вариативным перебором
+  for select result_fname,
+             result_sname,
+             result_patronimic,
+             result_pass_number,
+             result_pass_seria,
+             result_doc_no,
+             result_doc_date,
+             result_birth_date,
+             result_doc_type
+      from inn_check_queries_populate(:c_id)
+      into fname,
+           sname,
+           patronimic,
+           pass_number,
+           pass_seria,
+           doc_no,
+           doc_date,
+           birth_date,
+           doc_type
+  do
+  begin
+    -- осуществлялся ли уже запрос инн с данными клиентскими данными сегодня
+    if (exists(select *
+               from inn_check_queries icq
+               inner join extinfolist eil on eil.eil_id = icq.icq_from_eil_id
+               where icq.icq_from_c_id = :c_id and
+                     icq.icq_fname = :fname and
+                     icq.icq_sname = :sname and
+                     icq.icq_patronimic = :patronimic and
+                     icq.icq_doc_no = :doc_no and
+                     eil.eil_date = current_date and
+                     eil_status &gt;= 0))
+    then
+      continue;
+
+    -- если это гражданин рф то пропускаем
+    if (doc_type &lt;&gt; 10) then
+      continue;
+
+    if (inn_ru_source &gt; 0) then
+    begin
+      for select eic_code, eic_id
+          from extinfocfg
+          where (:inn_ru_source in (1,3) and eic_code = &#x27;inn_smev&#x27;)
+            or (:inn_ru_source in (2,3) and eic_code = &#x27;inn_gnivc&#x27;)
+          into cfg, eic_id
+      do
+      begin
+        -- создается запрос на получение инн
+        execute procedure hp_extinfo_insert(:cfg, &#x27;clients&#x27;, :c_id, 0, :un_id);
+
+        select eil.eil_id
+        from extinfolist eil
+        where eil.eil_from_c_id = :c_id and
+              eil.eil_from_eic_id = :eic_id
+        order by eil.eil_id desc rows 1
+        into :eil_id;
+
+        -- создаю дочернюю запись
+        insert into inn_check_queries (icq_from_c_id, icq_fname, icq_sname, icq_patronimic, icq_datebirth, icq_doc_type,
+                                       icq_doc_no, icq_doc_date, icq_creation_stage, icq_status, icq_inn_received,
+                                       icq_from_eil_id, icq_pass_seria, icq_pass_number,
+                                       icq_info_source)
+        values (:c_id, :fname, :sname, :patronimic, :birth_date, :doc_type, :doc_no, :doc_date,
+                f_enum_id(&#x27;inn_request_source&#x27;, :creation_stage), 0, 0, :eil_id, :pass_seria,
+                :pass_number, iif(:cfg = &#x27;inn_gnivc&#x27;, 0, 1));
+
+        counter = counter + 1;
+      end
+    end
+  end
+
+  if (counter &gt; 0) then
+  begin
+    for select eic_code
+    from extinfocfg
+    where (:inn_ru_source in (1,3) and eic_code = &#x27;inn_smev&#x27;)
+      or (:inn_ru_source in (2,3) and eic_code = &#x27;inn_gnivc&#x27;)
+    into cfg
+    do
+      post_event :cfg;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

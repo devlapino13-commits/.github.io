@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DO_CLIENT_ACCESS_BLOCK — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DO_CLIENT_ACCESS_BLOCK: 3 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DO_CLIENT_ACCESS_BLOCK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_uniqtable_id.html"><div class="to">HP_GET_UNIQTABLE_ID</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">BLOCK_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">BLOCK_UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DO_CLIENT_ACCESS_BLOCK(
+    C_ID DECIMAL(18,0),
+    BLOCK_DATE DATE,
+    BLOCK_UN_ID DECIMAL(18,0))
+AS
+declare variable ACCESS_KIND integer;
+declare variable PA_ID integer;
+declare variable UNIQTAB_USERNAME integer;
+declare variable UNIQTAB_PERMACTIONS integer;
+declare variable MAX_DATE date;
+declare variable UN_ID decimal(18,0);
+begin
+  select ukt_id
+  from hp_get_uniqtable_id(&#x27;Username&#x27;)
+  into :uniqtab_username;
+  select ukt_id
+  from hp_get_uniqtable_id(&#x27;PermActions&#x27;)
+  into :uniqtab_permactions;
+
+  if (block_date is null) then
+    block_date = current_date;
+
+  for select un_id
+      from username
+      where un_from_c_id = :c_id
+      into :un_id
+  do
+  begin
+    update username
+    set un_google_id = &#x27;&#x27;
+    where (un_id = :un_id);
+
+    access_kind = 0;
+    for select pa_id, pm_access_kind
+        from permactions, permissions
+        where pa_parent_id is null and
+              pm_object_kind = :uniqtab_username and
+              pm_object_id = :un_id and
+              pm_subject_kind = :uniqtab_permactions and
+              pm_subject_id = pa_id and
+              pm_is_delete = 0 and
+              (coalesce(pm_date_begin, date &#x27;01.01.2000&#x27;) &lt;= :block_date) and
+              (coalesce(pm_date_end, date &#x27;31.12.2999&#x27;) &gt;= :block_date)
+        into :pa_id, :access_kind
+    do
+    begin
+      if (access_kind = 1) then
+      begin
+        max_date = null;
+        select max(pm_date_begin)
+        from permactions, permissions
+        where pa_parent_id is null and
+              pm_object_kind = :uniqtab_username and
+              pm_object_id = :un_id and
+              pm_subject_kind = :uniqtab_permactions and
+              pm_subject_id = pa_id and
+              pm_is_delete = 0 and
+              (coalesce(pm_date_begin, &#x27;01.01.2000&#x27;) &lt;= current_date) and
+              (coalesce(pm_date_end, &#x27;31.12.2999&#x27;) &gt;= current_date)
+        into :max_date;
+
+        if (max_date is not null and
+            max_date &gt; block_date) then
+          block_date = current_date;
+
+        insert into permissions (pm_id, pm_object_kind, pm_object_id, pm_subject_kind, pm_subject_id, pm_date_begin,
+                                 pm_access_kind, pm_is_delete, pm_from_un_id)
+        values (-1, :uniqtab_username, :un_id, :uniqtab_permactions, :pa_id, :block_date, -1, 0, :block_un_id);
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

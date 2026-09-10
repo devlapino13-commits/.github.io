@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_HTML_INFO_CONT_CHECK — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_HTML_INFO_CONT_CHECK: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_HTML_INFO_CONT_CHECK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_html_client_info.html"><div class="to">FM_HTML_CLIENT_INFO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_HTML_INFO_CONT_CHECK(
+    C_ID D_ID)
+RETURNS (
+    RES_TEXT D_BLOB_TEXT)
+AS
+declare variable rd_id d_id;
+declare variable ver_status d_smallint;
+declare variable queue_no d_integer;
+declare variable aco_last_id d_id;
+declare variable aco_id d_id;
+declare variable decline_reason d_str_2048;
+declare variable db_id d_integer;
+declare variable bc_status d_integer;
+begin
+  db_id = f_get_db_id();
+  ver_status = 2;
+  res_text = f_format(&#x27;%1Статус проверки %2 номера: &#x27;,iif(db_id &lt;&gt; 39801, &#x27;&#x27;, &#x27;&lt;br&gt;&#x27;), iif(db_id &lt;&gt; 39801, &#x27;контактного&#x27;, &#x27;сотового&#x27;));  -- RFCKG-4140
+  select rd.rd_id
+  from refdata rd
+  where rd.rd_code = &#x27;ActionGroup.SimpleVerify_Phone_Number_Verify&#x27;
+  into :rd_id;
+
+  select acl.acl_status
+  from actionlist acl
+  where acl.acl_object_kind = f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;) and
+        acl.acl_object_id = :c_id and
+        acl.acl_from_rd_id = :rd_id
+  order by acl.acl_datetime desc
+  rows 1
+  into ver_status;
+
+  if (db_id = 39801) then
+  begin
+    select bc.bc_status       -- RFCKG-4180  проверка номера телефона
+    from bmg_clients bc
+    where bc.bc_from_c_id = :c_id
+      and bc.bc_is_last = 1
+    order by bc.bc_status_datetime
+    rows 1
+    into bc_status;
+
+    bc_status = coalesce(bc_status, -100);
+
+    res_text = blob_append(res_text, case bc_status
+                                       when -2 then &#x27;&lt;b style=&quot;color: red;&quot;&gt;Не подтвержден&lt;/b&gt;&#x27;
+                                       when 1 then &#x27;&lt;b style=&quot;color: green;&quot;&gt;Подтвержден&lt;/b&gt;&#x27;
+                                       when -3 then &#x27;&lt;b style=&quot;color: red;&quot;&gt;Ошибка запроса&lt;/b&gt;&#x27;
+                                       when -4 then &#x27;&lt;b style=&quot;color: red;&quot;&gt;Ошибка запроса&lt;/b&gt;&#x27;
+                                       when -100 then &#x27;&lt;b style=&quot;color: red;&quot;&gt;Нет активных запросов&lt;/b&gt;&#x27;
+                                       else &#x27;&lt;b&gt;Запрос в процессе&lt;/b&gt;&#x27;
+                                     end);
+
+    res_text = blob_append(res_text, iif(bc_status = -2, &#x27;&lt;br&gt;&lt;span style=&quot;color: red;&quot;&gt;Клиенту необходимо сменить в КМП номер телефона на тот, который привязанный к ИИН&lt;/span&gt;&lt;br&gt;&#x27;, &#x27;&#x27;));
+  end
+  else
+  begin
+    res_text = BLOB_APPEND(res_text, &#x27;&lt;b&gt;&#x27; || case ver_status
+                           when -3 then &#x27;Отмена заполнения&#x27;
+                           when -2 then &#x27;Отказан&#x27;
+                           when -1 then &#x27;На доработку&#x27;
+                           when 0 then &#x27;В ожидании&#x27;
+                           when 1 then &#x27;Принят на обработку&#x27;
+                           else &#x27;Подтвержден&#x27;
+                         end || &#x27;&lt;/b&gt;&#x27;);
+  end
+
+  if (ver_status = 0) then
+  begin
+    queue_no = 0;
+    for select aco_id
+        from actionorder
+        where aco_object_kind = 0 and
+              aco_object_id = :c_id and
+              aco_from_rd_id = :rd_id
+        order by aco_id desc
+        rows 1
+        into :aco_last_id
+    do
+    begin
+      for select aco_id
+          from actionorder
+          where aco_from_rd_id = :rd_id and
+                aco_status = 0
+          order by aco_date
+          into aco_id
+      do
+      begin
+        if (aco_id &lt;= aco_last_id) then
+          queue_no = queue_no + 1;
+      end
+    end
+    res_text = BLOB_APPEND(res_text, &#x27;&lt;b&gt; № &#x27; || queue_no || &#x27;&lt;/b&gt;&#x27;);
+  end
+
+  if (ver_status = -2) then
+  begin
+    decline_reason = &#x27;&#x27;;
+    select f_get_verify_memo(obm_memo, &#x27;reason_memo&#x27;)
+    from objectprops
+    inner join objectmemo on obm_from_opr_id = opr_id
+    where opr_object_kind = 0 and
+          opr_object_id = :c_id and
+          opr_subject_id = :rd_id
+    order by obm_datetime desc
+    rows 1
+    into decline_reason;
+
+    decline_reason = coalesce(decline_reason,&#x27;&#x27;);
+
+    res_text = BLOB_APPEND(res_text, &#x27;&lt;br&gt;&#x27; || &#x27;&lt;b&gt;Причина отказа: &lt;/b&gt;&#x27; || decline_reason || &#x27;&lt;/br&gt;&#x27;);
+
+    res_text = BLOB_APPEND(res_text, &#x27;&lt;br&gt;&#x27; || f_uri_sql(&#x27;Переотправить на верификацию&#x27;, &#x27;resend_to_verify&#x27;,&#x27;clients&#x27;, :c_id, &#x27;text&#x27;, &#x27;Наберите комбинацию&#x27;, &#x27;&#x27;, 4, 255, &#x27;&#x27;, &#x27;&#x27;, &#x27;dialog&#x27;, &#x27;&#x27;) || &#x27;&lt;/br&gt;&#x27;);
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

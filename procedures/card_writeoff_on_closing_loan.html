@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CARD_WRITEOFF_ON_CLOSING_LOAN — процедура — схема БД</title>
+<meta name="description" content="Процедура CARD_WRITEOFF_ON_CLOSING_LOAN: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CARD_WRITEOFF_ON_CLOSING_LOAN</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CS_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CARD_WRITEOFF_ON_CLOSING_LOAN(
+    CS_ID D_INTEGER,
+    AMOUNT D_CURRENCY)
+AS
+declare variable packet_no d_str_10;
+declare variable ticket_no d_integer;
+begin
+  if (f_get_const(&#x27;cardprjclose&#x27;) = 1) then
+    exit;
+  select
+    packet_no,
+    ticket_no
+  from cardsynctrn_create
+  into
+    :packet_no,
+    :ticket_no;
+
+  insert into cardsync (
+    cs_parent_id,
+    cs_from_csc_id,
+    cs_card_id,
+    cs_from_cca_id,
+    cs_object_kind,
+    cs_object_id,
+    cs_amount,
+    cs_request_json,
+    cs_office_id,
+    cs_from_un_id,
+    cs_from_k_id,
+    cs_from_c_id
+  )
+  select
+    cs_id,
+    f_get_cardsynccfg_id(&#x27;write-off_on_closing&#x27;),
+    cs_card_id,
+    cs_from_cca_id,
+    cs_object_kind,
+    cs_object_id,
+    :amount,
+    f_format(
+      &#x27;{&quot;card_acct&quot;:&quot;%1&quot;,&quot;card_acct_ccy&quot;:&quot;KGS&quot;,&quot;tran_type&quot;:&quot;12c&quot;,&quot;tran_ccy&quot;:&quot;KGS&quot;,&quot;tran_amount&quot;:%2,&#x27; ||
+      &#x27;%3,&quot;tran_comment&quot;:&quot;%4&quot;,&quot;bank_c&quot;:&quot;21&quot;,&quot;groupc&quot;:&quot;01&quot;,&quot;payment_mode&quot;:2,&quot;tran_date_time&quot;:&quot;%5&quot;}&#x27;,
+        cs_from_cca_id,
+        round(:amount, 2),
+        f_format(&#x27;&quot;tran_pocket&quot;:&quot;%1&quot;,&quot;tran_ticket&quot;:&quot;%2&quot;&#x27;, :packet_no, :ticket_no),
+        coalesce(f_json_str_get_value(cs_request_json, &#x27;info&#x27;, null), &#x27;переплата&#x27;) || &#x27;:&#x27; || round(:amount, 2) || &#x27;;&#x27;,
+        f_datetimetostr(current_timestamp)),
+    cs_office_id,
+    cs_from_un_id,
+    cs_from_k_id,
+    cs_from_c_id
+  from cardsync
+  where cs_id = :cs_id;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

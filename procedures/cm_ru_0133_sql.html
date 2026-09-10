@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0133_SQL — процедура — схема БД</title>
+<meta name="description" content="Блок если от даты выдачи до первого погашения меньше 15 дней или больше 45 дней">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0133_SQL</code></h1>
+<p class="desc">Блок если от даты выдачи до первого погашения меньше 15 дней или больше 45 дней</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0133_SQL(
+    MA_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable KOL_DAY integer;
+declare variable DISB_DATE date;
+declare variable FIRST_REPAY_DATE date;
+declare variable MIN_DAYS integer;
+declare variable MAX_DAYS integer;
+begin
+  if (exists(select *
+             from KONTRACT K
+             where K.K_FROM_MA_APP_ID = :MA_ID)) then
+    exit;
+  -- при утверждении графика:
+  --От даты выдачи до первого погашения не должно быть меньше min_days дней и не больше max_days дней.
+  min_days = 15;
+  max_days = 45;
+  kol_day = null;
+  select min(sh_date), max(sh_date)
+  from schedule
+  where sh_from_k_id = -:ma_id and
+        sh_id in (0, 1)
+  into disb_date, first_repay_date;
+  kol_day = first_repay_date - disb_date;
+
+  if (kol_day is null) then
+  begin
+    res_error_text = &#x27;график погашения не построен.&#x27;;
+    res_error_is_critical = 2;
+    suspend;
+    exit;
+  end
+
+  if (exists(select * from miniapp,product
+  where ma_id = :ma_id
+  and ma_is_active = 1
+  and ma_date_end = &#x27;31.12.9999&#x27;
+  and ma_from_pr_id = pr_id
+  and pr_code similar to &#x27;%(.reliable_client.|.reliable_client_plus.|.loyal.|.support.)%&#x27;)) then
+  begin
+    max_days = dateadd(month, 3, :disb_date) - :disb_date;
+  end
+
+  if (exists(select * from miniapp,product
+  where ma_id = :ma_id
+  and ma_is_active = 1
+  and ma_date_end = &#x27;31.12.9999&#x27;
+  and ma_from_pr_id = pr_id
+  and pr_code similar to &#x27;%(.selfemployed_plus.|.refinance_plus.)%&#x27;)) then
+  begin
+    max_days = 35;
+  end
+
+  if (not(kol_day between min_days and max_days)) then
+  begin
+    -- Если платежи попадают между 9-12 января или 1-11 мая, НЕ выводим сообщение о несоответствии по максимальным дням между платежами
+    if (not((extract(month from first_repay_date) = 1 and extract(day from first_repay_date) between 9 and 12) or
+        (extract(month from first_repay_date) = 5 and extract(day from first_repay_date) between 1 and 11)))  then
+    begin
+        res_error_text = &#x27;От даты выдачи до первого погашения должно быть не меньше &#x27; || min_days || &#x27; дней, и не больше &#x27; || max_days || &#x27; дней&#x27;;
+        res_error_is_critical = 1;
+        suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_RECREATE_FT_INFO — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_RECREATE_FT_INFO: 3 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_RECREATE_FT_INFO</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="ft_fio_change_hist.html"><div class="to">FT_FIO_CHANGE_HIST</div></a><a class="ref-card" href="hp_ft_fieldvalue_calc.html"><div class="to">HP_FT_FIELDVALUE_CALC</div></a><a class="ref-card" href="hp_ft_fieldvalue_update.html"><div class="to">HP_FT_FIELDVALUE_UPDATE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DEFAULT_UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FIB_KIND</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_RECREATE_FT_INFO(
+    C_ID D_ID,
+    DEFAULT_UN_ID D_ID,
+    FIB_KIND D_SMALLINT = 0)
+AS
+declare variable REG_ID D_INTEGER;
+declare variable UN_ID D_ID;
+declare variable DATE_OPEN D_DATE;
+declare variable DATE_CLOSE D_DATE;
+declare variable FIB_ID D_ID;
+declare variable FIL_ID D_ID;
+declare variable DD D_DATE;
+declare variable OL_DATETIME D_DATETIME;
+declare variable CHECK_DATE D_DATE;
+declare variable CHECK_DATETIME D_DATETIME;
+declare variable FIF_ID D_ID;
+declare variable FIF_FIELDNAME D_STR_CODE;
+declare variable NEW_VALUE D_STR_LONG;
+declare variable KS_DISB_DATE D_DATE;
+declare variable KS_CLOSE_DATE D_DATE;
+declare variable NEED_REPEAT D_SMALLINT;
+declare variable FIC_SCHEDULE_DATE D_DATE;
+declare variable FIC_DATE D_DATE;
+declare variable TMP_DATE D_DATE;
+declare variable PRIOR_FIL_DATE_CLOSE D_DATE;
+declare variable PRIOR_FIL_ID D_ID;
+declare variable FIC_SCHEDULE_DATE_PRIOR_FIL D_DATE;
+declare variable FIRST_LOAN_FOUND D_BOOL;
+declare variable CURR_FIB_KIND D_SMALLINT;
+begin
+  -- Процедура заполняет анкету ПОД/ФТ по переданному клиенту и
+  -- типу договора (обычный, самозанятый)
+
+  dd = cast(&#x27;31.12.9999&#x27; as date);
+  fib_kind = coalesce(fib_kind, 0);
+
+  -- Очищаем анкеты по клиенту, только по своему типу fib_kind
+  for select distinct fib_id
+      from ft_infoblank, ft_infolist
+      where fib_kind = :fib_kind and
+            fil_from_fib_id = fib_id and
+            fil_from_c_id = :c_id
+      into fib_id
+  do
+  begin
+    for select fif_id
+        from ft_infofield
+        where fif_from_fib_id = :fib_id
+        into fif_id
+    do
+    begin
+      delete from ft_infovalue
+      where fiv_from_c_id = :c_id and
+            fiv_from_fif_id = :fif_id;
+
+      delete from ft_infoeditvalue
+      where fie_from_c_id = :c_id and
+            fie_from_fif_id = :fif_id;
+    end
+
+    for select fil_id
+        from ft_infolist
+        where fil_from_c_id = :c_id and
+              fil_from_fib_id = :fib_id
+        into fil_id
+    do
+    begin
+      delete from ft_infocheck
+      where fic_from_fil_id = :fil_id;
+    end
+
+    delete from ft_infolist
+    where fil_from_c_id = :c_id and
+          fil_from_fib_id = :fib_id;
+  end
+
+  first_loan_found = 0; -- Признак что первый договор нужного типа (по fib_kind) найден
+
+  -- Берем все кредиты где данное лицо выступает в качестве клиента)
+  for with loans as (
+      select ks_date_begin, last_date as date_end, ks_region_id, ol_user_id,
+             ol_datetime,
+             case
+               when pr_code containing &#x27;.selfemployed.&#x27; then 1
+               when pr_code containing &#x27;.business.&#x27; then 2
+               else 0
+            end as  fib_kind
+      from knclient, kontstate, kontract, operlist, product, ft_date_close_calc(k_id, :c_id, :dd)
+      where kc_from_c_id = :c_id and
+            kc_amount_approved &gt; 0 and
+            ks_from_k_id = kc_from_k_id and
+            ks_state = 1 and
+            ks_ol_is_delete = 0 and
+            ks_from_k_id = k_id and
+            ks_from_ol_id = ol_id and
+            k_from_pr_id = pr_id
+      union
+      -- Добавляем залогодателей, причем учитываем замену залогодателей
+      -- Tсли указана дата окончания действия лица как залгодателя, беру эту дату,
+      -- если не указана тогда ориентируюсь на дату фактического закрытия займа
+      select min(date_begin), max(date_end), ks_region_id, ol_user_id,
+             ol_datetime, fib_kind
+      from (select coalesce(z_date_begin, ks_date_begin) as date_begin,
+                   coalesce(z_date_end, last_date) as date_end,
+                   ks_region_id, ol_user_id, ol_datetime,
+                   case
+                     when pr_code containing &#x27;.selfemployed.&#x27; then 1
+                     when pr_code containing &#x27;.business.&#x27; then 2
+                     else 0
+                   end as  fib_kind
+            from zalog, kontstate, operlist, kontract, product, ft_date_close_calc(k_id, :c_id, :dd)
+            where z_from_c_id = :c_id and
+                  z_from_k_id = ks_from_k_id and
+                  ks_state = 1 and
+                  ks_ol_is_delete = 0 and
+                  ks_from_ol_id = ol_id and
+                  ks_from_k_id = k_id and
+                  k_from_pr_id = pr_id)
+      group by ks_region_id, ol_user_id, ol_datetime, fib_kind
+    )
+  select ks_date_begin, iif(date_end = :dd, null, date_end), ks_region_id,
+         ol_user_id, ol_datetime, fib_kind
+  from loans
+  order by 1, 2
+  into ks_disb_date, ks_close_date, reg_id, un_id, ol_datetime,
+       curr_fib_kind
+  do
+  begin
+    -- Ищем первый выданный кредит с подходящим fib_kind
+    -- если fib_kind = 0 первый контракт в анкете должен быть обычным
+    -- если fib_kind = 1 первый контракт в анкете должен быть для самозанятых
+    -- Тип последующих договоров не важен, обрабатываем всех
+    if (first_loan_found = 0 and
+        curr_fib_kind is not null and
+        curr_fib_kind = fib_kind) then -- Договор нам подходит
+      first_loan_found = 1;
+
+    if (first_loan_found = 0) then
+      continue;
+
+    -- Создаем записи в таблице обновлений анкет ft_infolist, с учетом того,
+    -- что каждая строка анкеты, должна попадать в диапазон дат действия бланка
+    for select fib_id, maxvalue(fib_date, :ks_disb_date),
+               minvalue(coalesce(fib_date_close, :dd), coalesce(:ks_close_date, :dd))
+        from ft_infoblank
+        where fib_date &lt;= coalesce(:ks_close_date, :dd) and
+              coalesce(fib_date_close, :dd) &gt;= :ks_disb_date and
+              fib_state = 1 and
+              fib_date &lt;= current_date and
+              fib_kind = :fib_kind -- Обычная анкета или для самозанятых
+        order by fib_date
+        into fib_id, date_open, date_close
+    do
+    begin
+      fil_id = null;
+      if (ol_datetime is null) then
+        ol_datetime = dateadd(minute, 10, date_open);
+      if (date_close = dd) then
+        date_close = null;
+
+      -- Ищем, ранее созданную строку с нужным бланком fib_id
+      select fil_id
+      from ft_infolist
+      where fil_from_fib_id = :fib_id and
+            fil_from_c_id = :c_id and
+            fil_date_open &lt;= :date_open and
+            coalesce(fil_date_close, :dd) &gt;= :date_open
+      into :fil_id;
+
+      -- Если нашли, контрольно обновляем дату окончания, т.к. предыдущий договор
+      -- скорее всего закончился раньше. Если fil_date_close is null, значит
+      -- анкета не закрыта (и будет обновляться в будущем)
+      if (fil_id is not null) then
+      begin
+        update ft_infolist
+        set fil_date_close = iif(:date_close is null, null, maxvalue(:date_close, fil_date_close)) -- Сохраняем наибольшее значение
+        where fil_id = :fil_id and
+              fil_date_close is not null;
+      end
+      else
+      begin
+        -- Если не нашли, вставляем, и заполняем первоначальные данные
+        insert into ft_infolist (fil_from_fib_id, fil_from_c_id, fil_date_open,
+                                 fil_date_close, fil_last_un_id,
+                                 fil_from_reg_id)
+        values (:fib_id, :c_id, :date_open, :date_close, :un_id, :reg_id)
+        returning (fil_id)
+        into fil_id;
+
+        update ft_infolistlog
+        set fill_datetime = :ol_datetime
+        where fill_from_fil_id = :fil_id;
+
+        update ft_infocheck
+        set fic_datetime = :ol_datetime
+        where fic_from_fil_id = :fil_id and
+              fic_date = :date_open;
+      end
+
+      ol_datetime = null;
+    end
+  end
+
+  -- Заполнение дат проверки анкеты при изменении данных
+  for with tab
+      as (select distinct cast(cds_create_datetime as date) as check_date,
+                          cds_create_datetime as check_datetime
+          from clientdocs cd
+          inner join passkind pask on pask.pk_id = cd.cds_from_pk_id
+          inner join passdoctype pdt on pdt.pdt_id = pask.pk_from_pdt_id
+          where cds_from_c_id = :c_id and
+                (cd.cds_is_main_doc = 1 or
+                pdt_code in (
+                  &#x27;snils&#x27;, &#x27;registration_fiz&#x27;, &#x27;registration_vnj&#x27;,
+                  &#x27;registration_rvp&#x27;, &#x27;work_permit&#x27;, &#x27;work_patent&#x27;,
+                  &#x27;job_agreement&#x27;, &#x27;relocation_docs&#x27;, &#x27;magration_card&#x27;))
+          union
+          select cast(res_datetime as date), res_datetime
+          from ft_fio_change_hist(:c_id, 0)
+          union
+          select cast(adc_datetime as date), adc_datetime as check_datetime
+          from addrclient
+          where adc_from_c_id = :c_id and
+                adc_address_type = 1
+          union
+          select cast(adcl_datetime as date) as check_date,
+                 adcl_datetime as check_datetime
+          from addrclog
+          where adcl_from_c_id = :c_id and
+                adcl_address_type = 1
+          union all
+          select min(fcl_date) as check_date,
+                 cast(min(fcl_date) as timestamp) as check_datetime
+          from finpolis_639_cli_link fcl -- если найдено совпадение по перечню 639, тогда уровень риска - высокий
+          where fcl.fcl_from_c_id = :c_id
+          union all
+          select cast(&#x27;01.02.2021&#x27; as date) as check_date,
+                 cast(&#x27;01.02.2021&#x27; as date) as check_datetime
+          from finpolis_639_cli_link fcl -- если найдено совпадение по перечню 639, тогда уровень риска - высокий
+          where fcl.fcl_from_c_id = :c_id and
+                fcl.fcl_date &lt; cast(&#x27;01.02.2021&#x27; as date)
+          union all
+          select fil.fisl_date_begin, fil.fisl_date_begin
+          from ft_info_stoplist fil
+          where fil.fisl_from_c_id = :c_id
+          union all
+          select ks_date_begin, ol_datetime
+          from (select ks.ks_from_k_id, ks_date_begin, ol_datetime
+                from kontstate ks, knclient, operlist
+                where kc_from_c_id = :c_id and
+                      kc_amount_approved &gt; 0 and
+                      kc_from_k_id = ks_from_k_id and
+                      ks_state = 1 and
+                      ks_ol_is_delete = 0 and
+                      ks_from_ol_id = ol_id
+                union
+                -- вытягиваю залогодателей, причем важно учесть что могла быть замена залогодателей
+                select ks_from_k_id, min(date_begin), ol_datetime
+                from (select ks_from_k_id,
+                             coalesce(z_date_begin, ks_date_begin) as date_begin,
+                             ks_region_id, ol_user_id, ol_datetime
+                      from zalog zal, kontstate ks, operlist
+                      where zal.z_from_c_id = :c_id and
+                            zal.z_from_k_id = ks_from_k_id and
+                            ks_state = 1 and
+                            ks_ol_is_delete = 0 and
+                            ks_from_ol_id = ol_id) a
+                group by ks_from_k_id, ol_datetime))
+
+      select check_date, max(check_datetime)
+      from tab
+      where check_date is not null
+      group by 1
+      into check_date, check_datetime
+  do
+  begin
+    un_id = null;
+    select cds_create_un_id
+    from clientdocs
+    where cds_from_c_id = :c_id and
+          cast(cds_create_datetime as date) = :check_date and
+          cds_create_un_id is not null rows 1
+    into un_id;
+
+    if (un_id is null) then
+    begin
+      select adc_from_un_id
+      from addrclient
+      where adc_from_c_id = :c_id and
+            adc_address_type = 1 and
+            cast(adc_datetime as date) = :check_date and
+            adc_from_un_id is not null rows 1
+      into un_id;
+    end
+
+    if (un_id is null) then
+    begin
+      select adcl_from_un_id
+      from addrclog
+      where adcl_from_c_id = :c_id and
+            adcl_address_type = 1 and
+            cast(adcl_datetime as date) = :check_date and
+            adcl_from_un_id is not null rows 1
+      into :un_id;
+    end
+
+    if (un_id is null) then
+      un_id = default_un_id;
+
+    for select fil_id
+        from ft_infolist
+        where fil_date_open &lt;= :check_date and
+              fil_from_c_id = :c_id and
+              coalesce(fil_date_close, :dd) &gt;= :check_date
+        into fil_id
+    do
+    begin
+      update or insert into ft_infocheck (fic_from_fil_id, fic_date,
+                                          fic_from_un_id, fic_datetime)
+      values (:fil_id, :check_date, :un_id, :check_datetime)
+      matching (fic_from_fil_id, fic_date);
+    end
+  end
+
+  -- заполняет плановые даты проверок анкеты
+  for select fil_id, fil_date_open, fil_date_close
+      from ft_infolist
+      where fil_from_c_id = :c_id
+      into :fil_id, :date_open, date_close
+  do
+  begin
+    need_repeat = 1;
+    tmp_date = date_open;
+
+    while (need_repeat = 1) do
+    begin
+      need_repeat = 0;
+      for select fic_date, fic_schedule_date
+          from ft_infocheck
+          where fic_from_fil_id = :fil_id and
+                fic_date &gt;= :tmp_date
+          order by fic_date
+          into fic_date, :fic_schedule_date
+      do
+      begin
+        if (prior_fil_date_close is not null) then
+        begin
+          if (prior_fil_date_close + 1 = fic_date) then
+          begin
+            select fic.fic_schedule_date
+            from ft_infocheck fic
+            where fic.fic_from_fil_id = :prior_fil_id
+            order by fic.fic_date desc
+            rows 1
+            into :fic_schedule_date_prior_fil;
+
+            if (fic_schedule_date_prior_fil &lt; fic_schedule_date) then
+            begin
+              fic_schedule_date = fic_schedule_date_prior_fil;
+            end
+          end
+        end
+
+        if (fic_schedule_date &lt;= coalesce(date_close, current_date)) then
+        begin
+          if (not exists(select *
+                         from ft_infocheck
+                         where fic_from_fil_id = :fil_id and
+                               fic_date between :fic_date + 1 and :fic_schedule_date)) then
+          begin
+            if (tmp_date &lt;&gt; fic_schedule_date) then
+            begin
+              tmp_date = fic_schedule_date;
+              need_repeat = 1;
+            end
+            else
+              need_repeat = 0;
+
+            update or insert into ft_infocheck (fic_from_fil_id, fic_date,
+                                                fic_from_un_id, fic_datetime)
+            values (:fil_id, :fic_schedule_date, :default_un_id,
+                    :fic_schedule_date)
+            matching (fic_from_fil_id, fic_date);
+
+            break;
+          end
+        end
+      end
+    end
+
+    prior_fil_date_close = date_close;
+    prior_fil_id = :fil_id;
+  end
+
+  for select fic_from_fil_id, fic_date, fic_from_un_id, fic_datetime,
+             fil_from_fib_id
+      from ft_infocheck, ft_infolist
+      where fic_from_fil_id = fil_id and
+            fil_from_c_id = :c_id
+      order by fic_from_fil_id, fic_date
+      into :fil_id, :check_date, :un_id, :check_datetime, :fib_id
+  do
+  begin
+    for select fif_id, fif_fieldname
+        from ft_infofield
+        where fif_from_fib_id = :fib_id and
+              fif_date &lt;= :check_date and
+              fif_is_delete = 0
+        into :fif_id, fif_fieldname
+    do
+    begin
+      new_value = &#x27;&#x27;;
+      select res_text
+      from hp_ft_fieldvalue_calc(:fil_id, :c_id, :fif_fieldname, :check_date, 1)
+      into new_value;
+
+      execute procedure hp_ft_fieldvalue_update(:fil_id, :c_id, :fif_id,
+          :check_date, :new_value, :un_id, 0, &#x27;&#x27;);
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

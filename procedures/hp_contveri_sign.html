@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CONTVERI_SIGN — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CONTVERI_SIGN: 4 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CONTVERI_SIGN</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_contkind_info.html"><div class="to">HP_CONTKIND_INFO</div></a><a class="ref-card" href="hp_contveri_sign_sync.html"><div class="to">HP_CONTVERI_SIGN_SYNC</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_edoc_sms_sign.html"><div class="to">HP_EDOC_SMS_SIGN</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CONT_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CONT_VALUE</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SIGN_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PIN_CODE</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_IS_ERROR</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEED_SEND_SMS</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CONTVERI_SIGN(
+    CONT_KIND D_STR_CODE,
+    CONT_VALUE D_STR_100,
+    SIGN_KIND D_STR_CODE,
+    PIN_CODE D_STR_100)
+RETURNS (
+    RES_IS_ERROR D_SMALLINT,
+    RES_TEXT D_STR_255,
+    C_ID D_ID,
+    NEED_SEND_SMS D_SMALLINT)
+AS
+declare variable cv_id d_id;
+declare variable cv_status d_smallint;
+declare variable db_id d_integer;
+declare variable clt_id d_integer;
+declare variable rd_id d_integer;
+declare variable rd_id_2 d_integer;
+declare variable sign_kind_code d_str_code;
+declare variable cv_status_new d_integer;
+declare variable is_new_contdata d_smallint;
+begin
+  -- Процедура подтверждения контактных данных
+
+  need_send_sms = 0;
+  res_is_error = 0;
+  res_text = &#x27;&#x27;;
+
+  db_id = f_get_db_id();
+  is_new_contdata =  f_get_const(&#x27;new_contdata&#x27;);
+
+  -- если пин-код 111 прилетел через входящий СМС, меняем его тип подписания
+  if (pin_code = &#x27;111&#x27; and sign_kind = &#x27;sms&#x27;) then sign_kind = &#x27;sms_111&#x27;;
+
+  sign_kind_code = f_enum(&#x27;edoc_sign_kind&#x27;, :sign_kind, &#x27;code&#x27;);
+
+  if (f_enum(&#x27;cont_kind&#x27;, cont_kind, &#x27;code&#x27;, 0) = &#x27;cell&#x27;) then
+  begin
+    select rd_id
+    from refdata
+    where rd_code = &#x27;contactinfo.cell_add&#x27;
+    into rd_id_2;
+  end
+
+  -- cont_kind могут передаваться как старый, так и новый вариант кодовых названий
+  -- поэтому конверетируем их между собой
+  select rd_id, cont_kind_id
+  from hp_contkind_info(:cont_kind)
+  into :rd_id, :cont_kind;
+
+  if (rd_id_2 is null) then rd_id_2 = rd_id;
+
+  if (is_new_contdata = 0) then
+  begin
+    -- получаем последнюю запись где совпал номер телефона и пароль
+    select cv_id, cv_status, cv_object_id
+    from contverify
+    where cv_contact_value = :cont_value and
+          cv_from_rd_id in (:rd_id, :rd_id_2) and
+          (:sign_kind_code in (&#x27;sms_111&#x27;, &#x27;paper&#x27;) or cv_password in (f_coder_pass(:pin_code), f_md5(:pin_code))) and
+          cv_object_kind = f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;) and
+          cv_status &gt;= 0
+    order by cv_id desc, cv_status
+    rows 1
+    into cv_id, cv_status, c_id;
+
+    if (cv_id is null) then
+      res_text = &#x27;Неверный пин-код&#x27;;
+
+    if (res_text = &#x27;&#x27;) then
+    begin
+      if (cv_status = 0) then
+      begin
+        cv_status_new = case sign_kind_code
+                        when &#x27;paper&#x27; then 2
+                        when &#x27;sms&#x27; then 3
+                        when &#x27;sms_111&#x27; then 3
+                        else 1
+        end;
+
+        update contverify
+        set cv_status = :cv_status_new
+        where cv_id = :cv_id;
+  
+        execute procedure hp_contveri_sign_sync(&#x27;contverify&#x27;, :cv_id, null, :sign_kind_code);
+
+        need_send_sms = 1;
+      end else
+        res_text = iif(db_id &lt;&gt; 94401, &#x27;Данные уже подтверждены&#x27;, &#x27;Məlumatlar artıq təstiq olunub&#x27;);
+     end
+  end
+
+  if (is_new_contdata = 1) then
+  begin
+    cv_status = null;
+    cv_id = null;
+
+    clt_id = f_cont_id(cont_value, &#x27;null&#x27;);
+
+    -- получаем последнюю запись где совпал номер телефона и пароль
+    if (clt_id is not null) then
+    begin
+      select cvr_id, cvr_status, cda_from_c_id
+      from contveri, contdata
+      where cda_from_clt_id = :clt_id and
+            cda_cont_kind = :cont_kind and
+            cda_id = cvr_from_cda_id and
+            (:sign_kind_code in (&#x27;sms_111&#x27;, &#x27;paper&#x27;) or cvr_hash_pin in (f_coder_pass(:pin_code), f_md5(:pin_code))) and
+            cvr_status &gt;= 0
+      order by cvr_id desc, cvr_status
+      rows 1
+      into cv_id, cv_status, c_id;
+    end
+
+    if (cv_id is null) then
+      res_text = &#x27;Неверный пин-код&#x27;;
+
+    if (res_text = &#x27;&#x27; and cv_id is not null) then
+    begin
+      if (cv_status = 0) then
+      begin
+        update contveri
+        set cvr_status = 1,
+            cvr_sign_kind = f_enum(&#x27;edoc_sign_kind&#x27;, :sign_kind, &#x27;id&#x27;)
+        where cvr_id = :cv_id;
+
+        need_send_sms = 1;
+
+        execute procedure hp_contveri_sign_sync(&#x27;contveri&#x27;, :cv_id, null, :sign_kind);
+      end else
+        res_text = iif(db_id &lt;&gt; 94401, &#x27;Данные уже подтверждены&#x27;, &#x27;Məlumatlar artıq təstiq olunub&#x27;);
+    end
+  end
+  if (need_send_sms = 1) then
+    res_text = iif(db_id &lt;&gt; 94401, &#x27;Успешно подтвержден&#x27;, &#x27;Uğurla təsdiq olundu&#x27;);
+
+  res_is_error = 1 - need_send_sms;
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_JIRA_DEV_STATS — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_JIRA_DEV_STATS: 1 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_JIRA_DEV_STATS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_jira_static_recalc.html"><div class="to">HP_JIRA_STATIC_RECALC</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">DEV_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">DEV_ESTIMATE_BUSY</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DEV_WAITING</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DEV_WORKING</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DEV_REWORKING</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_JIRA_DEV_STATS(
+    DEV_ID D_INTEGER)
+RETURNS (
+    DEV_ESTIMATE_BUSY D_DATETIME,
+    DEV_WAITING D_INTEGER,
+    DEV_WORKING D_INTEGER,
+    DEV_REWORKING D_INTEGER)
+AS
+declare variable issue_id d_integer;
+declare variable estimate_sec d_integer;
+declare variable state_datetime d_datetime;
+declare variable jrs_code d_str_code;
+declare variable jrd_kpi_timezone d_smallint;
+declare variable total_work d_integer;
+declare variable saldo d_integer;
+declare variable level_id d_integer;
+declare variable period_start d_integer;
+declare variable tasks_closed d_integer;
+declare variable work_seconds d_integer;
+begin
+  dev_estimate_busy = null;
+
+  period_start = extract(year from dateadd(month, -3, current_date)) * 100 +
+                 extract(month from dateadd(month, -3, current_date));
+
+  if (period_start &lt; 202401) then
+    period_start = 202401;
+
+  dev_waiting = 0;
+  dev_working = 0;
+  dev_reworking = 0;
+
+  if (dev_id &lt;&gt; 0) then
+  begin
+    for select jri_issue_id, jri_level, jri_estimate_secs, jri_state_datetime, jrs_code, jrd_kpi_timezone
+    from jira_issues, jira_states, jira_types, jira_dev
+    where jrd_id = :dev_id and
+          jri_dev_id = jrd_id and
+          jri_finished is null and
+          jri_state_id = jrs_id and
+          jri_type_id = jrt_id and
+          jrt_kpi_kind &lt;&gt; 0
+    into issue_id, level_id, estimate_sec, state_datetime, jrs_code, jrd_kpi_timezone
+    do
+    begin
+      if (estimate_sec = 0) then
+      begin
+        tasks_closed = 0;
+        work_seconds = 0;
+
+        select sum(p.jrp_tasks_closed), sum(p.jrp_work_seconds)
+        from jira_period p
+        where p.jrp_period &gt;= :period_start and
+              p.jrp_dev_id = :dev_id and
+              (p.jrp_level = :level_id or :level_id = 0)
+        into tasks_closed, work_seconds;
+
+        if (tasks_closed is null) then
+          tasks_closed = 0;
+
+        if (work_seconds is null) then
+          work_seconds = 0;
+
+        if (tasks_closed &lt;&gt; 0) then
+          estimate_sec = round(cast(work_seconds as float) / tasks_closed);
+
+        if (estimate_sec = 0) then
+          Continue;
+      end
+
+      total_work = 0;
+
+      if (jrs_code = &#x27;work&#x27;) then
+      begin
+        dev_working = dev_working + 1;
+        total_work = f_jira_diff(state_datetime, current_timestamp, jrd_kpi_timezone);
+      end
+      else
+      if (jrs_code = &#x27;wait&#x27;) then
+        dev_waiting = dev_waiting + 1;
+      else
+      if (jrs_code = &#x27;rework&#x27;) then
+        dev_reworking = dev_reworking + 1;
+
+      saldo = estimate_sec - total_work;
+      if (saldo &gt; 0) then
+      begin
+        total_work = 0;
+        select sum(f_jira_diff(jrl_old_datetime, jrl_new_datetime, jrl_kpi_timezone))
+        from jira_log, jira_states
+        where jrl_issue_id = :issue_id and
+              jrl_old_state = jrs_id and
+              jrs_code = &#x27;work&#x27;
+        into total_work;
+
+        if (total_work is null) then
+          total_work = 0;
+
+        saldo = saldo - total_work;
+      end
+
+      if (saldo &lt; 0) then
+        saldo = 0;
+
+      if (saldo &gt; 0) then
+      begin
+        if (dev_estimate_busy is null) then
+          dev_estimate_busy = current_timestamp;
+
+        dev_estimate_busy = f_jira_add(dev_estimate_busy, saldo);
+
+        if (jrs_code &lt;&gt; &#x27;work&#x27;) then
+          dev_estimate_busy = f_jira_add(dev_estimate_busy, 20 * 60); -- 20 мин на переключение к след задаче
+      end
+    end
+  end else
+  begin
+    for select jri_issue_id, jri_level, jri_estimate_secs, jri_state_datetime, jrs_code, jrd_kpi_timezone
+    from jira_issues, jira_dev, jira_states, jira_types
+    where jri_dev_id = jrd_id and
+          jrd_is_dev = 0 and
+          jri_finished is null and
+          jri_state_id = jrs_id and
+          jri_type_id = jrt_id and
+          jrt_kpi_kind &lt;&gt; 0
+    into issue_id, level_id, estimate_sec, state_datetime, jrs_code, jrd_kpi_timezone
+    do
+    begin
+      if (estimate_sec = 0) then
+      begin
+        tasks_closed = 0;
+        work_seconds = 0;
+
+        select sum(p.jrp_tasks_closed), sum(p.jrp_work_seconds)
+        from jira_period p
+        where p.jrp_period &gt;= :period_start and
+              (p.jrp_level = :level_id or :level_id = 0)
+        into tasks_closed, work_seconds;
+
+        if (tasks_closed is null) then
+          tasks_closed = 0;
+
+        if (work_seconds is null) then
+          work_seconds = 0;
+
+        if (tasks_closed &lt;&gt; 0) then
+          estimate_sec = round(cast(work_seconds as float) / tasks_closed);
+
+        if (estimate_sec = 0) then
+          Continue;
+      end
+
+      total_work = 0;
+
+      if (jrs_code = &#x27;work&#x27;) then
+      begin
+        dev_working = dev_working + 1;
+        total_work = f_jira_diff(state_datetime, current_timestamp, jrd_kpi_timezone);
+      end
+      else
+      if (jrs_code = &#x27;wait&#x27;) then
+        dev_waiting = dev_waiting + 1;
+      else
+      if (jrs_code = &#x27;rework&#x27;) then
+        dev_reworking = dev_reworking + 1;
+
+      saldo = estimate_sec - total_work;
+      if (saldo &gt; 0) then
+      begin
+        total_work = 0;
+        select sum(f_jira_diff(jrl_old_datetime, jrl_new_datetime, jrl_kpi_timezone))
+        from jira_log, jira_states
+        where jrl_issue_id = :issue_id and
+              jrl_old_state = jrs_id and
+              jrs_code = &#x27;work&#x27;
+        into total_work;
+
+        if (total_work is null) then
+          total_work = 0;
+
+        saldo = saldo - total_work;
+      end
+
+      if (saldo &lt; 0) then
+        saldo = 0;
+
+      if (saldo &gt; 0) then
+      begin
+        if (dev_estimate_busy is null) then
+          dev_estimate_busy = current_timestamp;
+
+        dev_estimate_busy = f_jira_add(dev_estimate_busy, saldo);
+      end
+    end
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

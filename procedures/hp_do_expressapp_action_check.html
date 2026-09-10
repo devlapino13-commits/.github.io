@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DO_EXPRESSAPP_ACTION_CHECK — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DO_EXPRESSAPP_ACTION_CHECK: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DO_EXPRESSAPP_ACTION_CHECK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_expressapp_action.html"><div class="to">HP_DO_EXPRESSAPP_ACTION</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EXA_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_STATUS</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DO_EXPRESSAPP_ACTION_CHECK(
+    EXA_ID D_INTEGER)
+RETURNS (
+    RES_STATUS D_SMALLINT)
+AS
+declare variable c_id id_type;
+declare variable delinq_day d_integer;
+declare variable lgc_calc d_integer;
+declare variable asp_status d_str_code;
+declare variable k_id d_id;
+declare variable db_id d_integer;
+declare variable point d_integer;
+declare variable max_balance curr_type;
+declare variable cli_balance curr_type;
+begin
+  db_id = f_get_db_id();
+
+  res_status = 0;
+  c_id = null;
+  select exa_from_c_id, exa_base_k_id
+  from expressapp
+  where exa_id = :exa_id
+  into c_id, k_id;
+
+  if (row_count = 0) then
+  begin
+    -- не имеется запись для данного клиента в таблице expressapp
+    res_status = -1;
+    suspend;
+    exit;
+  end
+
+  if (db_id = 81001) then
+  begin
+    /*
+    if (res_status = 0) then
+    begin
+      -- проверка на легитимный платеж
+      lgc_calc = null;
+      select sum(lgc_calc)
+      from legitimcalc
+      where lgc_from_c_id = :c_id
+      and lgc_from_k_id = :k_id
+      and lgc_date &lt;= current_date
+      into lgc_calc;
+      lgc_calc = coalesce(lgc_calc,0);
+      if (lgc_calc &lt;= 0) then
+      begin
+        res_status = -1;
+      end
+    end
+    */
+
+    if (res_status = 0) then
+    begin
+      -- проверка на действующий догоовр АСП
+      asp_status = f_edoc_status(&#x27;asp.agreement&#x27;, :c_id, current_date);
+      if (asp_status &lt;&gt; &#x27;signed&#x27;) then
+      begin
+        res_status = -1;
+      end
+    end
+    -- проверка на сотрудника
+    if (res_status = 0) then
+    begin
+      if (exists(select 1 from hr_pstatus  -- сотрудников исключаем
+      where ps_from_c_id = :c_id
+      and current_date between ps_date_begin and ps_date_end
+      and ps_status = 1
+      and ps_is_working = 1)) then
+      begin
+        res_status = -1;
+      end 
+    end 
+    -- проверка имеется ли МП у клиента
+    if (res_status = 0) then
+    begin
+      if (f_fsm_client_status(c_id) = 0) then
+      begin
+        res_status = -1;
+      end 
+    end
+    -- проверка суммы
+    if (res_status = 0) then
+    begin
+      select sum(oks_balance),
+             max(current_date - oks_delinq_date)
+      from knclient, oksummary
+      where kc_from_c_id = :c_id
+      and kc_amount_approved &gt; 0
+      and kc_from_k_id = oks_from_k_id
+      and current_date between oks_date_begin and oks_date_end
+      and oks_close_state = 0
+      into cli_balance, delinq_day;
+
+      cli_balance = coalesce(cli_balance, 0);
+      delinq_day = coalesce(delinq_day,0);
+      if (delinq_day &lt; 0) then delinq_day = 0;
+
+      -- если имеется просрочка то исключаем
+      if (delinq_day &gt; 0 ) then
+      begin
+        res_status = -1;
+      end
+
+      -- если легитимный платеж менее 2х исключаем
+      if (res_status = 0) then
+      begin
+        select sum(lgc_calc) from legitimcalc
+        where lgc_from_k_id = :k_id
+        into lgc_calc;
+        lgc_calc = coalesce(lgc_calc,0);
+  
+        if (lgc_calc &lt; 2) then
+        begin
+          res_status = -1;
+        end 
+      end
+      -- проверка на доступную сумму
+      if (res_status = 0) then
+      begin
+        point = f_point(c_id, current_date);
+  
+        max_balance = case
+                        when point &gt;= 24 then 150000
+                        when point &gt;= 18 then 120000
+                        when point &gt;= 15 then 100000
+                        when point &gt;= 12 then 80000
+                        when point &gt;= 9 then 60000
+                        when point &gt;= 6 then 50000
+                        when point &gt;= 3 then 40000
+                        else 35000
+                      end;
+         if (max_balance - cli_balance &lt; 35000) then
+         begin
+           res_status = -1;
+         end 
+      end
+    end
+  end
+
+  if (db_id in (39801, 41701)) then
+  begin
+    if (res_status = 0) then
+    begin
+      point = f_point(c_id, current_date);
+      -- балл клиента должно быть не менее 10ти баллов
+      if (point &lt; 10) then
+        res_status = -1;
+    end 
+  end 
+
+  if (res_status = 0) then
+  begin
+    -- проверка на активную просрочку
+    delinq_day = null;
+    select max(current_date - oks_delinq_date) from knclient, oksummary
+    where kc_from_c_id = :c_id
+    and kc_amount_approved &gt; 0
+    and kc_from_k_id = oks_from_k_id
+    and current_date between oks_date_begin and oks_date_end
+    and current_date &gt; oks_delinq_date
+    into delinq_day;
+    delinq_day = coalesce(delinq_day,-1);
+    if (delinq_day &gt; 0) then res_status = -1;
+  end
+
+  if (res_status = -1) then
+  begin
+    update expressapp
+    set exa_final_status = -1
+    where exa_id = :exa_id;
+  end 
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

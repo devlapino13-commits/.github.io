@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MC_LOGIN_ACTION_VISIT — процедура — схема БД</title>
+<meta name="description" content="Процедура MC_LOGIN_ACTION_VISIT: 2 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>MC_LOGIN_ACTION_VISIT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_send_quick_message.html"><div class="to">HP_SEND_QUICK_MESSAGE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="mc_login_user_visit.html"><div class="to">MC_LOGIN_USER_VISIT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ACTION_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACTION_DATA</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ERR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE MC_LOGIN_ACTION_VISIT(
+    ACTION_CODE D_STR_CODE,
+    ACTION_DATA D_STR_LONG)
+RETURNS (
+    RES_CODE D_STR_CODE,
+    ERR_TEXT D_STR_255)
+AS
+declare variable db_id d_integer;
+declare variable mcl_login d_str_code;
+declare variable mcl_id d_id;
+declare variable pin_code d_integer;
+declare variable mcc_pin_code d_integer;
+declare variable send_code_cnt d_integer;
+declare variable check_code_cnt d_integer;
+declare variable login_try_cnt d_integer;
+declare variable mcl_pass_hash d_str_code;
+declare variable c_birth_date d_date;
+declare variable birth_date_str d_str_code;
+declare variable c_id d_id;
+declare variable login_cnt d_integer;
+declare variable login_correct d_smallint;
+declare variable max_check_cnt d_smallint;
+declare variable visit_access smallint;
+declare variable mcl_id_old id_type;
+begin
+  --max_check_cnt = 1000; -- На время тестирования
+  max_check_cnt = 3;
+  err_text = &#x27;&#x27;;
+  res_code = &#x27;undefined&#x27;;
+  db_id = f_get_db_id();
+
+  if (action_code = &#x27;send_code&#x27;) then
+  begin
+    mcl_login = f_json_str_get_value(action_data, &#x27;login&#x27;, &#x27;&#x27;);
+    if (coalesce(mcl_login, &#x27;&#x27;) = &#x27;&#x27;) then
+    begin
+      res_code = &#x27;send_error&#x27;;
+      err_text = &#x27;Отсутствует номер телефона&#x27;;
+      suspend;
+      exit;
+    end
+    if (mcl_login not similar to &#x27;(79|992|996|998|994)[[:DIGIT:]]{9}&#x27; or (mcl_login similar to &#x27;(9960|9961|9963|9964)[[:DIGIT:]]{8}&#x27;)) then
+    begin
+      res_code = &#x27;send_error&#x27;;
+      err_text = &#x27;Неправильный номер телефона&#x27;;
+      suspend;
+      exit;
+    end
+
+    send_code_cnt = 0;
+    select mcc_send_code_cnt
+    from mc_check
+    where mcc_login = :mcl_login
+    into send_code_cnt;
+
+    if (send_code_cnt &gt;= max_check_cnt) then
+    begin
+      res_code = &#x27;send_block&#x27;;
+      err_text = &#x27;Превышен лимит отправок кода.&#x27;;
+      suspend;
+      exit;
+    end
+
+-- На вермя тестирования отправки кода не будет, код 7777 для всех
+    mcc_pin_code = 7777;
+--    mcc_pin_code = trunc(rand() * 9000 + 1000);
+--    execute procedure hp_send_quick_message(
+--      &#x27;sms&#x27;, :mcl_login, &#x27;&#x27;,
+--      iif(db_id &lt;&gt; 94401,
+--        &#x27;М Булак: Ваш код для подтверждения: &#x27;,
+--        &#x27;Mol Bulak: Tesdiq uchun kod: &#x27;) || mcc_pin_code,
+--      &#x27;&#x27;, 365, 1000000000000);
+
+    update or insert into mc_check (mcc_login, mcc_send_code_cnt, mcc_pin_code)
+    values (:mcl_login, :send_code_cnt + 1, :mcc_pin_code)
+    matching (mcc_login);
+
+    res_code = &#x27;send_ok&#x27;;
+    suspend;
+  end
+
+  if (action_code = &#x27;check_code&#x27;) then
+  begin
+    mcl_login = f_json_str_get_value(action_data, &#x27;login&#x27;, &#x27;&#x27;);
+    pin_code = f_json_str_get_value(action_data, &#x27;pin_code&#x27;, -1);
+    if (coalesce(mcl_login, &#x27;&#x27;) = &#x27;&#x27;) then
+    begin
+      res_code = &#x27;check_error&#x27;;
+      err_text = &#x27;Отсутствует номер телефона&#x27;;
+      suspend;
+      exit;
+    end
+    if (mcl_login not similar to &#x27;(79|992|996|998|994)[[:DIGIT:]]{9}&#x27; or (mcl_login similar to &#x27;(9960|9961|9963|9964)[[:DIGIT:]]{8}&#x27;)) then
+    begin
+      res_code = &#x27;check_error&#x27;;
+      err_text = &#x27;Неправильный номер телефона&#x27;;
+      suspend;
+      exit;
+    end
+    if (coalesce(pin_code, -1) = -1) then
+    begin
+      res_code = &#x27;check_error&#x27;;
+      err_text = &#x27;Код не указан&#x27;;
+      suspend;
+      exit;
+    end
+
+    check_code_cnt = 0;
+    mcc_pin_code = 0;
+    select mcc_check_code_cnt, mcc_pin_code
+    from mc_check
+    where mcc_login = :mcl_login
+    into check_code_cnt, mcc_pin_code;
+
+    -- Если mcc_pin_code=0, значит не отправляли, отвечаем блокировкой
+    if (check_code_cnt &gt;= max_check_cnt or mcc_pin_code = 0) then
+    begin
+      res_code = &#x27;check_block&#x27;;
+      err_text = &#x27;Превышен лимит проверок кода.&#x27;;
+      suspend;
+      exit;
+    end
+
+    if (mcc_pin_code &lt;&gt; pin_code) then
+    begin
+      update or insert into mc_check (mcc_login, mcc_check_code_cnt)
+      values (:mcl_login, :check_code_cnt + 1)
+      matching (mcc_login);
+      res_code = &#x27;check_error&#x27;;
+      err_text = &#x27;Коды не совпадают.&#x27;;
+      suspend;
+      exit;
+    end
+
+    res_code = &#x27;check_ok&#x27;;
+    update mc_check
+    set mcc_check_code_cnt = 0
+    where mcc_login = :mcl_login;
+
+    suspend;
+  end
+
+  if (action_code = &#x27;update_pass&#x27;) then
+  begin
+    mcl_login = f_json_str_get_value(action_data, &#x27;login&#x27;, &#x27;&#x27;);
+    pin_code = f_json_str_get_value(action_data, &#x27;pin_code&#x27;, -1);
+    mcl_pass_hash = f_json_str_get_value(action_data, &#x27;password&#x27;, null);
+    if (coalesce(mcl_login, &#x27;&#x27;) = &#x27;&#x27;) then
+    begin
+      res_code = &#x27;pass_error&#x27;;
+      err_text = &#x27;Отсутствует номер телефона&#x27;;
+      suspend;
+      exit;
+    end
+    if (mcl_login not similar to &#x27;(79|992|996|998|994)[[:DIGIT:]]{9}&#x27; or (mcl_login similar to &#x27;(9960|9961|9963|9964)[[:DIGIT:]]{8}&#x27;)) then
+    begin
+      res_code = &#x27;pass_error&#x27;;
+      err_text = &#x27;Неправильный номер телефона&#x27;;
+      suspend;
+      exit;
+    end
+    if (coalesce(pin_code, -1) = -1) then
+    begin
+      res_code = &#x27;pass_error&#x27;;
+      err_text = &#x27;Код не указан&#x27;;
+      suspend;
+      exit;
+    end
+    if (coalesce(mcl_pass_hash, &#x27;&#x27;) = &#x27;&#x27;) then
+    begin
+      res_code = &#x27;pass_error&#x27;;
+      err_text = &#x27;Пустой пароль&#x27;;
+      suspend;
+      exit;
+    end
+
+    check_code_cnt = 0;
+    mcc_pin_code = 0;
+    select mcc_check_code_cnt, mcc_pin_code
+    from mc_check
+    where mcc_login = :mcl_login
+    into check_code_cnt, mcc_pin_code;
+
+    -- Если mcc_pin_code=0, значит не отправляли, отвечаем блокировкой
+    if (check_code_cnt &gt;= max_check_cnt or mcc_pin_code = 0) then
+    begin
+      res_code = &#x27;pass_block&#x27;;
+      err_text = &#x27;Превышен лимит попыток смены пароля&#x27;;
+      suspend;
+      exit;
+    end
+
+    if (mcc_pin_code &lt;&gt; pin_code) then
+    begin
+      update or insert into mc_check (mcc_login, mcc_check_code_cnt)
+      values (:mcl_login, :check_code_cnt + 1)
+      matching (mcc_login);
+      res_code = &#x27;pass_error&#x27;;
+      err_text = &#x27;Коды не совпадают.&#x27;;
+      suspend;
+      exit;
+    end
+
+    mcl_id = null;
+    c_id = null;
+    select mcl_id, mcl_from_c_id
+    from mc_login
+    where mcl_login = :mcl_login and
+          mcl_is_delete = 0
+    into mcl_id, c_id;
+
+    if (mcl_id is null or c_id is null) then
+    begin
+      -- Создаем/обновляем пользователя, привязанного клиента нет
+      update or insert into mc_login (mcl_login, mcl_pass_hash)
+      values (:mcl_login, :mcl_pass_hash)
+      matching (mcl_login);
+
+      -- Обнуляем счетчики проверок кода и логина
+      update mc_check
+      set mcc_check_code_cnt = 0,
+          mcc_login_try_cnt = 0
+      where mcc_login = :mcl_login;
+
+      res_code = &#x27;pass_ok_new&#x27;;
+    end
+    else
+    begin
+      -- Пользователь уже есть, и к нему привязан клиент
+      -- обновляем ему пароль, но выставляем требование проверить ДР
+      -- Если это другой клиент, то проверка ДР создаст для него дубликат логина
+      update mc_login
+      set mcl_pass_hash = :mcl_pass_hash
+      where mcl_id = :mcl_id;
+
+      update mc_check
+      set mcc_check_birth_date = 1,
+          mcc_check_code_cnt = 0,
+          mcc_login_try_cnt = 0
+      where mcc_login = :mcl_login;
+
+      res_code = &#x27;pass_ok_exist&#x27;;
+    end
+
+    suspend;
+    exit;
+  end
+  if (action_code = &#x27;check_birth_date&#x27;) then
+  begin
+    mcl_login = f_json_str_get_value(action_data, &#x27;login&#x27;, &#x27;&#x27;);
+    birth_date_str = f_json_str_get_value(action_data, &#x27;birth_date&#x27;, &#x27;&#x27;);
+
+    if (coalesce(mcl_login, &#x27;&#x27;) = &#x27;&#x27;) then
+    begin
+      res_code = &#x27;birth_error&#x27;;
+      err_text = &#x27;Отсутствует номер телефона&#x27;;
+      suspend;
+      exit;
+    end
+
+    if (mcl_login not similar to &#x27;(79|992|996|998|994)[[:DIGIT:]]{9}&#x27; or (mcl_login similar to &#x27;(9960|9961|9963|9964)[[:DIGIT:]]{8}&#x27;)) then
+    begin
+      res_code = &#x27;birth_error&#x27;;
+      err_text = &#x27;Неправильный номер телефона&#x27;;
+      suspend;
+      exit;
+    end
+
+    begin
+      c_birth_date = cast(birth_date_str as date);
+      when any do
+        c_birth_date = null;
+    end
+    if (c_birth_date is null) then
+    begin
+      res_code = &#x27;birth_error&#x27;;
+      err_text = &#x27;Неправильный формат даты рождения&#x27;;
+      suspend;
+      exit;
+    end
+
+    c_id = null;
+    select mcl_from_c_id
+    from mc_login, mc_check
+    where mcl_login = :mcl_login and
+          mcc_login = :mcl_login and
+          mcc_check_birth_date = 1
+    into c_id;
+
+    if (c_id is null) then
+    begin
+      res_code = &#x27;birth_error&#x27;;
+      err_text = &#x27;Проверка ДР не требуется&#x27;;
+      suspend;
+      exit;
+    end
+
+    if (exists(select 1
+               from clients
+               where c_id = :c_id and
+                     c_birth_date = :c_birth_date)) then
+      res_code = &#x27;birth_ok_exists&#x27;;
+    else
+    begin -- Дата рождения не совпала, требуется создание нового пользователя
+
+      -- Расчитываем суффикс для логина login_nnn
+      select count(*)
+      from mc_login
+      where mcl_login starting :mcl_login
+      into login_cnt;
+
+      -- Переименовываем существующего пользователя в вид login_nnn
+      select mcl_id, mcl_from_c_id
+      from mc_login
+      where mcl_login = :mcl_login
+      into :mcl_id_old, :c_id;
+
+      update mc_login
+      set mcl_login = mcl_login || &#x27;_&#x27; || lpad(:login_cnt, 3, &#x27;0&#x27;)
+      where mcl_id = :mcl_id_old  --mcl_login = :mcl_login
+      returning mcl_pass_hash
+      into mcl_pass_hash;
+
+      -- Создаем нового пользователя, под старым именем, без клиента
+      insert into mc_login (mcl_login, mcl_from_c_id, mcl_pass_hash)
+      values (:mcl_login, :c_id, :mcl_pass_hash)
+      returning mcl_id
+      into :mcl_id;
+
+      update mc_visit_login
+      set mvl_mcl_id = :mcl_id
+      where mvl_mcl_id = :mcl_id_old;
+
+      res_code = &#x27;birth_ok_new&#x27;;
+    end
+
+    update mc_check
+    set mcc_check_birth_date = 0
+    where mcc_login = :mcl_login;
+
+    suspend;
+    exit;
+  end
+
+  if (action_code = &#x27;login&#x27;) then
+  begin
+    mcl_login = f_json_str_get_value(action_data, &#x27;login&#x27;,  &#x27;&#x27;);
+    mcl_pass_hash = f_json_str_get_value(action_data, &#x27;password&#x27;, &#x27;&#x27;);
+
+    if (coalesce(mcl_login, &#x27;&#x27;) = &#x27;&#x27;) then
+    begin
+      res_code = &#x27;login_error&#x27;;
+      err_text = &#x27;Отсутствует номер телефона&#x27;;
+      suspend;
+      exit;
+    end
+    if (mcl_login not similar to &#x27;(79|992|996|998|994)[[:DIGIT:]]{9}&#x27; or (mcl_login similar to &#x27;(9960|9961|9963|9964)[[:DIGIT:]]{8}&#x27;)) then
+    begin
+      res_code = &#x27;login_error&#x27;;
+      err_text = &#x27;Неправильный номер телефона&#x27;;
+      suspend;
+      exit;
+    end
+    if (coalesce(mcl_pass_hash, &#x27;&#x27;) = &#x27;&#x27;) then
+    begin
+      res_code = &#x27;login_error&#x27;;
+      err_text = &#x27;Пустой пароль&#x27;;
+      suspend;
+      exit;
+    end
+
+    login_try_cnt = 0;
+    select mcc_login_try_cnt
+    from mc_check
+    where mcc_login = :mcl_login
+    into login_try_cnt;
+
+    if (login_try_cnt &gt;= max_check_cnt) then
+    begin
+      res_code = &#x27;login_block&#x27;;
+      err_text = &#x27;Превышен лимит ошибочных попыток входа&#x27;;
+      suspend;
+      exit;
+    end
+
+    login_correct = 0;
+    visit_access = 0;
+
+    select 1, iif(mvl_mcl_id is null, 0, 1)
+    from mc_login
+    left join mc_visit_login on mcl_id = mvl_mcl_id
+        and mvl_is_active = 1
+    where mcl_login = :mcl_login and
+          mcl_pass_hash = :mcl_pass_hash and
+          mcl_is_delete = 0
+    into login_correct, visit_access;
+    login_correct = coalesce(login_correct, 0);
+
+    if (visit_access = 0) then
+    begin
+        login_correct = 0;
+        res_code = &#x27;login_error&#x27;;
+        err_text = &#x27;Отказано в доступе&#x27;;
+    end
+
+    if (login_correct = 1) then
+    begin
+      if (exists(select 1
+                 from mc_check
+                 where mcc_login = :mcl_login and
+                       mcc_check_birth_date = 1)) then
+      begin
+        res_code = &#x27;login_check_birth_date&#x27;;
+        err_text = &#x27;Требуется проверка даты рождения&#x27;;
+      end
+      else
+      begin
+        res_code = &#x27;login_ok&#x27;;
+        -- Чистим счетчики
+        update mc_check
+        set mcc_check_code_cnt = 0,
+            mcc_login_try_cnt = 0
+        where mcc_login = :mcl_login;
+      end
+    end
+    else
+    begin
+      res_code = &#x27;login_error&#x27;;
+      err_text = &#x27;Неправильный номер телефона или пароль&#x27;;
+      update or insert into mc_check (mcc_login, mcc_login_try_cnt)
+      values (:mcl_login, :login_try_cnt + 1)
+      matching (mcc_login);
+    end
+    suspend;
+    exit;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

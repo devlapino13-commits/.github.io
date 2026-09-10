@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_KG_0004_SQL — процедура — схема БД</title>
+<meta name="description" content="Проверка клиентов по предварительным заявкам">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_KG_0004_SQL</code></h1>
+<p class="desc">Проверка клиентов по предварительным заявкам</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_get_continfo.html"><div class="to">AAREP_GET_CONTINFO</div></a><a class="ref-card" href="hp_client_relation_list.html"><div class="to">HP_CLIENT_RELATION_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_KG_0004_SQL(
+    MA_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable kc_amount curr_type;
+declare variable kf_client_pass_no varchar(30);
+declare variable c_id id_type;
+declare variable c_birth_date d_date;
+declare variable c_cell_no_date d_date;
+declare variable c_doc_type d_integer;
+declare variable c_verify_status d_integer;
+declare variable k_kontract_no d_str_20;
+declare variable crel_other_c_id id_type;
+declare variable ma_refund d_smallint;
+declare variable pr_code d_str_100;
+declare variable oks_delinq_date d_date;
+declare variable relation_type d_str_20;
+declare variable c_name_fio d_str_100;
+begin
+  if (ma_id = 3573740) then -- RFCKG-608 запрос от Чолпон
+    exit;
+  for select mac_from_c_id, c_name_fio, c_pass_no, c_birth_date, c_verify_status, c_doc_type, ma_refund, pr_code
+      from miniappclient macl, clients, miniapp maa, product
+      where mac_from_ma_id = :ma_id and
+            (mac_amount &gt; 0 or
+            mac_is_poruch = 1) and
+            c_type = 0 and
+            mac_from_c_id = c_id and
+            maa.ma_id = macl.mac_from_ma_id and
+            maa.ma_is_active = 1 and
+            maa.ma_date_end = &#x27;31.12.9999&#x27; and
+            maa.ma_from_pr_id = pr_id
+      into :c_id, :res_info_text, :kf_client_pass_no, :c_birth_date, c_verify_status, c_doc_type, :ma_refund, pr_code
+  do
+  begin
+    if (c_doc_type = 1) then
+    begin
+      res_error_is_critical = 2;
+      res_error_text = &#x27;С 1-апреля 2017-года, паспорта образца 1994-года являются недействительными&#x27;;
+      suspend;
+    end
+    c_cell_no_date = null;
+    select c_cell_no_date
+    from aarep_get_continfo(&#x27;clients&#x27;, :c_id)
+    into c_cell_no_date;
+    res_error_text = &#x27;&#x27;;
+    res_error_is_critical = 0;
+    if (:c_birth_date is null) then
+    begin
+      res_error_is_critical = 1;
+      res_error_text = &#x27;Дата рождения не заполнена&#x27;;
+      suspend;
+    end
+    if (coalesce(:kf_client_pass_no, &#x27;&#x27;) = &#x27;&#x27;) then
+    begin
+      res_error_is_critical = 1;
+      res_error_text = &#x27;Номер паспорта не заполнен&#x27;;
+      suspend;
+    end
+    --      Пункт 7, проверка клиента на просрочку
+    k_kontract_no = null;
+    for select k_kontract_no, oks_delinq_date
+        from oksummary, knclient, kontract
+        where kc_from_c_id = :c_id and
+              kc_amount_approved &gt; 0 and
+              kc_from_k_id = oks_from_k_id and
+              current_date between oks_date_begin and oks_date_end and
+              current_date &gt; oks_delinq_date and
+              oks_from_k_id = k_id and
+              oks_close_state = 0
+        into k_kontract_no, oks_delinq_date
+    do
+    begin
+      if (k_kontract_no is not null and
+          not(oks_delinq_date between &#x27;01.12.20&#x27; and &#x27;31.01.21&#x27; and
+          pr_code containing &#x27;.par.&#x27; and
+          (pr_code containing &#x27;.ind.&#x27; or pr_code containing &#x27;.gr.&#x27; or pr_code containing &#x27;.birge.&#x27;) and
+          exists(select *
+                 from knclient_compens kcc
+                 inner join knclient kncl on kncl.kc_id = kcc.kcc_from_kc_id and
+                       kc_from_c_id = :c_id
+                 where kcc.kcc_date_end &gt; kcc.kcc_date_begin))) then
+
+
+        if (exists(select *
+                   from miniapp maa
+                   inner join product pr on pr.pr_id = ma_from_pr_id
+                   where maa.ma_id = :ma_id and
+                         maa.ma_date_end = &#x27;31.12.9999&#x27; and
+                         pr.pr_code containing &#x27;.Actiya_Ishenim_Refin.&#x27; and
+                         maa.ma_is_active = 1)) then
+          exit;
+
+      begin
+        res_error_is_critical = iif(ma_refund = 1, 0, 1);
+        res_error_text = &#x27;У клиента имеется активный просроченный кредит в контракте №&#x27; || k_kontract_no;
+        suspend;
+      end
+    end
+
+    -- Находит родственников клиента и проверяет на просрочку (RFCKG-2429, RFCKG-4542)
+    for select crel_other_c_id, c_name_fio, lower(rel_name)
+        from hp_client_relation_list(:c_id, 0)
+        where crel_from_rel_id in (&#x27;1&#x27;, &#x27;2&#x27;, &#x27;3&#x27;, &#x27;4&#x27;, &#x27;5&#x27;, &#x27;6&#x27;)
+        into crel_other_c_id, c_name_fio, relation_type
+    do
+    begin
+        if (crel_other_c_id is null) then
+          crel_other_c_id = 0;
+        k_kontract_no = null;
+        select k_kontract_no
+        from oksummary, knclient, kontract
+        where kc_from_c_id = :crel_other_c_id and
+              kc_amount_approved &gt; 0 and
+              kc_from_k_id = oks_from_k_id and
+              current_date between oks_date_begin and oks_date_end and
+              current_date &gt; oks_delinq_date and
+              oks_close_state = 0 and
+              oks_from_k_id = k_id rows 1
+        into k_kontract_no;
+        if (k_kontract_no is not null) then
+        begin
+          res_error_is_critical = iif(ma_refund = 1, 0, 1);
+          res_error_text = c_name_fio || &#x27; (&#x27; || relation_type || &#x27; клиента) имеет активный просроченный займ № &#x27; || k_kontract_no;
+          suspend;
+        end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

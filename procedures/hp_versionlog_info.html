@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_VERSIONLOG_INFO — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_VERSIONLOG_INFO: 2 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_VERSIONLOG_INFO</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ITEM_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">VER_DATETIME</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">LAST_DATE</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LAST_USER</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LAST_BODY</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MAX_DATE</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_VERSIONLOG_INFO(
+    ITEM_NAME D_STR_100 NOT NULL,
+    VER_DATETIME D_DATETIME)
+RETURNS (
+    LAST_DATE D_DATETIME,
+    LAST_USER D_STR_CODE,
+    LAST_BODY D_STR_CODE,
+    MAX_DATE D_DATETIME)
+AS
+declare variable last_body_blob d_blob_text;
+declare variable tmp_blob_w blob sub_type 1 segment size 80 character set win1251;
+declare variable curr_body_blob d_blob_text;
+declare variable pos d_integer;
+declare variable is_exists d_bool;
+declare variable pkg_name d_str_code;
+declare variable obj_type d_integer;
+declare variable tmp_blob d_blob_binary;
+declare function prepare_blob(bl_in d_blob_text)
+returns blob
+as
+declare variable bl_out d_blob_text;
+declare variable ppos d_integer;
+begin
+  bl_out = bl_in;
+  bl_out = lower(bl_out);
+
+  ppos = position(ascii_char(13)||ascii_char(10) || &#x27;as&#x27; || ascii_char(13)||ascii_char(10), bl_out);
+
+  if (ppos &gt; 0) then
+    bl_out = substring(bl_out from ppos + 1);
+  bl_out = replace(bl_out, &#x27; &#x27;, &#x27;&#x27;);
+  bl_out = replace(bl_out, ascii_char(13), &#x27;&#x27;);
+  bl_out = replace(bl_out, ascii_char(10), &#x27;&#x27;);
+
+  --Убрать завершающую семиколон &quot;;&quot;
+  ppos = char_length(bl_out);
+  if (substring(bl_out from ppos for 1) = &#x27;;&#x27;) then
+    bl_out =  substring(bl_out from 1 for ppos - 1);
+  return bl_out;
+end
+
+begin
+  last_body = &#x27;&#x27;;
+
+  if (item_name is null) then
+    item_name = &#x27;&#x27;;
+
+  if (not exists(select * from ibe$version_history v
+  where v.ibe$vh_object_name = :item_name)) then
+  begin
+    for select rdb$package_name
+    from rdb$packages
+    union
+    select null
+    from rdb$database
+    into pkg_name
+    do
+    begin
+      select p.rdb$procedure_source
+      from rdb$procedures p
+      where p.rdb$package_name is not distinct from :pkg_name and
+            p.rdb$procedure_name = :item_name
+      into tmp_blob;
+
+      if (tmp_blob is null) then
+      begin
+        select f.rdb$function_source
+        from rdb$functions f
+        where f.rdb$package_name is not distinct from :pkg_name and
+              f.rdb$function_name = :item_name
+        into tmp_blob;
+      end
+
+      if (tmp_blob is not null) then
+        break;
+    end
+
+    if (tmp_blob is null) then
+    begin
+      select t.rdb$trigger_source
+      from rdb$triggers t
+      where t.rdb$trigger_name = :item_name
+      into tmp_blob;
+    end
+
+    if (tmp_blob is not null) then
+    begin
+      begin
+        curr_body_blob = tmp_blob;
+        when any do
+        begin
+          tmp_blob_w = tmp_blob;
+          curr_body_blob = tmp_blob_w;
+        end
+      end
+
+      curr_body_blob = prepare_blob(curr_body_blob);
+
+      last_body = f_md5_blob(curr_body_blob);
+    end else
+      last_body = &#x27;deleted&#x27;;
+
+    last_date = current_timestamp;
+    last_user = &#x27;SISLAMOV&#x27;;
+    max_date = current_timestamp;
+
+    suspend;
+    exit;
+  end
+
+  for select ibe$vh_modify_date as change_date,
+             ibe$vh_user_name as change_user,
+             ibe$vh_object_name as obj_name,
+             ibe$vh_body as obj_body,
+             ibe$vh_object_type as obj_type
+  from ibe$version_history
+  where ibe$vh_object_name = :item_name and
+        ibe$vh_modify_date &gt;= coalesce(:ver_datetime, ibe$vh_modify_date)
+  order by ibe$vh_modify_date desc
+  as cursor cur
+  do
+  begin
+    if (max_date is null) then
+      max_date = cur.change_date;
+
+    obj_type = cur.obj_type;
+
+    is_exists = 0;
+    if (obj_type in (1, 4)) then
+    begin
+      for select rdb$package_name
+      from rdb$packages
+      union
+      select null
+      from rdb$database
+      into pkg_name
+      do
+      begin
+        if (obj_type = 1) then
+        begin
+          if (exists(
+          select * from rdb$procedures p
+          where p.rdb$package_name is not distinct from :pkg_name and
+                p.rdb$procedure_name = cur.obj_name)) then
+            is_exists = 1;
+        end else
+        begin
+          if (exists(
+          select * from rdb$functions f
+          where f.rdb$package_name is not distinct from :pkg_name and
+                f.rdb$function_name = cur.obj_name)) then
+            is_exists = 1;
+        end
+      end
+    end else
+    if (obj_type = 2) then
+    begin
+    for  select t.rdb$trigger_source from rdb$triggers t
+      where t.rdb$trigger_name = cur.obj_name
+      into :curr_body_blob do
+        is_exists = 1;
+    end
+
+    if (is_exists = 0) then
+    begin
+      last_date = cur.change_date;
+      last_user = cur.change_user;
+
+      last_body = &#x27;deleted&#x27;;
+
+      suspend;
+      exit;
+    end
+
+    begin
+      if (obj_type &lt;&gt; 2) then
+        curr_body_blob = cur.obj_body;
+      when any do
+      begin
+        tmp_blob_w = cur.obj_body;
+        curr_body_blob = tmp_blob_w;
+      end
+    end
+
+    curr_body_blob = prepare_blob(curr_body_blob);
+
+    if (last_body_blob is not null and last_body_blob is distinct from curr_body_blob) then
+    begin
+      last_body = f_md5_blob(last_body_blob);
+      suspend;
+
+      exit;
+    end
+
+    last_body_blob = curr_body_blob;
+    last_date = cur.change_date;
+    last_user = cur.change_user;
+  end
+
+  if (max_date is not null) then
+  begin
+    last_body = f_md5_blob(last_body_blob);
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

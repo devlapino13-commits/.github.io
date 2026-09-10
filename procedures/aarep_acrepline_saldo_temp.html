@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_ACREPLINE_SALDO_TEMP — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_ACREPLINE_SALDO_TEMP: 2 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_ACREPLINE_SALDO_TEMP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_acrepline_saldo.html"><div class="to">AAREP_ACREPLINE_SALDO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REPORT_REGION_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REPORT_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ACC_BALANCE</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACC_NUMBER</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACC_SUMMA</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_ACREPLINE_SALDO_TEMP(
+    REPORT_REGION_ID INTEGER,
+    REPORT_DATE_END DATE)
+RETURNS (
+    ACC_BALANCE VARCHAR(255),
+    ACC_NUMBER INTEGER,
+    ACC_SUMMA DECIMAL(18,4))
+AS
+declare variable al_id varchar(20);
+declare variable acc_balance_prior varchar(20);
+declare variable acc_number_prior integer;
+declare variable acc_balance_prior2 varchar(20);
+declare variable acc_number_prior2 integer;
+declare variable summa_one_ekv decimal(18,4);
+declare variable suspended smallint;
+begin
+  acc_balance_prior = &#x27;&#x27;;
+  acc_number_prior = -1;
+  acc_summa = 0;
+  for select al_id, al_from_bg_id, al_number
+      from acc_list, region_list(:report_region_id, 1, 3, 1)
+      where al_from_reg_id = id_list
+      order by al_from_bg_id, al_number
+      into :al_id, :acc_balance, acc_number
+  do
+  begin
+    summa_one_ekv = f_al_bal(al_id, report_date_end);
+
+    if (((acc_balance_prior &lt;&gt; acc_balance) or (acc_number_prior &lt;&gt; acc_number)) and
+        (acc_number_prior &gt; -1)) then
+    begin
+      acc_balance_prior2 = acc_balance;
+      acc_number_prior2 = acc_number;
+      acc_balance = acc_balance_prior;
+      acc_number = acc_number_prior;
+      suspended = 1;
+      if (acc_summa &lt;&gt; 0) then
+        suspend;
+      acc_balance = acc_balance_prior2;
+      acc_number = acc_number_prior2;
+      acc_summa = summa_one_ekv;
+    end
+    else
+    begin
+      acc_summa = acc_summa + summa_one_ekv;
+      suspended = 0;
+    end
+
+    acc_balance_prior = acc_balance;
+    acc_number_prior = acc_number;
+  end
+  if ((suspended = 0) and
+      (acc_summa &lt;&gt; 0)) then
+    suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

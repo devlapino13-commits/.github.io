@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_ACTIVE_BALANCE_LIST — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_ACTIVE_BALANCE_LIST: 3 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_ACTIVE_BALANCE_LIST</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_client_relation_list.html"><div class="to">HP_CLIENT_RELATION_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_html_main.html"><div class="to">FM_REPORT_HTML_MAIN</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OBJ_KIND</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_ACTIVE_BALANCE_LIST(
+    OBJ_KIND D_STR_100,
+    OBJ_ID ID_TYPE,
+    UN_ID ID_TYPE)
+RETURNS (
+    RES_TEXT BLOB SUB_TYPE TEXT SEGMENT SIZE 80)
+AS
+declare variable k_id id_type;
+declare variable client_id id_type;
+declare variable c_id id_type;
+declare variable c_name_fio d_str_100;
+declare variable rel_name d_str_10;
+declare variable crel_from_rel_id d_str_code;
+declare variable k_amount_approved d_currency;
+declare variable kc_amount_approved d_currency;
+declare variable client_koef d_currency;
+declare variable balans d_currency;
+declare variable balans_vu d_currency;
+declare variable days_vu d_integer;
+declare variable balans_active d_currency;
+declare variable delinq_sum_active d_currency;
+declare variable balans_total d_currency;
+declare variable delinq_sum d_currency;
+declare variable delinq_sum_total d_currency;
+declare variable delinq_days d_integer;
+declare variable delinq_days_max d_integer;
+begin
+  -- процедура возвращает таблицу &quot;Активный баланс&quot; (RFCKG-1694)
+  -- колонки таблицы:
+  -- 1) ФИО клиента или его родственника (супруг, родители, дети)
+  -- 2) родство
+  -- 3) активный баланс (баланс ОС по всем активным займам + сумма на В/У)
+  -- 6) общая просроченная сумма ОС по всем активным займам
+  -- 5) кол-во дней максимальной активной просрочки
+
+  res_text = (select res_style
+              from fm_html_styles) || &#x27;&lt;body&gt;&#x27;;
+
+  -- беру клиентов
+  for select :obj_id
+      from rdb$database
+      where :obj_kind in (&#x27;clients&#x27;, &#x27;0&#x27;)
+      union
+      select kc_from_c_id
+      from knclient
+      where :obj_kind in (&#x27;kontract&#x27;, &#x27;9&#x27;) and
+            kc_from_k_id = :obj_id and
+            kc_amount_approved &gt; 0
+      union
+      select mac_from_c_id
+      from miniappclient
+      where :obj_kind in (&#x27;miniapp&#x27;, &#x27;11&#x27;) and
+            mac_from_ma_id = :obj_id and
+            mac_amount &gt; 0
+      into client_id
+  do
+  begin
+    c_id = 0;
+    c_name_fio = &#x27;&#x27;;
+    rel_name = &#x27;&#x27;;
+    res_text = blob_append(res_text, &#x27;&lt;br&gt;&lt;table width=&quot;100%&quot;&gt;&lt;col width=&quot;40%&quot;&gt;&lt;tr&gt;&lt;th&gt;ФИО&lt;/th&gt;&lt;th&gt;Родство&lt;/th&gt;&lt;th&gt;Активный баланс&lt;/th&gt;&lt;th&gt;Просрочка (сумма/дни)&lt;/th&gt;&lt;tr&gt;&#x27;);
+
+    -- беру клиента c родственниками (супруг, родители, дети)
+    for select c_id,
+               c_name_fio,
+               rel_name,
+               crel_from_rel_id
+        from (select c_id,
+                     c_name_fio,
+                     &#x27;(клиент)&#x27; rel_name,
+                     &#x27;0&#x27; crel_from_rel_id
+              from clients
+              where c_id = :client_id
+              union
+              select crel_other_c_id,
+                     c_name_fio,
+                     lower(rel_name),
+                     crel_from_rel_id
+              from hp_client_relation_list(:client_id, 0)
+              where crel_from_rel_id in (&#x27;1&#x27;, &#x27;2&#x27;, &#x27;3&#x27;, &#x27;4&#x27;, &#x27;5&#x27;, &#x27;6&#x27;))
+        order by crel_from_rel_id
+        into c_id,
+             c_name_fio,
+             rel_name,
+             crel_from_rel_id
+    do
+    begin
+      balans_active = 0;
+      delinq_sum_active = 0;
+      delinq_days_max = 0;
+      balans_vu = 0;
+      days_vu = 0;
+      balans_total = 0;
+      delinq_sum_total = 0;
+
+      -- активные контракты клиента или его родственника
+      for select kc_from_k_id,
+                 kc_amount_approved
+          from knclient
+          inner join kontstate on ks_from_k_id = kc_from_k_id
+          where kc_from_c_id = :c_id and
+                kc_amount_approved &gt; 0 and
+                ks_ol_is_delete = 0 and
+                ks_state = 1 and
+                current_date between ks_date_begin and ks_date_end
+          into k_id,
+               kc_amount_approved
+      do
+      begin
+        balans = 0;
+        client_koef = 0;
+        delinq_sum = 0;
+        delinq_days = 0;
+
+        select k_amount_approved
+        from kontract
+        where k_id = :k_id
+        into k_amount_approved;
+
+        client_koef = kc_amount_approved / k_amount_approved; -- доля клиента в групповом займе
+
+        select oks_balance * :client_koef,
+               oks_delinq_os * :client_koef,
+               iif(oks_delinq_date &lt; current_date, current_date - oks_delinq_date, 0)
+        from oksummary
+        where oks_from_k_id = :k_id and
+              oks_close_state = 0 and
+              current_date between oks_date_begin and oks_date_end
+        into balans, -- долг ОС текущего контракта на стандартном учете
+             delinq_sum, -- просроченная сумма ОС текущего контракта
+             delinq_days; -- кол-во дней активной просрочки
+
+        balans_active = balans_active + coalesce(balans, 0); -- баланс по активным займам
+        delinq_sum_active = delinq_sum_active + coalesce(delinq_sum, 0); -- общая просроченная сумма по активным займам
+
+        if (delinq_days_max &lt; delinq_days) then
+          delinq_days_max = delinq_days; -- кол-во дней максимальной активной просрочки
+      end
+
+      -- долг ОС на внесистемном учете
+      select current_date - max(oko_ol_date),
+             sum(oko_sh_os + oko_os + oko_sh_perc + oko_perc)
+      from operkroff
+      where oko_ol_is_active = 1 and
+            oko_from_c_id = :c_id
+      into days_vu, -- просрочка на ВУ (дней)
+           balans_vu; -- долг на ВУ
+
+      -- итого активный баланс (долги по активным кредитам + долг на ВУ)
+      balans_total = balans_active + coalesce(balans_vu, 0);
+      delinq_sum_total = delinq_sum_active + coalesce(balans_vu, 0);
+
+      -- итого макс. активная просрочка (дней)
+      if (delinq_days_max &lt; coalesce(days_vu, 0)) then
+        delinq_days_max = days_vu;
+
+      -- клиента отображаем, а его родственников только если есть задолженность
+      if (crel_from_rel_id = &#x27;0&#x27; or balans_total &gt; 0) then
+        res_text = blob_append(res_text, f_html_table_row(c_name_fio, rel_name, round(balans_total), round(delinq_sum_total) || &#x27; / &#x27; || delinq_days_max, -1, 0, 1, 1));
+    end
+    res_text = blob_append(res_text, &#x27;&lt;/table&gt;&lt;br&gt;&#x27;);
+  end
+
+  res_text = blob_append(res_text, &#x27;&lt;/body&gt;&#x27;);
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

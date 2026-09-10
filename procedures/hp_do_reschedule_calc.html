@@ -1,0 +1,647 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DO_RESCHEDULE_CALC — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DO_RESCHEDULE_CALC: 6 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DO_RESCHEDULE_CALC</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_reschedule_auto.html"><div class="to">HP_DO_RESCHEDULE_AUTO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_reschedule.html"><div class="to">HP_DO_RESCHEDULE</div></a><a class="ref-card" href="hp_do_reschedule_auto.html"><div class="to">HP_DO_RESCHEDULE_AUTO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEED_NEW_ANNU</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FIRST_PERC_KIND</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PERC_LGOTA_VALUE</div><div class="ptype">DECIMAL(18,7)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEED_LOAD</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DO_RESCHEDULE_CALC(
+    K_ID D_ID,
+    REP_DATE D_DATE,
+    NEED_NEW_ANNU D_SMALLINT,
+    FIRST_PERC_KIND D_SMALLINT,
+    PERC_LGOTA_VALUE D_PERCENT,
+    NEED_LOAD D_SMALLINT = 0)
+AS
+declare variable sh_rec_id d_integer;
+declare variable disb_amount decimal(18,4) = 0;
+declare variable pr_percent_method integer;
+declare variable kd_percent_per_day d_double;
+declare variable balans decimal(18,4) = 0;
+declare variable s_percent decimal(18,4) = 0;
+declare variable is_grace integer;
+declare variable sh_new_os decimal(18,4) = 0;
+declare variable sh_new_perc decimal(18,4) = 0;
+declare variable s_date date;
+declare variable dd_min date;
+declare variable s_all decimal(18,4) = 0;
+declare variable pr_round_perc integer;
+declare variable pr_is_360 integer;
+declare variable kol_day integer;
+declare variable tmp_amount decimal(18,4) = 0;
+declare variable cm_database_id integer;
+declare variable k_disb_date date;
+declare variable perc_per_month d_double;
+declare variable period_real integer;
+declare variable delta_days double precision;
+declare variable pr_week_or_month integer;
+declare variable pr_wm_kolich integer;
+declare variable sh_prior_percent_per_day d_percent;
+declare variable last_os d_currency;
+declare variable is_first_perc d_smallint;
+declare variable future_balance d_currency;
+declare variable new_annu_amount d_double;
+declare variable delta_perc d_currency;
+declare variable zad_perc d_currency;
+declare variable rep_count_old d_integer;
+declare variable rep_count_new d_integer;
+declare variable annu_orig d_currency;
+declare variable s_tmp_percent d_currency;
+declare variable s_all_perc d_currency;
+declare variable days_list d_str_long;
+declare variable s_percent_for_annu d_currency;
+declare variable sh_date_prv d_date;
+declare variable is_grace_perc d_smallint;
+declare variable kol_days d_integer;
+declare variable has_add_month_grace_perc d_smallint;
+declare variable rep_date_os d_currency;
+declare variable zad_os d_currency;
+declare variable first_normal_sh_date d_date;
+declare variable can_change_delinq d_smallint;
+declare variable delinq_os d_currency;
+declare variable delinq_perc d_currency;
+declare variable pr_percent_kind d_smallint;
+declare variable fix_perc_all d_currency;
+declare variable fix_perc_per_day d_currency;
+declare variable total_days d_integer;
+declare variable tmp_perc d_currency;
+declare variable fix_perc_total d_currency;
+declare variable stop_perc boolean;
+begin
+  -- Процедура для автореструктуризации графика после погашения
+  if (need_load is null) then
+    need_load = 0;
+
+  if (first_perc_kind is null) then
+    first_perc_kind = 0;
+
+  if (need_load = 1) then
+  begin
+--    select res_text
+--    from hp_do_reschedule_auto(:k_id, :rep_date, &#x27;auto&#x27;, &#x27;debug&#x27;, 1000000000001)
+--    into res_text;
+  end
+
+  cm_database_id = f_get_db_id();
+  stop_perc = (cm_database_id = 39801)
+    and exists(select * from kontract where k_id = :k_id and coalesce(k_stop_perc, &#x27;31.12.9999&#x27;) &lt;= :rep_date);
+
+  select disb_amount, pr_percent_method, kd_percent_per_day, pr_round_perc,
+         pr_is_360, k_disb_date
+  from temp_params
+  into :disb_amount, :pr_percent_method, kd_percent_per_day, pr_round_perc,
+       pr_is_360, k_disb_date;
+
+  select pr_week_or_month, pr_wm_kolich, pr_percent_kind
+  from kontract, product
+  where k_id = :k_id and
+        k_from_pr_id = pr_id
+  into pr_week_or_month, pr_wm_kolich, pr_percent_kind;
+
+  if (pr_percent_kind is null) then
+    pr_percent_kind = 0;
+
+  if (pr_percent_kind = 2 and f_tmp_const(&#x27;ipf_percent_mode_active&#x27;) = 1) then
+    pr_percent_method = -2; -- Амортизация процента на оставщийся срок
+
+  future_balance = 0;
+  s_percent = 0;
+  rep_count_old = 0;
+  rep_count_new = 0;
+  rep_date_os = 0;
+  delinq_os = 0;
+  delinq_perc = 0;
+  select sum(iif(sh_repay_mode = 1, sh_zad_os, 0)),
+         sum(iif(sh_repay_mode = 1, sh_zad_perc, 0)),
+         sum(iif(sh_repay_mode &lt;&gt; 1, sh_zad_os, 0)), -- не просроченный баланс
+         sum(iif(sh_repay_mode &lt;&gt; 1 and sh_is_grace_os = 0, 1, 0)),
+         sum(sh_calcing_perc - iif(sh_repay_mode = 1, sh_zad_perc, 0)),
+         sum(iif(sh_repay_mode &lt;&gt; 1 and sh_zad_os &lt;&gt; 0, 1, 0)),
+         sum(iif(sh_repay_mode &lt;&gt; 1 and sh_is_grace_os = 0, 1, 0)),
+         sum(iif(sh_date = :rep_date, sh_zad_os, 0)),
+         sum(sh_zad_perc)
+  from temp_sh
+  where sh_id &gt;= 0
+  into delinq_os, delinq_perc, future_balance, period_real, s_percent, rep_count_old, rep_count_new,
+       rep_date_os, fix_perc_all;
+
+  if (delinq_os is null) then
+    delinq_os = 0;
+  if (delinq_perc is null) then
+    delinq_perc = 0;
+  if (fix_perc_all is null) then
+    fix_perc_all = 0;
+
+  fix_perc_total = fix_perc_all;
+  fix_perc_all = fix_perc_all - delinq_perc;
+
+  can_change_delinq = 0;
+  if (exists(select *
+             from hp_do_reschedule_can_delinq
+             where res_is_error = 0))
+  then can_change_delinq = 1;
+
+  if (can_change_delinq = 1) then
+  begin
+    future_balance = future_balance + delinq_os;
+    s_percent = s_percent + delinq_perc;
+    fix_perc_all = fix_perc_all + delinq_perc;
+    if (rep_date_os &lt;&gt; 0) then
+      rep_date_os = rep_date_os + delinq_os;
+  end
+
+  days_list = &#x27;&#x27;;
+  s_percent_for_annu = s_percent;
+
+  is_grace_perc = 0;
+  has_add_month_grace_perc = 0;
+
+  select sh_is_grace_perc
+  from temp_sh
+  where sh_date &gt;= :rep_date and
+        (sh_zad_os &lt;&gt; 0 or sh_zad_perc &lt;&gt; 0)
+  order by sh_date, sh_id
+  rows 1
+  into is_grace_perc;
+
+  has_add_month_grace_perc = is_grace_perc;
+
+  first_normal_sh_date = null;
+  select sh_date
+  from temp_sh
+  where sh_date &gt;= :rep_date and
+        sh_is_grace_perc = 0
+  order by sh_date
+  rows 1
+  into first_normal_sh_date;
+
+  if (is_grace_perc &gt; 0) then
+    rep_date_os = 0;
+
+  if (is_grace_perc = 0) then
+  begin
+    perc_lgota_value = 0;
+    first_perc_kind = 1;
+  end
+
+  sh_date_prv = rep_date;
+  total_days = 0;
+  for select sh_date, sh_is_grace_os, sh_is_grace_perc
+  from temp_sh
+  where sh_date &gt; :rep_date
+  order by sh_date, sh_id
+  into s_date, is_grace, is_grace_perc
+  do
+  begin
+    if (is_grace_perc = 1 and is_grace = 1) then
+    begin
+      kol_days = f_agein360(rep_date, s_date, pr_is_360);
+      total_days = kol_days;
+      days_list = -kol_days;
+    end
+    else
+    begin
+      if (days_list &lt;&gt; &#x27;&#x27;) then
+        days_list = days_list || &#x27;,&#x27;;
+  
+      kol_days = f_agein360(sh_date_prv, s_date, pr_is_360);
+  
+      if (is_grace = 1) then
+        kol_days = -kol_days;
+  
+      days_list = days_list || kol_days;
+      total_days = total_days + kol_days;
+    end
+    sh_date_prv = s_date;
+  end
+
+  annu_orig = 0;
+
+  if (future_balance is null) then future_balance = 0;
+  if (s_percent is null) then s_percent = 0;
+  balans = future_balance;
+
+  update temp_sh
+  set sh_new_os = 0,
+      sh_new_perc = 0
+  where sh_repay_mode &lt;&gt; 1 or
+        :can_change_delinq = 1;
+
+  if (need_new_annu = 1 and period_real &gt; 0) then
+  begin
+    if (pr_percent_method in (-1, -2) and rep_count_old = rep_count_new and can_change_delinq = 0) then
+    begin
+      select sh_zad_os + sh_zad_perc as annu
+      from temp_sh
+      where sh_repay_mode &lt;&gt; 1 and
+            sh_zad_os &lt;&gt; 0
+      group by 1
+      order by count(*) desc
+      rows 1
+      into annu_orig;
+      if (annu_orig is null) then annu_orig = 0;
+    end
+
+    if (can_change_delinq = 1 or
+        exists(select * from temp_sh
+               where sh_date &lt;&gt; sh_date_orig or
+                     sh_date_orig is null or
+                     sh_is_grace_os &lt;&gt; sh_is_grace_os_orig or
+                     sh_is_grace_perc &lt;&gt; sh_is_grace_perc_orig)) then
+    begin
+      if (pr_percent_method = 2) then
+      begin
+        if (pr_week_or_month = 2 and
+            pr_wm_kolich = 1) then
+        begin
+          if (cm_database_id not in (39801, 41701)) then
+          begin
+            if (pr_is_360 = 0)
+            then perc_per_month = round(cast(kd_percent_per_day as double precision) * 365.0000 / 12.0000 / 100.0000, 9);
+            else perc_per_month = round(cast(kd_percent_per_day as double precision) * 30.0 / 100.0, 9);
+          end
+          else
+          begin
+            if (pr_is_360 = 0 and
+                k_disb_date &gt;= &#x27;17.10.2016&#x27;) then
+              perc_per_month = round(kd_percent_per_day * 365.0 / 12.0 / 100.0, 9);
+            else
+              perc_per_month = round(kd_percent_per_day * 30.0 / 100.0, 9);
+          end
+        end
+        else
+        begin
+          if (pr_week_or_month = 0) then
+            delta_days = 1.0;
+          if (pr_week_or_month = 1) then
+            delta_days = 7.0;
+          if (pr_week_or_month = 2) then
+            delta_days = 30.0;
+          delta_days = delta_days * pr_wm_kolich;
+          perc_per_month = round(kd_percent_per_day * delta_days / 100.0, 9);
+        end
+
+        new_annu_amount = (perc_per_month * power((1 + perc_per_month), period_real)) / (power((1 + perc_per_month), period_real) - 1);
+        new_annu_amount = balans * new_annu_amount;
+        new_annu_amount = round(new_annu_amount, 0);
+        last_os = new_annu_amount;
+
+        new_annu_amount = f_annu(balans - rep_date_os, iif(rep_date_os &lt;&gt; 0, 0, s_percent_for_annu), first_perc_kind, kd_percent_per_day, days_list, 0, pr_round_perc, has_add_month_grace_perc, perc_lgota_value, 0);
+        last_os = f_annu(balans - rep_date_os, iif(rep_date_os &lt;&gt; 0, 0, s_percent_for_annu), first_perc_kind, kd_percent_per_day, days_list, 0, pr_round_perc, has_add_month_grace_perc, perc_lgota_value, 1);
+
+--        exception e_message &#x27;test annu: &#x27; || new_annu_amount ||
+--                            &#x27;last_annu: &#x27; || last_os ||
+--                            &#x27;, saldo_perc: &#x27; || iif(rep_date_os &lt;&gt; 0, 0, s_percent_for_annu) ||
+--                            &#x27;, first_perc_kind: &#x27; || first_perc_kind ||
+--                            &#x27;, has_add_month_grace_perc: &#x27; || has_add_month_grace_perc ||
+--                            &#x27;, perc_lgota_value: &#x27; || perc_lgota_value;
+      end else
+        if (pr_percent_method = -1) then
+        begin
+          if (rep_count_old = rep_count_new and annu_orig &lt;&gt; 0) then
+          begin
+            new_annu_amount = annu_orig;
+            last_os = new_annu_amount;
+          end else
+          begin
+            s_all_perc = 0;
+            s_tmp_percent = s_percent;
+            dd_min = rep_date;
+            is_first_perc = 0;
+            tmp_amount = disb_amount;
+          
+            for select sh_date, iif(sh_is_grace_perc = 1, 1, sh_is_grace_os), sh_annu, sh_zad_perc, sh_is_grace_perc,
+                       iif(sh_is_grace_perc = 1 or sh_date = :first_normal_sh_date,
+                           sh_prior_percent_per_day * ((100.0000 - :perc_lgota_value) / 100.0000),
+                           sh_prior_percent_per_day)
+            from temp_sh
+            where sh_id &gt; 0 and
+                  sh_repay_mode &lt;&gt; 1
+            order by sh_date, sh_id
+            into s_date, is_grace, s_all, zad_perc, is_grace_perc, sh_prior_percent_per_day
+            do
+            begin
+              sh_new_os = 0;
+              sh_new_perc = 0;
+          
+              if (is_first_perc = 0 and is_grace_perc = 0) then
+                is_first_perc = 1;
+          
+              if (s_date &gt;= dd_min) then
+              begin
+                if (s_date &gt; dd_min) then
+                begin
+                  kol_day = f_agein360(:dd_min, :s_date, :pr_is_360);
+                  s_tmp_percent = s_tmp_percent + round((tmp_amount * sh_prior_percent_per_day / 100) * cast(kol_day as double precision), 2);
+                end
+          
+                s_tmp_percent = round(s_tmp_percent, pr_round_perc);
+              end
+          
+              if (is_grace_perc = 0) then
+              begin
+                if (stop_perc) then
+                begin
+                  sh_new_perc = 0;
+                end else
+                begin
+                  sh_new_perc = s_tmp_percent;
+          
+                  if (abs(zad_perc - sh_new_perc) &lt;= 1) then
+                    sh_new_perc = zad_perc;
+          
+                  s_tmp_percent = s_tmp_percent - sh_new_perc;
+                  if (s_tmp_percent &lt; 0) then s_tmp_percent = 0;
+                end
+              end
+          
+              s_all_perc = s_all_perc + sh_new_perc;
+              dd_min = s_date;
+          
+              if (is_first_perc = 1) then
+                is_first_perc = 2;
+            end
+            if (s_tmp_percent &gt; 1) then
+              s_all_perc = s_all_perc + s_tmp_percent;
+  
+            new_annu_amount = round((balans + s_all_perc) / period_real, 0);
+            last_os = new_annu_amount;
+          end
+        end else
+          if (pr_percent_method = -2) then
+          begin
+            new_annu_amount = round((balans + fix_perc_all) / period_real, 0);
+            last_os = new_annu_amount;
+          end else
+          begin
+            new_annu_amount = round(future_balance / period_real, 0);
+            last_os = future_balance - (new_annu_amount * (period_real - 1));
+          end
+  
+      if (first_perc_kind = 1) then
+      begin
+        update temp_sh
+        set sh_annu = :new_annu_amount
+        where sh_repay_mode &lt;&gt; 1;
+      end else
+      begin
+        update temp_sh
+        set sh_annu = iif(sh_is_grace_os = 0, :new_annu_amount, 0.0)
+        where sh_repay_mode &lt;&gt; 1;
+      end
+  
+      if (pr_percent_method in (0, 1, 2)) then
+      begin
+        update temp_sh
+        set sh_annu = :last_os
+        where sh_repay_mode &lt;&gt; 1 and
+              sh_is_grace_os = 0
+        order by sh_date desc
+        rows 1;
+      end
+    end else
+    begin
+      update temp_sh
+      set sh_annu = sh_annu_orig
+      where sh_repay_mode &lt;&gt; 1;
+    end
+  end
+
+  dd_min = rep_date;
+  is_first_perc = 0;
+  delta_perc = 0;
+  fix_perc_per_day = 0;
+
+  if (total_days &lt;&gt; 0) then
+  begin
+    fix_perc_per_day = (fix_perc_all - s_percent) / total_days;
+    if (fix_perc_per_day &lt; 0) then
+      fix_perc_per_day = 0;
+  end
+
+  for select sh_rec_id, sh_date,
+             iif(sh_is_grace_perc = 1, 1, sh_is_grace_os),
+             sh_is_grace_perc, sh_annu, sh_zad_os, sh_zad_perc,
+             iif(sh_is_grace_perc = 1 or sh_date = :first_normal_sh_date,
+                 sh_prior_percent_per_day * ((100.0000 - :perc_lgota_value) / 100.0000),
+                 sh_prior_percent_per_day)
+  from temp_sh
+  where sh_id &gt; 0 and
+        sh_repay_mode &lt;&gt; 1 and
+        sh_date &gt;= :rep_date
+  order by sh_date, sh_id
+  into sh_rec_id, s_date, is_grace, is_grace_perc, s_all, zad_os, zad_perc, sh_prior_percent_per_day
+  do
+  begin
+    sh_new_os = 0;
+    sh_new_perc = 0;
+
+    if (is_first_perc = 0 and is_grace_perc = 0) then
+      is_first_perc = 1;
+
+    if (s_date &gt;= dd_min) then
+    begin
+      if (pr_percent_method &gt;= 1) then
+        tmp_amount = balans;
+      else
+        tmp_amount = disb_amount;
+
+      if (s_date &gt; dd_min) then
+      begin
+        kol_day = f_agein360(:dd_min, :s_date, :pr_is_360);
+
+        if (pr_percent_method = -2)
+        then tmp_perc = round(fix_perc_per_day * cast(kol_day as double precision), 2);
+        else tmp_perc = round((tmp_amount * sh_prior_percent_per_day / 100) * cast(kol_day as double precision), 2);
+
+        s_percent = s_percent + tmp_perc + delta_perc;
+        delta_perc = 0;
+        s_percent = round(s_percent, pr_round_perc);
+
+        if (stop_perc) then
+          s_percent = 0;
+
+        if (abs(zad_perc - s_percent) &lt;= 1) then
+          s_percent = zad_perc;
+
+        if (is_grace_perc = 1) then
+        begin
+          delta_perc = s_percent;
+          s_percent = 0;
+        end else
+        if (first_perc_kind = 1 and s_percent &gt; s_all) then
+        begin
+          delta_perc = s_percent - s_all;
+          s_percent = s_all;
+        end
+      end
+    end
+
+    if (is_grace_perc = 0) then
+    begin
+      if (stop_perc) then
+      begin
+        sh_new_perc = 0;
+      end else
+      begin
+        sh_new_perc = s_percent;
+        s_percent = 0;
+      end
+    end
+
+    if (is_grace = 0 and (s_date &gt; dd_min or dd_min = rep_date)) then
+    begin
+      if (pr_percent_method in (-2, -1, 2)) then
+      begin
+        if (s_date &gt; rep_date) then
+        begin
+          if (sh_new_perc &lt; s_all) then
+            sh_new_os = s_all - sh_new_perc;
+          else
+            sh_new_os = 0;
+        end
+        else sh_new_os = zad_os;
+      end
+      else sh_new_os = s_all;
+    end
+
+    if (sh_new_os &lt; 0) then
+      sh_new_os = 0;
+
+    if (balans &lt; sh_new_os) then
+      sh_new_os = balans;
+
+    update temp_sh
+    set sh_new_os = :sh_new_os,
+        sh_new_perc = :sh_new_perc
+    where sh_rec_id = :sh_rec_id;
+
+    balans = balans - sh_new_os;
+    dd_min = s_date;
+
+    if (is_first_perc = 1) then
+      is_first_perc = 2;
+  end
+
+  if (s_percent &gt; 0) then
+  begin
+    if (not stop_perc) then
+      update temp_sh
+      set sh_new_perc = sh_new_perc + :s_percent
+      where sh_rec_id = :sh_rec_id;
+    s_percent = 0;
+  end
+
+  if (pr_percent_method = -2) then
+  begin
+    s_percent = 0;
+    select sum(sh_new_perc)
+    from temp_sh
+    into s_percent;
+    if (s_percent is null) then
+      s_percent = 0;
+
+    if (s_percent &lt;&gt; fix_perc_total) then
+    begin
+      if (not stop_perc) then
+        update temp_sh
+        set sh_new_perc = sh_new_perc + (:fix_perc_total - :s_percent)
+        where sh_rec_id = :sh_rec_id;
+    end
+  end
+
+  if (balans &gt; 0) then
+  begin
+    update temp_sh
+    set sh_new_os = sh_new_os + :balans
+    where sh_rec_id = :sh_rec_id;
+    balans = 0;
+  end
+
+  if (pr_percent_method in (-2, -1, 2)) then
+  begin
+    update temp_sh
+    set sh_annu = sh_new_all
+    where sh_new_all &lt;&gt; 0 and
+          sh_is_grace_os = 0
+    order by sh_rec_id desc
+    rows 1;
+  end else
+  begin
+    update temp_sh
+    set sh_annu = sh_new_os
+    where sh_new_os &lt;&gt; 0 and
+          sh_is_grace_os = 0
+    order by sh_rec_id desc
+    rows 1;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

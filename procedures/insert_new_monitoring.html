@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>INSERT_NEW_MONITORING — процедура — схема БД</title>
+<meta name="description" content="Процедура INSERT_NEW_MONITORING: 2 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>INSERT_NEW_MONITORING</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_cmd.html"><div class="to">FM_REPORT_CMD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">KC_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEED_REFRESH</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE INSERT_NEW_MONITORING(
+    KC_ID D_ID,
+    UN_ID D_ID)
+RETURNS (
+    RES_TEXT D_STR_100,
+    NEED_REFRESH D_SMALLINT)
+AS
+declare variable pr_code d_str_100;
+declare variable obj_id d_id;
+declare variable obj_kind d_smallint;
+declare variable rep_date d_date;
+declare variable datex d_date;
+declare variable reg_id d_integer;
+declare variable lo_id d_id;
+declare variable rd_anketa d_integer;
+declare variable is_idjara d_bool;
+declare variable mai_provision_servic_date d_date;
+declare variable knclient_kind d_smallint;
+declare variable clients_kind d_smallint;
+declare variable k_id d_id;
+declare variable k_disb_date d_date;
+declare variable actionlist_cnt d_integer;
+declare variable kf_id d_id;
+begin
+  res_text = &#x27;&#x27;;
+  need_refresh = 0;
+  rd_anketa = f_get_rd_id(&#x27;Anketa.TargetUseLoan&#x27;);
+  rep_date = current_date;
+  datex = &#x27;03.03.2022&#x27;;
+  knclient_kind = f_objkind(&#x27;KnClient&#x27;, &#x27;ID&#x27;);
+  clients_kind = f_objkind(&#x27;Clients&#x27;, &#x27;ID&#x27;);
+
+  select iif(:datex &gt; k.k_disb_date, kc.kc_from_c_id, kc.kc_id),
+         iif(:datex &gt; k.k_disb_date, :clients_kind, :knclient_kind), kal.kal_new_kf_officer, kal.kal_new_reg_id,
+         iif(pr_code containing &#x27;.IDJARA.&#x27;, 1, 0), pr.pr_code, k.k_id, k.k_disb_date, kal.kal_from_kf_id
+  from knclient kc
+  inner join kontract k on k.k_id = kc.kc_from_k_id
+  inner join product pr on pr.pr_id = k.k_from_pr_id
+  inner join knaktlist kal on kal.kal_from_kf_id = k.k_from_kf_id and
+        :rep_date between kal.kal_date and kal.kal_date_end and
+        kal.is_delete = 0
+  where kc.kc_id = :kc_id
+  into obj_id, obj_kind, lo_id, reg_id, is_idjara, pr_code, k_id, k_disb_date, kf_id;
+
+  -- Если папка за Виртуальным сотрудником то передаём её МО офиса
+  if (:lo_id = 1000000000100 or :lo_id = 1000000000005) then
+  begin
+    lo_id = null;
+    -- Получаем c_id МО офиса
+    select ps.ps_from_c_id
+    from hr_pstatus ps
+    inner join joblist jl on jl.jl_id = ps.ps_from_jl_id
+    inner join jobkind jk on jk.jk_id = jl.jl_kind and
+          jk.jk_system_code = &#x27;JobSystem.Region_KM&#x27;
+    where ps.ps_from_reg_id = :reg_id and
+          current_date between ps.ps_date_begin and ps.ps_date_end and
+          ps.ps_is_working = 1
+          rows 1
+    into :lo_id;
+
+    -- Если у офиса нет МО, передаём задачу КС у которого была папка до передачи на Виртуального сотрудника
+    if (:lo_id is null) then
+    begin
+      select kal.kal_new_kf_officer
+      from knaktlist kal
+      where kal.kal_from_kf_id = :kf_id and
+            kal.kal_new_kf_officer not in (1000000000100, 1000000000005) and
+            kal.is_delete = 0
+            rows 1
+      into :lo_id;
+    end
+  end
+
+  select count(*)
+  from actionlist acl
+  where acl.acl_from_rd_id = :rd_anketa and
+        acl.acl_object_kind = :obj_kind and
+        acl.acl_object_id = :obj_id
+  into actionlist_cnt;
+
+  -- Создание задачи для старых контрактов завязанные на clients невозможна, так как задача должна создаваться на дату выдачи + 1\8 дней
+  if (obj_kind = clients_kind) then
+  begin
+    res_text = &#x27;Создание задачи для контрактов выданных до 03.03.2022 невозможна!&#x27;;
+  end
+
+  -- Если это акционный продукт по которому не нужно создавать ЦМ
+  else
+  if ((:pr_code containing &#x27;.express_online.&#x27;) or (:pr_code containing &#x27;.express_similar.&#x27;)) then
+  begin
+    res_text = &#x27;Кредит по акционному продукту, задача не создана!&#x27;;
+  end
+
+  else
+  if (:actionlist_cnt &gt;= 2) then
+  begin
+    res_text = &#x27;По контракту уже был создан повторный мониторинг!&#x27;;
+  end
+
+  -- Если прошлая задача не закрыта
+  else
+  if (exists(select *
+             from actionlist acl
+             where acl.acl_from_rd_id = :rd_anketa and
+                   acl.acl_object_kind = :obj_kind and
+                   acl.acl_object_id = :obj_id and
+                   acl.acl_status in (0, 1))) then
+  begin
+    res_text = &#x27;Ранее созданная задача все еще в обработке!&#x27;;
+  end
+
+  -- На текущую дату уже есть задача
+  else
+  if (exists(select *
+             from actionlist acl
+             where acl.acl_from_rd_id = :rd_anketa and
+                   acl.acl_object_kind = :obj_kind and
+                   acl.acl_object_id = :obj_id and
+                   acl.acl_date = current_date)) then
+  begin
+    res_text = &#x27;Задача заполнения мониторинга уже создана на сегодняшний день!&#x27;;
+  end
+
+  -- Робот сам создаёт задачи для кредитов на следующий день после выдачи
+  else
+  if (:k_disb_date = current_date) then
+  begin
+    res_text = &#x27;Создание задачи в день выдачи запрещена!&#x27;;
+  end
+
+  if (:is_idjara = 1) then
+  begin
+    select mi.mai_provision_servic_date
+    from miniapp_ipf mi
+    inner join kontract k on k.k_from_ma_app_id = mi.mai_from_ma_id
+    where k.k_id = :k_id
+    into mai_provision_servic_date;
+    if (mai_provision_servic_date is null) then
+      :mai_provision_servic_date = :rep_date;
+    else
+      :rep_date = :mai_provision_servic_date;
+  end
+
+  -- Создаем задачу сегодняшним днем
+  if (res_text = &#x27;&#x27;) then
+  begin
+    insert into actionlist (acl_date, acl_from_reg_id, acl_object_kind, acl_object_id, acl_from_rd_id, acl_status,
+                            acl_respons_c_id, acl_from_un_id)
+    values (:rep_date, :reg_id, :obj_kind, :obj_id, :rd_anketa, 0, :lo_id, :un_id);
+
+    res_text = &#x27;Задача успешно создана&#x27;;
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

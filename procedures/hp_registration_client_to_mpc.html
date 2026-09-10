@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_REGISTRATION_CLIENT_TO_MPC — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_REGISTRATION_CLIENT_TO_MPC: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_REGISTRATION_CLIENT_TO_MPC</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="cr_json_new_account.html"><div class="to">CR_JSON_NEW_ACCOUNT</div></a><a class="ref-card" href="cr_json_new_agreement.html"><div class="to">CR_JSON_NEW_AGREEMENT</div></a><a class="ref-card" href="cr_json_new_customer.html"><div class="to">CR_JSON_NEW_CUSTOMER</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CAC_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SHOW_ADD_INFO</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_REGISTRATION_CLIENT_TO_MPC(
+    CAC_ID D_INTEGER NOT NULL,
+    SHOW_ADD_INFO SMALLINT = 0)
+AS
+declare variable c_id d_id;
+declare variable card_id d_integer;
+declare variable cca_id d_integer;
+declare variable csc_id d_integer;
+declare variable new_account d_str_2048;
+declare variable new_agreement d_str_2048;
+declare variable new_customer d_str_2048;
+declare variable cs_request_json d_str_8100;
+declare variable cac_from_reg_id d_integer;
+declare variable un_id d_id;
+declare variable k_id d_id;
+begin
+  for
+    select
+      cac_from_c_id,
+      cac_card_id,
+      cac_from_cca_id,
+      cac_from_reg_id,
+      ck.cac_from_un_id
+    from cardaktclient  ck
+    where cac_id = :cac_id
+    into
+      :c_id,
+      :card_id,
+      :cca_id,
+      :cac_from_reg_id,
+      :un_id
+  do
+  begin
+    -- получаю утвержденный займ клиента по продукту связанному с картами &quot;М Булак&quot;
+    select kont.k_id
+    from kontract kont
+    inner join knclient kncl on kont.k_id = kncl.kc_from_k_id
+    inner join product pr on pr.pr_id = kont.k_from_pr_id
+    where kncl.kc_from_c_id = :c_id
+          and kncl.kc_amount_approved &gt; 0
+          and pr.pr_mbulak_cards_kind &gt; 0 -- продукт по картам &quot;М Булак&quot;
+          and kont.k_status = 1
+          and kont.k_fact_disb_ol_id is null
+    rows 1
+    into :k_id;
+
+    select csc.csc_id
+    from cardsynccfg csc
+    where csc.csc_code = &#x27;registr_client&#x27;
+    into :csc_id;
+
+    select new_account
+    from cr_json_new_account(:c_id, :show_add_info)
+    into :new_account;
+
+    select new_agreement
+    from cr_json_new_agreement(:c_id, :show_add_info)
+    into :new_agreement;
+
+    select new_customer
+    from cr_json_new_customer(:c_id, :show_add_info)
+    into :new_customer;
+
+    cs_request_json = &#x27;{&#x27; ||
+        &#x27;&quot;account&quot;: &#x27; || :new_account || &#x27;, &#x27; ||
+        &#x27;&quot;agreement&quot;: &#x27; || :new_agreement || &#x27;, &#x27; ||
+        &#x27;&quot;customer&quot;: &#x27; || :new_customer ||
+        &#x27;}&#x27;;
+
+    insert into cardsync (cs_from_csc_id, cs_card_id, cs_from_cca_id, cs_object_kind, cs_object_id, cs_request_json, cs_office_id, cs_from_un_id, cs_from_c_id, cs_from_k_id)
+    values (:csc_id, :card_id, :cca_id, f_objkind(&#x27;cardaktclient&#x27;, &#x27;id&#x27;), :cac_id, :cs_request_json, :cac_from_reg_id, :un_id, :c_id, :k_id);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

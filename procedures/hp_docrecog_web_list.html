@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DOCRECOG_WEB_LIST — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DOCRECOG_WEB_LIST: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DOCRECOG_WEB_LIST</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_drm_has_pages.html"><div class="to">HP_GET_DRM_HAS_PAGES</div></a><a class="ref-card" href="hp_uuid.html"><div class="to">HP_UUID</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UUID</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_JSON</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DOCRECOG_WEB_LIST(
+    UUID D_STR_CODE)
+RETURNS (
+    RES_JSON D_STR_8100)
+AS
+declare variable err_text d_str_255;
+declare variable c_id d_id;
+declare variable c_citizen integer;
+declare variable pk_id d_integer;
+declare variable obj_kind d_integer;
+declare variable obj_id d_id;
+declare variable obj_code d_str_code;
+declare variable drm_name varchar(255);
+declare variable drm_code varchar(255);
+declare variable drm_api_code varchar(255);
+declare variable drm_is_manual smallint;
+declare variable drm_recog_2 d_smallint;
+declare variable drm_has_page1 d_smallint;
+declare variable drm_has_page2 d_smallint;
+declare variable json_list d_str_8100;
+declare variable json_array d_str_255;
+declare variable need_recog d_smallint;
+declare variable lang d_str_lang;
+declare variable doc_no d_str_code;
+declare variable need_date_begin d_smallint;
+declare variable need_date_end d_smallint;
+declare variable doc_date_begin d_date;
+declare variable doc_date_end d_date;
+declare variable doc_datetime d_datetime;
+declare variable doc_detail1 d_str_255;
+declare variable doc_detail2 d_str_255;
+declare variable need_datetime d_smallint;
+declare variable tmp_int d_integer;
+declare variable can_attach d_smallint;
+declare variable drm_id d_integer;
+begin
+  err_text = &#x27;&#x27;;
+  json_list = &#x27;&#x27;;
+
+  select obj_kind, obj_id
+  from hp_uuid(:uuid)
+  into obj_kind, obj_id;
+
+  lang = f_get_lang_code(null, null);
+
+  if (err_text = &#x27;&#x27; and obj_id is null)
+  then err_text = f_lang(lang, &#x27;Неверная ссылка&#x27;);
+  else obj_code = f_objkind(obj_kind, &#x27;name&#x27;);
+
+  if (obj_code = &#x27;edoc_sign&#x27;) then
+  begin
+    select eds_from_c_id from edoc_sign
+    where eds_id = :obj_id
+    into c_id;
+
+    if (not exists(select * from clients where c_id = :c_id)) then
+      err_text = &#x27;Клиент не найден&#x27;;
+
+    if (err_text = &#x27;&#x27;) then
+    begin
+      select c_citizen
+      from clients
+      where c_id = :c_id
+      into c_citizen;
+      c_citizen = coalesce(c_citizen, 0);
+
+      for select drm_id, pk_name, drm_code, drm_api_code, drm_is_manual, drm_recog_2, pk_id
+      from docrecogmain, passkind, passdoctype, hp_citizen_passkind(:c_citizen)
+      where drm_inactive = 0
+        and drm_show_to_client = 1
+        and res_pk_id = pk_id
+        and pk_from_drm_id = drm_id
+        and pk_id &gt; 0
+        and pk_from_pdt_id = pdt_id
+      order by pdt_is_main_doc desc
+      into drm_id, drm_name, drm_code, drm_api_code, drm_is_manual, drm_recog_2, pk_id
+      do
+      begin
+        -- Сначала проверяем что документ не находится на оцифровке
+        can_attach = 1;
+        if (exists(
+            select * from docrecoglist, actionorder
+            where drl_from_drm_id = :drm_id
+              and drl_from_c_id = :c_id
+              and drl_status = 0
+              and drl_from_acl_id = aco_id
+              and aco_from_rd_id in (f_get_rd_id(&#x27;ActionGroup.DocRecog_Client&#x27;), f_get_rd_id(&#x27;ActionGroup.DocRecog_Client_OiVO&#x27;))
+              and aco_status in (0, 1))) then
+        begin
+         can_attach = 0;
+         doc_detail1 = f_lang(lang, &#x27;Документ находится на стадии обработки&#x27;);
+         doc_detail2 = &#x27;&#x27;;
+        end
+        else
+        begin
+          select cds_doc_no, cds_doc_date_begin, cds_doc_date_end,
+            pdt_need_date_begin, pdt_need_date_end,
+            iif(coalesce(cds_doc_blob_1,0) &gt; 0 or coalesce(cds_doc_blob_2,0) &gt; 0, 1, 0),
+            cds_create_datetime
+          from clientdocs, passkind, passdoctype
+          where cds_from_c_id = :c_id
+            and pk_id = :pk_id
+            and cds_is_delete = 0
+            and cds_from_pk_id = pk_id
+            and pk_from_pdt_id = pdt_id
+          order by cds_doc_date_begin desc, cds_create_datetime desc
+          rows 1
+          into doc_no, doc_date_begin, doc_date_end, need_date_begin, need_date_end,
+            need_datetime, doc_datetime;
+  
+          doc_detail1 = f_lang(lang, &#x27;Документ отсутствует. Вы можете его закрепить.&#x27;);
+          doc_detail2 = &#x27;&#x27;;
+  
+          if (row_count &gt; 0) then
+          begin
+            doc_no = coalesce(doc_no, &#x27;&#x27;);
+            if (doc_no = &#x27;&#x27;) then doc_no = f_lang(lang, &#x27;б/н&#x27;);
+            tmp_int = char_length(doc_no);
+  
+            if (tmp_int &gt;= 5) then -- Маскируем номер документа, для длинных
+              doc_no = left(doc_no, tmp_int - 5) || &#x27;***&#x27; || right(doc_no, 2);
+      
+            if (need_date_begin = 1) then
+              if (need_date_end = 1) then
+                doc_detail1 = f_format(f_lang(lang,&#x27;№ %1, выдан: %2, действует до: %3&#x27;), doc_no, f_datetostr(doc_date_begin), f_datetostr(doc_date_end));
+              else
+                doc_detail1 = f_format(f_lang(lang,&#x27;№ %1, выдан: %2&#x27;), doc_no, f_datetostr(doc_date_begin));
+            else
+              doc_detail1 = f_format(&#x27;№ %1&#x27;, doc_no);
+      
+            if (need_datetime = 1) then
+              doc_detail2 = f_format(&#x27;%1: %2&#x27;, f_lang(lang, &#x27;Добавлен&#x27;), f_datetimetostr(doc_datetime));
+          end
+
+        select drm_has_page1, drm_has_page2
+        from hp_get_drm_has_pages(:pk_id)
+        into :drm_has_page1, :drm_has_page2;
+        end
+
+        json_list = json_list || iif(json_list &lt;&gt; &#x27;&#x27;, &#x27;,&#x27;, &#x27;&#x27;) ||
+          &#x27;{&#x27; ||
+           f_json_make_pair(&#x27;code&#x27;, drm_code, &#x27;str&#x27;) || &#x27;,&#x27; ||
+           f_json_make_pair(&#x27;name&#x27;, drm_name, &#x27;str&#x27;) || &#x27;,&#x27; ||
+           f_json_make_pair(&#x27;api_code&#x27;, drm_api_code, &#x27;str&#x27;) || &#x27;,&#x27; ||
+           f_json_make_pair(&#x27;attachable&#x27;, can_attach, &#x27;num&#x27;) || &#x27;,&#x27;;
+
+           -- Массив details
+           json_array = &#x27;&#x27;;
+           if (doc_detail1 &lt;&gt; &#x27;&#x27;) then
+             json_array = f_format(&#x27;&quot;%1&quot;&#x27;, doc_detail1);
+
+           if (doc_detail2 &lt;&gt; &#x27;&#x27;) then
+             json_array = json_array || iif(json_array &lt;&gt; &#x27;&#x27;, &#x27;,&#x27;, &#x27;&#x27;) || f_format(&#x27;&quot;%1&quot;&#x27;, doc_detail2);
+           json_list = json_list || &#x27;&quot;details&quot;:[&#x27; || json_array || &#x27;],&#x27;;
+
+           json_array = &#x27;&#x27;;
+           if (drm_has_page1 = 1) then
+           begin
+             need_recog = iif(drm_is_manual = 0, 1, 0);
+             json_array =
+               &#x27;{&#x27; ||
+                 f_json_make_pair(&#x27;page&#x27;, 1, &#x27;num&#x27;) || &#x27;,&#x27; ||
+                 f_json_make_pair(&#x27;need_recog&#x27;, need_recog, &#x27;num&#x27;) ||
+                &#x27;}&#x27;;
+           end
+           if (drm_has_page2 = 1) then
+           begin
+             need_recog = iif(drm_is_manual = 0 and drm_recog_2 = 1, 1, 0);
+             json_array = json_array || iif(json_array &lt;&gt; &#x27;&#x27;, &#x27;,&#x27;, &#x27;&#x27;) ||
+               &#x27;{&#x27; ||
+                 f_json_make_pair(&#x27;page&#x27;, 2, &#x27;num&#x27;) || &#x27;,&#x27; ||
+                 f_json_make_pair(&#x27;need_recog&#x27;, need_recog, &#x27;num&#x27;) ||
+                &#x27;}&#x27;;
+           end
+           json_list = json_list || &#x27;&quot;pages&quot;:[&#x27; || json_array || &#x27;]}&#x27;;
+      end
+    end
+  end
+
+  if (err_text &lt;&gt; &#x27;&#x27;) then
+    res_json = &#x27;{&#x27; || f_json_make_pair(&#x27;err_text&#x27;, err_text, &#x27;str&#x27;) || &#x27;}&#x27;;
+  else
+  res_json =
+    &#x27;{&#x27; ||
+     f_json_make_pair(&#x27;c_id&#x27;, c_id, &#x27;num&#x27;) || &#x27;,&#x27; ||
+     &#x27;&quot;doc_list&quot;:[&#x27;||json_list||&#x27;]}&#x27;;
+
+  Suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

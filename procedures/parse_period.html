@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PARSE_PERIOD — процедура — схема БД</title>
+<meta name="description" content="Процедура PARSE_PERIOD: 1 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>PARSE_PERIOD</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">P_TEXT</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">YEARS</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MONTHS</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE PARSE_PERIOD(
+    P_TEXT VARCHAR(50))
+RETURNS (
+    YEARS INTEGER,
+    MONTHS INTEGER)
+AS
+declare variable v_text varchar(50);
+declare variable v_num_str varchar(50);
+declare variable v_num numeric(10,2);
+begin
+  years = 0;
+  months = 0;
+
+  v_text = lower(trim(:p_text));
+
+  -- &quot;0&quot;
+  if (v_text = &#x27;0&#x27; or v_text = &#x27;&#x27;) then
+  begin
+    suspend;
+    exit;
+  end
+
+  -- &quot;11 и более&quot; / &quot;5 и более лет&quot;
+  if (v_text containing &#x27;и более&#x27;) then
+  begin
+    years = cast(substring(v_text from 1 for position(&#x27; &#x27; in v_text) - 1) as integer);
+    months = 0;
+  end
+
+  if (v_text containing &#x27;-лет&#x27;) then
+  begin
+    -- извлекаем число до суффикса &quot;-лет&quot;
+    years = cast(trim(substring(v_text from 1 for position(&#x27;-лет&#x27; in v_text) - 1)) as integer);
+    months = 0;  -- поскольку это только &quot;лет&quot;, месяцев нет
+  end
+
+  -- диапазон &quot;2-2.5 года&quot; / &quot;2-2,5 года&quot;
+  else if (v_text containing &#x27;-&#x27;) then
+  begin
+    years = cast(trim(substring(v_text from 1 for position(&#x27;-&#x27; in v_text) - 1)) as integer);
+
+    v_num_str = trim(substring(v_text from position(&#x27;-&#x27; in v_text) + 1));
+
+    if (position(&#x27; &#x27; in v_num_str) &gt; 0) then
+      v_num_str = substring(v_num_str from 1 for position(&#x27; &#x27; in v_num_str) - 1);
+
+    v_num_str = replace(v_num_str, &#x27;,&#x27;, &#x27;.&#x27;);
+    v_num = cast(v_num_str as numeric(10,2));
+
+    months = cast((v_num - floor(v_num)) * 12 as integer);
+  end
+
+  -- &quot;0,5 года&quot; / &quot;11 лет&quot; / &quot;1,5 года&quot;
+  else
+  begin
+    -- если есть пробел &gt; берем число до него
+    if (position(&#x27; &#x27; in v_text) &gt; 0) then
+      v_num_str = substring(v_text from 1 for position(&#x27; &#x27; in v_text) - 1);
+    else
+      v_num_str = v_text;
+
+    v_num_str = replace(v_num_str, &#x27;,&#x27;, &#x27;.&#x27;);
+    v_num = cast(v_num_str as numeric(10,2));
+
+    years = floor(v_num);
+    months = cast((v_num - years) * 12 as integer);
+  end
+
+  if (v_text containing &#x27;мес&#x27;) then
+  begin
+    years = 0;
+    if (position(&#x27; &#x27; in v_text) &gt; 0) then
+      months = cast(substring(v_text from 1 for position(&#x27; &#x27; in v_text) - 1) as integer);
+    else
+      months = cast(v_text as integer);
+  end
+
+  if (v_text containing &#x27;дней&#x27;) then
+  begin
+    years = 0;
+    months = 0;
+  end
+
+  -- ?? ограничение: максимум 10 лет
+  if (years &gt;= 10) then
+  begin
+    years = 10;
+    months = 0;
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

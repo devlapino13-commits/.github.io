@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_UXFRAME_SQL_SEL — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_UXFRAME_SQL_SEL: 3 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_UXFRAME_SQL_SEL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_split_str.html"><div class="to">HP_SPLIT_STR</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_uxframe_sql.html"><div class="to">HP_UXFRAME_SQL</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UX_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc">Код формы</div></div><div class="prow"><div class="pname">FR_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc">Код фрейма</div></div><div class="prow"><div class="pname">NEED_SECURE_MASK</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SQL_TEXT</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SQL_IS_EXEC</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_UXFRAME_SQL_SEL(
+    UX_CODE D_STR_CODE,
+    FR_CODE D_STR_CODE,
+    NEED_SECURE_MASK D_BOOL = 0)
+RETURNS (
+    SQL_TEXT D_STR_8100,
+    SQL_IS_EXEC D_BOOL)
+AS
+declare variable field_name d_str_code;
+declare variable field_list d_str_8100;
+declare variable enter_sym d_str_10;
+declare variable ufp_editor d_str_code;
+declare variable ufd_source d_str_code;
+declare variable ufd_is_table d_bool;
+declare variable buttonedit_sql d_str_long;
+declare variable master_field d_str_code;
+declare variable detail_field d_str_code;
+declare variable master_field_count d_integer;
+declare variable detail_field_count d_integer;
+declare variable master_detail_where d_str_long;
+declare variable res_str d_str_code;
+declare variable is_detail d_bool;
+declare variable param_index d_integer;
+declare variable ufi_master_ufr_code d_str_code;
+declare variable md_linked d_bool;
+declare variable ufr_show_kind d_smallint;
+declare variable ufi_ua_code d_str_100;
+declare variable ua_uxa_code d_str_code;
+declare variable ua_usr_text_field d_str_code;
+declare variable ufp_code d_str_100;
+declare variable ux_kind d_str_code;
+declare variable max_rows d_integer;
+declare variable alias_letter d_str_10;
+declare variable search_text_field d_str_code;
+begin
+  -- Приготовление Select sql для фрейма
+
+  if (need_secure_mask is null) then
+    need_secure_mask = 0;
+
+  sql_text = &#x27;&#x27;;
+  field_list = &#x27;&#x27;;
+  enter_sym = ascii_char(13) || ascii_char(10);
+
+  select ufd_source, ufd_is_table, ufr_show_kind
+  from uxfrdata, uxframe
+  where ufr_code = :fr_code and
+        ufd_ufr_code = ufr_code and
+        ufd_kind = 0
+  into ufd_source, ufd_is_table, ufr_show_kind;
+
+  if (ufr_show_kind = 0) then
+  begin
+    suspend;
+    exit;
+  end
+
+  search_text_field = &#x27;&#x27;;
+
+  if (need_secure_mask = 1) then
+  begin
+    select usr_text_field
+    from uxalias, uxsearch
+    where uxa_ux_code = :ux_code and
+          uxa_code = usr_code and
+          usr_text_field &lt;&gt; &#x27;&#x27;
+    rows 1
+    into search_text_field;
+  end
+
+  alias_letter = &#x27;&#x27;;
+
+  sql_is_exec = 0;
+  master_field = &#x27;&#x27;;
+  detail_field = &#x27;&#x27;;
+  is_detail = 0;
+  master_field_count = 0;
+  detail_field_count = 0;
+
+  select ucf_master_field, ucf_detail_field, ucf_master_ufr_code, uxf$kind(ux_kind, &#x27;code&#x27;)
+  from uxcodeframe, uxcode
+  where ucf_ux_code = :ux_code and
+        ucf_ufr_code = :fr_code and
+        ux_code = ucf_ux_code
+  into master_field, detail_field, ufi_master_ufr_code, ux_kind;
+
+  if (row_count &gt; 0) then
+  begin
+    if (ufi_master_ufr_code is not null) then
+    begin
+      is_detail = 1;
+      if (coalesce(master_field, &#x27;&#x27;) = &#x27;&#x27; or
+          coalesce(detail_field, &#x27;&#x27;) = &#x27;&#x27;) then
+        exception e_message f_format(&#x27;Поля мастер-деталь не настроены, форма: %1, frame: %2&#x27;, ux_code, fr_code);
+  
+      select count(*)
+      from hp_split_str(:master_field, &#x27;;&#x27;)
+      into :master_field_count;
+  
+      select count(*)
+      from hp_split_str(:detail_field, &#x27;;&#x27;)
+      into :detail_field_count;
+  
+      if (detail_field_count &lt;&gt; master_field_count) then
+        exception e_message f_format(&#x27;Количество полей мастер и деталь не совпадает, форма: %1, frame: %2&#x27;, ux_code, fr_code);
+    end
+  end else
+    exception e_default f_format(&#x27;Frame not found. форма: %1, frame: %2&#x27;, ux_code, fr_code);
+
+  master_detail_where = &#x27;&#x27;;
+  master_field_count = 0;
+  detail_field_count = 0;
+
+  if (ufd_is_table = 1 and is_detail = 1) then
+  begin
+    for select res_str
+    from hp_split_str(:detail_field, &#x27;;&#x27;)
+    into :res_str
+    do
+    begin
+      detail_field_count = detail_field_count + 1;
+
+      -- Если поле из мастер-деталь связки не является параметром, добавляем в WHERE
+      if (exists(select * from uxfrparam
+      where ufp_ufr_code = :fr_code and
+            ufp_origin_name = :res_str and
+            ufp_is_param = 0)) then
+      begin
+        if (master_detail_where &lt;&gt; &#x27;&#x27;) then
+          master_detail_where = master_detail_where || &#x27; and &#x27; || enter_sym;
+  
+        master_detail_where = master_detail_where || res_str || &#x27; = :%&#x27; || detail_field_count;
+      end
+    end
+
+    for select res_str
+    from hp_split_str(:master_field, &#x27;;&#x27;)
+    into :res_str
+    do
+    begin
+      master_field_count = master_field_count + 1;
+      master_detail_where = replace(master_detail_where, &#x27;%&#x27;||master_field_count, res_str);
+    end
+
+    if (master_detail_where &lt;&gt; &#x27;&#x27;) then
+      master_detail_where = &#x27; (&#x27; || master_detail_where || &#x27;) &#x27;;
+  end
+
+  for select ufp_code, ufp_origin_name, ufp_editor
+  from uxfrparam
+  where ufp_ufr_code = :fr_code and
+        ufp_is_param = 0 and
+        ufp_is_delete = 0 and
+        ufp_in_use = 1
+  order by ufp_index
+  into ufp_code, field_name, ufp_editor
+  do
+  begin
+    if (field_list &lt;&gt; &#x27;&#x27;) then
+      field_list = field_list || &#x27;, &#x27; || enter_sym;
+
+    if (ufp_editor in (&#x27;blob_bls&#x27;, &#x27;blob&#x27;)) then
+    begin
+      field_list = field_list || field_name;
+      field_list = field_list || &#x27;, &#x27; || enter_sym;
+      field_list = field_list || &#x27;uxf$blob(&#x27; || field_name || &#x27;, 1) as &#x27; || field_name || &#x27;$json&#x27;;
+      field_list = field_list || &#x27;, &#x27; || enter_sym;
+      field_list = field_list || &#x27;uxf$blob(&#x27; || field_name || &#x27;, 0) as &#x27; || field_name || &#x27;$text&#x27;;
+
+      if (ufp_editor = &#x27;blob&#x27;) then
+      begin
+        field_list = field_list || &#x27;, &#x27; || enter_sym;
+        field_list = field_list || &#x27;cast(null as d_blob_binary) as &#x27; || field_name || &#x27;$blob&#x27;;
+        field_list = field_list || &#x27;, &#x27; || enter_sym;
+        field_list = field_list || &#x27;cast(null as d_str_255) as &#x27; || field_name || &#x27;$file&#x27;;
+      end
+
+      ufp_editor = &#x27;blob_json&#x27;;
+    end else
+    if (ufp_editor = &#x27;blob_json&#x27;) then
+    begin
+      field_list = field_list || field_name || &#x27; as &#x27; || field_name || &#x27;$json&#x27;;
+      field_list = field_list || &#x27;, &#x27; || enter_sym;
+      field_list = field_list || &#x27;iif(coalesce(&#x27; || field_name || &#x27;, &#x27;&#x27;&#x27;&#x27;) &lt;&gt; &#x27;&#x27;&#x27;&#x27;, &#x27;&#x27;Файл(ы)&#x27;&#x27;, &#x27;&#x27;(Пусто)&#x27;&#x27;) as &#x27; || field_name || &#x27;$text&#x27;;
+    end
+    else
+    if (need_secure_mask = 1 and field_name &lt;&gt; search_text_field) then
+      field_list = field_list || &#x27;uxf$mask(&#x27; || field_name || &#x27;, &#x27;&#x27;&#x27; || ufp_editor || &#x27;&#x27;&#x27;) as &#x27; || field_name;
+    else
+      field_list = field_list || field_name;
+
+    ufi_ua_code = &#x27;&#x27;;
+    ua_uxa_code = &#x27;&#x27;;
+    ua_usr_text_field = &#x27;&#x27;;
+    buttonedit_sql = &#x27;&#x27;;
+
+    if (ufp_editor in (&#x27;buttonedit&#x27;, &#x27;dialogedit&#x27;)) then
+    begin
+      select ua_code, ua_uxa_code, ua_usr_text_field
+      from uxfrparam, uxaction
+      where ufp_code = :ufp_code and
+            ufp_ufr_code = ua_ux_code and
+            ufp_origin_name = ua_usr_id_field and
+            ua_usr_id_field = :field_name and
+            ua_ux_code = :fr_code
+      into ufi_ua_code, ua_uxa_code, ua_usr_text_field;
+
+      if (coalesce(ufi_ua_code, &#x27;&#x27;) = &#x27;&#x27;) then
+        exception e_default f_format(&#x27;%1 action not found, ufp_code: %2&#x27;, ufp_editor, ufp_code);
+
+      if (ua_usr_text_field = &#x27;&#x27;) then
+      begin
+        -- если поле нужно формировать динамически, получаем текст SQL
+        select ukn_sql
+        from uxalias, uxcode, uxkeyname
+        where uxa_code = :ua_uxa_code and
+              uxa_ux_code = ux_code and
+              ux_table_name = ukn_table_name
+        into buttonedit_sql;
+
+        if (buttonedit_sql &lt;&gt; &#x27;&#x27;) then
+        begin
+          alias_letter = &#x27;a&#x27;;
+          buttonedit_sql = replace(buttonedit_sql, &#x27;:id&#x27;, alias_letter || &#x27;.&#x27; || field_name);
+          buttonedit_sql = &#x27; (&#x27; || buttonedit_sql || &#x27;) as &#x27; || field_name || &#x27;$text&#x27;;
+  
+          field_list = field_list || &#x27;, &#x27; || enter_sym || buttonedit_sql;
+        end else
+          exception e_default f_format(&#x27;%1 SQL not found, fr_code: %1, field: %2&#x27;, ufp_editor, fr_code, field_name);
+      end else
+        field_list = field_list || &#x27;, &#x27; || enter_sym || ua_usr_text_field || &#x27; as &#x27; || field_name || &#x27;$text&#x27;;
+    end
+  end
+
+  if (field_list &lt;&gt; &#x27;&#x27;) then
+    sql_text = &#x27;select &#x27; || enter_sym || field_list || enter_sym || &#x27;from &#x27; || ufd_source;
+  else
+  begin
+    if (ux_kind = &#x27;uxcommand&#x27;) then
+    begin
+      sql_text = &#x27;execute procedure &#x27; || ufd_source;
+      sql_is_exec = 1;
+    end
+    else
+      exception e_default f_format(&#x27;Select SQL no fields, ux_code: %1, fr_code: %2&#x27;, ux_code, fr_code);
+  end
+
+  field_list = &#x27;&#x27;;
+
+  if (ufd_is_table = 0) then
+  begin
+    for select ufp_origin_name
+    from uxfrparam
+    where ufp_ufr_code = :fr_code and
+          ufp_is_param = 1 and
+          ufp_is_delete = 0
+    order by ufp_index
+    into field_name
+    do
+    begin
+      md_linked = 0;
+      if (is_detail = 1) then
+      begin
+        detail_field_count = 0;
+        param_index = 0;
+        for select res_str
+        from hp_split_str(:detail_field, &#x27;;&#x27;)
+        into :res_str
+        do
+        begin
+          detail_field_count = detail_field_count + 1;
+          if (field_name = res_str) then
+          begin
+            param_index = detail_field_count;
+            break;
+          end
+        end
+
+        if (param_index &gt; 0) then
+        begin
+          master_field_count = 0;
+
+          for select res_str
+          from hp_split_str(:master_field, &#x27;;&#x27;)
+          into :res_str
+          do
+          begin
+            master_field_count = master_field_count + 1;
+            if (master_field_count = param_index) then
+            begin
+              field_name = res_str;
+              md_linked = 1;
+              break;
+            end
+          end
+
+          if (md_linked = 0) then
+            exception e_default f_format(&#x27;Master field param not found, ux_code: %1, fr_code: %1&#x27;, ux_code, fr_code);
+        end
+      end
+
+      if (field_list &lt;&gt; &#x27;&#x27;) then
+        field_list = field_list || &#x27;, &#x27;;
+
+      field_list = field_list || &#x27;:&#x27; || field_name;
+    end
+
+    if (field_list &lt;&gt; &#x27;&#x27;) then
+      sql_text = sql_text || &#x27;(&#x27; || field_list || &#x27;)&#x27;;
+
+    if (alias_letter &lt;&gt; &#x27;&#x27;) then
+      sql_text = sql_text || &#x27; &#x27; || alias_letter;
+  end else
+  begin
+    if (alias_letter &lt;&gt; &#x27;&#x27;) then
+      sql_text = sql_text || &#x27; &#x27; || alias_letter;
+
+    if (detail_field &lt;&gt; &#x27;&#x27;) then
+      detail_field = &#x27;;&#x27; || replace(detail_field, &#x27; &#x27;, &#x27;&#x27;) || &#x27;;&#x27;;
+
+    if (ufr_show_kind = 1) then
+    begin
+      for select ufp_origin_name
+      from uxfrparam
+      where ufp_ufr_code = :fr_code and
+            ufp_pk_field &lt;&gt; 0
+      order by ufp_index
+      into field_name
+      do
+      begin
+        if (position(&#x27;;&#x27; || field_name || &#x27;;&#x27;, detail_field) &gt; 0) then
+          Continue;
+  
+        if (field_list &lt;&gt; &#x27;&#x27;) then
+          field_list = field_list || &#x27; and &#x27; || enter_sym;
+  
+        field_list = field_list || field_name || &#x27; = :&#x27; || field_name;
+      end
+    end
+
+    if (field_list &lt;&gt; &#x27;&#x27;) then
+    begin
+      sql_text = sql_text || enter_sym || &#x27; where (&#x27; || field_list || &#x27;)&#x27;;
+
+      if (master_detail_where &lt;&gt; &#x27;&#x27;) then
+      sql_text = sql_text || enter_sym || master_detail_where;
+    end else
+      if (master_detail_where &lt;&gt; &#x27;&#x27;) then
+        sql_text = sql_text || enter_sym || &#x27; where &#x27; || master_detail_where;
+  end
+
+  -- При ufr_show_kind = 1 в интерфейсе будем проверять кол-во строк
+  -- если строк более одной, выдаем ошибку настройки
+
+  max_rows = 0;
+  if (sql_text &lt;&gt; &#x27;&#x27;) then
+  begin
+    if (ufr_show_kind = 1) then
+      max_rows = 2;
+    else
+      if (ufr_show_kind = 2 and ufd_is_table = 1) then
+        max_rows = 500; -- если источник просто таблица, не даем более 500 строк
+  end
+
+  if (max_rows &lt;&gt; 0) then
+    sql_text = sql_text || &#x27; rows &#x27; || max_rows;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

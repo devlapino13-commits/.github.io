@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CREATE_OPERSALMAIN — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CREATE_OPERSALMAIN: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CREATE_OPERSALMAIN</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OSM_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CREATE_OPERSALMAIN(
+    C_ID DECIMAL(18,0))
+RETURNS (
+    OSM_ID INTEGER)
+AS
+declare variable os_from_c_id decimal(18,0);
+declare variable os_from_ol_id decimal(18,0);
+declare variable ol_date date;
+declare variable is_active integer;
+declare variable os_from_sac_id integer;
+declare variable sac_sign integer;
+declare variable os_value decimal(18,4) = 0;
+declare variable ol_year_month integer;
+declare variable c_id_prior decimal(18,0);
+declare variable ol_id_prior decimal(18,0);
+declare variable is_delete integer;
+declare variable sac_id_prior integer;
+begin
+  c_id_prior = 0;
+  ol_id_prior = 0;
+  sac_id_prior = 0;
+  osm_id = 0;
+  if (c_id is null) then
+    c_id = 0;
+  if (c_id = 0) then
+  begin
+    delete from opersalmain;
+    delete from opersalsaldo;
+  end
+  else
+  begin
+    delete from opersalmain
+    where osm_from_c_id = :c_id;
+    delete from opersalsaldo
+    where oss_from_c_id = :c_id;
+  end
+
+  if (c_id = 0) then
+  begin
+    for select os_from_ol_id, os_from_c_id, os_from_sac_id, ol_date, is_delete, sum(os_value)
+        from opersalary, operlist
+        where os_from_ol_id = ol_id
+        group by os_from_ol_id, os_from_c_id, os_from_sac_id, ol_date, is_delete
+        into :os_from_ol_id, :os_from_c_id, :os_from_sac_id, :ol_date, :is_delete, :os_value
+    do
+    begin
+      if (sac_id_prior &lt;&gt; os_from_sac_id) then
+      begin
+        select sac_sign
+        from sa_config
+        where sac_id = :os_from_sac_id
+        into :sac_sign;
+        sac_id_prior = os_from_sac_id;
+      end
+      is_active = 1 - is_delete;
+
+      if ((ol_id_prior &lt;&gt; os_from_ol_id) or (c_id_prior &lt;&gt; os_from_c_id)) then
+      begin
+        osm_id = osm_id + 1;
+        ol_id_prior = os_from_ol_id;
+        c_id_prior = os_from_c_id;
+
+        insert into opersalmain (osm_id, osm_from_ol_id, osm_from_c_id, osm_ol_date, osm_ol_is_active, osm_oborot)
+        values (:osm_id, :os_from_ol_id, :os_from_c_id, :ol_date, :is_active, 0);
+      end
+
+      insert into opersaldetail (osd_from_osm_id, osd_from_sac_id, osd_value, osd_sign)
+      values (:osm_id, :os_from_sac_id, :os_value, :sac_sign);
+    end
+  end
+  else
+  begin
+    for select os_from_ol_id, os_from_c_id, os_from_sac_id, ol_date, is_delete, sum(os_value)
+        from opersalary, operlist
+        where os_from_ol_id = ol_id and
+              os_from_c_id = :c_id
+        group by os_from_ol_id, os_from_c_id, os_from_sac_id, ol_date, is_delete
+        into :os_from_ol_id, :os_from_c_id, :os_from_sac_id, :ol_date, :is_delete, :os_value
+    do
+    begin
+      if (sac_id_prior &lt;&gt; os_from_sac_id) then
+      begin
+        select sac_sign
+        from sa_config
+        where sac_id = :os_from_sac_id
+        into :sac_sign;
+        sac_id_prior = os_from_sac_id;
+      end
+      is_active = 1 - is_delete;
+
+      if ((ol_id_prior &lt;&gt; os_from_ol_id) or (c_id_prior &lt;&gt; os_from_c_id)) then
+      begin
+        osm_id = -1;
+        ol_id_prior = os_from_ol_id;
+        c_id_prior = os_from_c_id;
+
+        insert into opersalmain (osm_id, osm_from_ol_id, osm_from_c_id, osm_ol_date, osm_ol_is_active, osm_oborot)
+        values (:osm_id, :os_from_ol_id, :os_from_c_id, :ol_date, :is_active, 0)
+        returning osm_id
+        into :osm_id;
+
+      end
+
+      insert into opersaldetail (osd_from_osm_id, osd_from_sac_id, osd_value, osd_sign)
+      values (:osm_id, :os_from_sac_id, :os_value, :sac_sign);
+    end
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

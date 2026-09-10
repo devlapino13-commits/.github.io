@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DO_REF_ACCOUNT_LOAN_CREATE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DO_REF_ACCOUNT_LOAN_CREATE: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DO_REF_ACCOUNT_LOAN_CREATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="get_ref_account_knclient.html"><div class="to">GET_REF_ACCOUNT_KNCLIENT</div></a><a class="ref-card" href="hp_do_ref_account_loan_ob_saldo.html"><div class="to">HP_DO_REF_ACCOUNT_LOAN_OB_SALDO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_disbursement.html"><div class="to">HP_DO_DISBURSEMENT</div></a><a class="ref-card" href="hp_do_trg_kn_operkred_period.html"><div class="to">HP_DO_TRG_KN_OPERKRED_PERIOD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">WITH_SALDO</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DO_REF_ACCOUNT_LOAN_CREATE(
+    K_ID ID_TYPE,
+    WITH_SALDO INTEGER = 0)
+AS
+declare variable kc_id id_type;
+declare variable sab_id id_type;
+declare variable saldo_date date;
+declare variable kc_non_resident integer;
+declare variable kc_client_type integer;
+declare variable disb_reg_id integer;
+declare variable acc_id id_type;
+declare variable disb_date date;
+begin
+-- создает лицевые счета по займу
+  saldo_date = &#x27;31.12.2017&#x27;;
+
+  for select kc_id, kc_non_resident, kc_client_type, ks_date_begin, ks_region_id
+      from knclient, kontstate
+      where kc_from_k_id = :k_id and
+            kc_amount_approved &gt; 0 and
+            ks_from_k_id = :k_id and
+            ks_state = 1 and
+            ks_ol_is_delete = 0
+      into :kc_id, :kc_non_resident, :kc_client_type, disb_date, disb_reg_id
+  do
+  begin
+    if (disb_date &lt; saldo_date) then
+      disb_date = saldo_date;
+
+-- создаем счета по займу
+    for select sab_id
+        from sys_accbalance
+        where sab_object_kind = 8
+        order by sab_full_code
+        into :sab_id
+    do
+    begin
+      select acc_id
+      from get_ref_account_knclient(:sab_id, &#x27;&#x27;, :kc_id, :kc_non_resident, :kc_client_type, :disb_date, :disb_reg_id)
+      into :acc_id;
+    end
+  end
+
+  if (with_saldo = 1) then
+    execute procedure hp_do_ref_account_loan_ob_saldo(:k_id);
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

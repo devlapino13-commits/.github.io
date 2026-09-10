@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_ACTIONLIST_GET_LOANS_STATES — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_ACTIONLIST_GET_LOANS_STATES: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_ACTIONLIST_GET_LOANS_STATES</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_check_loan_data.html"><div class="to">HP_GET_CHECK_LOAN_DATA</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_actionlist_get_1.html"><div class="to">HP_ACTIONLIST_GET_1</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_OBJECT_DETAIL</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_ACTIONLIST_GET_LOANS_STATES(
+    C_ID ID_TYPE)
+RETURNS (
+    RES_OBJECT_DETAIL BLOB SUB_TYPE TEXT SEGMENT SIZE 80)
+AS
+declare variable opr_id d_integer;
+declare variable res str_20;
+declare variable ovs_datetime d_datetime;
+declare variable k_kontract_no str_20;
+declare variable res_comment d_str_long;
+declare variable counter d_integer;
+declare variable ovs_value d_integer;
+begin
+
+  res_object_detail = &#x27;&#x27;;
+  counter = 0;
+
+  for select opr_id, ovs_datetime, k_kontract_no, ovs_value,
+             case ovs_value
+               when -1 then &#x27;Доработка&#x27;
+               when -2 then &#x27;Отказан&#x27;
+               when 2 then &#x27;Одобрен&#x27;
+             end
+      from objectprops
+      inner join objectvalues on ovs_from_opr_id = opr_id
+      inner join username on un_id = ovs_from_un_id
+      inner join knclient on kc_from_k_id = opr_object_id and
+            opr_object_kind = 9
+      inner join kontract on k_id = kc_from_k_id
+      where kc_from_c_id = :c_id and
+            kc_amount_approved &gt; 0 and
+            opr_subject_id = (select rd_id
+                              from hp_get_check_loan_data(k_id)) and
+            ovs_value in (2, -1, -2)
+      order by ovs_datetime desc
+      rows 5
+      into opr_id, ovs_datetime, k_kontract_no, ovs_value, res
+  do
+  begin
+    counter = counter + 1;
+    res_comment = &#x27;&#x27;;
+
+    if (ovs_value in (-1, -2)) then
+    begin
+      select f_get_verify_memo(obm_memo, &#x27;reason&#x27;)
+      from objectmemo
+      where obm_from_opr_id = :opr_id and
+            obm_memo not containing (&#x27;Для сведения:&#x27;) and
+            obm_datetime = :ovs_datetime
+      order by obm_id
+      rows 1
+      into res_comment;
+    end
+
+    res_object_detail = blob_append(res_object_detail, counter);
+    res_object_detail = blob_append(res_object_detail, &#x27;. &#x27; || k_kontract_no || &#x27; - &#x27;);
+    res_object_detail = blob_append(res_object_detail, &#x27;&lt;b&gt;&#x27; || res || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;);
+    res_object_detail = blob_append(res_object_detail, f_datetimetostr(ovs_datetime) || &#x27;&lt;br&gt;&#x27;);
+    res_object_detail = blob_append(res_object_detail, &#x27;&lt;i&gt;&#x27; || res_comment || &#x27;&lt;/i&gt;&lt;br&gt;&lt;br&gt;&#x27;);
+
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

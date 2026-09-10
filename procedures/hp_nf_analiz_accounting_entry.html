@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_NF_ANALIZ_ACCOUNTING_ENTRY — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_NF_ANALIZ_ACCOUNTING_ENTRY: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_NF_ANALIZ_ACCOUNTING_ENTRY</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">IFA_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ERR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_NF_ANALIZ_ACCOUNTING_ENTRY(
+    IFA_ID D_INTEGER,
+    UN_ID D_ID)
+RETURNS (
+    ERR_TEXT D_STR_255)
+AS
+declare variable ifa_file_name d_str_100;
+declare variable ifa_date d_date;
+declare variable ifa_is_detail_problem d_bool;
+declare variable id d_integer;
+declare variable rec_no d_integer;
+declare variable main_bank_id d_integer;
+declare variable sub_bank_id d_integer;
+declare variable subaccount d_integer;
+declare variable recieved_tran d_integer;
+declare variable must_pay_tran d_currency;
+declare variable netto_count_trans d_integer;
+declare variable netto_amount d_currency;
+declare variable reg_id d_integer;
+declare variable acc_dt d_str_20;
+declare variable acc_issuer d_str_20;
+declare variable acc_dt1 d_str_20;
+declare variable acc_kt d_str_20;
+declare variable ol_id d_id;
+declare variable ob_detail d_str_long;
+declare variable curr_code d_str_lang;
+begin
+  err_text = &#x27;&#x27;;
+  curr_code = &#x27;417&#x27;;
+
+  select
+    ifa_file_name,
+    ifa_date,
+    ifa_is_detail_problem
+  from ipc_file_analiz
+  where ifa_id = :ifa_id
+    and ifa_file_type = 3
+    and ifa_status = 0
+  into
+    :ifa_file_name,
+    :ifa_date,
+    :ifa_is_detail_problem;
+  if (row_count = 0) then
+    err_text = &#x27;Данные для построения бухгалтерских проводок не определены.&#x27;;
+
+  if (err_text = &#x27;&#x27; and ifa_is_detail_problem = 1) then
+    err_text = &#x27;Выявлены ошибки! Бухгалтерские проводки могут быть сформированы только после их исправления.&#x27;;
+
+  if (err_text = &#x27;&#x27;) then
+  begin
+    reg_id = 1090100;
+    acc_dt = (select al_id from acc_list where al_from_reg_id = :reg_id and al_currency = :curr_code and al_account = &#x27;10150/101&#x27;);
+    acc_dt1 = (select al_id from acc_list where al_from_reg_id = :reg_id and al_currency = :curr_code and al_account = &#x27;80509/10&#x27;);
+    acc_kt = (select al_id from acc_list where al_from_reg_id = :reg_id and al_currency = :curr_code and al_account = &#x27;21114/13&#x27;);
+
+    insert into operlist (
+      ol_from_reg_id,
+      ol_oper_type,
+      ol_oper_subtype,
+      ol_date,
+      ol_doc_no,
+      ol_doc_kind,
+      ol_memo,
+      ol_user_id
+    )
+    values (
+      :reg_id,
+      2,
+      11,
+      :ifa_date,
+      :ifa_id,
+      9,
+      f_format(&#x27;NF-файл &quot;%1&quot; от %2 г.&#x27;, :ifa_file_name, f_datetostr(:ifa_date)),
+      :un_id
+    )
+    returning ol_id
+    into :ol_id;
+
+    for
+      select
+        ind_id,
+        ind_rec_no,
+        ind_main_bank_id,
+        ind_sub_bank_id,
+        ib_subaccount,
+        ind_recieved_tran,
+        ind_must_pay_tran,
+        ind_netto_count_trans,
+        ind_netto_amount
+      from ipc_nonfin_detail
+        inner join ipc_banks
+          on ib_id = ind_sub_bank_id
+      where ind_from_ifa_id = :ifa_id
+        and ind_error_id is null
+    into
+      :id,
+      :rec_no,
+      :main_bank_id,
+      :sub_bank_id,
+      :subaccount,
+      :recieved_tran,
+      :must_pay_tran,
+      :netto_count_trans,
+      :netto_amount
+    do
+    begin
+      acc_issuer = (select al_id from acc_list where al_from_reg_id = :reg_id and al_currency = :curr_code and al_account = &#x27;10004/&#x27; || :subaccount);
+
+      if (recieved_tran &gt; 0) then
+      begin
+        ob_detail = f_format(&#x27;Комиссия по нефинансовым транзакциям по пл.картам за %1 (%2)&#x27;, f_datetostr(ifa_date), rec_no);
+
+        insert into operbook (
+          ob_from_ol_id,
+          ob_currency,
+          ob_curr_rate,
+          ob_account_dt,
+          ob_account_kt,
+          ob_detail,
+          ob_summa,
+          ob_summa_val
+        )
+        values (
+          :ol_id,
+          :curr_code,
+          1,
+          :acc_dt,
+          :acc_issuer,
+          :ob_detail,
+          :recieved_tran,
+          :recieved_tran
+        );
+        insert into operbook (
+          ob_from_ol_id,
+          ob_currency,
+          ob_curr_rate,
+          ob_account_dt,
+          ob_account_kt,
+          ob_detail,
+          ob_summa,
+          ob_summa_val
+        )
+        values (
+          :ol_id,
+          :curr_code,
+          1,
+          :acc_issuer,
+          :acc_kt,
+          :ob_detail,
+          :recieved_tran,
+          :recieved_tran
+        );
+      end
+
+      if (must_pay_tran &gt; 0) then
+      begin
+        ob_detail = f_format(&#x27;Расходы по нефинансовым транзакциям по пл.картам за %1 (%2)&#x27;, f_datetostr(ifa_date), rec_no);
+
+        insert into operbook (
+          ob_from_ol_id,
+          ob_currency,
+          ob_curr_rate,
+          ob_account_dt,
+          ob_account_kt,
+          ob_detail,
+          ob_summa,
+          ob_summa_val
+        )
+        values (
+          :ol_id,
+          :curr_code,
+          1,
+          :acc_dt1,
+          :acc_issuer,
+          :ob_detail,
+          :must_pay_tran,
+          :must_pay_tran
+        );
+        insert into operbook (
+          ob_from_ol_id,
+          ob_currency,
+          ob_curr_rate,
+          ob_account_dt,
+          ob_account_kt,
+          ob_detail,
+          ob_summa,
+          ob_summa_val
+        )
+        values (
+          :ol_id,
+          :curr_code,
+          1,
+          :acc_issuer,
+          :acc_dt,
+          :ob_detail,
+          :must_pay_tran,
+          :must_pay_tran
+        );
+      end
+    end
+
+    update ipc_file_analiz set
+      ifa_status = 1,
+      ifa_from_un_id = :un_id,
+      ifa_datetime = current_timestamp,
+      ifa_from_ol_id = :ol_id
+    where ifa_id = :ifa_id;
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

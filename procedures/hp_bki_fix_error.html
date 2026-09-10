@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_BKI_FIX_ERROR — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_BKI_FIX_ERROR: 3 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_BKI_FIX_ERROR</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_bki_add_to_buffer.html"><div class="to">HP_BKI_ADD_TO_BUFFER</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">BKE_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DONT_SEND</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_BKI_FIX_ERROR(
+    BKE_ID D_ID NOT NULL,
+    UN_ID D_ID,
+    DONT_SEND D_BOOL = 0)
+AS
+declare variable source_alias d_str_100;
+declare variable bkl_object_id d_id;
+declare variable bkl_object_kind d_integer;
+declare variable event_date d_date;
+declare variable bkt_format d_integer;
+begin
+  if (exists (select * from bki_errors bke
+              where bke.bke_id = :bke_id
+                and bke.bke_fixed = 1))
+  then
+    exit;
+
+  if (not exists(select * from username where un_id = :un_id)) then
+    exception e_default &#x27;not found user for un_id = &#x27; || coalesce(un_id, &#x27;&lt;null&gt;&#x27;);
+
+  update bki_errors bke
+  set bke.bke_fixed = 1,
+      bke.bke_fixed_un_id = :un_id
+  where bke.bke_id = :bke_id;
+
+  if (coalesce(dont_send, 0) = 1) then
+    exit;
+
+  bkt_format = (select bkt_format
+                from bki_errors, bki_events, bki_clients, bki_loans, bki_packet, bki_packet_type
+                where bke_id = :bke_id
+                  and bev_id = bke_from_bev_id
+                  and bkc_id = bev_from_bkc_id
+                  and bkl_id = bkc_from_bkl_id
+                  and bkp_id = bkl_from_bkp_id
+                  and bkt_id = bkp_from_bkt_id);
+
+  source_alias = &#x27;.bki_errors.format&#x27; || bkt_format || &#x27;.&#x27;;
+  select bkl_object_id, bkl_object_kind, bev_event_date
+  from bki_errors, bki_events, bki_clients, bki_loans, bki_packet
+  where bke_id = :bke_id
+    and bkc_id = bev_from_bkc_id
+    and bev_id = bke_from_bev_id
+    and bkl_id = bkc_from_bkl_id
+    and bkp_id = bkl_from_bkp_id
+  into bkl_object_id, bkl_object_kind, event_date;
+
+  execute procedure hp_bki_add_to_buffer(source_alias, f_objkind(bkl_object_kind, &#x27;code&#x27;), bkl_object_id, event_date);
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

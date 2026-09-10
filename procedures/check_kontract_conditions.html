@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHECK_KONTRACT_CONDITIONS — процедура — схема БД</title>
+<meta name="description" content="Процедура CHECK_KONTRACT_CONDITIONS: 1 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CHECK_KONTRACT_CONDITIONS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CHECK_KONTRACT_CONDITIONS(
+    K_ID DECIMAL(18,0))
+RETURNS (
+    RES_TEXT VARCHAR(255),
+    RES_ID INTEGER)
+AS
+declare variable KC_BUSUNESS_SUBTYPE integer;
+declare variable C_SEX integer;
+declare variable C_BIRTH_DATE date;
+declare variable C_PASS_NO varchar(30);
+declare variable C_PASS_DATE date;
+declare variable C_PASS_WHO varchar(255);
+declare variable C_NAME_FIO varchar(100);
+declare variable C_TEMP varchar(100);
+declare variable K_DISB_DATE date;
+declare variable C_PASS_DATE_EXPIRE date;
+declare variable PR_IS_EMPLOYER integer;
+declare variable C_ID decimal(18,0);
+declare variable C_CITIZEN integer;
+declare variable C_NATION integer;
+declare variable C_DOC_TYPE integer;
+declare variable PR_DATE_END date;
+declare variable ST_STAFF integer;
+declare variable ST_CLIENT integer;
+begin
+  select st_user_client_access, st_user_staff_access
+  from get_stored_proc_options
+  into :st_client, :st_staff;
+  /* Procedure Text */
+  res_id = 0;
+  res_text = &#x27;&#x27;;
+  for select c_id, c_name_fio, kc_busuness_subtype, c_sex, c_birth_date, c_pass_no, c_pass_date, c_pass_who,
+             k_disb_date, c_pass_date_expire, pr_is_employer, c_citizen, c_nation, c_doc_type, pr_date_end,
+             k_disb_date
+      from knclient, clients, kontract, product
+      where kc_from_k_id = :k_id and
+            kc_from_c_id = c_id and
+            kc_amount_approved &lt;&gt; 0 and
+            kc_amount_approved is not null and
+            c_type = 0 and
+            kc_from_k_id = k_id and
+            k_from_pr_id = pr_id
+      into :c_id, :c_name_fio, :kc_busuness_subtype, :c_sex, :c_birth_date, :c_pass_no, :c_pass_date, :c_pass_who,
+           :k_disb_date, :c_pass_date_expire, :pr_is_employer, :c_citizen, :c_nation, :c_doc_type, :pr_date_end,
+           k_disb_date
+  do
+  begin
+    if (pr_date_end &lt; k_disb_date) then
+    begin
+      res_id = res_id + 1;
+      res_text = &#x27;Кредитный продукт недействителен на дату выдачи&#x27;;
+      suspend;
+    end
+    if ((kc_busuness_subtype is null) or (kc_busuness_subtype = 0)) then
+    begin
+      res_id = res_id + 1;
+      res_text = c_name_fio || &#x27;: &#x27; || &#x27; тип бизнеса не указана&#x27;;
+      suspend;
+    end
+    if (c_sex is null) then
+    begin
+      res_id = res_id + 1;
+      res_text = c_name_fio || &#x27;: &#x27; || &#x27; пол не указан&#x27;;
+      suspend;
+    end
+    if ((c_citizen is null) or (c_citizen = 0)) then
+    begin
+      res_id = res_id + 1;
+      res_text = c_name_fio || &#x27;: &#x27; || &#x27; гражданство не указано&#x27;;
+      suspend;
+    end
+    if ((c_nation is null) or (c_nation = 0)) then
+    begin
+      res_id = res_id + 1;
+      res_text = c_name_fio || &#x27;: &#x27; || &#x27; национальность не указана&#x27;;
+      suspend;
+    end
+    if ((c_doc_type is null) or (c_doc_type = 0)) then
+    begin
+      res_id = res_id + 1;
+      res_text = c_name_fio || &#x27;: &#x27; || &#x27; тип документа не указан&#x27;;
+      suspend;
+    end
+    if (c_birth_date is null) then
+    begin
+      res_id = res_id + 1;
+      res_text = c_name_fio || &#x27;: &#x27; || &#x27; дата рождение не указано&#x27;;
+      suspend;
+    end
+
+    if (c_pass_date_expire &lt; k_disb_date) then
+    begin
+      res_id = res_id + 1;
+      res_text = c_name_fio || &#x27;: &#x27; || &#x27; срок действия паспорта (документа) истек&#x27;;
+      suspend;
+    end
+
+    if (c_birth_date is not null) then
+    begin
+      if (dateadd(18 year to :c_birth_date) &gt; :k_disb_date) then
+      begin
+        res_id = res_id + 1;
+        res_text = c_name_fio || &#x27;: &#x27; || &#x27; клиент младше 18 лет&#x27;;
+        suspend;
+      end
+      if (dateadd(100 year to :c_birth_date) &lt; :k_disb_date) then
+      begin
+        res_id = res_id + 1;
+        res_text = c_name_fio || &#x27;: &#x27; || &#x27; возраст клиента не правильно указан&#x27;;
+        suspend;
+      end
+    end
+    if ((c_pass_no is null) or (c_pass_no = &#x27;&#x27;)) then
+    begin
+      res_id = res_id + 1;
+      res_text = c_name_fio || &#x27;: &#x27; || &#x27; номер удостоверения не указан&#x27;;
+      suspend;
+    end
+    if (c_pass_date is null) then
+    begin
+      res_id = res_id + 1;
+      res_text = c_name_fio || &#x27;: &#x27; || &#x27; дата выдачи удостоверения не указана&#x27;;
+      suspend;
+    end
+    if ((c_pass_who is null) or (c_pass_who = &#x27;&#x27;)) then
+    begin
+      res_id = res_id + 1;
+      res_text = c_name_fio || &#x27;: &#x27; || &#x27; орган выдавщее удостоверение не указано&#x27;;
+      suspend;
+    end
+    if (pr_is_employer = 0) then
+    begin
+      -- #employee_disb --&gt;  12.06.2020 igusev добавил условие для боевых выдач этим МиРМ, в рамках боевого текста КМП
+      if (c_id not in (
+            1010100005782, -- Азаев Азамат Бактыбекович
+            1010100020434, -- Илалов Руслан Асхатович
+            1010100059428, -- Мирзаева Эркин
+            1010100007176)) then -- Усманов Ахад --------------------- &lt;
+      begin
+          if (exists(select *
+                     from hr_pstatus
+                     where ps_from_c_id = :c_id and
+                           ps_date_begin &lt;= :k_disb_date and
+                           ps_is_working = 1 and
+                           ps_date_end &gt;= :k_disb_date)) then
+          begin
+            res_id = res_id + 1;
+            res_text = c_name_fio || &#x27;: &#x27; || &#x27; Сотрудник не может получить кредит по этому продукту&#x27;;
+            suspend;
+          end
+      end
+
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

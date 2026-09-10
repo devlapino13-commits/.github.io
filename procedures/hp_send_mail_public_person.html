@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_SEND_MAIL_PUBLIC_PERSON — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_SEND_MAIL_PUBLIC_PERSON: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_SEND_MAIL_PUBLIC_PERSON</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_send_quick_message.html"><div class="to">HP_SEND_QUICK_MESSAGE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_disbursement.html"><div class="to">HP_DO_DISBURSEMENT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_SEND_MAIL_PUBLIC_PERSON(
+    K_ID D_ID)
+AS
+declare variable k_no d_str_20;
+declare variable reg_concat d_str_100;
+declare variable mail_to varchar(1000);
+declare variable mail_subject d_str_255;
+declare variable mail_body blob sub_type 1 segment size 80;
+declare variable mail_manager varchar(500); -- RFCKG-5569
+declare variable mail_operator varchar(500);
+declare variable mail_office varchar(1000);
+declare variable body_main varchar(1000);
+declare variable office_note varchar(500);
+begin
+  if (exists(select *
+             from knclient kc
+             inner join clients c on c.c_id = kc.kc_from_c_id and
+                   c.c_is_public = 1
+             where kc.kc_from_k_id = :k_id and
+                   kc.kc_amount_approved &gt; 0)) then
+  begin
+    select k.k_kontract_no,
+           reg.reg_code || &#x27; &#x27; || reg.reg_name,
+           replace(replace(coalesce(reg.reg_email_manager, &#x27;&#x27;), &#x27; &#x27;, &#x27;&#x27;), &#x27;,&#x27;, &#x27;;&#x27;),
+           replace(replace(coalesce(reg.reg_email_operator, &#x27;&#x27;), &#x27; &#x27;, &#x27;&#x27;), &#x27;,&#x27;, &#x27;;&#x27;)
+    from kontract k
+    inner join region reg on k.k_fact_disb_reg_id = reg.reg_unicode
+    where k.k_id = :k_id
+    into :k_no, :reg_concat, :mail_manager, :mail_operator;
+
+    /* адреса офиса: менеджер + операционист, без дублей */
+    mail_office = :mail_manager;
+    if (:mail_operator &lt;&gt; &#x27;&#x27; and position(:mail_operator in :mail_office) = 0) then
+    begin
+      if (:mail_office = &#x27;&#x27;) then
+        mail_office = :mail_operator;
+      else
+        mail_office = :mail_office || &#x27;;&#x27; || :mail_operator;
+    end
+
+    mail_subject = &#x27;Выдача кредита клиенту НПДЛ&#x27;;
+    body_main = &#x27;&lt;b&gt;Внимание !&lt;/b&gt;&lt;br&gt;&lt;br&gt;В офисе &lt;b&gt;&#x27; || :reg_concat ||
+                &#x27;&lt;/b&gt; была произведена выдача кредита &lt;b&gt;&#x27; || :k_no || &#x27;&lt;/b&gt; клиенту НПДЛ.&#x27;;
+
+    /* 1. письмо комплаенсу — как раньше, плюс пометка при незаполненной почте офиса */
+    if (:mail_office = &#x27;&#x27;) then
+      office_note = &#x27;&lt;br&gt;&lt;br&gt;&lt;b&gt;Внимание: e-mail офиса не настроен &#x27; ||
+                    &#x27;(region.reg_email_manager / reg_email_operator), копия в офис не отправлена.&lt;/b&gt;&#x27;;
+    else
+      office_note = &#x27;&#x27;;
+
+    mail_to = &#x27;compliance@mbulak.kg&#x27;;
+    mail_body = :body_main || :office_note;
+    execute procedure hp_send_quick_message(&#x27;email&#x27;, :mail_to, :mail_subject, :mail_body, &#x27;&#x27;, 1, 1000000000000);
+
+    /* 2. отдельное письмо в офис выдачи */
+    if (:mail_office &lt;&gt; &#x27;&#x27;) then
+    begin
+      mail_body = :body_main ||
+        &#x27;&lt;br&gt;&lt;br&gt;Если вы получили данное сообщение, необходимо направить на почту &#x27; ||
+        &#x27;&lt;b&gt;compliance@mbulak.kg&lt;/b&gt; данное сообщение со следующей информацией:&lt;br&gt;&#x27; ||
+        &#x27;1. ФИО клиента&lt;br&gt;&#x27; ||
+        &#x27;2. Является ли клиент в настоящее время НПДЛ&lt;br&gt;&#x27; ||
+        &#x27;3. Место работы клиента и должность&lt;br&gt;&#x27; ||
+        &#x27;4. Источник происхождения денежных средств&#x27;;
+      execute procedure hp_send_quick_message(&#x27;email&#x27;, :mail_office, :mail_subject, :mail_body, &#x27;&#x27;, 1, 1000000000000);
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

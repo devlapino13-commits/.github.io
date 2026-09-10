@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CHECK_MIX_CHARSET — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CHECK_MIX_CHARSET: 3 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CHECK_MIX_CHARSET</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_correct_all_mixed_charset.html"><div class="to">HP_CORRECT_ALL_MIXED_CHARSET</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">S_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CAN_CHANGE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FORCE_CHANGE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ERR_TXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RESULT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_IS_CHANGED</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CHECK_MIX_CHARSET(
+    S_TEXT VARCHAR(255),
+    CAN_CHANGE SMALLINT,
+    FORCE_CHANGE SMALLINT)
+RETURNS (
+    ERR_TXT VARCHAR(255),
+    RESULT VARCHAR(255),
+    RES_IS_CHANGED INTEGER)
+AS
+declare variable i smallint;
+declare variable cyr smallint;
+declare variable lat smallint;
+declare variable s_orig varchar(255);
+declare variable cyr_ch d_str_100;
+begin
+  cyr_ch = &#x27;АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШ�©ЪЬЫЭЮЯабвгдеёжзийклмнопрстуфхцчшщъьыэюяң�©ү&#x27; ||
+    iif(f_get_db_id() = 39801, &#x27;әғқұhі&#x27;, &#x27;&#x27;);
+
+  s_orig = s_text;
+  res_is_changed = 0;
+  result = s_text;
+  cyr = 0;
+  lat = 0;
+  err_txt = &#x27;&#x27;;
+  i = 0;
+  while (i &lt; char_length(s_text) and (cyr = 0 or lat = 0)) do
+  begin
+    i = i + 1;
+    if (position(substring(s_text from i for 1), &#x27; 0123456789`~!@#$%^&amp;*()_+&quot;№;%:?*{}[].,/-&#x27;&#x27;|\IVX&#x27;) = 0) then
+    begin
+      if (position(substring(s_text from i for 1), cyr_ch) &gt; 0) then
+        cyr = 1;
+      else
+        lat = 1;
+    end
+  end
+
+  if ((lat = 0 and
+      cyr = 0) or (force_change in (0, 1) and
+      cyr = 0) or (force_change in (0, 2) and
+      lat = 0)) then
+  begin
+    if (result &lt;&gt; s_orig) then
+      res_is_changed = 1;
+    suspend;
+    exit;
+  end
+  if (can_change = 0) then
+  begin
+    if (cyr = 1 and
+        lat = 1) then
+      err_txt = &#x27;В строке смешаны буквы кириллицы и латиницы.&#x27;;
+    if (force_change = 1 and
+        cyr = 1) then
+      err_txt = &#x27;В строке присутствуют символы кириллицы.&#x27;;
+    if (force_change = 2 and
+        lat = 1) then
+      err_txt = &#x27;В строке присутствуют символы латиницы.&#x27;;
+    if (result &lt;&gt; s_orig) then
+      res_is_changed = 1;
+    suspend;
+    exit;
+  end
+
+  if (force_change in (0, 1)) then
+  begin
+    s_text = s_orig;
+-- Меняем кириллицу на латиницу
+    s_text = replace(s_text, &#x27;А&#x27;, &#x27;A&#x27;);
+    s_text = replace(s_text, &#x27;В&#x27;, &#x27;B&#x27;);
+    s_text = replace(s_text, &#x27;С&#x27;, &#x27;C&#x27;);
+    s_text = replace(s_text, &#x27;Е&#x27;, &#x27;E&#x27;);
+    s_text = replace(s_text, &#x27;Н&#x27;, &#x27;H&#x27;);
+    s_text = replace(s_text, &#x27;К&#x27;, &#x27;K&#x27;);
+    s_text = replace(s_text, &#x27;М&#x27;, &#x27;M&#x27;);
+    s_text = replace(s_text, &#x27;О&#x27;, &#x27;O&#x27;);
+    s_text = replace(s_text, &#x27;Р&#x27;, &#x27;P&#x27;);
+    s_text = replace(s_text, &#x27;Т&#x27;, &#x27;T&#x27;);
+    s_text = replace(s_text, &#x27;Х&#x27;, &#x27;X&#x27;);
+    s_text = replace(s_text, &#x27;а&#x27;, &#x27;a&#x27;);
+    s_text = replace(s_text, &#x27;с&#x27;, &#x27;c&#x27;);
+    s_text = replace(s_text, &#x27;е&#x27;, &#x27;e&#x27;);
+    s_text = replace(s_text, &#x27;о&#x27;, &#x27;o&#x27;);
+    s_text = replace(s_text, &#x27;р&#x27;, &#x27;p&#x27;);
+    s_text = replace(s_text, &#x27;х&#x27;, &#x27;x&#x27;);
+    s_text = replace(s_text, &#x27;у&#x27;, &#x27;y&#x27;);
+    cyr = 0;
+    lat = 0;
+    i = 0;
+    while (i &lt; char_length(s_text) and (cyr = 0 or lat = 0)) do
+    begin
+      i = i + 1;
+      if (position(substring(s_text from i for 1), &#x27; 0123456789`~!@#$%^&amp;*()_+&quot;№;%:?*{}[].,/-&#x27;&#x27;|\IVX&#x27;) = 0) then
+      begin
+        if (position(substring(s_text from i for 1), cyr_ch) &gt; 0) then
+          cyr = 1;
+        else
+          lat = 1;
+      end
+    end
+
+    if (cyr = 0 or lat = 0) then
+    begin
+-- Принимаем то что нашли
+      result = s_text;
+      if (result &lt;&gt; s_orig) then
+        res_is_changed = 1;
+      suspend;
+      exit;
+    end
+  end
+
+  if (force_change in (0, 2)) then
+  begin
+-- Меняем латиницу на кириллицу
+    s_text = s_orig;
+    s_text = replace(s_text, &#x27;A&#x27;, &#x27;А&#x27;);
+    s_text = replace(s_text, &#x27;B&#x27;, &#x27;В&#x27;);
+    s_text = replace(s_text, &#x27;C&#x27;, &#x27;С&#x27;);
+    s_text = replace(s_text, &#x27;E&#x27;, &#x27;Е&#x27;);
+    s_text = replace(s_text, &#x27;H&#x27;, &#x27;Н&#x27;);
+    s_text = replace(s_text, &#x27;K&#x27;, &#x27;К&#x27;);
+    s_text = replace(s_text, &#x27;M&#x27;, &#x27;М&#x27;);
+    s_text = replace(s_text, &#x27;O&#x27;, &#x27;О&#x27;);
+    s_text = replace(s_text, &#x27;P&#x27;, &#x27;Р&#x27;);
+    s_text = replace(s_text, &#x27;T&#x27;, &#x27;Т&#x27;);
+    s_text = replace(s_text, &#x27;X&#x27;, &#x27;Х&#x27;);
+    s_text = replace(s_text, &#x27;a&#x27;, &#x27;а&#x27;);
+    s_text = replace(s_text, &#x27;c&#x27;, &#x27;с&#x27;);
+    s_text = replace(s_text, &#x27;e&#x27;, &#x27;е&#x27;);
+    s_text = replace(s_text, &#x27;o&#x27;, &#x27;о&#x27;);
+    s_text = replace(s_text, &#x27;p&#x27;, &#x27;р&#x27;);
+    s_text = replace(s_text, &#x27;x&#x27;, &#x27;х&#x27;);
+    s_text = replace(s_text, &#x27;y&#x27;, &#x27;у&#x27;);
+
+    cyr = 0;
+    lat = 0;
+    i = 0;
+    while (i &lt; char_length(s_text) and (cyr = 0 or lat = 0)) do
+    begin
+      i = i + 1;
+      if (position(substring(s_text from i for 1), &#x27; 0123456789`~!@#$%^&amp;*()_+&quot;№;%:?*{}[].,/-&#x27;&#x27;|\IVX&#x27;) = 0) then
+      begin
+        if (position(substring(s_text from i for 1), cyr_ch) &gt; 0) then
+          cyr = 1;
+        else
+          lat = 1;
+      end
+    end
+
+    if (cyr = 0 or lat = 0) then
+    begin
+-- Принимаем то что нашли
+      result = s_text;
+      if (result &lt;&gt; s_orig) then
+        res_is_changed = 1;
+      suspend;
+      exit;
+    end
+  end
+  if (cyr = 1 and
+      lat = 1) then
+  begin
+    result = s_orig;
+    err_txt = &#x27;В строке смешаны буквы кириллицы и латиницы.&#x27;;
+    if (result &lt;&gt; s_orig) then
+      res_is_changed = 1;
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_KG_0136_SQL — процедура — схема БД</title>
+<meta name="description" content="Проверка наличия фото бизнеса или документа/справки о подтверждении дохода.">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_KG_0136_SQL</code></h1>
+<p class="desc">Проверка наличия фото бизнеса или документа/справки о подтверждении дохода.</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_KG_0136_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable KC_AMOUNT CURR_TYPE;
+declare variable C_ID ID_TYPE;
+declare variable PR_CODE D_STR_100;
+begin
+  if (K_ID = 109010239773700101) then
+    exit; ---RFCKG-613
+  if (:k_id = 109010190645900101) then
+    exit;--по письму от Чолпон 12,07,2022
+  if (k_id = 109010242287300101) then
+    exit; -- RFCKG-689
+  if (k_id = 109010248810200101) then
+    exit; --RFCKG-847
+  if (k_id = 109010294303800101) then
+    exit; --RFCKG-2905
+
+  for select kc.kc_from_c_id, pr.pr_code
+      from knclient kc
+      inner join kontract k on kc.kc_from_k_id = k.k_id
+      inner join product pr on k.k_from_pr_id = pr.pr_id
+      where kc_from_k_id = :k_id and
+            kc_amount_approved &gt; 100000
+      into :c_id, :pr_code
+  do
+  begin
+    if (not exists(select *
+                     from extinfolist eil
+                     where eil.eil_from_c_id = :c_id and
+                           eil.eil_from_eic_id = 10 and
+                           eil.eil_status = 2 and
+                           coalesce(eil.eil_kk_un_id, 0) = 0)) then
+    begin
+      if (not exists(select *
+                     from clientdocs cdc
+                     inner join passkind pk on pk.pk_id = cds_from_pk_id
+                     inner join passdoctype pdt on pk.pk_from_pdt_id = pdt.pdt_id and
+                     pdt.pdt_code in (&#x27;income_statement&#x27;, &#x27;place_of_business&#x27;,  &#x27;certificate_of_employment&#x27;) -- Справка о доходах, фото бизнеса, cправка с места работы (RFCKG-3576)
+                     where cds_from_c_id = :c_id and
+                           cds_is_delete = 0 and
+                           cast(cds_create_datetime as date) between current_date - 5 and current_date -- Дата загр документа (cds_create_datetime)
+      )) then
+      begin
+        res_error_text = &#x27;Отсутствует справка о доходах/фото бизнеса/cправка с места работы.&#x27;;
+        res_error_is_critical = 0; -- Временно отлючила по просьбе Азамата Махмутова (12.04.2021 вр. 14:28)
+        suspend;
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

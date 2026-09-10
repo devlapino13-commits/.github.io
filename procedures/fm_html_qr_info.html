@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_HTML_QR_INFO — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_HTML_QR_INFO: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_HTML_QR_INFO</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_uuid.html"><div class="to">HP_UUID</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_html_main.html"><div class="to">FM_REPORT_HTML_MAIN</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UUID</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_HTML_QR_INFO(
+    UUID D_STR_LONG,
+    UN_ID D_ID)
+RETURNS (
+    RES_TEXT D_STR_8100)
+AS
+declare variable OBJ_CODE D_STR_CODE;
+declare variable EDS_ID D_ID;
+declare variable OBJ_KIND D_INTEGER;
+declare variable DOC_NO D_STR_CODE;
+declare variable DOC_DATE D_DATE;
+declare variable UN_NAME D_STR_CODE;
+begin
+  -- Выдает информацию по эл.подписи через переданный UUID
+  res_text = &#x27;&#x27;;
+
+  select un_name
+  from username
+  where un_id = :un_id
+  into :un_name;
+
+  if (:un_name = &#x27;fmtest&#x27;) then
+  begin
+    select atd.html_content
+    from apple_test_data atd
+    where atd.report_type = &#x27;QR_INFO&#x27;
+    into :res_text;
+    suspend;
+    exit;
+  end
+
+  begin
+    select obj_kind, obj_id
+    from hp_uuid(:uuid)
+    into :obj_kind, :eds_id;
+  when any do
+    begin
+      res_text = &#x27;Не электронная подпись: &#x27; || uuid;
+      suspend;
+      exit;
+    end
+  end
+
+  if (eds_id is null)
+  then res_text = &#x27;Неверная ссылка&#x27;;
+  else obj_code = f_objkind(obj_kind, &#x27;name&#x27;);
+
+  if (res_text = &#x27;&#x27; and obj_code &lt;&gt; &#x27;edoc_sign&#x27;) then
+    res_text = &#x27;QR-код не содержит электронной подписи&#x27;;
+
+  if (res_text = &#x27;&#x27;) then
+  begin
+    obj_code = &#x27;&#x27;;
+    for select edl_id, eds_from_c_id, eds_status, eds_enum_edoc_sign_kind, eds_status_datetime,
+           edl_object_kind, edl_object_id, edl_blank_date,
+           edl_status, edl_create_un_id, edl_create_datetime, edc_name, c_name_fio, un_name
+    from edoc_sign, edoc_list, clients, edoc_cfg, username
+    where eds_id = :eds_id and
+          edl_from_edc_id = edc_id and
+          eds_from_edl_id = edl_id and
+          eds_from_c_id = c_id and
+          edl_create_un_id = un_id
+    as cursor edoc
+    do
+    begin
+      obj_code = f_objkind(edoc.edl_object_kind, &#x27;name&#x27;);
+      if (obj_code = &#x27;com_list&#x27;) then
+      begin
+        select k_kontract_no, k_disb_date
+        from com_list, kontract
+        where cml_id = edoc.edl_object_id and
+              cml_object_id = k_id
+        into doc_no, doc_date;
+      end else
+      if (obj_code = &#x27;kontract&#x27;) then
+      begin
+        select k_kontract_no, k_disb_date
+        from kontract
+        where k_id = edoc.edl_object_id
+        into doc_no, doc_date;
+      end
+      else
+      if (obj_code = &#x27;miniapp&#x27;) then
+      begin
+        select ma_no, ma_date_app
+        from miniapp
+        where ma_id = edoc.edl_object_id
+        order by ma_number desc
+        rows 1
+        into doc_no, doc_date;
+      end
+      else
+      if (obj_code = &#x27;agreements&#x27;) then
+      begin
+        select ag_agreement_no, ag_agreement_date
+        from agreements
+        where ag_id = edoc.edl_object_id
+        into doc_no, doc_date;
+      end
+      else
+      if (obj_code = &#x27;clients&#x27;) then
+      begin
+        doc_no = &#x27;&#x27;;
+        doc_date = edoc.edl_blank_date;
+      end
+      else
+      if (obj_code = &#x27;kontmatag&#x27;) then
+      begin
+        select ag_agreement_no, ag_agreement_date
+        from agreements
+        inner join kontmatag on ag_id = kma_from_ag_id
+        where kma_id = edoc.edl_object_id
+        into doc_no, doc_date;
+      end
+      else
+      if (obj_code = &#x27;ft_anketa_list&#x27;) then
+      begin
+        doc_no = &#x27;&#x27;;
+        doc_date = edoc.edl_blank_date;
+      end
+      else res_text = &#x27;Неизвестный тип: &#x27; || obj_code;
+
+      if (res_text = &#x27;&#x27;) then
+      begin
+        res_text = &#x27;&lt;body&gt;&#x27; ||
+        &#x27;Пакет документов:&lt;br&gt;&lt;b&gt;&#x27; || edoc.edc_name || &#x27;&lt;/b&gt;&lt;br&gt;&lt;br&gt;&#x27; ||
+        iif(obj_code in (&#x27;kontract&#x27;,&#x27;miniapp&#x27;,&#x27;agreements&#x27;),
+          &#x27;Номер документа: &lt;b&gt;&#x27; || doc_no || &#x27;&lt;/b&gt;&lt;br&gt; Дата:&lt;b&gt;&#x27; || f_datetostr(doc_date) || &#x27;&lt;/b&gt;&lt;br&gt;&lt;br&gt;&#x27;, &#x27;&#x27;) ||
+        &#x27;Время создания документа: &lt;b&gt;&#x27; || f_datetimetostr(edoc.edl_create_datetime) || &#x27;&lt;/b&gt;&lt;br&gt;&#x27; ||
+        &#x27;Пользователь: &lt;b&gt;&#x27; || edoc.un_name || &#x27;&lt;/b&gt;&lt;br&gt;&lt;br&gt;&#x27; ||
+        &#x27;Клиент: &lt;b&gt;&#x27; || edoc.c_name_fio || &#x27;&lt;/b&gt;&lt;br&gt;&#x27; ||
+        &#x27;Время подписания: &lt;b&gt;&#x27; || f_datetimetostr(edoc.eds_status_datetime) || &#x27;&lt;/b&gt;&lt;br&gt;&lt;br&gt;&#x27; ||
+        &#x27;Подписанные документы: &lt;br&gt;&lt;ul&gt;&#x27;;
+        for select edf_print_name
+        from edoc_blank, edoc_frx
+        where edb_from_edl_id = edoc.edl_id and
+          edb_from_edf_id = edf_id
+        as cursor edb do
+          res_text = BLOB_APPEND(res_text, &#x27;&lt;li&gt;&#x27; || edb.edf_print_name || &#x27;&lt;br&gt;&#x27;);
+        res_text = BLOB_APPEND(res_text, &#x27;&lt;/ul&gt;&lt;/body&gt;&#x27;);
+      end
+    end
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

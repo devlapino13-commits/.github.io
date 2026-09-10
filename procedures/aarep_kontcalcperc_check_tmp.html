@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_KONTCALCPERC_CHECK_TMP — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_KONTCALCPERC_CHECK_TMP: 0 входных, 7 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_KONTCALCPERC_CHECK_TMP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">7</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">7 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DD</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_REGION_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_REGION_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_ACCOUNT</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_KONT_SALDO</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_BALANCE_SALDO</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_LOAN_COUNT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_KONTCALCPERC_CHECK_TMP
+RETURNS (
+    REP_DD DATE,
+    REP_REGION_ID INTEGER,
+    REP_REGION_NAME VARCHAR(100),
+    REP_ACCOUNT VARCHAR(20),
+    REP_KONT_SALDO DECIMAL(18,4),
+    REP_BALANCE_SALDO DECIMAL(18,4),
+    REP_LOAN_COUNT INTEGER)
+AS
+declare variable period_min integer;
+declare variable period_max integer;
+declare variable rep_period integer;
+begin
+  select min(kcp_period), max(kcp_period)
+  from kontcalcperc
+  into :period_min, :period_max;
+
+  if (period_min is null) then
+    period_min = 0;
+  if (period_max is null) then
+    period_max = 0;
+  if (period_min &lt;&gt; 0) then
+  begin
+    rep_period = period_min;
+    while (rep_period &lt;= :period_max) do
+    begin
+      if (mod(rep_period, 100) &lt; 12) then
+      begin
+        rep_dd = &#x27;01.&#x27; || mod(rep_period + 1, 100) || &#x27;.&#x27; || round(rep_period / 100);
+        rep_dd = rep_dd - 1;
+      end
+      else
+        rep_dd = &#x27;31.12.&#x27; || round(rep_period / 100);
+      rep_loan_count = 0;
+      rep_kont_saldo = 0;
+      for select al_id, al_from_reg_id, reg_code || &#x27; &#x27; || reg_name
+          from acc_list, region
+          where al_from_bg_id = &#x27;76-09&#x27; and
+                al_from_reg_id = reg_unicode
+          into :rep_account, rep_region_id, rep_region_name
+      do
+      begin
+        rep_balance_saldo = f_al_bal(rep_account, rep_dd);
+        suspend;
+      end
+
+      rep_balance_saldo = 0;
+      for select distinct kcp_perc_account, kcp_from_reg_id, reg_code || &#x27; &#x27; || reg_name
+          from kontcalcperc, region
+          where kcp_period = :rep_period and
+                kcp_from_reg_id = reg_unicode
+--      and kcp_loan_is_closed=0
+          into :rep_account, rep_region_id, rep_region_name
+      do
+      begin
+        rep_kont_saldo = 0;
+        rep_loan_count = 0;
+        select sum(kcp_perc_saldo), sum(iif(kcp_perc_saldo &gt; 0, 1, 0))
+        from kontcalcperc
+        where kcp_period = :rep_period and
+              kcp_perc_account = :rep_account and
+              kcp_from_reg_id = :rep_region_id
+--        and kcp_loan_is_closed=0
+        into :rep_kont_saldo, :rep_loan_count;
+        if (rep_kont_saldo is null) then
+          rep_kont_saldo = 0;
+        if (rep_loan_count is null) then
+          rep_loan_count = 0;
+        suspend;
+      end
+
+      if (mod(rep_period, 100) &lt; 12) then
+        rep_period = rep_period + 1;
+      else
+        rep_period = (round(rep_period / 100) + 1) * 100 + 1;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

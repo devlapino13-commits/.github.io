@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_SET_MINIAPPCLIENT_INCOME — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_SET_MINIAPPCLIENT_INCOME: 4 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_SET_MINIAPPCLIENT_INCOME</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_check_loan_data.html"><div class="to">HP_GET_CHECK_LOAN_DATA</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_cmd.html"><div class="to">FM_REPORT_CMD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OBJ_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MACI_IS_DOCUMENTED</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_IS_ERROR</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_SET_MINIAPPCLIENT_INCOME(
+    OBJ_KIND D_STR_CODE,
+    OBJ_ID D_ID,
+    MACI_IS_DOCUMENTED D_SMALLINT,
+    UN_ID D_ID)
+RETURNS (
+    RES_IS_ERROR D_SMALLINT,
+    RES_TEXT D_STR_255)
+AS
+declare variable clt_id d_integer;
+declare variable clt_code d_str_code;
+declare variable fcb_id d_integer;
+declare variable obj_code d_str_code;
+declare variable c_id d_id;
+declare variable k_status d_smallint;
+declare variable c_status d_smallint;
+declare variable k_id d_id;
+declare variable need_name d_bool;
+declare variable check_count d_integer;
+declare variable ma_id d_integer;
+declare variable rd_id d_integer;
+begin
+  res_is_error = 0;
+  res_text = &#x27;Операция прошла успешно&#x27;;
+
+  obj_code = f_objkind(obj_kind, &#x27;code&#x27;);
+
+  if (obj_code &lt;&gt; &#x27;miniappclient_income&#x27;) then
+    exception e_default f_format(&#x27;Incorrect obj_kind. miniappclient_income expected, actually: %1&#x27;, obj_code);
+
+  if (coalesce(obj_id, 0) &gt; 0) then
+  begin
+    select m.ma_id
+    from miniappclient mcl
+    inner join miniapp m on m.ma_id = mcl.mac_from_ma_id
+    where mcl.mac_id = :obj_id and
+          mcl.mac_amount &gt; 0 rows 1
+    into :ma_id;
+
+    select k_id, kc_from_c_id, k_status, c_verify_status
+    from kontract k
+    inner join knclient knc on knc.kc_from_k_id = k.k_id and
+          knc.kc_amount_approved &gt; 0
+    inner join clients cl on cl.c_id = knc.kc_from_c_id
+    where k.k_from_ma_app_id = :ma_id rows 1
+    into k_id, c_id, k_status, c_status;
+
+    select k_id, kc_from_c_id, k_status, c_verify_status
+    from knclient, kontract, clients
+    where kc_id = :obj_id and
+          kc_from_k_id = k_id and
+          kc_from_c_id = c_id
+    into k_id, c_id, k_status, c_status;
+
+    if (k_status = 1) then
+    begin
+      res_is_error = 1;
+      res_text = &#x27;Договор уже утвержден. Необходимо вернуть в процесс.&#x27;;
+      suspend;
+      exit;
+    end
+
+
+    select rd_id
+    from hp_get_check_loan_data(:k_id)
+    into:rd_id;
+
+    if (exists(select *
+               from actionlist
+               where acl_object_kind = 9 and
+                     acl_object_id = :k_id and
+                     acl_status = 1 and
+                     acl_from_rd_id = :rd_id)) then
+    begin
+      res_is_error = 1;
+      res_text = &#x27;Договор находится на рассмотрении КК. Изменения запрещены.&#x27;;
+      suspend;
+      exit;
+    end
+  end
+  if (maci_is_documented is null) then
+  begin
+    res_is_error = 1;
+    res_text = &#x27;Вариант не выбран. Выберите один вариант из списка.&#x27;;
+    suspend;
+    exit;
+  end
+
+  if (exists(select *
+             from miniappclient_income maci
+             where maci.maci_from_mac_id = :obj_id and
+                   maci.maci_is_documented = :maci_is_documented)) then
+  begin
+    res_is_error = 1;
+    res_text = &#x27;Новое значение совпадает со старым значением, операция отменяется&#x27;;
+    suspend;
+    exit;
+  end
+
+  update or insert into miniappclient_income (maci_from_mac_id, maci_is_documented, maci_datetime, maci_from_un_id)
+  values (:obj_id, :maci_is_documented, current_timestamp, :un_id)
+  matching (maci_from_mac_id);
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

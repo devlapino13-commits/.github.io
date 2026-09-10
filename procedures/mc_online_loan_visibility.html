@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MC_ONLINE_LOAN_VISIBILITY — процедура — схема БД</title>
+<meta name="description" content="Процедура MC_ONLINE_LOAN_VISIBILITY: 3 входных, 5 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>MC_ONLINE_LOAN_VISIBILITY</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="get_active_mbulak_card.html"><div class="to">GET_ACTIVE_MBULAK_CARD</div></a><a class="ref-card" href="mc_online_loan_get_kib_id.html"><div class="to">MC_ONLINE_LOAN_GET_KIB_ID</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="mc_send_online_loan_push_tmp.html"><div class="to">MC_SEND_ONLINE_LOAN_PUSH_TMP</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MCL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LOAN_LIMIT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">HAVE_MBULAK_CARD</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ONLINE_APP_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">IS_VISIBLE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ONLINE_MBULAK_CARDS</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ONLINE_OTHER_CARDS</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MAX_LOAN_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE MC_ONLINE_LOAN_VISIBILITY(
+    MCL_ID D_ID,
+    LOAN_LIMIT D_CURRENCY,
+    HAVE_MBULAK_CARD D_INTEGER)
+RETURNS (
+    ONLINE_APP_ID D_INTEGER,
+    IS_VISIBLE D_INTEGER,
+    ONLINE_MBULAK_CARDS D_BOOL,
+    ONLINE_OTHER_CARDS D_BOOL,
+    MAX_LOAN_AMOUNT D_CURRENCY)
+AS
+declare variable C_ID D_ID;
+declare variable CAL_CARD_ID D_INTEGER;
+declare variable K_DISB_KIND D_INTEGER;
+declare variable KS_DATE_BEGIN D_DATE;
+declare variable KBM_ID D_ID;
+declare variable KIB_SCORE D_INTEGER;
+declare variable ACTIVE_ONLINE_BALANCE D_CURRENCY;
+declare variable DAY_OF_WEEK  D_SMALLINT;
+declare variable CURRENT_HOUR  D_SMALLINT;
+begin
+  is_visible = 0;
+  online_mbulak_cards = 1;
+
+    -- RFCKG-2521
+    -- каждую субботу с 22.00 до 08.00 следующего дня отключать баннер онлайн займа
+    day_of_week = extract(weekday from current_date);
+    current_hour =  extract(hour from current_timestamp);
+    
+    if( (day_of_week = 6 and current_hour &gt;= 22) or
+        (day_of_week = 0 and current_hour &lt; 8 )) then
+    begin
+        is_visible = 0;
+
+        suspend;
+        exit;
+    end
+
+  if ((select cv.cv_value
+       from const_var cv
+       where cv.cv_code = &#x27;online_loan_is_active&#x27;) = 0) then
+  begin
+    suspend;
+    exit;
+  end 
+
+  select mcl.mcl_from_c_id
+  from mc_login mcl
+  where mcl.mcl_id = :mcl_id
+  into c_id;
+
+  if (coalesce(:c_id, -777) = -777) then
+  begin
+    suspend;
+    exit;
+  end
+
+  if (f_get_const(&#x27;online_loan_limit_cli_list&#x27;) = 1) then
+  begin
+    if (not exists (
+        select *
+        from temp_objlist tol
+        where tol_kind = &#x27;online_loan&#x27;
+        and tol.tol_object_id = :c_id
+    )) then
+    begin
+      is_visible = 0;
+      suspend;
+      exit;
+    end
+  end
+
+  online_other_cards = f_get_const(&#x27;online_other_cards&#x27;);
+
+  -- RFCKG-2684
+  if (c_id = 1090101308471) then -- для тестовой выдачи
+    online_other_cards = 1;
+  --
+
+  if (online_other_cards = 0) then -- если активрована выдача на сторонние карты, нет смысла проверять наличие карты МБулак т.к. все-равно виджет будет виден
+  begin
+      -- проверяю наличие активной карты МБулак у клиента --&gt;
+      -- логика передачи входящего параметра HAVE_MBULAK_CARD оказалась некорректной ввиду ошибки в ТЗ, поэтому решил получать значенеи чз вызов процедуры
+      have_mbulak_card = 0;
+    
+      select cal_card_id
+      from get_active_mbulak_card(:c_id)
+      into :cal_card_id;
+    
+    
+      if (cal_card_id is not null) then
+        have_mbulak_card = 1;
+      -- &lt; -----------------------------------------
+  end
+
+  if (((have_mbulak_card = 1) or (online_other_cards = 1))  and
+      loan_limit &gt;= 15000 and
+      (select sum(coalesce((select (current_date - oks.oks_delinq_date)
+                            from oksummary oks
+                            where current_date between oks.oks_date_begin and oks.oks_date_end and
+                                  current_date - oks.oks_delinq_date &gt; 0 and
+                                  oks_close_state = 0 and
+                                  oks_from_k_id = kc.kc_from_k_id), 0))
+       from knclient kc
+       where kc.kc_from_c_id = :c_id
+       and kc.kc_amount_approved &gt; 0) = 0) then
+    is_visible = 1;
+
+  select oa.oa_id
+  from online_app oa
+  where oa.oa_from_mcl_id = :mcl_id
+  and oa.oa_status between 0 and 2
+  rows 1
+  into :online_app_id;
+
+  if (online_app_id is not null) then
+    is_visible = 1;
+
+  --JIRA 2168
+  for select kt.k_disb_kind, ks.ks_date_begin
+      from knclient kc
+      inner join kontstate ks on ks.ks_from_k_id = kc.kc_from_k_id
+      inner join kontract kt on kt.k_id = kc.kc_from_k_id
+      where kc.kc_from_c_id = :c_id and
+            kc.kc_amount_approved &gt; 0 and
+            ks.ks_state = 1 and
+            ks.ks_ol_is_delete = 0 and
+            current_date between ks.ks_date_begin and ks.ks_date_end
+      order by ks.ks_date_begin desc
+      into k_disb_kind, ks_date_begin
+  do
+  begin
+    if (online_app_id is null and ks_date_begin = current_date) then
+    begin
+      is_visible = 0;
+      break;
+    end 
+
+    /* Данное условие было убрано на основании задачи RFCKG-2599
+    if (online_app_id is null and k_disb_kind = 6) then
+    begin
+      is_visible = 0;
+      break;
+    end 
+    */
+  end
+
+  if (is_visible = 1 and f_point(c_id, current_date, 0) &lt; 6) then
+    is_visible = 0;
+
+  if (is_visible = 1) then
+  begin
+    select kbm_id,
+           kbm_score_rate
+    from mc_online_loan_get_kib_id(:c_id)
+    into :kbm_id,
+         :kib_score;
+
+    if (kbm_id is not null) then
+    begin
+      if (kib_score &lt; 641 or kib_score = 999) then
+        is_visible = 0;
+    end
+  end
+
+  -- реализация оп задаче RFCKG-2599. Связанная задача RFCKG-2252 --&gt;
+  if (is_visible = 1) then
+  begin
+      active_online_balance = 0;
+
+      select sum(oks.oks_balance)
+      from knclient kc
+      inner join oksummary oks on oks.oks_from_k_id = kc.kc_from_k_id and
+            current_date between oks.oks_date_begin and oks.oks_date_end and
+            oks.oks_close_state = 0
+      inner join kontract kt on kt.k_id = oks.oks_from_k_id
+      inner join product pr on pr.pr_id = kt.k_from_pr_id and
+            pr.pr_code containing &#x27;.online_loan.&#x27;
+      where kc.kc_from_c_id = :c_id and
+            kc.kc_amount_approved &gt; 0
+      into active_online_balance;
+
+      max_loan_amount = 49999 - active_online_balance;
+      max_loan_amount = iif(max_loan_amount &gt; loan_limit, loan_limit, max_loan_amount);
+      if (max_loan_amount &lt; 15000) then
+        is_visible = 0;
+  end
+  -- &lt; --
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

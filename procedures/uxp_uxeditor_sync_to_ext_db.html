@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$UXEDITOR_SYNC_TO_EXT_DB — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$UXEDITOR_SYNC_TO_EXT_DB: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$UXEDITOR_SYNC_TO_EXT_DB</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EXTERNAL_DB_PATH</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PASS</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$UXEDITOR_SYNC_TO_EXT_DB(
+    EXTERNAL_DB_PATH D_STR_255,
+    PASS D_STR_CODE)
+AS
+declare variable us_uuid d_uuid;
+begin
+  for select us_uuid, us_code, us_name, us_is_table, us_is_doc, us_kind, us_different, us_memo, us_keyfields, us_autoincfield,
+             us_lookup_id, us_lookup_text, us_main_table, us_fields, us_params, us_in_ui, us_sql
+  from ux$source
+  where us_code = &#x27;sys$params&#x27;
+  as cursor cur
+  do
+  begin
+    us_uuid = cur.us_uuid;
+
+    execute statement (&#x27;
+    update or insert into ux$source (us_uuid, us_code, us_name, us_is_table, us_is_doc, us_kind, us_different, us_memo, us_keyfields,
+                                     us_autoincfield, us_lookup_id, us_lookup_text, us_main_table, us_fields, us_params,
+                                     us_in_ui, us_sql)
+    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    matching (us_uuid)&#x27;)
+    (cur.us_uuid, cur.us_code, cur.us_name, cur.us_is_table, cur.us_is_doc, cur.us_kind, cur.us_different, cur.us_memo, cur.us_keyfields, cur.us_autoincfield,
+     cur.us_lookup_id, cur.us_lookup_text, cur.us_main_table, cur.us_fields, cur.us_params, cur.us_in_ui, cur.us_sql)
+    on external :external_db_path
+    as user current_user password :pass role &#x27;RDB$ADMIN&#x27;;
+  end
+
+  execute statement (&#x27;update ux$field set uf_state = -2 where uf_owner = ?&#x27;) (:us_uuid)
+  on external :external_db_path
+  as user current_user password :pass role &#x27;RDB$ADMIN&#x27;;
+
+  for select uf_uuid, uf_owner, uf_field_name, uf_origin_uf_uuid, uf_select_name, uf_name, uf_is_param, uf_pk_field,
+             uf_type, uf_position, uf_domain, uf_data_type, uf_not_null, uf_default, uf_secured, uf_expression,
+             uf_expr_fields, uf_edi_uuid, uf_state
+  from ux$field
+  where uf_owner = :us_uuid
+  as cursor cur
+  do
+  begin
+    execute statement (&#x27;
+    update or insert into ux$uniq (uu_id, uu_kind, uu_is_base)
+    values (?, ?, 0)
+    matching (uu_id)&#x27;)
+    (cur.uf_uuid, uxf$kind(&#x27;uxfield&#x27;, &#x27;id&#x27;))
+     on external :external_db_path
+     as user current_user password :pass role &#x27;RDB$ADMIN&#x27;;
+
+    execute statement (&#x27;
+    update or insert into ux$field (uf_uuid, uf_owner, uf_field_name, uf_origin_uf_uuid, uf_select_name, uf_name,
+                                    uf_is_param, uf_pk_field, uf_type, uf_position, uf_domain, uf_data_type, uf_not_null,
+                                    uf_default, uf_secured, uf_expression, uf_expr_fields, uf_edi_uuid, uf_state)
+    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    matching (uf_owner, uf_field_name)&#x27;)
+    (cur.uf_uuid, cur.uf_owner, cur.uf_field_name, cur.uf_origin_uf_uuid, cur.uf_select_name, cur.uf_name,
+     cur.uf_is_param, cur.uf_pk_field, cur.uf_type, cur.uf_position, cur.uf_domain, cur.uf_data_type, cur.uf_not_null,
+     cur.uf_default, cur.uf_secured, cur.uf_expression, cur.uf_expr_fields, cur.uf_edi_uuid, 0)
+     on external :external_db_path
+     as user current_user password :pass role &#x27;RDB$ADMIN&#x27;;
+  end
+
+  execute statement (&#x27;delete from ux$field where uf_owner = ? and uf_state = -2&#x27;) (:us_uuid)
+  on external :external_db_path
+  as user current_user password :pass role &#x27;RDB$ADMIN&#x27;;
+
+  for select ux_uuid, ux_us_uuid, ux_fcode, ux_scode, ux_name, ux_release_uuid, ux_draft_uuid, ux_draft_user, ux_inactive
+  from ux$code
+  where ux_uuid = :us_uuid
+  as cursor cur
+  do
+  begin
+    execute statement (&#x27;
+    update or insert into ux$code
+    (ux_uuid, ux_us_uuid, ux_fcode, ux_scode, ux_name, ux_release_uuid, ux_draft_uuid, ux_draft_user, ux_inactive)
+    values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    matching (ux_uuid)&#x27;)
+    (cur.ux_uuid, cur.ux_us_uuid, cur.ux_fcode, cur.ux_scode, cur.ux_name, cur.ux_release_uuid, cur.ux_draft_uuid,
+     cur.ux_draft_user, cur.ux_inactive)
+     on external :external_db_path
+     as user current_user password :pass role &#x27;RDB$ADMIN&#x27;;
+  end
+
+  for select ufm_uuid, ufm_ux_uuid, ufm_updated, ufm_async_mode, ufm_use_report_db,
+             ufm_lock_change_db, ufm_web_help, ufm_dont_prepare_on_show, ufm_source_refresh,
+             ufm_close_on_save, ufm_lifetime_secs, ufm_doc_frame_code
+  from ux$form
+  where ufm_uuid = :us_uuid
+  as cursor cur
+  do
+  begin
+    execute statement (&#x27;update or insert into ux$form (ufm_uuid, ufm_ux_uuid, ufm_updated, ufm_async_mode, ufm_use_report_db)
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        matching (ufm_uuid)&#x27;)
+    (cur.ufm_uuid, cur.ufm_ux_uuid, cur.ufm_updated, cur.ufm_async_mode, cur.ufm_use_report_db,
+     cur.ufm_lock_change_db, cur.ufm_web_help, cur.ufm_dont_prepare_on_show, cur.ufm_source_refresh,
+     cur.ufm_close_on_save, cur.ufm_lifetime_secs, cur.ufm_doc_frame_code)
+     on external :external_db_path
+     as user current_user password :pass role &#x27;RDB$ADMIN&#x27;;
+  end
+
+  for select ufr_uuid, ufr_owner, ufr_code, ufr_fcode, ufr_name, ufr_us_uuid, ufr_is_grid, ufr_can_update, ufr_can_insert,
+             ufr_can_delete, ufr_tree_parent_field, ufr_tree_image_field, ufr_master_ufr_uuid, ufr_is_mainframe, ufr_master_field,
+             ufr_detail_field, ufr_hide_on_group, ufr_group_panel, ufr_find_panel, ufr_hide_summary, ufr_autowidth,
+             ufr_grid_disable_edit, ufr_sql_where, ufr_sql_orderby,
+             ufr_refresh_params, ufr_tree_position_field, ufr_tree_can_drag_field, ufr_tree_can_drop_field,
+             ufr_add_table_fields
+  from ux$frame
+  where ufr_uuid = :us_uuid
+  as cursor cur
+  do
+  begin
+    execute statement (&#x27;
+    update or insert into ux$frame (ufr_uuid, ufr_owner, ufr_code, ufr_fcode, ufr_name, ufr_us_uuid, ufr_is_grid,
+                                    ufr_can_update, ufr_can_insert, ufr_can_delete, ufr_tree_parent_field, ufr_tree_image_field,
+                                    ufr_master_ufr_uuid, ufr_is_mainframe, ufr_master_field, ufr_detail_field,
+                                    ufr_hide_on_group, ufr_group_panel, ufr_find_panel, ufr_hide_summary, ufr_autowidth,
+                                    ufr_grid_disable_edit, ufr_sql_where, ufr_sql_orderby,
+                                    ufr_refresh_params, ufr_tree_position_field, ufr_tree_can_drag_field, ufr_tree_can_drop_field,
+                                    ufr_add_table_fields)
+    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    matching (ufr_uuid)&#x27;)
+    (cur.ufr_uuid, cur.ufr_owner, cur.ufr_code, cur.ufr_fcode, cur.ufr_name, cur.ufr_us_uuid, cur.ufr_is_grid, cur.ufr_can_update,
+     cur.ufr_can_insert, cur.ufr_can_delete, cur.ufr_tree_parent_field, cur.ufr_tree_image_field, cur.ufr_master_ufr_uuid, cur.ufr_is_mainframe,
+     cur.ufr_master_field, cur.ufr_detail_field, cur.ufr_hide_on_group, cur.ufr_group_panel, cur.ufr_find_panel, cur.ufr_hide_summary,
+     cur.ufr_autowidth, cur.ufr_grid_disable_edit, cur.ufr_sql_where, cur.ufr_sql_orderby,
+     cur.ufr_refresh_params, cur.ufr_tree_position_field, cur.ufr_tree_can_drag_field, cur.ufr_tree_can_drop_field)
+     on external :external_db_path
+     as user current_user password :pass role &#x27;RDB$ADMIN&#x27;;
+  end
+
+  for select ufp_uuid, ufp_parent, ufp_ufr_uuid, ufp_uf_uuid, ufp_editor, ufp_refresh, ufp_not_null, ufp_public
+  from ux$frparam
+  where ufp_ufr_uuid = :us_uuid
+  as cursor cur
+  do
+  begin
+    execute statement (&#x27;
+    update or insert into ux$frparam (ufp_uuid, ufp_parent, ufp_ufr_uuid, ufp_uf_uuid, ufp_editor, ufp_refresh,
+                                      ufp_not_null, ufp_public)
+    values (?, ?, ?, ?, ?, ?, ?, ?)
+    matching (ufp_uuid)&#x27;)
+    (cur.ufp_uuid, cur.ufp_parent, cur.ufp_ufr_uuid, cur.ufp_uf_uuid, cur.ufp_editor, cur.ufp_refresh,
+     cur.ufp_not_null, cur.ufp_public)
+     on external :external_db_path
+     as user current_user password :pass role &#x27;RDB$ADMIN&#x27;;
+  end
+
+  for select edi_uuid, edi_source, edi_field_name, edi_popup_menu, edi_index, edi_img_uuid, edi_use_last
+  from ux$editor, ux$frparam
+  where ufp_ufr_uuid = :us_uuid and
+        ufp_uuid = edi_uuid
+  as cursor cur
+  do
+  begin
+    execute statement (&#x27;
+    update or insert into ux$editor (edi_uuid, edi_source, edi_field_name, edi_popup_menu, edi_index, edi_img_uuid, edi_use_last)
+    values (?, ?, ?, ?, ?, ?, ?)
+    matching (edi_uuid)&#x27;)
+    (cur.edi_uuid, cur.edi_source, cur.edi_field_name, cur.edi_popup_menu, cur.edi_index, cur.edi_img_uuid, cur.edi_use_last)
+     on external :external_db_path
+     as user current_user password :pass role &#x27;RDB$ADMIN&#x27;;
+  end
+
+  for select upd_ufp_uuid, upd_ufr_uuid, upd_uf_uuid, upd_uxa_uuid, upd_def_value, upd_locked
+  from ux$paramdef, ux$frparam
+  where upd_ufp_uuid = ufp_uuid and
+        ufp_ufr_uuid = :us_uuid
+  as cursor cur
+  do
+  begin
+    execute statement (&#x27;
+    update or insert into ux$paramdef (upd_ufp_uuid, upd_ufr_uuid, upd_uf_uuid, upd_uxa_uuid, upd_def_value, upd_locked)
+    values (?, ?, ?, ?, ?, ?)
+    matching (upd_ufp_uuid, upd_uxa_uuid)&#x27;)
+    (cur.upd_ufp_uuid, cur.upd_ufr_uuid, cur.upd_uf_uuid, cur.upd_uxa_uuid, cur.upd_def_value, cur.upd_locked)
+     on external :external_db_path
+     as user current_user password :pass role &#x27;RDB$ADMIN&#x27;;
+  end
+
+  for select exp_ux_uuid, exp_kind, exp_expression, exp_calc_expr, exp_calc_ufr_uuid, exp_message, exp_is_sql, exp_action,
+             exp_position, exp_is_bool, exp_calc_kind
+  from ux$expression, ux$frparam
+  where exp_ux_uuid = ufp_uuid and
+        ufp_ufr_uuid = :us_uuid
+  as cursor cur
+  do
+  begin
+    execute statement (&#x27;
+    update or insert into ux$expression (exp_ux_uuid, exp_kind, exp_expression, exp_calc_expr, exp_calc_ufr_uuid,
+                                         exp_message, exp_is_sql, exp_action, exp_position, exp_is_bool, exp_calc_kind)
+    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    matching (exp_ux_uuid, exp_kind)&#x27;)
+    (cur.exp_ux_uuid, cur.exp_kind, cur.exp_expression, cur.exp_calc_expr, cur.exp_calc_ufr_uuid,
+     cur.exp_message, cur.exp_is_sql, cur.exp_action, cur.exp_position, cur.exp_is_bool, cur.exp_calc_kind)
+     on external :external_db_path
+     as user current_user password :pass role &#x27;RDB$ADMIN&#x27;;
+  end
+
+  for select uma_ux_uuid, uma_mask, uma_message
+  from ux$frmask, ux$frparam
+  where ufp_uuid = uma_ux_uuid and
+        ufp_ufr_uuid = :us_uuid
+  as cursor cur
+  do
+  begin
+    execute statement (&#x27;
+    update or insert into ux$frmask (uma_ux_uuid, uma_mask, uma_message)
+    values (?, ?, ?)
+    matching (uma_ux_uuid)&#x27;)
+    (cur.uma_ux_uuid, cur.uma_mask, cur.uma_message)
+     on external :external_db_path
+     as user current_user password :pass role &#x27;RDB$ADMIN&#x27;;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

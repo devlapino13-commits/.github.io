@@ -1,0 +1,1217 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_REPAY_RESCHEDULE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_REPAY_RESCHEDULE: 4 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_REPAY_RESCHEDULE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">5</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">4 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fhp_agein360.html"><div class="to">FHP_AGEIN360</div></a><a class="ref-card" href="hp_repay_alloc.html"><div class="to">HP_REPAY_ALLOC</div></a><a class="ref-card" href="hp_repay_close_small_amounts.html"><div class="to">HP_REPAY_CLOSE_SMALL_AMOUNTS</div></a><a class="ref-card" href="hp_repay_fill.html"><div class="to">HP_REPAY_FILL</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">5 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_repayment.html"><div class="to">HP_DO_REPAYMENT</div></a><a class="ref-card" href="hp_do_repayment_recalc_sh.html"><div class="to">HP_DO_REPAYMENT_RECALC_SH</div></a><a class="ref-card" href="hp_do_reschedule_float.html"><div class="to">HP_DO_RESCHEDULE_FLOAT</div></a><a class="ref-card" href="hp_return_start_perc_rate.html"><div class="to">HP_RETURN_START_PERC_RATE</div></a><a class="ref-card" href="hp_undo_reschedule_float.html"><div class="to">HP_UNDO_RESCHEDULE_FLOAT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">DD</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">IS_RESCHEDULE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REPAY_DT_ACCOUNT_KIND</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">HAS_ADVANCED_PAY</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEED_PSK</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_REPAY_RESCHEDULE(
+    DD D_DATE,
+    IS_RESCHEDULE D_INTEGER,
+    REPAY_DT_ACCOUNT_KIND D_INTEGER,
+    K_ID D_ID)
+RETURNS (
+    HAS_ADVANCED_PAY D_INTEGER,
+    NEED_PSK D_INTEGER)
+AS
+declare variable disb_amount decimal(18,4) = 0;
+declare variable pr_percent_method integer;
+declare variable kd_percent_per_day decimal(18,7);
+declare variable balans decimal(18,4) = 0;
+declare variable balans_orig decimal(18,4) = 0;
+declare variable calced_perc_for_repay_date decimal(18,4) = 0;
+declare variable repay_need_reschedule integer;
+declare variable client_koef double precision;
+declare variable s_percent decimal(18,4) = 0;
+declare variable next_os decimal(18,4) = 0;
+declare variable next_perc decimal(18,4) = 0;
+declare variable zad_os decimal(18,4) = 0;
+declare variable pay_os decimal(18,4) = 0;
+declare variable zad_perc decimal(18,4) = 0;
+declare variable pay_perc decimal(18,4) = 0;
+declare variable is_grace integer;
+declare variable repay_mode integer;
+declare variable sh_new_os decimal(18,4) = 0;
+declare variable sh_new_perc decimal(18,4) = 0;
+declare variable k_stop_perc date;
+declare variable s_date date;
+declare variable calcing_perc decimal(18,4) = 0;
+declare variable s_rec_no integer;
+declare variable dd_min date;
+declare variable plan_perc decimal(18,4) = 0;
+declare variable dd_change_days integer;
+declare variable dd_change_begin date;
+declare variable dd_change_end date;
+declare variable annu decimal(18,4) = 0;
+declare variable s_all decimal(18,4) = 0;
+declare variable pr_round_perc integer;
+declare variable pr_is_360 integer;
+declare variable kol_day integer;
+declare variable tmp_amount decimal(18,4) = 0;
+declare variable need_close_loan integer;
+declare variable saldo_os decimal(18,4) = 0;
+declare variable saldo_perc decimal(18,4) = 0;
+declare variable saldo_fine decimal(18,4) = 0;
+declare variable cm_database_id integer;
+declare variable small_amount decimal(18,4) = 0;
+declare variable k_disb_date date;
+declare variable new_annu_amount decimal(18,4) = 0;
+declare variable period_real integer;
+declare variable need_new_annu integer;
+declare variable last_is_calced integer = 0;
+declare variable orig_annu_amount decimal(18,4) = 0;
+declare variable delta_days double precision;
+declare variable pr_week_or_month integer;
+declare variable pr_wm_kolich integer;
+declare variable sh_prior_percent_per_day d_percent;
+declare variable repay_last_s_date d_date;
+declare variable days_list d_str_long;
+declare variable s_date_new d_date;
+declare variable s_date_prv d_date;
+declare variable auto_repay_zero_amount d_smallint;
+declare variable annu_up d_smallint;
+declare variable delinq_os d_currency;
+declare variable delinq_perc d_currency;
+declare variable calced_perc_for_vac d_currency;
+declare variable last_rec_id d_integer;
+declare variable vac_date_begin d_date;
+declare variable vac_date_end d_date;
+declare variable vac_percent_per_day d_percent;
+declare variable vac_last_os d_currency;
+declare variable perc_per_month d_percent;
+declare variable last_sh_id d_integer;
+declare variable s_id d_integer;
+declare variable new_annu d_currency;
+declare variable is_zero_balance d_bool;
+declare variable vac_max_part_limit d_currency;
+declare variable vac_pay_all d_currency;
+begin
+  -- Процедура для автореструктуризации графика после погашения
+
+  cm_database_id = f_get_db_id();
+  days_list = &#x27;&#x27;;
+  small_amount = 0;
+  if (cm_database_id = 81001 and
+      dd &gt;= &#x27;01.11.2015&#x27;) then
+  begin
+    if (dd &gt;= &#x27;01.10.2022&#x27;) then
+      small_amount = 0;
+    else
+      small_amount = 500;
+    -- если оплата через кассу, не убирать мелкие долги
+    if (repay_dt_account_kind = 1) then
+      small_amount = 0;
+  end
+  if (cm_database_id = 94401 and
+      dd &gt;= &#x27;23.11.2015&#x27;) then
+    small_amount = 5;
+
+  if (is_reschedule is null) then
+    is_reschedule = 0;
+
+  vac_last_os = 0;
+  has_advanced_pay = 0;  -- Нет частично-досрочного погашения
+  auto_repay_zero_amount = 0;
+  annu_up = 0;
+  if (is_reschedule = 2) then
+  begin
+    is_reschedule = 1;
+    auto_repay_zero_amount = 1;
+
+    update temp_vrepay
+    set s_all = zad_os + zad_perc;
+
+    update temp_vrepay
+    set is_grace = 1
+    where zad_os = 0 and
+          zad_perc &gt; 0 and
+          s_date &gt;= :dd;
+  end else
+  if (is_reschedule = 3) then
+  begin
+    has_advanced_pay = 1;
+    is_reschedule = 1;
+    annu_up = 1; -- Повышение аннуитета из-за повышения ставки
+
+    update temp_vrepay
+    set s_all = zad_os + zad_perc;
+  end else
+  if (is_reschedule = 777) then
+  begin
+    update temp_vrepay
+    set sh_new_os = zad_os - pay_os,
+        sh_new_perc = zad_perc - pay_perc,
+        s_all = zad_os + zad_perc
+    where s_date is not null and
+          is_extra = 0;
+
+    -- По ИПФ новый вариант перестроения - убираем проценты за будущие периоды если ОС оплачен
+    for select s_rec_no, zad_os, pay_os, zad_perc
+    from temp_vrepay
+    where repay_mode = 3 and
+          pay_os &lt;&gt; 0
+    into s_rec_no, zad_os, pay_os, zad_perc
+    do
+    begin
+      tmp_amount = 0;
+
+      if (zad_os &lt;= pay_os) then
+        tmp_amount = zad_perc;
+      else
+      begin
+        tmp_amount = round(cast(zad_perc as double precision) * pay_os / zad_os, 0);
+        if (tmp_amount - zad_perc &lt;= 1 and tmp_amount - zad_perc &gt;= -1) then
+          tmp_amount = zad_perc;
+      end
+
+      if (tmp_amount &lt;&gt; 0) then
+      begin
+        has_advanced_pay = 1;
+
+        update temp_vrepay
+        set sh_new_perc = zad_perc - pay_perc - :tmp_amount
+        where s_rec_no = :s_rec_no;
+      end
+    end
+
+    suspend;
+    exit;
+  end
+
+--  Используется для тестирования перестройки графика
+--  select res_amount
+--  from hp_repay_fill(:k_id, 0, :dd, 0, 1, 1, 1, 1, 0)
+--  into :tmp_amount;
+
+--  execute procedure hp_repay_alloc(:dd, 19474, 1, 1, 1, 1); ровная сумма
+--  execute procedure hp_repay_alloc(:dd, 19500, 1, 1, 1, 1); -- с переплатой
+
+  select disb_amount, pr_percent_method, kd_percent_per_day, repay_need_reschedule, client_koef, pr_round_perc,
+         pr_is_360, k_disb_date, vac_date_begin, vac_date_end, vac_max_part_limit
+  from temp_params
+  into :disb_amount, :pr_percent_method, kd_percent_per_day, repay_need_reschedule, client_koef, pr_round_perc,
+       pr_is_360, k_disb_date, vac_date_begin, vac_date_end, vac_max_part_limit;
+
+  vac_percent_per_day = kd_percent_per_day;
+
+  if (is_reschedule = 1 and repay_need_reschedule = 0) then
+    repay_need_reschedule = 1;
+
+  select sum(zad_os - pay_os), sum(calcing_perc - pay_perc), sum(zad_fine - pay_fine),
+         sum(iif(is_vac_perc = 1, zad_os - pay_os, 0)),
+         sum(pay_os + pay_perc)
+  from temp_vrepay
+  where s_date is not null and
+        is_extra = 0
+  into :saldo_os, :saldo_perc, :saldo_fine, vac_last_os, vac_pay_all;
+
+  if (dd &gt; vac_date_end) then
+    vac_pay_all = 0;
+
+  if (vac_last_os is null) then
+    vac_last_os = 0;
+
+  if (saldo_os is null) then
+    saldo_os = 0;
+  if (saldo_perc is null) then
+    saldo_perc = 0;
+  if (saldo_fine is null) then
+    saldo_fine = 0;
+  if (vac_pay_all is null) then
+    vac_pay_all = 0;
+
+  update temp_vrepay
+  set sh_new_os = zad_os - pay_os,
+      sh_new_perc = zad_perc - pay_perc
+  where s_date is null and
+        is_extra = 0;
+
+  need_close_loan = 0;
+
+  if (saldo_os &lt;= 0 and
+      saldo_perc &lt;= 0) then -- если долг по ос и %% закрыт
+  begin
+    if (saldo_fine &lt;= 0) then
+      need_close_loan = 1; -- если долга по пеням нет, закрываем кредит
+    else
+
+    -- рф и кр: закрываем если даже имеется долг по пеням. пеню списываем
+    if (cm_database_id in (81001, 41701)) then
+      need_close_loan = 1;
+  end
+  if (need_close_loan = 1) then
+  begin
+    update temp_vrepay
+    set sh_new_os = 0,
+        sh_new_perc = 0
+    where s_date is not null and
+          is_extra = 0;
+    suspend;
+    exit;
+  end
+
+  if (saldo_perc &lt; 0) then
+    saldo_perc = 0;
+
+  delinq_os = 0;
+  select sum(zad_os - pay_os), -- остаточный баланс после распределения
+         sum(zad_os), -- первоначальный баланс (до распределения)
+         sum(iif(repay_mode = 1 or ((:annu_up = 1 or :auto_repay_zero_amount = 1) and s_date = :dd), zad_os, 0)),
+         sum(iif(repay_mode = 1 or ((:annu_up = 1 or :auto_repay_zero_amount = 1) and s_date = :dd), zad_perc, 0)),
+         sum(calcing_perc), -- накопленные проценты на момент погашения
+         sum(iif(is_vac_perc = 1, calcing_perc, 0)) -- накопленные проценты за кредитные каникулы
+  from temp_vrepay
+  where s_id &gt;= 0 and
+        s_date is not null and
+        is_extra = 0
+  into :balans, :balans_orig, :delinq_os, :delinq_perc, :calced_perc_for_repay_date, :calced_perc_for_vac;
+
+  if (calced_perc_for_repay_date is null) then
+    calced_perc_for_repay_date = 0;
+
+  if (calced_perc_for_vac is null) then
+    calced_perc_for_vac = 0;
+
+  calced_perc_for_repay_date = calced_perc_for_repay_date - calced_perc_for_vac;
+
+  if (delinq_os is null) then
+    delinq_os = 0;
+
+  if (annu_up = 0 and auto_repay_zero_amount = 0) then
+  begin
+    delinq_os = 0;
+    delinq_perc = 0;
+  end
+
+  saldo_perc = saldo_perc - delinq_perc;
+  if (saldo_perc &lt; 0) then
+    saldo_perc = 0;
+
+  if (repay_need_reschedule = 1) then -- если в продукте требуется автореструктуризация
+  begin
+    update temp_vrepay
+    set sh_new_os = 0,
+        sh_new_perc = 0
+    where s_date is not null and
+          is_extra = 0;
+
+    if (vac_date_end &gt; dd and vac_max_part_limit &gt; 0 and vac_pay_all &gt;= vac_max_part_limit) then
+    begin
+      if (exists(select * from temp_vrepay
+                 where s_date &gt;= :dd and
+                       repay_mode = 2)) then
+      begin
+        update temp_vrepay
+        set repay_mode = 2
+        where s_date &gt;= :dd and
+              is_extra = 0 and
+              is_hidden_line = 0
+        rows 1
+        returning s_date
+        into s_date;
+
+        update temp_vrepay
+        set repay_mode = 3
+        where s_date &gt; :s_date and
+              is_extra = 0 and
+              is_hidden_line = 0;
+      end
+    end
+  end
+  else
+    update temp_vrepay
+    set sh_new_os = zad_os,
+        sh_new_perc = zad_perc
+    where s_id &gt;= 0 and
+          s_date is not null and
+          is_extra = 0;
+
+  if (client_koef &lt;&gt; 1) then -- Распределение доли участника
+  begin
+    -- перестройка графика после доли участника
+    update temp_vrepay
+    set sh_new_os = zad_os - pay_os,
+        sh_new_perc = zad_perc - round(:client_koef * zad_perc)
+    where s_id &gt;= 0 and
+          s_date is not null and
+          is_extra = 0;
+    suspend;
+    exit; -- завершаем автореструктуризацию
+  end
+
+  s_percent = 0;
+  next_os = 0;
+  next_perc = 0;
+  -- Если на первоначальную сумму и не нужно автореструктурировать
+  if ((pr_percent_method &lt;= 0) and
+      (repay_need_reschedule = 0)) then
+  begin
+    for select s_rec_no, s_date, zad_os, pay_os, zad_perc, pay_perc, is_grace, repay_mode, sh_new_os, sh_new_perc,
+               k_stop_perc, calcing_perc
+        from temp_vrepay
+        where s_id &gt;= 0 and
+              s_date is not null and
+              is_extra = 0
+        into s_rec_no, s_date, zad_os, pay_os, zad_perc, pay_perc, is_grace, repay_mode, sh_new_os, sh_new_perc,
+             k_stop_perc, calcing_perc
+    do
+    begin
+      if ((zad_os - pay_os = 0) and
+          (is_grace = 0) and
+          (repay_mode &gt; 1)) then
+      begin
+        -- если ОС закрыт и не просроченный платеж,
+        -- то запоминаем %% и закрываем выплату
+
+        if (zad_perc - pay_perc &gt; 0) then
+          s_percent = s_percent + zad_perc - pay_perc;
+        sh_new_os = 0;
+        sh_new_perc = 0;
+      end
+      else
+      begin
+        -- значит еще есть долг по ОС или просрочка
+
+        sh_new_os = zad_os - pay_os;
+        if (is_grace = 0 and
+            next_os &lt; 0 and
+            repay_mode &gt; 1) then
+        begin
+          sh_new_os = sh_new_os + next_os;
+          sh_new_perc = sh_new_perc + next_os;
+          next_os = 0;
+        end
+        sh_new_perc = zad_perc - pay_perc + s_percent;
+        s_percent = 0;
+
+        if (zad_os - pay_os &lt; 0) then
+        begin
+          next_os = next_os + zad_os - pay_os;
+          next_perc = next_perc + zad_os - pay_os;
+          sh_new_perc = sh_new_perc + next_perc;
+          sh_new_os = 0;
+          next_perc = 0;
+        end
+
+        if (sh_new_os &gt; 0) then
+        begin
+          sh_new_perc = sh_new_perc + next_perc;
+          next_perc = 0;
+        end
+
+        if (sh_new_perc &lt; 0) then
+        begin
+          next_perc = next_perc + sh_new_perc;
+          sh_new_perc = 0;
+        end
+      end
+
+      if ((k_stop_perc is not null) and
+          (k_stop_perc &lt;= s_date)) then
+      begin
+        sh_new_perc = calcing_perc - pay_perc;
+        if (sh_new_perc &lt; 0) then
+          sh_new_perc = 0;
+      end
+
+      update temp_vrepay
+      set sh_new_os = :sh_new_os,
+          sh_new_perc = :sh_new_perc
+      where s_rec_no = :s_rec_no;
+    end -- end of for select
+
+    if (next_perc &lt;&gt; 0) then
+    begin
+      sh_new_perc = sh_new_perc + next_perc;
+      next_perc = 0;
+    end
+    if (s_percent &gt; 0) then
+    begin
+      sh_new_perc = zad_perc - pay_perc + s_percent;
+      if ((k_stop_perc is not null) and
+          (k_stop_perc &lt;= s_date)) then
+      begin
+        sh_new_perc = calcing_perc - pay_perc;
+      end
+    end
+    if (sh_new_perc &lt; 0) then
+      sh_new_perc = 0;
+    update temp_vrepay
+    set sh_new_os = :sh_new_os,
+        sh_new_perc = :sh_new_perc
+    where s_rec_no = :s_rec_no;
+
+    execute procedure hp_repay_close_small_amounts(:small_amount, :s_rec_no);
+    suspend;
+    exit;
+  end -- конец блока: &quot;Если на первоначальную сумму и не нужно автореструктурировать&quot;
+
+  if (repay_need_reschedule = 0) then
+  begin
+    suspend;
+    exit;
+  end
+
+  -- Автореструктуризация
+  if (is_reschedule = 1) then
+    balans = balans_orig;
+
+  -- Наличие досрочно-частиного погашения
+  last_is_calced = 0;
+  orig_annu_amount = 0;
+
+  repay_last_s_date = null;
+
+  if (has_advanced_pay = 0) then
+  begin
+    if (cm_database_id = 81001 and
+        k_disb_date &gt;= &#x27;01.11.2016&#x27;) then
+    begin
+      if (exists(select *
+                 from temp_vrepay
+                 where (((pay_os + pay_perc) &lt;&gt; 0 and repay_mode = 3) or
+                        (((zad_os + zad_perc) &lt; (pay_os + pay_perc)) and repay_mode = 2)) and
+                       s_date is not null)) then
+      begin
+        if (current_date &gt;= &#x27;11.04.2018&#x27;) then
+        begin
+          if (balans &gt; 500.0) then
+            has_advanced_pay = 1; -- Пересчитать график с новой суммой аннуитета
+          else
+            has_advanced_pay = 2; -- Весь остаток перенести на следующий платеж
+        end
+        else
+        begin
+          if (balans &gt; 3000.0) then
+            has_advanced_pay = 1; -- Пересчитать график с новой суммой аннуитета
+          else
+            has_advanced_pay = 2; -- Весь остаток перенести на следующий платеж
+        end
+  
+        select max(s_date)
+        from temp_vrepay
+        where repay_mode = 3 and
+              zad_os &lt;&gt; 0 and
+              s_date is not null
+        into repay_last_s_date;
+      end
+    end
+  end else
+  begin
+    select max(s_date)
+    from temp_vrepay
+    where repay_mode = 3 and
+          zad_os &lt;&gt; 0 and
+          s_date is not null
+    into repay_last_s_date;
+  end
+
+  need_psk = 0;
+  if (has_advanced_pay &lt;&gt; 0) then
+    need_psk = 1;
+
+  if (has_advanced_pay = 1) then
+  begin
+    -- если имеются изменения ставок будущей датой, не делаем автореструктуризацию, Sanjari, 23.05.2020
+    -- могут быть изменения ставок (льготные)
+    if (dd &lt;&gt; k_disb_date and vac_date_begin is null) then
+    begin
+      if (exists(select * from kontdata
+      where kd_from_k_id = :k_id and
+            kd_ol_date &gt; :dd and
+            kd_ol_is_delete = 0)) then
+       has_advanced_pay = 0;
+    end
+  end
+
+  need_new_annu = 0;
+  orig_annu_amount = 0;
+
+  -- новый вариант определения действующей суммы аннуитета, Sanjari, 30/12/2019
+  select zad_os + zad_perc
+  from temp_vrepay
+  where repay_mode = 3 and
+        zad_os &lt;&gt; 0 and
+        is_vac_perc = 0 and
+        s_date &lt; :repay_last_s_date
+  group by 1
+  order by count(*) desc
+  rows 1
+  into orig_annu_amount;
+
+  if (auto_repay_zero_amount = 1 or
+     (auto_repay_zero_amount = 0 and has_advanced_pay &lt;&gt; 0 and repay_last_s_date is not null)) then -- если была частично-досрочное погашение, вычисляем новую сумму
+  begin
+    need_new_annu = 1;
+
+    period_real = 0;
+    s_date_prv = dd;
+    for select s_date, is_grace, sh_prior_percent_per_day, repay_mode
+    from temp_vrepay
+    where (repay_mode = 3 or ((:annu_up = 1 or :auto_repay_zero_amount = 1) and repay_mode = 2)) and
+          (zad_os &lt;&gt; 0 or is_grace = 1 or (:cm_database_id &lt;&gt; 94401 and :is_reschedule = 0 and zad_perc &lt;&gt; 0)) and -- RFCAZ-512
+          s_date is not null and
+          is_vac_perc = 0 -- исключаем процентные каникулы
+    order by s_date
+    into s_date_new, is_grace, sh_prior_percent_per_day, repay_mode
+    do
+    begin
+      if (s_date_new &gt; s_date_prv) then
+      begin
+        if (days_list &lt;&gt; &#x27;&#x27;) then
+          days_list = days_list || &#x27;,&#x27;;
+  
+        if (is_grace = 0)
+        then days_list = days_list || datediff(day, s_date_prv, s_date_new);
+        else days_list = days_list || -datediff(day, s_date_prv, s_date_new);
+
+        if (is_grace = 0) then
+          period_real = period_real + 1;
+      end
+      s_date_prv = s_date_new;
+    end
+
+    if (period_real is null) then
+      period_real = 0;
+    if (orig_annu_amount is null) then
+      orig_annu_amount = 0;
+
+    -- расчет новой суммы аннуитета
+    if (period_real &gt; 1) then
+    begin
+      select pr_week_or_month, pr_wm_kolich
+      from kontract, product
+      where k_id = :k_id and
+            k_from_pr_id = pr_id
+      into pr_week_or_month, pr_wm_kolich;
+
+      if (pr_week_or_month = 2 and
+          pr_wm_kolich = 1) then
+      begin
+        if (cm_database_id not in (39801, 41701)) then
+        begin
+          if (pr_is_360 = 0) then
+            perc_per_month = round(kd_percent_per_day * 365.0 / 12.0 / 100.0, 9);
+          else
+            perc_per_month = round(kd_percent_per_day * 30.0 / 100.0, 9);
+        end
+        else
+        begin
+          if (pr_is_360 = 0 and
+              k_disb_date &gt;= &#x27;17.10.2016&#x27;) then
+            perc_per_month = round(kd_percent_per_day * 365.0 / 12.0 / 100.0, 9);
+          else
+            perc_per_month = round(kd_percent_per_day * 30.0 / 100.0, 9);
+        end
+      end
+      else
+      begin
+        if (pr_week_or_month = 0) then
+          delta_days = 1.0;
+        if (pr_week_or_month = 1) then
+          delta_days = 7.0;
+        if (pr_week_or_month = 2) then
+          delta_days = 30.0;
+        delta_days = delta_days * pr_wm_kolich;
+        perc_per_month = round(kd_percent_per_day * delta_days / 100.0, 9);
+      end
+
+      if (vac_date_begin is null) then
+        new_annu_amount = f_annu(balans - delinq_os, saldo_perc, 1, kd_percent_per_day, days_list, pr_round_perc, pr_round_perc, 0, 0, 0);
+      else
+        new_annu_amount = f_annu(balans - delinq_os, 0, 1, kd_percent_per_day, days_list, pr_round_perc, pr_round_perc, 0, 0, 0);
+
+      if ((annu_up = 0 and auto_repay_zero_amount = 0) and
+         ((sh_prior_percent_per_day &lt;&gt; kd_percent_per_day) or
+         (orig_annu_amount &gt; 0 and orig_annu_amount &lt; new_annu_amount))) then
+      begin
+        if (dd &lt;&gt; k_disb_date) then
+        begin
+          new_annu_amount = 0;
+          need_new_annu = 0;
+          has_advanced_pay = 0; -- не досрочно-частиный платеж
+        end else
+        begin
+          if (kd_percent_per_day &gt; sh_prior_percent_per_day) then
+          begin
+            calced_perc_for_repay_date = round((balans - delinq_os) / 100.0000 * (kd_percent_per_day - sh_prior_percent_per_day), 0);
+            kd_percent_per_day = sh_prior_percent_per_day;
+            new_annu_amount = f_annu(balans - delinq_os, calced_perc_for_repay_date, 1, kd_percent_per_day, days_list, pr_round_perc, pr_round_perc, 0, 0, 0);
+          end
+        end
+      end
+    end
+    else
+    begin
+      need_new_annu = 0;
+      -- 29.03.2022 А.�©егольский закомментировал т.к. график меняется, считаем частично-досрочным
+      -- Согласовано с Санжаром
+      -- has_advanced_pay = 0; -- не досрочно-частиный платеж
+    end
+  end
+
+  -- Для кредитных каникул не пересчитываем аннуитет
+  if (need_new_annu = 1 and vac_date_begin is not null) then
+    new_annu_amount = orig_annu_amount;
+
+  if (calced_perc_for_repay_date = 0 and dd = k_disb_date) then
+  begin
+    select sh_prior_percent_per_day
+    from temp_vrepay
+    where s_id &gt;= 0 and
+          s_date is not null and
+          is_extra = 0
+    rows 1
+    into sh_prior_percent_per_day;
+
+    if (kd_percent_per_day &gt; sh_prior_percent_per_day) then
+      calced_perc_for_repay_date = round((balans - delinq_os) / 100.0000 * (kd_percent_per_day - sh_prior_percent_per_day), 0);
+  end
+
+  s_percent = calced_perc_for_repay_date;
+  calced_perc_for_repay_date = 0;
+  dd_min = dd;
+  is_zero_balance = 0;
+
+  if (balans = 0) then
+    is_zero_balance = 1;
+
+  balans = balans - vac_last_os;
+
+  -- Перестроение графика в основном графике (без кредитных каникул
+  for select s_rec_no, s_id, s_date, zad_os, pay_os, zad_perc, pay_perc, is_grace, repay_mode, k_stop_perc, calcing_perc,
+             dd_change_days, dd_change_begin, dd_change_end, s_all, sh_prior_percent_per_day
+      from temp_vrepay
+      where s_id &gt;= 0 and
+            s_date is not null and
+            is_extra = 0 and
+            is_vac_perc = 0
+      into s_rec_no, s_id, s_date, zad_os, pay_os, zad_perc, pay_perc, is_grace, repay_mode, k_stop_perc, calcing_perc,
+           dd_change_days, dd_change_begin, dd_change_end, s_all, sh_prior_percent_per_day
+  do
+  begin
+    if (vac_date_end is not null and dd_min &lt; vac_date_end) then
+      dd_min = vac_date_end;
+
+    sh_new_os = 0;
+    sh_new_perc = 0;
+
+    plan_perc = zad_perc;
+
+    if (repay_mode = 1) then -- если просроченный платеж, берем минимальную из % по графику и накопленный
+      plan_perc = minvalue(zad_perc, calcing_perc);
+
+    if (abs(s_percent - plan_perc) &lt;= 1) then
+      s_percent = plan_perc;
+
+    if (repay_mode = 1) then -- если просроченный платеж
+    begin
+      if (zad_perc &lt; s_percent) then -- если накопленных %% больше чем %% по графику в этом платеже
+      begin
+        sh_new_perc = zad_perc - pay_perc;
+        s_percent = s_percent - zad_perc;
+      end
+      else
+      begin
+        sh_new_perc = s_percent - pay_perc;
+        s_percent = 0;
+      end
+    end
+
+    if (s_date &gt;= dd_min) then
+    begin
+      -- Если был сдвиг даты из-за праздников, не забываем про это.
+      if (1&lt;&gt; 1 and dd_change_days &lt;&gt; 0) then -- отключен, Sanjari 25.04.2020
+      begin
+        if (dd_min &gt;= dd_change_begin and
+            dd_min &lt;= dd_change_end) then
+        begin
+          if (s_date &gt; dd_change_end) then
+            dd_min = dd_change_begin;
+          else
+          if (s_date &gt; dd_change_begin) then
+          begin
+            dd_min = dd_change_end;
+            -- Если на остаток или аннуитет, берем баланс
+            if (pr_percent_method &gt;= 1) then
+            begin
+              if (s_date &gt; dd_change_begin) then
+              begin
+                select res_days
+                from fhp_agein360(:dd_change_begin, minvalue(:s_date, coalesce(:k_stop_perc, :s_date)), :pr_is_360)
+                into :kol_day;
+                if (kol_day &lt; 0) then
+                  kol_day = 0;
+                tmp_amount = round((zad_os * sh_prior_percent_per_day / 100) * cast(kol_day as double precision), 2);
+                s_percent = s_percent + tmp_amount;
+              end
+            end
+          end
+        end
+      end
+      if (pr_percent_method &gt;= 1) then
+        tmp_amount = balans;
+      else
+        tmp_amount = disb_amount;
+
+      if (s_date &gt; dd_min) then
+      begin
+        select res_days
+        from fhp_agein360(:dd_min,  minvalue(:s_date, coalesce(:k_stop_perc, :s_date)), :pr_is_360)
+        into :kol_day;
+
+        if (kol_day &lt; 0) then
+          kol_day = 0;
+        s_percent = s_percent + round((tmp_amount * sh_prior_percent_per_day / 100) * cast(kol_day as double precision), 2);
+      end
+
+      s_percent = round(s_percent, pr_round_perc);
+      if ((annu_up = 0 or ((annu_up = 1 or auto_repay_zero_amount = 1) and s_date = dd)) and (zad_perc &lt; s_percent and (repay_mode &lt;= 1 or (repay_mode = 2 and auto_repay_zero_amount = 0)))) then
+      begin
+        sh_new_perc = zad_perc - pay_perc;
+        s_percent = s_percent - zad_perc;
+      end else
+      begin
+        sh_new_perc = s_percent - pay_perc;
+        s_percent = 0;
+      end
+
+      if (sh_new_perc &lt; 0) then
+      begin
+        s_percent = s_percent + sh_new_perc;
+        plan_perc = plan_perc - sh_new_perc;
+        sh_new_perc = 0;
+      end
+      dd_min = s_date;
+    end -- end of (s_date&gt;=dd_min)
+
+    if (pr_percent_method = 2) then -- Сумма аннуитета: остаток к оплате по платежу
+    begin
+      if (is_reschedule = 0) then
+      begin
+        if (has_advanced_pay &lt;&gt; 2) then -- если не нужно собирать в один платеж
+        begin
+          annu = zad_os + plan_perc - (pay_os + pay_perc);
+
+          -- пересчет сумму аннуитета для РФ с 1 ноября
+          if (need_new_annu = 1 and
+             (repay_mode = 3 or (repay_mode = 2 and (annu_up = 1 or auto_repay_zero_amount = 1)))) then
+            annu = new_annu_amount;
+          else
+          begin
+            -- Если основная сумма выплачено ровно, то закрывали платеж. Теперь это не так: ждем полного погашения платежа
+            if (dd &lt; s_date) then -- если платит раньше срока
+            begin
+              if ((zad_os + zad_perc - pay_os - pay_perc &lt;= 1) -- если выплаче сумма по графику
+                  and
+                  (is_grace = 0) and
+                  (repay_mode &gt; 1)) then
+                annu = 0;
+            end
+            else
+            begin
+              -- старыый вариант, Sanjari, 12.02.2020
+--              if ((zad_os +zad_perc) and
+--                  (repay_mode &gt; 1)) then
+--                annu = 0;
+
+              if ((zad_os + zad_perc - pay_os - pay_perc &lt;= 1) and
+                  (repay_mode &gt; 1)) then
+                annu = 0;
+            end
+          end
+
+          if (annu &lt;= 0) then -- если общая сумма выплачена, процент перекинуть на сле.платеж
+          begin
+            s_percent = s_percent + sh_new_perc;
+            sh_new_perc = 0;
+            sh_new_os = 0;
+          end
+          else
+          begin
+            if (annu &lt; sh_new_perc) then -- если процент больше чем платеж, лишнюю часть перекинуть на след.плажет
+            begin
+              s_percent = s_percent + (sh_new_perc - annu);
+              sh_new_perc = annu;
+            end
+          end
+        end
+        else
+        begin
+          -- После досрочно-частиного погашения осталось меньше необхдимого баланса,
+          -- поэтому сворачиваем все в ближайший платеж
+          if (last_is_calced = 0 and
+             (repay_mode = 3 or (repay_mode = 2 and (annu_up = 1 or auto_repay_zero_amount = 1)))) then
+          begin
+            select res_days
+            from fhp_agein360(:dd, :s_date, :pr_is_360)
+            into :kol_day;
+            if (kol_day &lt; 0) then
+              kol_day = 0;
+            s_percent = s_percent + round((balans * sh_prior_percent_per_day / 100) * cast(kol_day as double precision), pr_round_perc);
+
+            sh_new_os = balans;
+            sh_new_perc = s_percent;
+            s_percent = 0;
+            annu = sh_new_os + sh_new_perc;
+            last_is_calced = 1;
+          end
+          else
+          begin
+            sh_new_os = 0;
+            sh_new_perc = 0;
+            annu = 0;
+          end
+        end
+      end
+      else
+      begin
+        annu = s_all;
+
+        if (cm_database_id in (39801, 41701) and  k_stop_perc &lt;= s_date) then
+          annu = zad_os - pay_os + sh_new_perc;
+
+        -- пересчет сумму аннуитета для РФ с 1 ноября
+        if (need_new_annu = 1 and
+            (repay_mode = 3 or (repay_mode = 2 and (annu_up = 1 or auto_repay_zero_amount = 1)))) then
+        begin
+          if (not((annu_up = 1 or auto_repay_zero_amount = 1) and s_date = dd)) then
+            annu = new_annu_amount;
+        end
+      end
+
+      if (annu &lt; sh_new_perc) then -- если процент больше чем платеж, лишнюю часть перекинуть на след.плажет
+      begin
+        s_percent = s_percent + (sh_new_perc - annu);
+        sh_new_perc = annu;
+      end
+
+--      if (is_grace = 0) then       -- Старый вариани, письмо от Ироды 25.12.2025 JIRA RFCRU-4776
+      if (annu &gt; sh_new_perc) then   -- Новый вариани, если аннуитет позволяет, добавить ОС при нехватке %%
+        sh_new_os = annu - sh_new_perc;
+      else
+        sh_new_os = 0;
+
+      -- RFCAZ-512
+      if (:cm_database_id &lt;&gt; 94401 and is_grace = 1) then  -- чтобы не исчезали льготные периоды, письмо от 13.01.2026
+        sh_new_os = 0;
+    end
+    else
+    begin -- на первоначальную сумму или на остаток
+      annu = zad_os - pay_os;
+      if (is_reschedule = 0 and
+          annu &lt;= 0) then
+      begin
+        s_percent = s_percent + sh_new_perc;
+        sh_new_perc = 0;
+        sh_new_os = 0;
+      end
+      if (is_grace = 0) then
+        sh_new_os = annu;
+      else
+        sh_new_os = 0;
+    end
+    if (sh_new_os &lt; 0) then
+      sh_new_os = 0;
+    if (balans &lt; sh_new_os) then
+      sh_new_os = balans;
+
+    if (((k_stop_perc is not null) and
+        k_stop_perc &lt;= s_date) or
+        (s_date &lt; dd and
+        zad_perc &gt; calcing_perc)) then
+    begin
+      sh_new_perc = calcing_perc - pay_perc;
+      if (sh_new_perc &lt; 0) then
+        sh_new_perc = 0;
+    end
+    update temp_vrepay
+    set sh_new_os = :sh_new_os,
+        sh_new_perc = :sh_new_perc
+    where s_rec_no = :s_rec_no;
+
+    if (balans &gt; 0 and is_zero_balance = 0) then
+    begin
+      last_rec_id = null;
+      last_sh_id = null;
+    end
+
+    balans = balans - sh_new_os;
+
+    if (last_rec_id is null and (balans = 0 and is_zero_balance = 0)) then
+    begin
+      last_rec_id = s_rec_no;
+      last_sh_id = s_id;
+    end
+  end -- end of for select
+
+  if (balans &lt;&gt; 0) then
+  begin
+    sh_new_os = sh_new_os + balans;
+    update temp_vrepay
+    set sh_new_os = :sh_new_os
+    where s_rec_no = :s_rec_no;
+
+    last_rec_id = s_rec_no;
+    last_sh_id = s_id;
+    balans = 0;
+  end
+
+  if (s_percent &gt; 0) then
+  begin
+    sh_new_perc = sh_new_perc + s_percent;
+    update temp_vrepay
+    set sh_new_perc = :sh_new_perc
+    where s_rec_no = :s_rec_no;
+
+    if (((k_stop_perc is not null) and
+        k_stop_perc &lt;= s_date) or
+        (s_date &lt; dd and
+        zad_perc &gt; calcing_perc)) then
+    begin
+      sh_new_perc = calcing_perc - pay_perc;
+    end
+    if (sh_new_perc &lt; 0) then
+      sh_new_perc = 0;
+
+    update temp_vrepay
+    set sh_new_perc = :sh_new_perc
+    where s_rec_no = :s_rec_no;
+    s_percent = 0;
+  end
+
+  -- Перестроение графика в процентной части кредитных каникул
+  if (vac_date_begin &lt;= dd and vac_max_part_limit &gt; 0) then
+  begin
+    if (last_rec_id is null or last_sh_id is null) then
+    begin
+      select s_rec_no, s_id
+      from temp_vrepay
+      where s_date &gt; :vac_date_end and
+            s_id &gt; 0
+      order by s_date
+      rows 1
+      into last_rec_id, last_sh_id;
+    end
+
+    update temp_params
+    set vac_updated_sh_id = :last_sh_id;
+
+    pay_perc = 0;
+    select sum(pay_perc)
+    from temp_vrepay
+    where s_id &gt;= 0 and
+          s_date is not null and
+          is_extra = 0 and
+          is_vac_perc = 1
+    rows 1
+    into pay_perc;
+
+    if (pay_perc is null) then
+      pay_perc = 0;
+
+    calced_perc_for_vac = calced_perc_for_vac - pay_perc;
+
+    select zad_perc
+    from temp_vrepay
+    where s_id &gt;= 0 and
+          s_date is not null and
+          is_extra = 0 and
+          zad_perc &gt; 0 and
+          is_vac_perc = 1
+    rows 1
+    into new_annu;
+
+    update temp_vrepay
+    set is_vac_perc = 2
+    where s_id &gt; 0 and
+          s_rec_no &gt; :last_rec_id and
+          s_date is not null and
+          is_extra = 0 and
+          is_vac_perc = 0;
+
+    s_percent = calced_perc_for_vac;
+    if (dd &lt; vac_date_end) then
+    begin
+      select sum(zad_os - pay_os)
+      from temp_vrepay
+      where s_id &gt;= 0 and
+            s_date &gt; :dd and
+            is_extra = 0
+      into balans;
+    
+      if (balans is null) then
+        balans = 0;
+
+      if (balans &gt; 0) then
+      begin
+        select res_days
+        from fhp_agein360(:dd,  minvalue(:vac_date_end, coalesce(:k_stop_perc, :vac_date_end)), :pr_is_360)
+        into :kol_day;
+
+        if (kol_day &lt; 0) then
+          kol_day = 0;
+        s_percent = s_percent + round((balans * vac_percent_per_day / 100) * cast(kol_day as double precision), pr_round_perc);
+      end
+    end
+
+    update temp_vrepay
+    set sh_new_os = 0,
+        sh_new_perc = 0,
+        s_all = zad_os + zad_perc
+    where s_date is not null and
+          is_extra = 0 and
+          is_vac_perc &gt;= 1;
+
+    if (s_percent &gt; 0) then
+    begin
+      for select s_rec_no, s_date, zad_os, pay_os, zad_perc, pay_perc, is_grace, repay_mode, k_stop_perc, calcing_perc,
+                 dd_change_days, dd_change_begin, dd_change_end, s_all, sh_prior_percent_per_day
+          from temp_vrepay
+          where s_id &gt;= 0 and
+                s_date is not null and
+                is_extra = 0 and
+                is_vac_perc &gt;= 1
+          into s_rec_no, s_date, zad_os, pay_os, zad_perc, pay_perc, is_grace, repay_mode, k_stop_perc, calcing_perc,
+               dd_change_days, dd_change_begin, dd_change_end, s_all, sh_prior_percent_per_day
+      do
+      begin
+        sh_new_os = 0;
+        sh_new_perc = 0;
+    
+        if (dd &lt;= vac_date_end) then
+          annu = new_annu - pay_perc;
+        else
+          annu = zad_perc - pay_perc;
+
+        if (abs(s_percent - annu) &lt;= 1) then
+          s_percent = annu;
+    
+        /*
+        if (need_new_annu = 1 and
+           (repay_mode = 3 or (repay_mode = 2 and (annu_up = 1 or auto_repay_zero_amount = 1)))) then
+          annu = new_annu_amount;
+        */
+
+--        exception e_message &#x27;annu: &#x27; || annu || &#x27;, s_percent: &#x27; || s_percent;
+
+        if (annu &lt; s_percent) then -- если накопленных %% больше чем %% по графику в этом платеже
+        begin
+          sh_new_perc = annu;
+          s_percent = s_percent - annu;
+        end
+        else
+        begin
+          sh_new_perc = s_percent;
+          s_percent = 0;
+        end
+
+        if (s_percent = 0) then
+          sh_new_os = vac_last_os;
+
+        update temp_vrepay
+        set sh_new_os = :sh_new_os,
+            sh_new_perc = :sh_new_perc
+        where s_rec_no = :s_rec_no;
+
+        if (s_percent = 0) then
+          break;
+      end -- end of for select Vacation
+
+      if (s_percent &gt; 0) then
+      begin
+        sh_new_os = vac_last_os;
+        update temp_vrepay
+        set sh_new_os = :sh_new_os,
+            sh_new_perc = sh_new_perc + :s_percent
+        where s_rec_no = :s_rec_no;
+
+        s_percent = 0;
+      end
+    end
+  end -- end vacation
+
+  -- aschegolskiy, RFCRU-999
+  -- С 10.04.2024 будет работать новая реализация алгоритма
+  if (need_psk = 0 and dd &gt; &#x27;09.04.2024&#x27;) then
+  begin
+    if (exists(select *
+               from temp_vrepay
+               where (graph_diff_os &lt;&gt; 0 or graph_diff_perc &lt;&gt; 0) and
+                     s_date &gt;= :dd)) then
+    need_psk = 1;
+  end
+
+  execute procedure hp_repay_close_small_amounts(:small_amount, :s_rec_no);
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DO_DISBURSEMENT_CARD — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DO_DISBURSEMENT_CARD: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DO_DISBURSEMENT_CARD</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">7</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">7 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="elcard_do_disbursement.html"><div class="to">ELCARD_DO_DISBURSEMENT</div></a><a class="ref-card" href="hp_bankacc_get_info.html"><div class="to">HP_BANKACC_GET_INFO</div></a><a class="ref-card" href="hp_client_bank_card.html"><div class="to">HP_CLIENT_BANK_CARD</div></a><a class="ref-card" href="hp_do_disbursement.html"><div class="to">HP_DO_DISBURSEMENT</div></a><a class="ref-card" href="hp_do_disbursement_card_mb.html"><div class="to">HP_DO_DISBURSEMENT_CARD_MB</div></a><a class="ref-card" href="hp_fps_get_loan_bank.html"><div class="to">HP_FPS_GET_LOAN_BANK</div></a><a class="ref-card" href="moneta_do_disbursement.html"><div class="to">MONETA_DO_DISBURSEMENT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_cmd.html"><div class="to">FM_REPORT_CMD</div></a><a class="ref-card" href="hp_do_disbursement_fps.html"><div class="to">HP_DO_DISBURSEMENT_FPS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ERROR_TEXT</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DO_DISBURSEMENT_CARD(
+    REP_K_ID D_ID,
+    UN_ID D_ID)
+RETURNS (
+    ERROR_TEXT D_STR_8100)
+AS
+declare variable db_id d_integer;
+declare variable disb_kind d_integer;
+declare variable manager_id d_id;
+declare variable cashier_id d_id;
+declare variable disb_account d_str_20;
+declare variable res_ol_ids d_str_100;
+declare variable c_id d_id;
+declare variable card_id d_str_100;
+declare variable c_name_fio d_str_100;
+declare variable kolich_client_approved d_smallint;
+declare variable is_online d_smallint;
+declare variable amount_approved curr_type;
+declare variable go_reg_id d_integer;
+declare variable fpb_code d_str_code;
+declare variable cell_no d_str_code;
+declare variable disb_date d_date;
+declare variable is_oivo d_bool;
+declare variable is_business boolean;
+declare variable bank_bik d_str_10;
+declare variable client_account d_str_20;
+declare variable client_inn d_str_20;
+declare variable al_account varchar(32);
+begin
+  -- Процедура отвечает за выдачу на карту/СБП/расчетный счет
+  error_text = &#x27;&#x27;;
+
+  if (un_id is null) then
+  begin
+    error_text = &#x27;UN_ID не передан&#x27;;
+    suspend;
+    exit;
+  end
+
+  db_id = f_get_db_id();
+  go_reg_id = f_hq_id(db_id);
+
+  is_oivo = 0;
+  select k_disb_kind,
+         k_approved_manager,
+         k_kolich_client_approved,
+         coalesce(k_is_online, 0),
+         k_amount_approved,
+         k_disb_date,
+         iif(pr_code containing &#x27;.oivo_pack.&#x27;, 1, 0),
+         pr_code containing &#x27;.business.&#x27;
+  from kontract, product
+  where k_id = :rep_k_id
+    and k_from_pr_id = pr_id
+  into disb_kind,
+       manager_id,
+       kolich_client_approved,
+       is_online,
+       amount_approved,
+       disb_date,
+       is_oivo,
+       is_business;
+  manager_id = coalesce(manager_id, 0);
+
+  if (disb_date &lt;&gt; current_date and rep_k_id &lt;&gt; coalesce(rdb$get_context(&#x27;USER_TRANSACTION&#x27;, &#x27;MOVE_DISB_K_ID&#x27;), 0)) then
+  begin
+    error_text = &#x27;Дата выдачи в договоре отличается от текущей даты. Выдача запрещена.&#x27;;
+    suspend;
+    exit;
+  end
+
+  if (db_id in (39801, 41701) and disb_kind = 6) then
+  begin
+    -- карта МБулак
+    error_text = (select err_text from hp_do_disbursement_card_mb(:rep_k_id, :un_id));
+    suspend;
+    exit;
+  end
+
+  -- Получаем казначея -- &gt;
+  cashier_id = 0;
+  select kc_from_c_id
+  from knclient
+  where kc_from_k_id = :rep_k_id and
+        kc_status = 2 and
+        kc_amount_approved &gt; 0 rows 1
+  into cashier_id;
+  if (cashier_id is null) then
+    cashier_id = 0;
+  if (cashier_id = 0) then
+  begin
+    select kc_from_c_id
+    from knclient
+    where kc_from_k_id = :rep_k_id and
+          kc_amount_approved &gt; 0 rows 1
+    into cashier_id;
+  end
+
+  cashier_id = coalesce(cashier_id, 0);
+  ------------------------- &lt;
+
+  if (db_id = 81001) then
+  begin
+    if (kolich_client_approved &gt; 1) then
+        error_text = error_text || &#x27;В договоре более одного участника; &#x27;;
+
+    if (is_online = 0) then
+        error_text = error_text || &#x27;Тип выдачи займа - оффлайн; &#x27;;
+
+    -- RFCRU-5556
+    if (is_business) then
+    begin
+      if (extract(weekday from current_date) in (0,6) or
+        (cast(current_time as time) &gt;= time&#x27;16:55&#x27; or cast(current_time as time) &lt; time&#x27;03:00&#x27;)) then
+      begin
+        error_text = &#x27;Перевод на карту по продукту &quot;Бизнес&quot; запрещен в выходные дни и в период c 16:55 по 03:00 в будни.&#x27;;
+        suspend;
+        exit;
+      end
+    end
+  end
+
+  if ((db_id in (39801, 41701) and disb_kind not in (5, 6)) or (db_id = 81001 and disb_kind not in (5, 7, 8))) then
+  begin
+    error_text = error_text || &#x27;Способ выдачи займа - не выдача на карту/СБП/расчетный счет; &#x27;;
+  end
+
+
+  for select kc_from_c_id
+  from knclient
+  where kc_from_k_id = :rep_k_id
+  and kc_amount_approved &gt; 0
+  into c_id
+  do
+  begin
+    if (db_id = 81001 and disb_kind = 7) then
+    begin
+      -- Проверяем, что банк и номер телефона для выдачи указаны
+      select fpb_code, cell_no
+      from hp_fps_get_loan_bank(:rep_k_id, :c_id)
+      into fpb_code, cell_no;
+
+      if (fpb_code is null or cell_no is null ) then
+        error_text = error_text || &#x27;У клиента [&#x27; || c_name_fio || &#x27;] не указан банк/телефон для перевода по СБП; &#x27;;
+    end
+    else if (db_id = 81001 and disb_kind = 8) then
+    begin
+      -- Проверяем, что банк и расчетный счет указан
+      select bank_bik, client_account, client_inn
+      from hp_bankacc_get_info(:rep_k_id, :c_id)
+      into bank_bik, client_account, client_inn;
+
+      if (coalesce(bank_bik, &#x27;&#x27;) = &#x27;&#x27; or
+          coalesce(client_account, &#x27;&#x27;) = &#x27;&#x27; or
+          coalesce(client_inn, &#x27;&#x27;) = &#x27;&#x27;) then
+        error_text = error_text || &#x27;У клиента [&#x27; || c_name_fio || &#x27;] не указан банк или расчетный счет или ИНН для выдачи на банковский счет; &#x27;;
+    end
+    else
+    begin
+      -- получаю последнюю активную карту клиента
+      select token
+      from hp_client_bank_card(:c_id)
+      into card_id;
+    
+      if (card_id is null) then
+      begin
+        select c_name_fio
+        from clients
+        where c_id = :c_id
+        into c_name_fio;
+    
+        error_text = error_text || &#x27;У клиента [&#x27;||c_name_fio||&#x27;] не закреплена карта; &#x27;;
+      end
+    end
+  end
+
+  if (error_text &lt;&gt; &#x27;&#x27;) then
+  begin
+    suspend;
+    exit;
+  end
+
+  if (db_id = 41701) then -- Элькарт
+  begin
+      select al_id
+      from acc_list
+      where al_from_reg_id = :go_reg_id and
+            al_account = &#x27;10004/2&#x27;
+      into disb_account;
+
+      select res_ol_ids, res_text
+      from hp_do_disbursement(:un_id, :rep_k_id, :go_reg_id, :disb_kind, :disb_account, :go_reg_id, :disb_kind, :disb_account, :cashier_id, :manager_id)
+      into :res_ol_ids, error_text;
+    
+      res_ol_ids = coalesce(res_ol_ids, &#x27;&#x27;);
+    
+      if (res_ol_ids &lt;&gt; &#x27;&#x27;) then
+        execute procedure elcard_do_disbursement(:rep_k_id);
+  end
+  if (db_id = 81001) then -- Монета
+  begin
+      -- 51-01/18 Монета
+      -- 51-01/24 Oivo
+      -- 51-01/25 Wirebank(ТКБ)
+      -- 51-01/26 Oivo Wirebank(ТКБ)
+      
+      -- выдачи по ТКБ только через СБП 
+      if (f_get_const(&#x27;edoc_pmt_project_disb&#x27;) = &#x27;wirebank&#x27; and disb_kind = 7) then 
+      begin
+        al_account = &#x27;51-01/25&#x27;;
+
+        if (is_oivo = 1) then
+          al_account = &#x27;51-01/26&#x27;;
+      end
+      else
+      begin
+        al_account = &#x27;51-01/18&#x27;;
+
+        if (is_oivo = 1) then
+          al_account = &#x27;51-01/24&#x27;;
+      end
+
+      select al_id
+      from acc_list
+      where al_from_reg_id = :go_reg_id and
+            al_account = :al_account
+      into disb_account;
+
+      select res_ol_ids, res_text
+      from hp_do_disbursement(:un_id, :rep_k_id, :go_reg_id, :disb_kind, :disb_account, :go_reg_id, :disb_kind, :disb_account, :cashier_id, :manager_id)
+      into :res_ol_ids, error_text;
+    
+      res_ol_ids = coalesce(res_ol_ids, &#x27;&#x27;);
+    
+      if (res_ol_ids &lt;&gt; &#x27;&#x27;) then
+        execute procedure moneta_do_disbursement(:rep_k_id, :c_id, :amount_approved);
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

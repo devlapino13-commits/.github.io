@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_MESSAGE_REFUND — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_MESSAGE_REFUND: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_MESSAGE_REFUND</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_edoc_ins.html"><div class="to">HP_EDOC_INS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_MESSAGE_REFUND
+AS
+declare variable NUM_PROCESSING D_INTEGER;
+declare variable NUM_ADDED D_INTEGER;
+declare variable RES_TEXT D_STR_255;
+declare variable FR_ID D_ID;
+declare variable EDL_ID D_ID;
+begin
+  if (f_get_db_id() not in (39801, 41701)) then
+    exit;
+
+  num_processing = (select count(*)
+                    from edoc_blank, edoc_list
+                    where edb_from_edl_id = edl_id and
+                          edb_status = 0 and
+                          edl_status &lt;&gt; -1);
+  num_added = 0;
+  if (num_processing &lt; 50) then
+  begin
+    for select first 250 fr.fr_id
+        from finerefund fr
+        where fr.fr_is_send = 0 and
+              fr.fr_status = 1
+        into fr_id
+    do
+    begin
+      execute procedure hp_edoc_ins(&#x27;info_about_finerefund&#x27;, f_objkind(&#x27;finerefund&#x27;, &#x27;id&#x27;), :fr_id, 1000000000000)
+          returning_values :edl_id, :res_text;
+
+      update finerefund fr
+      set fr.fr_is_send = 1
+      where fr.fr_id = :fr_id;
+
+      num_added = num_added + 1;
+    end
+    if (num_added = 0) then
+      update fsrobot_sh_main
+      set fsm_is_active = 0
+      where fsm_id = 71;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

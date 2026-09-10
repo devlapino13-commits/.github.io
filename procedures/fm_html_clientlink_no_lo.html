@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_HTML_CLIENTLINK_NO_LO — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_HTML_CLIENTLINK_NO_LO: 3 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_HTML_CLIENTLINK_NO_LO</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_html_main.html"><div class="to">FM_REPORT_HTML_MAIN</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OBJ_KIND</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_HTML_CLIENTLINK_NO_LO(
+    OBJ_KIND VARCHAR(100),
+    OBJ_ID DECIMAL(18,0),
+    UN_ID DECIMAL(18,0))
+RETURNS (
+    RES_TEXT BLOB SUB_TYPE TEXT SEGMENT SIZE 80)
+AS
+declare variable cl_fio str_100;
+declare variable lo_id d_id;
+declare variable reg_id d_integer;
+declare variable office_address d_str_255;
+declare variable def_text d_str_code;
+declare variable emw_language d_str_100;
+begin
+  res_text = (select res_style from fm_html_styles) || &#x27;&lt;body&gt;&#x27;;
+
+  select un_from_c_id
+  from username
+  where un_id = :un_id
+  into :lo_id;
+
+  select ps_from_reg_id
+  from hr_pstatus
+  where ps_from_c_id = :lo_id and
+        ps_date_begin &lt;= current_date and
+        ps_date_end &gt;= current_date and
+        ps_is_working = 1 and
+        ps_status = 1
+  into :reg_id;
+
+  office_address = &#x27;&#x27;;
+  if (reg_id is not null) then
+  begin
+    select adl_address_str
+    from region, addrlist
+    where reg_unicode = :reg_id and
+          reg_address_fact = adl_id
+    into office_address;
+  end
+
+  for select clk_id, clk_from_c_id, clk_link_name, clk_link_cell_no, clk_comment, clk_status, clk_add_datetime,
+             clk_from_un_id
+      from clientlink
+      where clk_id = :obj_id as cursor clk
+  do
+  begin
+    res_text = blob_append(res_text, &#x27;Имя: &lt;b&gt;&#x27; || clk.clk_link_name || &#x27;&lt;/b&gt;&#x27;);
+    select Emw_Language
+    from extminiweb where emw_phone = clk.clk_link_cell_no
+    into Emw_Language;
+    Emw_Language = coalesce(Emw_Language,&#x27;&#x27;);
+    res_text = blob_append(res_text, &#x27;&lt;br&gt;Язык общения: &lt;b&gt;&#x27; || Emw_Language || &#x27;&lt;/b&gt;&#x27;);
+
+    def_text = case clk.clk_status
+                 when -2 then &#x27;Отказ&#x27;
+                 when -1 then &#x27;Перезвонить&#x27;
+                 when 0 then &#x27;Новый контакт&#x27;
+                 when 1 then &#x27;Заинтересован&#x27;
+                 when 2 then &#x27;Получил займ&#x27;
+               end;
+
+    res_text = blob_append(res_text, &#x27;&lt;br&gt;Текущий статус: &lt;b&gt;&#x27; || def_text || &#x27;&lt;/b&gt;&#x27;);
+    if (clk.clk_status in (-2, -1, 0, 1)) then
+    begin
+      res_text = blob_append(res_text, &#x27; &#x27; || f_uri_sql(&#x27;Изменить&#x27;,
+        &#x27;set_clientlink_status&#x27;, &#x27;clientlink&#x27;, :obj_id, &#x27;combo&#x27;,
+        &#x27;Укажите новый статус&#x27;, &#x27;&#x27;, 0, 0, clk.clk_status, &#x27;&#x27;, &#x27;dialog&#x27;, &#x27;&#x27;) || &#x27;&lt;br&gt;&#x27;);
+    end
+
+    res_text = blob_append(res_text, &#x27;&lt;br&gt;&#x27;);
+    res_text = blob_append(res_text, &#x27;&lt;br&gt;Комментарий:&lt;br&gt;&lt;b&gt;&#x27; || coalesce(clk.clk_comment, &#x27;Отсутствует&#x27;) || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;);
+
+    if (coalesce(clk.clk_comment, &#x27;&#x27;) = &#x27;&#x27;) then
+      def_text = &#x27;Добавить&#x27;;
+    else
+      def_text = &#x27;Изменить&#x27;;
+    res_text = blob_append(res_text, f_uri_sql(:def_text, &#x27;set_clientlink_comment&#x27;,
+      &#x27;clientlink&#x27;, :obj_id, &#x27;text&#x27;, &#x27;Введите комментарий&#x27;, &#x27;&#x27;, 0, 255,
+      clk.clk_comment, &#x27;&#x27;, &#x27;dialog&#x27;, &#x27;&#x27;) || &#x27;&lt;br&gt;&#x27;);
+
+    if (office_address &lt;&gt; &#x27;&#x27;) then
+      res_text = blob_append(res_text, &#x27;&lt;br&gt;&lt;br&gt;&#x27; || f_uri_sql(&#x27;Отправить адрес офиса по СМС&#x27;,
+        &#x27;send_clientlink_sms&#x27;, &#x27;clientlink&#x27;, obj_id, &#x27;none&#x27;,
+        &#x27;Подтвердите отправку sms на номер &#x27; || clk.clk_link_cell_no ||&#x27;, с текстом:&#x27;,
+        office_address, 0, 255, &#x27;&#x27;, &#x27;&#x27;, &#x27;dialog&#x27;, &#x27;&#x27;) || &#x27;&lt;br&gt;&#x27;);
+
+    res_text = blob_append(res_text, &#x27;&lt;br&gt;&lt;br&gt;&#x27;);
+    res_text = blob_append(res_text, &#x27;Номер предоставлен клиентом:&#x27;);
+
+    select c_name_fio
+    from clients
+    where c_id = clk.clk_from_c_id
+    into cl_fio;
+    res_text = blob_append(res_text, &#x27;&lt;br&gt;&lt;b&gt;&#x27; || f_uri_open(cl_fio, &#x27;client&#x27;, &#x27;Clients&#x27;, clk.clk_from_c_id, cl_fio, &#x27;&#x27;, un_id) || &#x27;&lt;/b&gt;&#x27;); -- добавленом гипер ссылка для килента
+    res_text = blob_append(res_text, &#x27;&lt;br&gt;&#x27; || f_datetimetostr(clk.clk_add_datetime));
+    res_text = blob_append(res_text, &#x27;&lt;br&gt;&lt;br&gt;&#x27; || f_uri_sql(&#x27;Забрать на обработку&#x27;,
+        &#x27;pick_up_clientlink&#x27;, &#x27;clientlink&#x27;, obj_id, &#x27;none&#x27;,
+        &#x27;Забрать клиента &lt;b&gt;&#x27; || clk.clk_link_name ||&#x27;&lt;/b&gt;, для дальнейшей работы с клиентом.&#x27;, &#x27;&#x27;, 0, 255, &#x27;&#x27;, &#x27;&#x27;, &#x27;dialog&#x27;, &#x27;&#x27;) || &#x27;&lt;br&gt;&#x27;);
+  end
+  res_text = blob_append(res_text, &#x27;&lt;/body&gt;&#x27;);
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

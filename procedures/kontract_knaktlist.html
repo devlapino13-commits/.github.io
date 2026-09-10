@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KONTRACT_KNAKTLIST — процедура — схема БД</title>
+<meta name="description" content="Процедура KONTRACT_KNAKTLIST: 2 входных, 7 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>KONTRACT_KNAKTLIST</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">7</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">KONT_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DD</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">7 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">KAL_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KAL_KF_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KAL_LO_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KAL_REG_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KAL_IS_ACTIVE</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KAL_AKT_NO</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KAL_MEMO</div><div class="ptype">VARCHAR(2048)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE KONTRACT_KNAKTLIST(
+    KONT_ID DECIMAL(18,0),
+    DD DATE)
+RETURNS (
+    KAL_DATE TYPE OF COLUMN KNAKTLIST.KAL_DATE,
+    KAL_KF_NAME TYPE OF COLUMN KNAKTLIST.KAL_NEW_KF_NAME,
+    KAL_LO_FIO VARCHAR(100),
+    KAL_REG_NAME VARCHAR(100),
+    KAL_IS_ACTIVE VARCHAR(100),
+    KAL_AKT_NO VARCHAR(20),
+    KAL_MEMO VARCHAR(2048))
+AS
+declare variable DB_ID D_INTEGER;
+declare variable KF_ID decimal(18,0);
+begin
+    db_id = f_get_db_id();
+
+    select k_from_kf_id
+    from kontract
+    where k_id = :kont_id
+    into :kf_id;
+
+
+    for select
+        kal_date,
+        kal_new_kf_name,
+        c_name_fio,
+        reg_code || &#x27; &#x27; || reg_name,
+        iif(knaktlist.is_delete = 1, &#x27;Аннулирована&#x27;, &#x27;&#x27;), -- Михайлечко Дмитрий 27.06.2024
+        iif(kal_from_ka_id &lt;&gt; 0 and :db_id in (39801, 41701), ka_akt_no, 0), -- RFCKG-2455
+        iif(kal_from_ka_id &lt;&gt; 0 and :db_id in (39801, 41701), ka_memo, &#x27;Создание кредитной папки&#x27;) -- RFCKG-2455
+    from knaktlist, knakt, clients, region
+    where kal_new_kf_officer = c_id
+        and kal_new_reg_id = reg_unicode
+        and kal_from_kf_id = :kf_id
+        and kal_from_ka_id = ka_id
+    order by kal_date, knaktlist.is_delete
+    into
+        :kal_date,
+        :kal_kf_name,
+        :kal_lo_fio,
+        :kal_reg_name,
+        :kal_is_active,
+        :kal_akt_no,
+        :kal_memo
+    do
+        suspend;
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

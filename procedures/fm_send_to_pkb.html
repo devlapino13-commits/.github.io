@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_SEND_TO_PKB — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_SEND_TO_PKB: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_SEND_TO_PKB</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_priority_rep_id.html"><div class="to">HP_GET_PRIORITY_REP_ID</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_cmd.html"><div class="to">FM_REPORT_CMD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_SEND_TO_PKB(
+    MA_ID D_ID,
+    UN_ID D_ID)
+RETURNS (
+    RES_TEXT D_BLOB_TEXT)
+AS
+declare variable C_FIO D_STR_100;
+declare variable C_INN D_STR_20;
+declare variable PASS_NO D_STR_20;
+declare variable EIC_ID D_ID;
+declare variable C_ID D_ID;
+declare variable EIC_HAS_API D_SMALLINT;
+declare variable EIC_INFO_ACTUAL_DAYS D_INTEGER;
+declare variable EIC_CODE D_STR_20;
+declare variable HAS_CREDIT_HISTORY D_SMALLINT;
+begin
+  res_text = &#x27;&#x27;;
+
+  select mac.mac_from_c_id
+  from miniappclient mac
+  where mac.mac_from_ma_id = :ma_id and
+        mac.mac_amount &gt; 0
+  into :c_id;
+
+  if (f_get_db_id() &lt;&gt; 39801) then
+  begin
+    suspend;
+    exit;
+  end
+
+  if (not exists(select 1
+                 from extinfolist eil
+                 where eil.eil_from_c_id = :c_id and
+                       eil.eil_object_kind = 11 and
+                       eil.eil_object_id = :ma_id and
+                       eil.eil_status = 2 and
+                       eil.eil_from_eic_id = 11))
+    then
+    begin
+      res_text = f_lang(&#x27;kz&#x27;, &#x27;ЗАПРОС НЕ ОТПРАВЛЕН! Доступные отчеты еще не получены по клиенту. Повторите попытку через 3 минуты&#x27;);
+      suspend;
+      exit;
+    end
+
+  select priority_id
+  from hp_get_priority_rep_id(f_objkind(&#x27;miniapp&#x27;, &#x27;id&#x27;), :ma_id)
+  into :has_credit_history;
+
+  if (has_credit_history = -1) then
+  begin
+    res_text = f_lang(&#x27;kz&#x27;, &#x27;У клиента отсутствует кредитная история. Проходите дальше по процессу&#x27;);
+    suspend;
+    exit;
+  end 
+
+  select eic_id,
+         eic_has_api,
+         eic_info_actual_days,
+         eic_code
+  from extinfocfg
+  where eic_code = &#x27;pkb_cib_report&#x27;
+  into :eic_id,
+       :eic_has_api,
+       :eic_info_actual_days,
+       :eic_code;
+
+  if (eic_id is null) then
+    exception e_default &#x27;ExtinfoCfg not found: &#x27; || coalesce(:eic_code, &#x27;&lt;NULL&gt;&#x27;);
+
+  select c_inn,
+         c_pass_no,
+         c_name_fio
+  from clients
+  where c_id = :c_id
+  into c_inn,
+       pass_no,
+       c_fio;
+
+  if (f_edoc_status(&#x27;pers_data_consent&#x27;, :ma_id,  current_date) &lt;&gt; &#x27;signed&#x27;) then
+  begin
+    res_text = f_lang(&#x27;kz&#x27;, &#x27;Согласие на обработку перс. данных не подписан&#x27;);
+    suspend;
+    exit;
+  end
+
+  if ((char_length(coalesce(c_inn, &#x27;&#x27;)) &lt;&gt; 12) or
+      (coalesce(pass_no, &#x27;&#x27;) = &#x27;&#x27;)) then
+  begin
+    res_text = f_lang(&#x27;kz&#x27;, &#x27;Проверьте паспортные данные у &#x27;) || :c_fio;
+    suspend;
+    exit;
+  end
+
+
+  insert into extinfolist (eil_from_c_id, eil_from_eic_id, eil_date, eil_object_kind, eil_object_id, eil_is_json, eil_from_eip_id, eil_from_un_id)
+  values (:c_id, :eic_id, current_date, f_objkind(&#x27;miniapp&#x27;, &#x27;id&#x27;), :ma_id, :eic_has_api, null, :un_id);
+
+  res_text = f_lang(&#x27;kz&#x27;, &#x27;Данные отправлены в ПКБ для проверки&#x27;);
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

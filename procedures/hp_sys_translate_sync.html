@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_SYS_TRANSLATE_SYNC — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_SYS_TRANSLATE_SYNC: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_SYS_TRANSLATE_SYNC</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_sys_translate_insert.html"><div class="to">HP_SYS_TRANSLATE_INSERT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_SYS_TRANSLATE_SYNC
+AS
+declare variable db_user d_str_code;
+declare variable db_pass d_str_code;
+declare variable orig_text d_str_255;
+declare variable translate_text d_str_255;
+declare variable trm_id d_id;
+declare variable current_db_id d_integer;
+declare variable source_db_id d_integer;
+declare variable db_connection d_str_255;
+declare variable lg_lang_code d_str_10;
+begin
+  -- процедура синхронизирует оригинал и переводы текстов между базами
+
+  current_db_id = f_get_db_id();
+
+  select mss_user_connect, mss_pass
+  from morsynsettings
+  rows 1
+  into db_user, db_pass;
+
+  -- сначала проводим полный цикл импорта: забираем все что нужно из других БД
+  for select 81001, &#x27;10.1.2.11/3050:E:\IB_Base\DB_MBFRU.IB&#x27;
+  from rdb$database
+  where :current_db_id &lt;&gt; 81001
+  union
+  select 41701, &#x27;192.168.200.250/3050:D:\Finance\IB_Base\DB_1.IB&#x27;
+  from rdb$database
+  where :current_db_id &lt;&gt; 41701
+  union
+  select 94401, &#x27;10.60.0.50/3050:E:\DB\DB_AZ.IB&#x27;
+  from rdb$database
+  where :current_db_id &lt;&gt; 94401
+  into source_db_id, db_connection
+  do
+  begin
+    lg_lang_code = &#x27;&#x27;;
+    translate_text = &#x27;&#x27;;
+
+    -- импортируем оригиналы текста для перевода из других БД
+    for execute statement &#x27;select trm_orig_text from sys_transmain&#x27;
+    on external :db_connection
+    as user :db_user password :db_pass
+    into :orig_text
+    do
+    begin
+      select trm_id from hp_sys_translate_insert(&#x27;&#x27;, :orig_text, &#x27;&#x27;)
+      into trm_id;
+    end
+
+    for select lg_lang_code
+    from hp_translate_language_list
+    into :lg_lang_code
+    do
+    begin
+      if (current_db_id = 81001) then
+      begin
+        if (source_db_id = 41701 and lg_lang_code &lt;&gt; &#x27;kg&#x27;) then Continue;
+        if (source_db_id = 94401 and lg_lang_code &lt;&gt; &#x27;az&#x27;) then Continue;
+      end
+      if (current_db_id = 41701) then
+      begin
+        if (source_db_id = 81001 and lg_lang_code in (&#x27;kg&#x27;, &#x27;az&#x27;)) then Continue;
+        if (source_db_id = 94401 and lg_lang_code &lt;&gt; &#x27;az&#x27;) then Continue;
+      end
+      if (current_db_id = 94401) then
+      begin
+        if (source_db_id = 81001 and lg_lang_code in (&#x27;kg&#x27;, &#x27;az&#x27;)) then Continue;
+        if (source_db_id = 41701 and lg_lang_code &lt;&gt; &#x27;kg&#x27;) then Continue;
+      end
+
+      for execute statement
+      (&#x27;select trm_orig_text, trl_translate_text
+      from sys_transmain, sys_translate
+      where trm_id = trl_from_trm_id and
+            coalesce(trl_translate_text, &#x27;&#x27;&#x27;&#x27;) &lt;&gt; &#x27;&#x27;&#x27;&#x27; and
+            trl_lang_code = :lg_lang_code&#x27;)
+      (lg_lang_code := lg_lang_code)
+      on external :db_connection
+      as user :db_user password :db_pass
+      into :orig_text, translate_text
+      do
+      begin
+        select trm_id from hp_sys_translate_insert(:lg_lang_code, :orig_text, :translate_text)
+        into trm_id;
+      end
+    end
+  end
+
+  -- после этого проводим полный цикл экспорта: заливаем все что нужно в другие БД
+  for select 81001, &#x27;10.1.2.11/3050:E:\IB_Base\DB_MBFRU.IB&#x27;
+  from rdb$database
+  where :current_db_id &lt;&gt; 81001
+  union
+  select 41701, &#x27;192.168.200.250/3050:D:\Finance\IB_Base\DB_1.IB&#x27;
+  from rdb$database
+  where :current_db_id &lt;&gt; 41701
+  union
+  select 94401, &#x27;10.60.0.50/3050:E:\DB\DB_AZ.IB&#x27;
+  from rdb$database
+  where :current_db_id &lt;&gt; 94401
+  into source_db_id, db_connection
+  do
+  begin
+    lg_lang_code = &#x27;&#x27;;
+    translate_text = &#x27;&#x27;;
+
+    -- экспортируем оригиналы текста для перевода в другие БД
+    for select trm_orig_text from sys_transmain
+    into orig_text
+    do
+    begin
+      execute statement (&#x27;select trm_id from hp_sys_translate_insert(&#x27;&#x27;&#x27;&#x27;, :orig_text, &#x27;&#x27;&#x27;&#x27;)&#x27;)
+      (orig_text := orig_text)
+      on external :db_connection
+      as user :db_user password :db_pass
+      into :trm_id;
+    end
+
+    for select lg_lang_code
+    from hp_translate_language_list
+    into :lg_lang_code
+    do
+    begin
+      if (current_db_id = 81001) then
+      begin
+        if (source_db_id = 41701 and lg_lang_code = &#x27;kg&#x27;) then Continue;
+        if (source_db_id = 94401 and lg_lang_code = &#x27;az&#x27;) then Continue;
+      end
+      if (current_db_id = 41701) then
+      begin
+        if (source_db_id = 81001 and lg_lang_code not in (&#x27;kg&#x27;, &#x27;az&#x27;)) then Continue;
+        if (source_db_id = 94401 and lg_lang_code = &#x27;az&#x27;) then Continue;
+      end
+      if (current_db_id = 94401) then
+      begin
+        if (source_db_id = 81001 and lg_lang_code not in (&#x27;kg&#x27;, &#x27;az&#x27;)) then Continue;
+        if (source_db_id = 41701 and lg_lang_code = &#x27;kg&#x27;) then Continue;
+      end
+
+      for select trm_orig_text, trl_translate_text
+      from sys_transmain, sys_translate
+      where trm_id = trl_from_trm_id and
+            trl_lang_code = :lg_lang_code and
+            coalesce(trl_translate_text, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;
+      into :orig_text, translate_text
+      do
+      begin
+        execute statement (&#x27;select trm_id from hp_sys_translate_insert(:lg_lang_code, :orig_text, :translate_text)&#x27;)
+        (lg_lang_code := lg_lang_code, orig_text := orig_text, translate_text := translate_text)
+        on external :db_connection
+        as user :db_user password :db_pass
+        into :trm_id;
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

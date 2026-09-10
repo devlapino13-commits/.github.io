@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DO_REPAYMENT_RECALC_SH — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DO_REPAYMENT_RECALC_SH: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DO_REPAYMENT_RECALC_SH</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">7</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_repay_fill.html"><div class="to">HP_REPAY_FILL</div></a><a class="ref-card" href="hp_repay_reschedule.html"><div class="to">HP_REPAY_RESCHEDULE</div></a><a class="ref-card" href="hp_repay_save_operkred.html"><div class="to">HP_REPAY_SAVE_OPERKRED</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">7 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_fix_reschedule.html"><div class="to">HP_DO_FIX_RESCHEDULE</div></a><a class="ref-card" href="hp_do_repayment_recalc_new_fix.html"><div class="to">HP_DO_REPAYMENT_RECALC_NEW_FIX</div></a><a class="ref-card" href="hp_do_repayment_recalc_new_fix_2.html"><div class="to">HP_DO_REPAYMENT_RECALC_NEW_FIX_2</div></a><a class="ref-card" href="hp_do_repayment_recalc_new_ol.html"><div class="to">HP_DO_REPAYMENT_RECALC_NEW_OL</div></a><a class="ref-card" href="hp_do_reschedule_new_perc.html"><div class="to">HP_DO_RESCHEDULE_NEW_PERC</div></a><a class="ref-card" href="hp_reversal_new_operlist.html"><div class="to">HP_REVERSAL_NEW_OPERLIST</div></a><a class="ref-card" href="hp_reversal_operlist.html"><div class="to">HP_REVERSAL_OPERLIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DO_REPAYMENT_RECALC_SH(
+    OL_ID D_ID,
+    K_ID D_ID)
+AS
+declare variable tmp_amount d_currency;
+declare variable ol_date d_date;
+begin
+  -- Процедура для автореструктуризации графика
+  -- Процедура приводит в актуальное состояние задолженности по процентам
+  -- Является аналогом принятия нулевого погашения
+
+  if (coalesce(k_id, 0) = 0) then
+    exception e_default &#x27;Input parameter K_ID is null&#x27;;
+
+  if (coalesce(ol_id, 0) = 0) then
+    exception e_default &#x27;Input parameter OL_ID is null&#x27;;
+
+  select ol_date from operlist
+  where ol_id = :ol_id
+  into ol_date;
+  if (ol_date is null) then
+    exception e_default &#x27;Unknown date&#x27;;
+
+  -- Построение задолженности по графику на дату
+  select res_amount
+  from hp_repay_fill(:k_id, 0, :ol_date, 0, 1, 1, 1, 1, 1)
+  into :tmp_amount;
+
+  -- Автореструктуризация графика
+  tmp_amount = 0;
+  select has_advanced_pay
+  from hp_repay_reschedule(:ol_date, 2, 1, :k_id)
+  into :tmp_amount; -- Имеются ли досрочные погашения
+  tmp_amount = 0;
+
+  -- Сохранение на Operkred сумм автореструктуризации
+  execute procedure hp_repay_save_operkred(:k_id, 0, :ol_id, :ol_date, 0, 3, 0);
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

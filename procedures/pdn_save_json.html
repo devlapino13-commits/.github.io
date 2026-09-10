@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDN_SAVE_JSON — процедура — схема БД</title>
+<meta name="description" content="Процедура PDN_SAVE_JSON: 4 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>PDN_SAVE_JSON</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">3</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_pdn_getinfo_add.html"><div class="to">HP_PDN_GETINFO_ADD</div></a><a class="ref-card" href="pdn_info_action.html"><div class="to">PDN_INFO_ACTION</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_dpd_anketa_action.html"><div class="to">FM_DPD_ANKETA_ACTION</div></a><a class="ref-card" href="fm_send_client_to_kk.html"><div class="to">FM_SEND_CLIENT_TO_KK</div></a><a class="ref-card" href="hp_actionlist_set_status.html"><div class="to">HP_ACTIONLIST_SET_STATUS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OBJ_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACTION_DATA</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACTION_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE PDN_SAVE_JSON(
+    OBJ_ID D_ID,
+    UN_ID D_ID,
+    ACTION_DATA D_STR_8100,
+    ACTION_KIND D_STR_CODE)
+AS
+declare variable survey_json d_str_8100;
+declare variable jso1 d_integer;
+declare variable jso2 d_integer;
+declare variable gdoc d_smallint;
+declare variable income decimal(18,2);
+declare variable taxrate d_smallint;
+declare variable incomewt decimal(18,2);
+declare variable nmonth d_smallint;
+declare variable incomeavg decimal(18,2);
+declare variable data_count d_smallint;
+declare variable dtjob d_str_20;
+declare variable k_id d_id;
+declare variable c_id d_id;
+declare variable acl_id d_id;
+declare variable scoring_cnt d_smallint;
+declare variable pdn_limit d_currency;
+declare variable curr_reg d_str_100;
+declare variable curr_rosstat_income d_currency;
+declare variable curr_anketa_income d_currency;
+declare variable curr_rosstat_income_m d_currency;
+declare variable curr_anketa_income_m d_currency;
+declare variable sp_new d_currency;
+declare variable sp_old d_currency;
+declare variable sp d_currency;
+declare variable pdn d_currency;
+declare variable pdn_new d_currency;
+declare variable income_new d_currency;
+declare variable income_other d_currency;
+declare variable income_all d_currency;
+declare variable kc_id d_id;
+declare variable kc_date d_date;
+declare variable ki_id d_id;
+declare variable multiplier d_currency;
+begin
+    survey_json = &#x27;{}&#x27;;
+    scoring_cnt = null;
+    pdn_limit = null;
+    curr_reg = null;
+    curr_rosstat_income = null;
+    curr_anketa_income = null;
+    sp_new = null;
+    sp_old = null;
+    sp = null;
+    pdn = null;
+    pdn_new = null;
+    income_new = null;
+    income_other = null;
+    income_all =  null;
+    kc_date =  null;
+
+    select c_id, k_id, acl_id, kc_id, survey_json
+    from pdn_info_action(&#x27;miniappclient_income&#x27;, :obj_id)
+    into :c_id, :k_id, :acl_id, :kc_id, :survey_json;
+
+    if (:action_kind = &#x27;send_kk&#x27;) then
+    begin
+        update or insert into kk_income (
+            ki_from_k_id,
+            ki_from_c_id,
+            ki_from_acl_id,
+            ki_from_un_id,
+            ki_verify_income,
+            ki_is_manual,
+            ki_survey)
+        values (
+            :k_id,
+            :c_id,
+            :acl_id,
+            :un_id,
+            f_json_blob_get_value(:survey_json, &#x27;incomeavg&#x27;, &#x27;0&#x27;),
+            0,
+            :survey_json)
+        matching (ki_from_k_id, ki_from_acl_id, ki_from_c_id);
+    
+        :survey_json = &#x27;{}&#x27;;
+
+        update miniappclient_income maci
+        set maci.maci_is_blocked = 1
+        where maci.maci_from_mac_id = :obj_id;
+    end
+    else
+    if (:action_kind = &#x27;kont_to_ma&#x27;) then
+    begin
+        select ki_survey
+        from kk_income
+        where ki_from_k_id = :k_id
+          and ki_from_c_id = :c_id
+        into :survey_json;
+    end
+    else
+    if(:action_kind = &#x27;send_to_revision&#x27;) then
+    begin
+        select ki.ki_id, ki.ki_survey
+        from kk_income ki
+        where ki.ki_from_k_id = :k_id
+          and ki.ki_from_c_id = :c_id
+          and ki.ki_from_acl_id = :acl_id
+        into :ki_id, :survey_json;
+
+        survey_json = coalesce(:survey_json, &#x27;{}&#x27;);
+
+        update kk_income
+        set ki_survey = &#x27;{}&#x27;
+        where ki_id = :ki_id;
+
+        update miniappclient_income
+        set maci_is_blocked = 0
+        where maci_from_mac_id = :obj_id;
+    end
+    else
+    begin
+        jso1 = json.parse(:action_data);
+        jso2 = json.parse(:survey_json);
+    
+        if (:action_kind = &#x27;employer_save&#x27;) then
+        begin
+            select scoring_cnt,
+                   pdn_limit,
+                   curr_reg,
+                   curr_rosstat_income,
+                   curr_anketa_income, 
+                   curr_rosstat_income_m,
+                   curr_anketa_income_m,
+                   sp_new,
+                   sp_old,
+                   sp,
+                   pdn,
+                   pdn_new,
+                   income_new,
+                   income_other,
+                   income_all,
+                   kc_date,
+                   multiplier
+            from hp_pdn_getinfo_add(:kc_id)
+            into :scoring_cnt,
+                 :pdn_limit,
+                 :curr_reg,
+                 :curr_rosstat_income,
+                 :curr_anketa_income, 
+                 :curr_rosstat_income_m,
+                 :curr_anketa_income_m,
+                 :sp_new,
+                 :sp_old,
+                 :sp,
+                 :pdn,
+                 :pdn_new,
+                 :income_new,
+                 :income_other,
+                 :income_all,
+                 :kc_date,
+                 :multiplier;
+
+            gdoc   = json.obj_get_val(jso1, &#x27;gdoc&#x27;, -1);
+            income = json.obj_get_val(jso2, &#x27;income&#x27;, 0);
+            dtjob = json.obj_get_val(jso1, &#x27;dtjob&#x27;, null);
+
+            json.obj_set_i(jso2, &#x27;gdoc&#x27;, :gdoc);
+            json.obj_set_s(jso2, &#x27;dtjob&#x27;, :dtjob);
+            json.obj_set_i(jso2, &#x27;dtlastm&#x27;, json.obj_get_val(jso1, &#x27;dtlastm&#x27;, null));
+            json.obj_set_s(jso2, &#x27;dtpdn&#x27;, f_date_format(&#x27;dd.mm.yyyy&#x27;, f_date_month_begin(:kc_date)));
+            json.obj_set_s(jso2, &#x27;dtjobb&#x27;, f_date_format(&#x27;dd.mm.yyyy&#x27;, f_date_month_begin(dateadd(-1 year to f_date_month_begin(:kc_date)))));
+            json.obj_set_s(jso2, &#x27;dtjobe&#x27;, f_date_format(&#x27;dd.mm.yyyy&#x27;, f_date_month_end(dateadd(-4 month to f_date_month_begin(:kc_date)))));
+            json.obj_set_s(jso2, &#x27;employer&#x27;, json.obj_get_val(jso1, &#x27;employer&#x27;, &#x27;&#x27;));
+            json.obj_set_i(jso2, &#x27;scoring_cnt&#x27;, :scoring_cnt);
+            json.obj_set_f(jso2, &#x27;pdn_limit&#x27;, :pdn_limit);
+            json.obj_set_f(jso2, &#x27;koef&#x27;, :multiplier);
+            json.obj_set_s(jso2, &#x27;curr_reg&#x27;, :curr_reg);
+            json.obj_set_f(jso2, &#x27;curr_rosstat_income&#x27;, :curr_rosstat_income);
+            json.obj_set_f(jso2, &#x27;curr_anketa_income&#x27;, :curr_anketa_income); 
+            json.obj_set_f(jso2, &#x27;curr_rosstat_income_m&#x27;, :curr_rosstat_income_m);
+            json.obj_set_f(jso2, &#x27;curr_anketa_income_m&#x27;, :curr_anketa_income_m);
+            json.obj_set_f(jso2, &#x27;sp_new&#x27;, :sp_new);
+            json.obj_set_f(jso2, &#x27;sp_old&#x27;, :sp_old);
+            json.obj_set_f(jso2, &#x27;sp&#x27;, :sp);
+            json.obj_set_f(jso2, &#x27;pdn&#x27;, :pdn);
+            json.obj_set_f(jso2, &#x27;pdn_new&#x27;, :pdn_new);
+            json.obj_set_f(jso2, &#x27;income_new&#x27;, :income_new);
+            json.obj_set_f(jso2, &#x27;income_other&#x27;, :income_other);
+            json.obj_set_f(jso2, &#x27;income_all&#x27;, :income_all);
+    
+            taxrate  = iif(:gdoc = 2, 0, 13);
+            incomewt = :income * (1 - (:taxrate * 0.01));
+    
+            if (coalesce(:dtjob, &#x27;&#x27;) = &#x27;&#x27;) then
+                data_count = 12;
+            else
+                data_count = f_json_blob_get_count(:survey_json, &#x27;data&#x27;);
+    
+            nmonth     = iif(:data_count &gt; 12, 12, iif(:data_count &lt; 1, 1, :data_count));
+            incomeavg  = iif(:nmonth &gt; 0, :incomewt / :nmonth, 0);
+    
+            json.obj_set_i(jso2, &#x27;taxrate&#x27;,   :taxrate);
+            json.obj_set_f(jso2, &#x27;incomewt&#x27;,  :incomewt);
+            json.obj_set_i(jso2, &#x27;nmonth&#x27;,    :nmonth);
+            json.obj_set_f(jso2, &#x27;incomeavg&#x27;, :incomeavg);
+
+        end
+        else if (:action_kind = &#x27;monthly_save&#x27;) then
+        begin
+            json.obj_set_arr(jso2, &#x27;data&#x27;, json.obj_get_arr(jso1, &#x27;data&#x27;));
+            json.obj_set_f(jso2, &#x27;income&#x27;, cast(json.obj_get_val(jso1, &#x27;income&#x27;, 0) as decimal(18,4)));
+    
+            gdoc   = json.obj_get_val(jso2, &#x27;gdoc&#x27;, -1);
+            income = json.obj_get_val(jso2, &#x27;income&#x27;, 0);
+            dtjob = json.obj_get_val(jso2, &#x27;dtjob&#x27;, null);
+    
+            taxrate  = iif(:gdoc = 2, 0, 13);
+            incomewt = :income * (1 - (:taxrate * 0.01));
+    
+            if (coalesce(:dtjob, &#x27;&#x27;) = &#x27;&#x27;) then
+                data_count = 12;
+            else
+                data_count = f_json_blob_get_count(:action_data, &#x27;data&#x27;);
+    
+            nmonth     = iif(:data_count &gt; 12, 12, iif(:data_count &lt; 1, 1, :data_count));
+            incomeavg  = iif(:nmonth &gt; 0, :incomewt / :nmonth, 0);
+    
+            json.obj_set_i(jso2, &#x27;taxrate&#x27;,   :taxrate);
+            json.obj_set_f(jso2, &#x27;incomewt&#x27;,  :incomewt);
+            json.obj_set_i(jso2, &#x27;nmonth&#x27;,    :nmonth);
+            json.obj_set_f(jso2, &#x27;incomeavg&#x27;, :incomeavg);
+        end
+    
+        survey_json = json.obj_to_json(jso2);
+    end
+    
+    update miniappclient_income
+    set maci_survey = :survey_json,
+        maci_from_un_id = :un_id
+    where maci_from_mac_id = :obj_id;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

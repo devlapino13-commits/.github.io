@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TEST_BLOCK — процедура — схема БД</title>
+<meta name="description" content="Процедура TEST_BLOCK: 3 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>TEST_BLOCK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE TEST_BLOCK(
+    MA_ID D_ID,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable c_id id_type;
+declare variable pr_code d_str_100;
+declare variable point_cls d_integer;
+declare variable point_ipf d_integer;
+declare variable oks_balance d_currency;
+declare variable oks_balance_cls d_currency;
+declare variable oks_balance_ipf d_currency;
+declare variable total_debt d_currency;
+declare variable total_debt_cls d_currency;
+declare variable total_debt_ipf d_currency;
+declare variable max_debt d_currency;
+declare variable max_debt_cls d_currency;
+declare variable max_debt_ipf d_currency;
+declare variable mac_amount d_currency;
+declare variable ma_kolich_repay d_integer;
+declare variable ma_date_oper d_date;
+declare variable kc_amount_approved d_currency;
+declare variable max_old_amount_ipf d_currency;
+declare variable available_amount d_currency;
+declare variable available_amount_cls d_currency;
+declare variable available_amount_ipf d_currency;
+declare variable tmp_pr_code d_str_100;
+declare variable tmp_sum d_currency;
+declare variable tmp_str d_str_100;
+declare variable is_ipf d_bool;
+begin
+  -- проверки блока 0168 (RFCKG-3251):
+  -- 1) общий совокупный долг не должен превышать общий максимально допустимый долг
+  -- 2) типовой совокупный долг не должен превышать типовой максимально допустимый долг
+
+  -- определения:
+  -- а) типовой совокупный долг = баланс ОС активных кредитов типа продукта из новой заявки + сумма новой заявки
+  -- б) общий совокупный долг = баланс ОС всех активных кредитов (независимо от типа продукта) + сумма новой заявки
+  -- в) типовой максимально допустимый долг = максимально возможная сумма долга по одному типу продукта (классика или ИПФ)
+  -- г) общий максимально допустимый долг = больший из двух типовых максимально допустимых долгов
+
+  if (ma_id = 4285565) then -- RFCKG-2905
+    exit;
+
+  res_error_is_critical = 1;
+  res_error_text = &#x27;&#x27;;
+
+  select ma_kolich_repay,
+         ma_date_oper,
+         pr_code
+  from miniapp
+  inner join product on pr_id = ma_from_pr_id
+  where ma_id = :ma_id and
+        ma_is_active = 1 and
+        ma_date_end = &#x27;31.12.9999&#x27;
+  into ma_kolich_repay,
+       ma_date_oper,
+       pr_code;
+
+  if (ma_kolich_repay is null or
+      ma_date_oper is null or
+      pr_code is null) then
+  begin
+    exception e_message &#x27;Ошибка: заявка не найдена (168-блок)&#x27;;
+    exit;
+  end
+
+  if (pr_code containing &#x27;.ipf.&#x27;) then
+    is_ipf = 1;
+  else
+    is_ipf = 0;
+
+  if (pr_code containing &#x27;.kardhasan.&#x27; or
+      pr_code containing &#x27;.bittamlik.&#x27; or
+      pr_code containing &#x27;.mbulak_cards.&#x27; or
+      pr_code containing &#x27;.preferential.&#x27; or
+      pr_code containing &#x27;.solemar.&#x27; or
+      pr_code containing &#x27;.july.&#x27; or
+      pr_code containing &#x27;.umra.&#x27; or
+      pr_code containing &#x27;.fertilizer.&#x27; or
+      pr_code containing &#x27;.sugarmill.&#x27; or
+      pr_code containing &#x27;.installment_goods.&#x27; or
+      pr_code containing &#x27;.business.&#x27; or
+      pr_code containing &#x27;.express_online.&#x27; or
+      pr_code containing &#x27;.point_ignore.&#x27;) then
+    exit;
+
+  for select mac_from_c_id,
+             mac_amount
+      from miniappclient
+      where mac_from_ma_id = :ma_id and
+            mac_amount &gt; 0
+      into c_id,
+           mac_amount
+  do
+  begin
+    select c_name_fio
+    from clients
+    where c_id = :c_id
+    into res_info_text;
+
+    oks_balance = 0; -- общий активный долг
+    oks_balance_cls = 0; -- активный долг по классике
+    oks_balance_ipf = 0; -- активный долг по ИПФ
+
+    total_debt = 0; -- общий совокупный долг
+    total_debt_cls = 0; -- совокупный долг по классике
+    total_debt_ipf = 0; -- совокупный долг по ИПФ
+
+    max_debt = 0; -- общий максимально допустимый долг
+    max_debt_cls = 0; -- максимально допустимый долг по классике
+    max_debt_ipf = 0; -- максимально допустимый долг по ИПФ
+
+    available_amount = 0; -- доступная сумма всего
+    available_amount_cls = 0; -- доступная сумма по классике
+    available_amount_ipf = 0; -- доступная сумма по ИПФ
+
+    max_old_amount_ipf = 0; -- максимальная сумма в предыдущих кредитах по ИПФ
+    tmp_sum = 0;
+    tmp_pr_code = &#x27;&#x27;;
+
+    point_cls = f_point(c_id, ma_date_oper, 0); -- баллы клиента по классике, для расчета сумм и сроков классических кредитов, берутся общие баллы (RFCKG-3251)
+    point_ipf = f_point(c_id, ma_date_oper, 2); -- баллы клиента по ИПФ
+
+    if (is_ipf = 1) then
+    begin
+      if (ma_kolich_repay &gt; 24 and
+          point_ipf &lt; 24) then
+      begin
+        res_error_text = &#x27;Балл клиента по ИПФ - &#x27; || point_ipf || &#x27;. Максимальный срок кредита 24 мес.&#x27;;
+        suspend;
+      end
+      else if (ma_kolich_repay &gt; 36) then
+      begin
+        res_error_text = &#x27;Максимальный срок кредита по ИПФ 36 мес.&#x27;;
+        suspend;
+      end
+
+      select max(kc_amount_approved)
+      from kontract
+      inner join product on pr_id = k_from_pr_id
+      inner join kontstate on ks_from_k_id = k_id
+      inner join knclient on kc_from_k_id = k_id
+      where ks_state = 1 and
+            ks_date_begin &lt; &#x27;01.09.2021&#x27; and
+            ks_date_end &lt;= :ma_date_oper and
+            kc_amount_approved &gt; 0 and
+            kc_from_c_id = :c_id and
+            pr_code containing &#x27;.ipf.&#x27;
+      into max_old_amount_ipf; -- максимальная сумма предыдущего кредита, выданного до 01.09.2021 года и закрытого на момент подачи текущей заявки
+    end
+    else
+    begin
+      if (point_cls &lt; 20 and
+          ma_kolich_repay not between 3 and 18) then
+      begin
+        res_error_text = &#x27;Балл клиента по классике - &#x27; || point_cls || &#x27;. Cрок кредита должен быть в диапазоне 3-18 мес.&#x27;;
+        suspend;
+      end
+      else if (point_cls &gt;= 20 and
+          mac_amount &lt; 250001 and
+          ma_kolich_repay not between 3 and 24) then
+      begin
+        res_error_text = &#x27;Балл клиента по классике - &#x27; || point_cls || &#x27;. Cрок кредита должен быть в диапазоне 3-24 мес.&#x27;;
+        suspend;
+      end
+      else if (point_cls &gt;= 31 and
+          mac_amount between 250001 and 300000 and
+          ma_kolich_repay not between 3 and 36) then
+      begin
+        res_error_text = &#x27;Балл клиента по классике - &#x27; || point_cls || &#x27;. Сумма кредита - &#x27; || mac_amount || &#x27;. Cрок кредита должен быть в диапазоне 3-36 мес.&#x27;;
+        suspend;
+      end
+    end
+
+    for select pr_code,
+               oks_balance * (kc_amount_approved / k_amount_approved)
+        from oksummary
+        inner join knclient on kc_from_k_id = oks_from_k_id
+        inner join kontract on k_id = oks_from_k_id
+        inner join product on pr_id = k_from_pr_id
+        where k_disb_date &lt;= :ma_date_oper and
+              kc_amount_approved &gt; 0 and
+              kc_from_c_id = :c_id and
+              oks_close_state = 0 and
+              :ma_date_oper between oks_date_begin and oks_date_end
+        into tmp_pr_code,
+             tmp_sum
+    do
+    begin
+      oks_balance = oks_balance + tmp_sum;
+      if (tmp_pr_code containing &#x27;.ipf.&#x27;) then
+        oks_balance_ipf = oks_balance_ipf + tmp_sum;
+      else
+        oks_balance_cls = oks_balance_cls + tmp_sum;
+    end
+
+    total_debt = oks_balance + mac_amount;
+    if (is_ipf = 1) then
+      total_debt_ipf = oks_balance_ipf + mac_amount;
+    else
+      total_debt_cls = oks_balance_cls + mac_amount;
+
+    max_debt_cls = case
+                     when point_cls &lt;= 6 then 120000
+                     when point_cls between 7 and 12 then 150000
+                     when point_cls between 13 and 19 then 200000
+                     when point_cls between 20 and 30 then 250000
+                     when point_cls &gt;= 31 then 300000
+                   end;
+
+    max_debt_ipf = case
+                     when point_ipf &lt;= 5 then 150000
+                     when point_ipf between 6 and 11 then 200000
+                     when point_ipf between 12 and 35 then 250000
+                     when point_ipf &gt;= 36 then 300000
+                   end;
+
+    -- Если максимальная сумма предыдущего кредита (выданный до 01.09.2021 года и закрытый на момент подачи текущей заявки) выше,
+    -- чем максимальная сумма по накопленным баллам, то клиент может получить максимальную сумму до суммы предыдущего кредита.
+    -- Данное правило касается только ИПФ-продуктов (RFCKG-3251).
+    if (max_debt_ipf &lt; max_old_amount_ipf) then
+      max_debt_ipf = max_old_amount_ipf;
+
+    max_debt = max_debt_cls;
+    if (max_debt &lt; max_debt_ipf) then
+      max_debt = max_debt_ipf; -- беру больший максимально допустимый долг по классике или ИПФ
+
+    available_amount = max_debt - oks_balance;
+    available_amount_cls = max_debt_cls - oks_balance_cls;
+    available_amount_ipf = max_debt_ipf - oks_balance_ipf;
+
+    if (available_amount &lt; 0) then
+      available_amount = 0; -- доступная сумма для займа не может быть отрицательной
+
+    if (available_amount_cls &lt; 0) then
+      available_amount_cls = 0;
+
+    if (available_amount_ipf &lt; 0) then
+      available_amount_ipf = 0;
+
+    if (available_amount_cls &gt; available_amount) then
+      available_amount_cls = available_amount; -- доступная сумма по классике не может быть больше общей доступной суммы
+
+    if (available_amount_ipf &gt; available_amount) then
+      available_amount_ipf = available_amount; -- доступная сумма по ИПФ не может быть больше общей доступной суммы
+
+    tmp_str = &#x27;). Баллы по классике/ИПФ - &#x27; || point_cls || &#x27;/&#x27; || point_ipf || &#x27;. Доступная сумма по классике/ИПФ - &#x27; || round(available_amount_cls) || &#x27;/&#x27; || round(available_amount_ipf) || &#x27; сом.&#x27;;
+
+    if (total_debt &gt; max_debt) then
+    begin
+      res_error_text = &#x27;Совокупный долг (&#x27; || round(total_debt) || &#x27;) превышает максимально допустимое значение (&#x27; || round(max_debt) || tmp_str;
+      suspend;
+    end
+    else if (is_ipf = 1 and
+             total_debt_ipf &gt; max_debt_ipf) then
+    begin
+      res_error_text = &#x27;Совокупный долг по ИПФ (&#x27; || round(total_debt_ipf) || &#x27;) превышает максимально допустимое значение (&#x27; || round(max_debt_ipf) || tmp_str;
+      suspend;
+    end
+    else if (is_ipf = 0 and
+             total_debt_cls &gt; max_debt_cls) then
+    begin
+      res_error_text = &#x27;Совокупный долг по классике (&#x27; || round(total_debt_cls) || &#x27;) превышает максимально допустимое значение (&#x27; || round(max_debt_cls) || tmp_str;
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

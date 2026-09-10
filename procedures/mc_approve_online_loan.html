@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MC_APPROVE_ONLINE_LOAN — процедура — схема БД</title>
+<meta name="description" content="Процедура MC_APPROVE_ONLINE_LOAN: 2 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>MC_APPROVE_ONLINE_LOAN</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_edoc_insert.html"><div class="to">HP_EDOC_INSERT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MCL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE MC_APPROVE_ONLINE_LOAN(
+    MCL_ID D_ID,
+    K_ID D_ID)
+RETURNS (
+    RES_CODE D_STR_CODE,
+    RES_TEXT D_STR_255)
+AS
+declare variable c_id d_id;
+declare variable ool_id d_id;
+declare variable ma_id d_id;
+declare variable edl_id d_id;
+begin
+
+    res_code = &#x27;success&#x27;;
+    res_text = &#x27;&#x27;;
+
+    c_id = (select mcl_from_c_id from mc_login where mcl_id = :mcl_id);
+    if (coalesce(c_id, 0) = 0) then
+    begin
+        res_code = &#x27;error&#x27;;
+        res_text = &#x27;Не удалось загрузить данные профиля. Попробуйте войти в приложение заново&#x27;;
+        suspend;
+        exit;
+    end
+
+    if (coalesce(k_id, 0) = 0) then
+    begin
+        res_code = &#x27;error&#x27;;
+        res_text = &#x27;Не удалось получить информацию о кредитном договоре. Попробуйте снова или обратитесь к технической поддержке&#x27;;
+        suspend;
+        exit;
+    end
+
+    ma_id = (select k.k_from_ma_app_id from kontract k where k.k_id = :k_id);
+
+    -- Не даем утверждать займы, которые не относятся к онлайн-кредитованию ОЙВО
+    select ool_id
+    from mc_oivo_online_loan ool
+    where ool.ool_from_mcl_id = :mcl_id
+        and ool.ool_from_ma_id = :ma_id
+        and ool.ool_from_k_id = :k_id
+    into :ool_id;
+
+    if (ool_id is null) then
+    begin
+        res_code = &#x27;error&#x27;;
+        res_text = &#x27;Произошла ошибка. Пожалуйста, обратитесь к технической поддержке&#x27;;
+        suspend;
+        exit;
+    end
+
+    -- Утверждаем договор. Процедура hp_approve_loan здесь не используется, из-за проверок, которые могут
+    -- помешать утверждению. Все необходимые проверки в рамках онлайн-кредитования OiVO выполняются отдельно
+    update kontract
+    set k_status = 1,
+        k_user_id = 1000000000000
+    where k_id = :k_id;
+
+    -- Отправляем клиенту кредитный договор на подпись. Процедура hp_edoc_ins_loan_agreement здесь
+    -- не используется, чтобы избежать проверок, которые в ней проводятся
+    select edl_id, res_text
+    from hp_edoc_insert(&#x27;loan.agreement&#x27;, f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;), :k_id, 1000000000000)
+    into :edl_id, :res_text;
+
+    if (coalesce(res_text, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+    begin
+        -- Заменяем системный текст из процедуры, его нельзя показывать клиенту
+        res_code = &#x27;error&#x27;;
+        res_text = &#x27;Не удалось отправить электронный документ. Пожалуйста, попробуйте снова или обратитесь к техническое поддержке&#x27;;
+        suspend;
+        exit;
+    end
+
+    update mc_oivo_online_loan_edoc oole
+    set oole.oole_packet_kontract = :edl_id
+    where oole.oole_from_ool_id = :ool_id;
+
+    update mc_oivo_online_loan ool
+    set ool.ool_from_k_id = :k_id
+        --ool.ool_stage = f_enum_id()
+    where ool.ool_id = :ool_id;
+
+    suspend;
+
+    when any do
+    begin
+        res_code = &#x27;error&#x27;;
+        res_text = &#x27;Что-то пошло не так. Повторите попытку позже или обратитесь к технической поддержке&#x27;;
+        suspend;
+    end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

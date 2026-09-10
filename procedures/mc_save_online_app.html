@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MC_SAVE_ONLINE_APP — процедура — схема БД</title>
+<meta name="description" content="Процедура MC_SAVE_ONLINE_APP: 4 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>MC_SAVE_ONLINE_APP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="get_active_mbulak_card.html"><div class="to">GET_ACTIVE_MBULAK_CARD</div></a><a class="ref-card" href="mc_get_loan_limit.html"><div class="to">MC_GET_LOAN_LIMIT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="mc_save_online_app_other_card.html"><div class="to">MC_SAVE_ONLINE_APP_OTHER_CARD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MCL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">APP_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">APP_JSON</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CARD_TYPE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ONLINE_APP_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE MC_SAVE_ONLINE_APP(
+    MCL_ID D_ID NOT NULL,
+    APP_ID D_INTEGER,
+    APP_JSON D_STR_8100,
+    CARD_TYPE D_SMALLINT = 0)
+RETURNS (
+    ONLINE_APP_ID D_INTEGER,
+    ERROR_TEXT D_STR_255)
+AS
+declare variable C_ID D_ID;
+declare variable OA_MCL_ID D_ID;
+declare variable OA_FROM_C_ID D_ID;
+declare variable OA_STATUS D_SMALLINT;
+declare variable OA_DATE D_DATE;
+declare variable OA_ID D_INTEGER;
+declare variable CARD_ID D_ID;
+declare variable AMOUNT D_INTEGER;
+declare variable APP_AMOUNT D_INTEGER;
+declare variable MCL_LANG_CODE D_STR_LANG;
+begin
+  error_text = &#x27;&#x27;;
+  app_json = coalesce(app_json, &#x27;&#x27;);
+  online_app_id = app_id;
+
+  select ml.mcl_from_c_id, ml.mcl_lang_code
+  from mc_login ml
+  where ml.mcl_id = :mcl_id
+  into :c_id,
+       :mcl_lang_code;
+
+  if (card_type = 0) then
+  begin
+      select cal_card_id
+      from get_active_mbulak_card(:c_id)
+      into card_id;
+    
+      if (coalesce(:card_id, -999) = -999) then
+      begin
+        error_text = f_lang(:mcl_lang_code, &#x27;Отсутствует активная карта Мбулак&#x27;);
+        suspend;
+        exit;
+      end
+  end
+
+  select amount
+  from mc_get_loan_limit(:mcl_id)
+  into amount;
+
+  if (coalesce(:app_id, 0) &lt;&gt; 0) then
+  begin
+    select oa.oa_json
+    from online_app oa
+    where oa.oa_from_mcl_id = :mcl_id and
+          oa.oa_status &gt;= 0
+    order by oa.oa_datetime desc
+    rows 1
+    into app_json;
+  end
+
+  app_amount = f_json_blob_get_value(:app_json, &#x27;amount&#x27;, 0);
+
+  if (coalesce(:amount, 0) = 0) then
+  begin
+    error_text = f_lang(:mcl_lang_code, &#x27;Выдача невозможна. Запрашиваемая сумма (&#x27;) || :app_amount || f_lang(:mcl_lang_code, &#x27; сом) превышает доступный кредитный лимит &#x27;) || :amount || f_lang(:mcl_lang_code, &#x27; сом).&#x27;);
+    suspend;
+    exit;
+  end
+  else
+  begin
+    if (:app_amount &gt; :amount) then
+    begin
+      error_text = f_lang(:mcl_lang_code, &#x27;Выдача невозможна. Пожалуйста, Запрашиваемая сумма (&#x27;) || :app_amount || f_lang(:mcl_lang_code, &#x27; сом) превышает доступный кредитный лимит &#x27;) || :amount || f_lang(:mcl_lang_code, &#x27; сом).&#x27;);
+      suspend;
+      exit;
+    end
+  end
+
+  if (app_id is not null) then
+  begin
+    select oa.oa_id, oa.oa_from_mcl_id, oa.oa_from_c_id, oa.oa_status, oa.oa_date
+    from online_app oa
+    where oa.oa_id = :app_id
+    into :oa_id, :oa_mcl_id, :oa_from_c_id, :oa_status, :oa_date;
+  end
+
+  if (oa_id is not null) then
+  begin
+    if (oa_mcl_id &lt;&gt; mcl_id) then
+      error_text = f_lang(:mcl_lang_code, &#x27;Пользователь, который передается сейчас, отличается от изначального в заявке. Это недопустимо&#x27;);
+    else
+    if (oa_from_c_id &lt;&gt; c_id) then
+      error_text = f_lang(:mcl_lang_code, &#x27;Клиент, отличается от изначального в заявке. Это недопустимо&#x27;);
+    else
+    if (oa_date &lt;&gt; current_date) then
+      error_text = f_lang(:mcl_lang_code, &#x27;Заявка может быть отредактирваона только текущей датой&#x27;);
+
+    if (error_text &lt;&gt; &#x27;&#x27;) then
+    begin
+      suspend;
+      exit;
+    end
+
+    if ((oa_status = 0) and (app_json &lt;&gt; &#x27;&#x27;)) then
+    begin
+      update online_app oa
+      set oa.oa_json = :app_json
+      where oa.oa_id = :oa_id;
+    end
+  end
+  else
+  begin
+    insert into online_app (oa_from_mcl_id, oa_json, oa_card_type, oa_mbulak_card_id)
+    values (:mcl_id, :app_json, :card_type, :card_id)
+    returning oa_id
+    into :online_app_id;
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

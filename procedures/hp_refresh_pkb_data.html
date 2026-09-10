@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_REFRESH_PKB_DATA — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_REFRESH_PKB_DATA: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_REFRESH_PKB_DATA</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">3</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_is_restructured_kz.html"><div class="to">HP_IS_RESTRUCTURED_KZ</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_extinfotask_process.html"><div class="to">HP_EXTINFOTASK_PROCESS</div></a><a class="ref-card" href="hp_parse_pkb_report_process.html"><div class="to">HP_PARSE_PKB_REPORT_PROCESS</div></a><a class="ref-card" href="hp_refresh_extinfo_data.html"><div class="to">HP_REFRESH_EXTINFO_DATA</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EIL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_REFRESH_PKB_DATA(
+    EIL_ID D_ID)
+AS
+declare variable is_gambler d_smallint;
+declare variable is_bankrot d_smallint;
+declare variable is_overdue d_smallint;
+declare variable is_overdue_90 d_smallint;
+declare variable payment_count d_integer;
+declare variable json_text d_blob_text;
+declare variable temp_str d_str_255;
+declare variable job_title d_str_255;
+declare variable ma_id d_id;
+declare variable c_id d_id;
+declare variable un_id d_id;
+declare variable fku_type d_integer;
+declare variable curr_year d_integer;
+declare variable curr_month d_integer;
+declare variable from_date d_date;
+declare variable from_year d_integer;
+declare variable from_month d_integer;
+declare variable contract_type d_str_code;
+declare variable is_restructured d_smallint;
+declare variable settlement_type_id d_str_255;
+declare variable settlement_date d_str_255;
+declare variable tmp_value d_str_20;
+declare variable yy d_integer;
+declare variable mm d_integer;
+declare variable jso d_integer;
+declare variable jso_root d_integer;
+declare variable jsa_contracts d_integer;
+declare variable jso_contract d_integer;
+declare variable jsa_bankrupt_items d_integer;
+declare variable jsa_settlement d_integer;
+declare variable jso_settlement_item d_integer;
+declare variable jsa_years d_integer;
+declare variable jso_year d_integer;
+declare variable jsa_payments d_integer;
+declare variable jso_pay d_integer;
+declare variable t_type d_str_20;
+declare variable t_sub_type d_str_20;
+declare variable t_year_type d_str_20;
+declare variable i d_integer;
+declare variable k d_integer;
+declare variable y d_integer;
+declare variable p d_integer;
+declare variable cnt d_integer;
+declare variable sub_cnt d_integer;
+declare variable year_cnt d_integer;
+declare variable pay_cnt d_integer;
+declare variable ct_idx d_integer;
+declare variable contract_path d_str_255;
+declare variable query_count_90 d_integer;
+
+declare function get_json_type(p_parent d_integer, p_path d_str_255) returns d_str_20
+as
+begin
+  if (json.contains(p_parent, p_path) = 1) then
+    return json.val_get_type_name(p_parent, p_path);
+  return &#x27;null&#x27;;
+end
+
+declare function parse_date_ddmmyyyy(p_str d_str_255) returns date
+as
+begin
+  if (p_str is not null and p_str &lt;&gt; &#x27;&#x27; and p_str &lt;&gt; &#x27;-&#x27; and char_length(p_str) = 10) then
+    return cast(substring(p_str from 7 for 4) || &#x27;-&#x27; || substring(p_str from 4 for 2) || &#x27;-&#x27; || substring(p_str from 1 for 2) as date);
+  return null;
+end
+
+begin
+  is_overdue = 0;
+  is_overdue_90 = 0;
+  is_restructured = 0;
+  is_gambler = 0;
+  is_bankrot = 1;
+
+  select cast(blx_blob as d_blob_text), ei.eil_from_c_id, ei.eil_from_un_id, ei.eil_object_id
+  from extinfolist ei, hp_get_blobex_blob(ei.eil_from_bls_id)
+  where ei.eil_id = :eil_id
+  into :json_text, :c_id, un_id, ma_id;
+
+  if (trim(json_text) = &#x27;&#x27;) then
+    exception e_default f_format(&#x27;invalid eil_id: %1. no data found&#x27;, :eil_id);
+
+  jso = json.parse(json_text);
+  jso_root = json.obj_get_obj(jso, &#x27;Report.Root&#x27;);
+
+  if (jso_root is null) then
+    exception e_default &#x27;Не удалось десериализовать JSON (jso_root is null)&#x27;;
+
+  job_title = json.obj_get_val(jso_root, &#x27;ClassificationOfBorrower.SubjectsPosition.value&#x27;, &#x27;Самозанятый&#x27;);
+
+  is_gambler = iif((json.obj_get_val(jso_root, &#x27;Gamblers.GamblerFeature&#x27;)) = &#x27;true&#x27;, 1, 0);
+
+  query_count_90 = json.obj_get_val(jso_root, &#x27;NumberOfQueries.Days90.value&#x27;, 0);
+
+  temp_str = json.obj_get_val(jso_root, &#x27;TazalauBankruptInfo.Status.value&#x27;, &#x27;&#x27;);
+  if (temp_str starting &#x27;Данные о применении процедуры банкротства отсутствуют&#x27;) then
+    is_bankrot = 0;
+  else
+  begin
+    if (temp_str = &#x27;&#x27;) then
+    begin
+      t_type = get_json_type(jso_root, &#x27;TazalauBankruptInfo.Item&#x27;);
+
+      if (t_type = &#x27;Array&#x27;) then
+      begin
+        jsa_bankrupt_items = json.obj_get_arr(jso_root, &#x27;TazalauBankruptInfo.Item&#x27;);
+        cnt = json.count_get(jsa_bankrupt_items);
+        if (cnt &gt; 0) then
+        begin
+          -- забираем самый последний элемент массива
+          jso_pay = json.arr_get_obj(jsa_bankrupt_items, cnt - 1);
+          temp_str = json.obj_get_val(jso_pay, &#x27;StatementStatus.value&#x27;);
+          if (coalesce(temp_str, &#x27;&#x27;) not containing &#x27;Завершено&#x27;) then
+            is_bankrot = 0;
+        end
+      end
+      else if (t_type = &#x27;Object&#x27;) then
+      begin
+        temp_str = json.obj_get_val(jso_root, &#x27;TazalauBankruptInfo.Item.StatementStatus.value&#x27;, &#x27;&#x27;);
+        if (temp_str not containing &#x27;Завершено&#x27;) then
+          is_bankrot = 0;
+      end
+    end
+  end
+
+  -- проверка реструктуризации в нашей бд
+  select is_restructured
+  from hp_is_restructured_kz(:c_id, 12)
+  into :is_restructured;
+
+  -- анализ действующих контрактов
+  t_type = get_json_type(jso_root, &#x27;ExistingContracts.Contract&#x27;);
+
+  -- выставляем границы и дескрипторы для универсального while-обхода
+  if (t_type = &#x27;Object&#x27;) then
+  begin
+    cnt = 1;
+    jso_contract = json.obj_get_obj(jso_root, &#x27;ExistingContracts.Contract&#x27;);
+  end
+  else if (t_type = &#x27;Array&#x27;) then
+  begin
+    jsa_contracts = json.obj_get_arr(jso_root, &#x27;ExistingContracts.Contract&#x27;);
+    cnt = json.count_get(jsa_contracts);
+  end
+  else
+    cnt = 0;
+
+  i = 0;
+  while (i &lt; cnt) do
+  begin
+    if (t_type = &#x27;Array&#x27;) then
+      jso_contract = json.arr_get_obj(jsa_contracts, i);
+
+    if (jso_contract is not null) then
+    begin
+      payment_count = coalesce(nullif(json.obj_get_val(jso_contract, &#x27;NumberOfOverdueInstalments.value&#x27;), &#x27;&#x27;), 0);  -- возможны пустые значения (&lt;&gt; null, = &#x27;&#x27;)
+      fku_type = coalesce(nullif(json.obj_get_val(jso_contract, &#x27;CreditorType.id&#x27;), &#x27;&#x27;), 0);  -- возможны пустые значения (&lt;&gt; null, = &#x27;&#x27;)
+
+
+      if ((fku_type = 1 and payment_count &gt; 30) or (fku_type = 2 and payment_count &gt; 1)) then
+        is_overdue = 1;
+
+      -- проверка реструктуризации внутри текущего контракта
+      if (coalesce(is_restructured, 0) = 0) then
+      begin
+        if (json.contains(jso_contract, &#x27;SettlementIndicatorList.SettlementIndicator&#x27;) = 1) then
+          t_sub_type = json.val_get_type_name(jso_contract, &#x27;SettlementIndicatorList.SettlementIndicator&#x27;);
+        else
+          t_sub_type = &#x27;null&#x27;;
+
+        if (t_sub_type = &#x27;Array&#x27;) then
+        begin
+          jsa_settlement = json.obj_get_arr(jso_contract, &#x27;SettlementIndicatorList.SettlementIndicator&#x27;);
+          sub_cnt = json.count_get(jsa_settlement);
+          k = 0;
+          while (k &lt; sub_cnt) do
+          begin
+            jso_settlement_item = json.arr_get_obj(jsa_settlement, k);
+            settlement_type_id = json.obj_get_val(jso_settlement_item, &#x27;SettlementIndicator.id&#x27;);
+            settlement_date = json.obj_get_val(jso_settlement_item, &#x27;SettlementIndicatorDate.value&#x27;);
+
+            if (trim(settlement_type_id) = &#x27;1&#x27; and settlement_date &lt;&gt; &#x27;&#x27; and settlement_date &lt;&gt; &#x27;-&#x27; and char_length(settlement_date) = 10) then
+            begin
+              if (trim(settlement_type_id) = &#x27;1&#x27; and parse_date_ddmmyyyy(settlement_date) &gt;= dateadd(-12 month to current_date)) then
+              begin
+                is_restructured = 1;
+                leave; -- выход из внутреннего while по SettlementIndicator
+              end
+            end
+            k = k + 1;
+          end
+        end
+        else if (t_sub_type = &#x27;Object&#x27;) then
+        begin
+          settlement_type_id = json.obj_get_val(jso_contract, &#x27;SettlementIndicatorList.SettlementIndicator.SettlementIndicator.id&#x27;, &#x27;&#x27;);
+          settlement_date = json.obj_get_val(jso_contract, &#x27;SettlementIndicatorList.SettlementIndicator.SettlementIndicatorDate.value&#x27;, &#x27;&#x27;);
+
+          if (trim(settlement_type_id) = &#x27;1&#x27; and settlement_date &lt;&gt; &#x27;&#x27; and settlement_date &lt;&gt; &#x27;-&#x27; and char_length(settlement_date) = 10) then
+          begin
+          if (trim(settlement_type_id) = &#x27;1&#x27; and parse_date_ddmmyyyy(settlement_date) &gt;= dateadd(-12 month to current_date)) then
+            is_restructured = 1;
+          end
+        end
+      end
+
+      if (is_overdue = 1 and coalesce(is_restructured, 0) = 1) then
+        leave; -- выход из главного WHILE по контрактам
+    end
+
+    i = i + 1;
+  end
+
+
+  -- расчет просрочки 90+ дней за последние 12 месяцев
+  curr_year = extract(year from current_date);
+  curr_month = extract(month from current_date);
+  from_date = dateadd(-11 month to current_date);
+  from_year = extract(year from from_date);
+  from_month = extract(month from from_date);
+
+  ct_idx = 1;
+  while (ct_idx &lt;= 2) do
+  begin
+    if (is_overdue_90 = 1) then leave;
+    contract_type = iif(ct_idx = 1, &#x27;TerminatedContracts&#x27;, &#x27;ExistingContracts&#x27;);
+    contract_path = contract_type || &#x27;.Contract&#x27;;
+
+    t_type = get_json_type(jso_root, contract_path);
+
+    if (t_type = &#x27;Object&#x27;) then
+    begin
+      cnt = 1;
+      jso_contract = json.obj_get_obj(jso_root, contract_path);
+    end
+    else if (t_type = &#x27;Array&#x27;) then
+    begin
+      jsa_contracts = json.obj_get_arr(jso_root, contract_path);
+      cnt = json.count_get(jsa_contracts);
+    end
+    else
+      cnt = 0;
+
+    i = 0;
+    while (i &lt; cnt) do
+    begin
+      if (is_overdue_90 = 1) then leave;
+
+      if (t_type = &#x27;Array&#x27;) then
+        jso_contract = json.arr_get_obj(jsa_contracts, i);
+
+      if (jso_contract is null) then
+      begin
+        i = i + 1;
+        continue;
+      end
+
+      temp_str = json.obj_get_val(jso_contract, &#x27;CreditorType.id&#x27;, &#x27;&#x27;);
+      if (temp_str not in (&#x27;1&#x27;, &#x27;2&#x27;)) then
+      begin
+        i = i + 1;
+        continue;
+      end
+
+      -- Фильтр закрытых договоров по дате окончания
+      if (contract_type = &#x27;TerminatedContracts&#x27;) then
+      begin
+        temp_str = json.obj_get_val(jso_contract, &#x27;DateOfCreditEnd.value&#x27;, &#x27;&#x27;);
+        if (temp_str &lt;&gt; &#x27;&#x27; and temp_str &lt;&gt; &#x27;-&#x27; and char_length(temp_str) = 10) then
+        begin
+          if (cast(substring(temp_str from 7 for 4) || &#x27;-&#x27; || substring(temp_str from 4 for 2) || &#x27;-&#x27; || substring(temp_str from 1 for 2) as date) &lt; :from_date) then
+          begin
+            i = i + 1;
+            continue;
+          end
+        end
+      end
+
+      -- анализ календаря платежей PaymentsCalendar.Year
+      if (json.contains(jso_contract, &#x27;PaymentsCalendar.Year&#x27;) = 1) then
+        t_year_type = json.val_get_type_name(jso_contract, &#x27;PaymentsCalendar.Year&#x27;);
+      else
+        t_year_type = &#x27;null&#x27;;
+
+      if (t_year_type = &#x27;Object&#x27;) then
+      begin
+        year_cnt = 1;
+        jso_year = json.obj_get_obj(jso_contract, &#x27;PaymentsCalendar.Year&#x27;);
+      end
+      else if (t_year_type = &#x27;Array&#x27;) then
+      begin
+        jsa_years = json.obj_get_arr(jso_contract, &#x27;PaymentsCalendar.Year&#x27;);
+        year_cnt = json.count_get(jsa_years);
+      end
+      else
+        year_cnt = 0;
+
+      -- итерируемся по массиву лет с конца в начало
+      y = year_cnt - 1;
+      while (y &gt;= 0) do
+      begin
+        if (is_overdue_90 = 1) then leave;
+
+        if (t_year_type = &#x27;Array&#x27;) then
+          jso_year = json.arr_get_obj(jsa_years, y);
+
+        if (jso_year is not null) then
+        begin
+          yy = json.obj_get_val(jso_year, &#x27;title&#x27;, 0);
+          if (yy &lt; from_year) then leave; -- если год уже меньше искомого диапазона, прекращаем обход лет
+
+          if (yy between from_year and curr_year) then
+          begin
+            jsa_payments = json.obj_get_arr(jso_year, &#x27;Payment&#x27;);
+            if (jsa_payments is not null) then
+            begin
+              pay_cnt = json.count_get(jsa_payments);
+              p = 0;
+              while (p &lt; pay_cnt) do
+              begin
+                jso_pay = json.arr_get_obj(jsa_payments, p);
+                if (jso_pay is not null) then
+                begin
+                  mm = json.obj_get_val(jso_pay, &#x27;number&#x27;, 0);
+
+                  if ((yy = from_year and mm &gt;= from_month) or (yy = curr_year and mm &lt;= curr_month)) then
+                  begin
+                    tmp_value = json.obj_get_val(jso_pay, &#x27;value&#x27;, &#x27;&#x27;);
+                    if (tmp_value not in (&#x27;&#x27;, &#x27;-&#x27;, &#x27;null&#x27;) and cast(tmp_value as d_integer) &gt; 90) then
+                    begin
+                      is_overdue_90 = 1;
+                      leave;
+                    end
+                  end
+                end
+                p = p + 1;
+              end
+            end
+          end
+        end
+        y = y - 1;
+      end
+      i = i + 1;
+    end
+    ct_idx = ct_idx + 1;
+  end
+
+  update or insert into negativ_kib_history (nkh_from_c_id, nkh_is_gambler, nkh_is_overdue, nkh_is_bankrot,
+                                             nkh_last, nkh_from_un_id, nkh_from_eil_id, nkh_is_overdue_90, nkh_is_restructured, nkh_query_count_90)
+  values (:c_id, :is_gambler, :is_overdue, :is_bankrot, 1, :un_id, :eil_id, :is_overdue_90, :is_restructured, :query_count_90)
+  matching (nkh_from_c_id, nkh_last);
+
+  insert into kib_job_info (kji_from_c_id, kji_from_ma_id, kji_job_title, kji_from_eil_id, kji_create_datetime)
+  values (:c_id, :ma_id, :job_title, :eil_id, current_timestamp);
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

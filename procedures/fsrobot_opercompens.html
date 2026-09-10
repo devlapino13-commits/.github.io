@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FSROBOT_OPERCOMPENS — процедура — схема БД</title>
+<meta name="description" content="Процедура FSROBOT_OPERCOMPENS: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FSROBOT_OPERCOMPENS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">3</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="find_acc_list.html"><div class="to">FIND_ACC_LIST</div></a><a class="ref-card" href="fsrobot_opercompens_tmp.html"><div class="to">FSROBOT_OPERCOMPENS_TMP</div></a><a class="ref-card" href="hp_do_repayment.html"><div class="to">HP_DO_REPAYMENT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fsrobot_opercompens_anonim_tr.html"><div class="to">FSROBOT_OPERCOMPENS_ANONIM_TR</div></a><a class="ref-card" href="hp_compens_exec.html"><div class="to">HP_COMPENS_EXEC</div></a><a class="ref-card" href="hp_reaccept_repayment.html"><div class="to">HP_REACCEPT_REPAYMENT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FSROBOT_OPERCOMPENS(
+    REP_DATE D_DATE,
+    REP_K_ID D_ID = null)
+AS
+declare variable kcc_id d_integer;
+declare variable k_id d_id;
+declare variable region_id d_integer;
+declare variable dt_acc_base d_str_100;
+declare variable perc_and_nsp d_currency;
+declare variable c_id d_id;
+declare variable al_id d_str_100;
+declare variable ol_id d_id;
+begin
+    for select kcc_id,
+               k_id,
+               c_id,
+               kal_new_reg_id,
+               iif(pr_code like &#x27;%.ipf.%&#x27;, &#x27;11531/202&#x27;, &#x27;11531/201&#x27;),
+               cli_perc_dolia_corrected
+    from fsrobot_opercompens_tmp(:rep_date, 2, :rep_k_id)
+    where ((k_id = :rep_k_id) or (:rep_k_id is null))
+    into :kcc_id,
+         :k_id,
+         :c_id,
+         :region_id,
+         :dt_acc_base,
+         :perc_and_nsp
+    do
+    begin
+      -- если операция ранее уже была создана, тогда считаю что робот отработал и новую не создаю.
+      if (exists(select *
+                 from compens_robot_log t
+                 inner join operlist ol on t.crl_from_ol_id = ol.ol_id
+                 where ol.ol_date = :rep_date
+                 and ol.is_delete = 0
+                 and t.crl_from_kcc_id = :kcc_id
+             )) then
+                continue;
+
+      al_id = null;
+
+      select al_id
+      from find_acc_list(:dt_acc_base)
+      where al_from_reg_id = :region_id
+      into :al_id;
+
+      if (al_id is null) then
+        exception e_default &#x27;kcc_id = &#x27;||kcc_id||&#x27;; region_id = &#x27;||:region_id||&#x27;; al_id is null&#x27;;
+
+      ol_id = null;
+
+      select ol_id
+      from  hp_do_repayment (
+          :k_id,     -- k_id
+          0,                      -- c_id
+          :rep_date,           -- rep_date
+          :perc_and_nsp,                   -- repay_amount
+          0,                      -- repay_to_os
+          1,                      -- repay_to_perc
+          0,                      -- repay_to_fine
+          0,                      -- repay_to_kommis
+          1,                      -- need_save
+          0,                      -- is_full_repay
+          0,                      -- is_writeoff
+          :region_id,                -- repay_fact_office_id
+          3,                      -- repay_dt_account_kind
+          :al_id,   -- repay_dt_account_no
+          0,                      -- repay_curr_rate
+          1000000000000,          -- repay_user_id
+          :c_id,          -- repay_document_client
+          &#x27;погашение процентов государством&#x27;,       -- repay_doc_client_name_reason
+          0,                      -- repay_manager_c_id
+          0,                      -- repay_from_rd_id
+          0,                      -- repay_control_amount
+          0                       -- need_writeoff_operextra
+      )
+      into :ol_id;    
+
+      if (coalesce(ol_id, 0) &gt; 0) then
+      begin
+          insert into compens_robot_log (crl_from_kcc_id, crl_from_ol_id)
+          values (:kcc_id, :ol_id);
+      end
+   end
+
+   if (rep_k_id is null) then
+   begin
+      delete from fsrobot_eventlist fse
+      where fel_command_kind in (&#x27;Loan_LO_Repay_OK&#x27;, &#x27;Loan_Repay_OK&#x27;, &#x27;Loan_Repay_X&#x27;, &#x27;Push_Loan_LO_Repay&#x27;);
+   end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

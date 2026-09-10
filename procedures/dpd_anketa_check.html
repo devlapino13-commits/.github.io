@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DPD_ANKETA_CHECK — процедура — схема БД</title>
+<meta name="description" content="Процедура DPD_ANKETA_CHECK: 3 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>DPD_ANKETA_CHECK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="pdn_info_action.html"><div class="to">PDN_INFO_ACTION</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="cm_ru_0298_sql.html"><div class="to">CM_RU_0298_SQL</div></a><a class="ref-card" href="fm_dpd_anketa_action.html"><div class="to">FM_DPD_ANKETA_ACTION</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OBJ_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KIND</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_CODE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE DPD_ANKETA_CHECK(
+    OBJ_KIND D_STR_CODE,
+    OBJ_ID D_ID,
+    KIND D_SMALLINT = 0)
+RETURNS (
+    RES_CODE D_SMALLINT,
+    RES_TEXT D_STR_LONG)
+AS
+declare variable survey_json d_str_8100;
+declare variable jso d_integer;
+declare variable gdoc d_smallint;
+declare variable dtlastm d_integer;
+declare variable dtjob d_str_20;
+declare variable employer d_str_255;
+declare variable income decimal(18,2);
+declare variable taxrate d_smallint;
+declare variable nmonth d_smallint;
+declare variable incomewt decimal(18,2);
+declare variable incomeavg decimal(18,2);
+declare variable data_count d_smallint;
+declare variable c_id d_id;
+begin
+    res_code = 1;
+    res_text = &#x27;&#x27;;
+
+    if (:obj_kind &lt;&gt; &#x27;miniappclient_income&#x27;) then
+    begin
+        res_code = -1;
+        res_text = &#x27;Неверный тип объекта&#x27;;
+
+        suspend;
+        exit;
+    end
+
+    select c_id,
+           survey_json
+    from pdn_info_action(:obj_kind, :obj_id)
+    into :c_id,
+         :survey_json;
+
+    if (trim(:survey_json) = &#x27;{}&#x27; or :survey_json is null) then
+    begin
+        res_code = -1;
+        res_text = &#x27;Анкета документально подтвержденного дохода не заполнена&#x27;;
+
+        suspend;
+        exit;
+    end
+
+    jso = json.parse(:survey_json);
+
+    if (kind in (0, 1)) then
+    begin
+        gdoc     = json.obj_get_val(jso, &#x27;gdoc&#x27;, null);
+        dtlastm  = json.obj_get_val(jso, &#x27;dtlastm&#x27;, null);
+        employer = json.obj_get_val(jso, &#x27;employer&#x27;, &#x27;&#x27;);
+        dtjob    = json.obj_get_val(jso, &#x27;dtjob&#x27;, &#x27;&#x27;);
+
+        if (not exists(select *
+                       from clientdocs cds
+                       where cds.cds_from_c_id = :c_id
+                         and cds.cds_is_delete = 0
+                         and cds.cds_from_pk_id = 390
+                         and f_date_month_begin(cds.cds_doc_date_begin) = f_date_month_begin(current_date))
+            and coalesce(:dtjob, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;)
+        then
+        begin
+            res_code = -1;
+            res_text = &#x27;Не прикреплен документ о работе у одного работодателя&#x27;;
+
+            suspend;
+            exit;
+        end
+
+        if(not exists(select *
+                      from clientdocs cds
+                      where cds.cds_from_c_id = :c_id
+                        and cds.cds_is_delete = 0
+                        and cds.cds_from_pk_id = 77
+                        and f_date_month_begin(cds.cds_doc_date_begin) = f_date_month_begin(current_date))) then
+        begin
+            res_code = -1;
+            res_text = &#x27;Не прикреплен документ о доходе&#x27;;
+
+            suspend;
+            exit;
+        end
+
+        if (gdoc is null) then
+        begin
+            res_code = -1;
+            res_text = &#x27;Нет ответов на п. 1.1 и 1.2. Сохранение Шага 1 невозможно.&#x27;;
+
+            suspend;
+            exit;
+        end
+
+        if (dtlastm is null) then
+        begin
+            res_code = -1;
+            res_text = &#x27;Не указан месяц последнего полученного дохода (п. 1.2)&#x27;;
+
+            suspend;
+            exit;
+        end
+
+        if (coalesce(employer, &#x27;&#x27;) = &#x27;&#x27;) then
+        begin
+            res_code = -1;
+            res_text = &#x27;Не указано наименование работодателя&#x27;;
+
+            suspend;
+            exit;
+        end
+
+        if (coalesce(:dtjob, &#x27;&#x27;) &lt;&gt; &#x27;&#x27; and dtlastm &lt; 12) then
+        begin
+            res_code = -1;
+            res_text = &#x27;Вопрос 1.3 доступен только при выборе в вопросе 1.2 месяца расчета ПДН или месяца, предшествующего ему.&#x27;;
+
+            suspend;
+            exit;
+        end
+    end
+
+    if (kind in (0, 2)) then
+    begin
+        income = json.obj_get_val(jso, &#x27;income&#x27;, 0);
+        data_count = f_json_str_get_count(jso, &#x27;data&#x27;);
+
+        if (:data_count = 0) then
+        begin
+            res_code = -1;
+            res_text = &#x27;Таблица заполнена не полностью. Сохранение анкеты без ответа на вопрос 2.1 невозможно.&#x27;;
+
+            suspend;
+            exit;
+        end
+
+        if (:income &lt;= 0) then
+        begin
+            res_code = -1;
+            res_text = &#x27;Итоговый доход по анкете должен быть больше 0&#x27;;
+
+            suspend;
+            exit;
+        end
+    end
+
+    if (kind = 0) then
+    begin
+        gdoc      = json.obj_get_val(jso, &#x27;gdoc&#x27;, -1);
+        taxrate   = json.obj_get_val(jso, &#x27;taxrate&#x27;, -1);
+        nmonth    = json.obj_get_val(jso, &#x27;nmonth&#x27;, 0);
+        incomewt  = json.obj_get_val(jso, &#x27;incomewt&#x27;, 0);
+        incomeavg = json.obj_get_val(jso, &#x27;incomeavg&#x27;, 0);
+
+        if (:taxrate not in (0, 13)) then
+        begin
+            res_code = -1;
+            res_text = &#x27;Некорректная ставка НДФЛ&#x27;;
+
+            suspend;
+            exit;
+        end
+
+        if (:nmonth &lt; 3 or :nmonth &gt; 12) then
+        begin
+            res_code = -1;
+            res_text = &#x27;Количество месяцев для расчёта среднего дохода должно быть от 3 до 12&#x27;;
+
+            suspend;
+            exit;
+        end
+
+        if (:incomeavg &lt;= 0) then
+        begin
+            res_code = -1;
+            res_text = &#x27;Не рассчитан среднемесячный подтверждённый доход&#x27;;
+
+            suspend;
+            exit;
+        end
+
+        if (:incomewt &lt; 0) then
+        begin
+            res_code = -1;
+            res_text = &#x27;Не рассчитан доход за вычетом НДФЛ&#x27;;
+
+            suspend;
+            exit;
+        end
+    end
+
+    suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_OPERCASH_CLIENT_KONT_TMP — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_OPERCASH_CLIENT_KONT_TMP: 3 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_OPERCASH_CLIENT_KONT_TMP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_operextra_saldo.html"><div class="to">AAREP_OPEREXTRA_SALDO</div></a><a class="ref-card" href="hp_ipf_check_insurance_pay.html"><div class="to">HP_IPF_CHECK_INSURANCE_PAY</div></a><a class="ref-card" href="hp_opercash_loan_other_amount.html"><div class="to">HP_OPERCASH_LOAN_OTHER_AMOUNT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_opercash_client_kontracts.html"><div class="to">HP_OPERCASH_CLIENT_KONTRACTS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LKP_OFFICE_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ADD_INFO</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_KONTRACT_NAME</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_SORT_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_OPERCASH_CLIENT_KONT_TMP(
+    C_ID D_ID,
+    LKP_OFFICE_ID D_INTEGER,
+    ADD_INFO D_STR_CODE)
+RETURNS (
+    RES_K_ID D_ID,
+    RES_KONTRACT_NAME D_STR_255,
+    RES_SORT_DATE D_DATE)
+AS
+declare variable ks_state d_smallint;
+declare variable need_suspend d_bool;
+declare variable tmp_amount d_currency;
+declare variable kf_id d_id;
+declare variable kf_name d_str_code;
+declare variable k_status d_smallint;
+declare variable edoc_kind d_integer;
+declare variable k_disb_kind d_integer;
+declare variable k_cons_kind d_smallint;
+declare variable pr_code d_str_100;
+declare variable res_text d_str_255;
+begin
+  add_info = coalesce(add_info, &#x27;&#x27;);
+  if (add_info = &#x27;&#x27;) then
+    Exit;
+
+  if (lkp_office_id is null) then
+    exit;
+
+  add_info = f_enum_code(&#x27;cashoperkind&#x27;, add_info);
+
+  for select kc_from_k_id, k_from_kf_id, k_status, k_disb_date,
+             k_kontract_no || &#x27; от &#x27; || f_datetostr(k_disb_date) ||
+             &#x27;, &#x27; || pr_name, k_disb_kind, k_cons_kind, pr_code
+  from knclient, kontract, product
+  where kc_from_c_id = :c_id and
+        kc_amount_approved &gt; 0 and
+        kc_from_k_id = k_id and
+        k_from_pr_id = pr_id
+  into res_k_id, kf_id, k_status, res_sort_date, res_kontract_name, k_disb_kind, k_cons_kind, pr_code
+  do
+  begin
+    ks_state = null;
+    select ks_state
+    from kontstate
+    where ks_from_k_id = :res_k_id and
+          ks_ol_is_delete = 0 and
+          ks_date_end &gt;= &#x27;31.12.2999&#x27;
+    into ks_state;
+
+    need_suspend = 1;
+  
+    if (add_info = &#x27;minus.loan.disb&#x27; and pr_code containing &#x27;.insur_kontrakt.&#x27;) then  -- RFCKG-4831
+      need_suspend = 0;
+
+    if (add_info = &#x27;minus.loan.disb&#x27; and pr_code containing &#x27;.ipf.&#x27;) then  -- RFCKG-5347
+      need_suspend = 0;
+
+    if (add_info in (&#x27;plus.loan.repay&#x27;, &#x27;plus.loan.cl_repay&#x27;)) then
+    begin
+      if (ks_state &lt;&gt; 1) then
+        need_suspend = 0;
+      else
+      begin
+        select ok_sh_date
+        from operkred
+        where ok_from_k_id = :res_k_id and
+              ok_ol_is_active = 1 and
+              ok_type &lt; 7
+        group by 1
+        having sum(ok_sh_os + ok_sh_perc + ok_os + ok_perc) &gt; 0
+        order by ok_sh_date -- RFCKG-5095
+        rows 1
+        into res_sort_date;
+      end
+    end else
+    if (add_info = &#x27;plus.loan.card_kommis&#x27;) then
+    begin
+      /*
+      if (not exists(select * from cardlistlnk
+                     where cll_from_k_id = :res_k_id and
+                           cll_date_end &gt;= current_date)) then
+        need_suspend = 0;
+      */
+
+      if (not exists(select *
+                     from cardaktclient
+                     where cac_from_k_id = :res_k_id and
+                           cac_from_c_id = :c_id and
+                           cac_status  = f_enum_id(&#x27;cardaktclient&#x27;, &#x27;issued_delayed&#x27;))) then
+        need_suspend = 0;
+    end else
+    if (add_info = &#x27;minus.loan.overpay&#x27;) then
+    begin
+      tmp_amount = 0;
+      select sum(ok_os)
+      from operkred
+      where ok_from_k_id = :res_k_id and
+            ok_ol_is_active = 1 and
+            ok_type = 9
+      into tmp_amount;
+
+      if (tmp_amount is null) then
+        tmp_amount = 0;
+
+      if (tmp_amount = 0) then
+        need_suspend = 0;
+
+      if (need_suspend = 0) then
+      begin
+        select -sum(ok_perc + ok_tax)
+        from operkred
+        where ok_from_k_id = :res_k_id and
+              ok_ol_is_active = 1 and
+              ok_type = 9 and
+              ok_ol_date = &#x27;31.12.2025&#x27;
+        into tmp_amount; -- RFCKG-5143
+  
+        if (tmp_amount is null) then
+          tmp_amount = 0;
+  
+        if (tmp_amount &gt; 0) then
+          need_suspend = 1;
+      end
+    end else
+    if (add_info = &#x27;plus.loan.offpay&#x27;) then
+    begin
+      tmp_amount = 0;
+      select sum(oko_os + oko_sh_os + oko_perc + oko_sh_perc + oko_other + oko_sh_other)
+      from operkroff
+      where oko_from_k_id = :res_k_id and
+            oko_from_c_id = :c_id and
+            oko_ol_is_active = 1
+      into tmp_amount;
+
+      if (tmp_amount is null) then
+        tmp_amount = 0;
+
+      if (tmp_amount &lt;= 0) then
+        need_suspend = 0;
+    end else
+    if (add_info = &#x27;plus.loan.sud&#x27;) then
+    begin
+      tmp_amount = 0;
+
+      select res_amount_saldo
+      from aarep_operextra_saldo(9, :res_k_id, f_get_rd_id(&#x27;OperExtraKind.LawClientExpense&#x27;), &#x27;LoanRepay&#x27;, current_date, 0)
+      where res_amount_saldo &gt; 0
+      into tmp_amount;
+
+      if (tmp_amount is null) then
+        tmp_amount = 0;
+
+      if (tmp_amount &lt;= 0) then
+        need_suspend = 0;
+    end else
+    if (add_info in (&#x27;minus.loan.konsult&#x27;, &#x27;minus.loan.disb&#x27;, &#x27;plus.loan.konsult&#x27;, &#x27;plus.loan.partial&#x27;, &#x27;plus.loan.insurance&#x27;)) then
+    begin
+      -- Утвержденные договора в процессе, не выданные
+      if (ks_state &lt;&gt; 0 or k_status &lt;&gt; 1) then
+        need_suspend = 0;
+
+      if (need_suspend = 1) then
+      begin
+        if (not exists(select * from loantodisb
+                       where lnd_from_k_id = :res_k_id and
+                             lnd_disb_office_id = :lkp_office_id and
+                             lnd_is_ready = 1)) then
+          need_suspend = 0;
+      end
+
+      if (need_suspend = 1) then
+      begin
+        if (add_info = &#x27;minus.loan.disb&#x27;) then
+        begin
+          if (k_disb_kind &lt;&gt; 1) then
+            need_suspend = 0;
+          else
+          begin
+            if (edoc_kind is null) then
+              edoc_kind = f_edoc_kind(&#x27;loan.agreement&#x27;, &#x27;id&#x27;);
+    
+            -- Если нет подписанного эл.документа, не показываем займ
+            if (not exists(select * from edoc_list
+            where edl_object_kind = 9 and -- Kontract
+                  edl_object_id = :res_k_id and
+                  edl_from_edc_id = :edoc_kind and
+                  edl_status = 1)) then
+              need_suspend = 0;
+
+            -- RFCKG-3947
+            if (need_suspend = 1
+                and exists
+                (
+                    select 1
+                    from hp_opercash_loan_other_amount(:res_k_id, &#x27;CashTransactionIncom.Consultation&#x27;)
+                    where res_amount &gt; 0
+                )
+            ) then
+                need_suspend = 0;
+
+            -- RFCKG-3661
+            if (need_suspend = 1
+                and exists
+                (
+                    select 1
+                    from hp_opercash_loan_other_amount(:res_k_id, &#x27;CashTransactionIncom.Insurance&#x27;)
+                    where res_amount &gt; 0
+                )
+            ) then
+                need_suspend = 0;
+          end
+        end
+      end
+    end
+
+    if (add_info = &#x27;plus.loan.partial&#x27; and need_suspend = 1) then
+    begin
+      select res_amount
+      from hp_opercash_loan_other_amount(:res_k_id, &#x27;CashTransactionIncom.PartialPrice&#x27;)
+      into :tmp_amount;
+
+      if (tmp_amount &lt;= 0) then
+        need_suspend = 0;
+    end
+
+    if (add_info = &#x27;plus.loan.konsult&#x27; and k_cons_kind &gt; 0) then
+      need_suspend = iif(ks_state = 1, 1, 0); -- оплата конс. услуг в рассрочку принимается только если займ активный (RFCKG-4900)
+
+    if (add_info = &#x27;plus.loan.konsult&#x27; and need_suspend = 1) then
+    begin
+      select res_amount
+      from hp_opercash_loan_other_amount(:res_k_id, &#x27;CashTransactionIncom.Consultation&#x27;)
+      into :tmp_amount;
+
+      if (tmp_amount &lt;= 0) then
+        need_suspend = 0;
+    end
+
+    if (add_info = &#x27;plus.loan.insurance&#x27; and need_suspend = 0) then
+    begin
+      select res_text
+      from hp_ipf_check_insurance_pay(:res_k_id)
+      into res_text;
+
+      if (res_text &lt;&gt; &#x27;&#x27;) then
+        need_suspend = 1; -- RFCKG-5390
+    end
+
+    if (add_info = &#x27;plus.loan.insurance&#x27; and need_suspend = 1) then
+    begin
+      select res_amount
+      from hp_opercash_loan_other_amount(:res_k_id, &#x27;CashTransactionIncom.Insurance&#x27;)
+      into :tmp_amount;
+
+      if (tmp_amount &lt;= 0) then
+        need_suspend = 0;
+    end
+
+    if (need_suspend = 1) then
+    begin
+      kf_name = &#x27;&#x27;;
+      select kal_new_kf_name
+      from knaktlist
+      where kal_from_kf_id = :kf_id and
+            kal_date_end &gt;=  &#x27;31.12.2999&#x27; and
+            is_delete = 0
+      into kf_name;
+  
+      if (kf_name &lt;&gt; &#x27;&#x27;) then
+        res_kontract_name = res_kontract_name || &#x27;  (&#x27; || kf_name || &#x27;)&#x27;;
+  
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

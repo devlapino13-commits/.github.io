@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_RELATION_LIST — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_RELATION_LIST: 1 входных, 8 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_RELATION_LIST</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">8</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_relation_list_tmp.html"><div class="to">AAREP_RELATION_LIST_TMP</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">8 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REL_C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REL_C_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REL_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REL_DISTANCE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REL_CELL_NO</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REL_ADDRESS</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REL_LINK_WITH_COMPANY</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REL_BLACK_LIST</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_RELATION_LIST(
+    C_ID DECIMAL(18,0))
+RETURNS (
+    REL_C_ID DECIMAL(18,0),
+    REL_C_FIO VARCHAR(100),
+    REL_NAME VARCHAR(100),
+    REL_DISTANCE INTEGER,
+    REL_CELL_NO VARCHAR(50),
+    REL_ADDRESS VARCHAR(255),
+    REL_LINK_WITH_COMPANY VARCHAR(255),
+    REL_BLACK_LIST VARCHAR(100))
+AS
+declare variable m_is_black integer;
+declare variable full_list d_blob_text;
+begin
+-- Ищет все связи с контрагентом если он(а) не действующий сотрудник
+-- Находит если были:
+--   общий адрес
+--   общий старый адрес (места жительства)
+--   общий телефон
+--   родственные связи
+--   родственники родственников (уданность 5 узлов)
+--   контактные лица
+--   в одной группе солидарности получали кредит
+--   Если по адресам не найдены, ищет активных клиентов в одном доме
+--   Если по адресам не найдены и нет актив.кл. в одном доме, то ищет активных клиентов с одной улицы
+--   Если есть общие контакты
+  full_list = &#x27;&#x27;;
+  for select distinct rel_c_id, rel_fio, rel_name, rel_distance, rel_cell_no,
+                      iif(rel_address = &#x27;Не указан&#x27;, &#x27;&#x27;, rel_address)
+      from aarep_relation_list_tmp(:c_id)
+      order by 4, 1
+      into :rel_c_id, :rel_c_fio, :rel_name, :rel_distance, rel_cell_no, rel_address
+  do
+  begin
+    if (position(rel_c_fio, full_list) &lt;= 0) then
+    begin
+      full_list = blob_append(full_list, &#x27;;&#x27;, rel_c_fio);
+      rel_link_with_company = &#x27;&#x27;;
+      if (rel_c_id is not null) then
+      begin
+        if (exists(select *
+                   from hr_pstatus
+                   where ps_from_c_id = :rel_c_id and
+                         ps_date_end &gt;= &#x27;31.12.2999&#x27; and
+                         ps_is_working = 1 and
+                         ps_status = 1)) then
+        begin
+          rel_link_with_company = &#x27;Действ.сотрудник&#x27;;
+          rel_cell_no = &#x27;***&#x27;;
+          rel_address = &#x27;***&#x27;;
+        end
+        else
+        if (exists(select *
+                   from hr_pstatus
+                   where ps_from_c_id = :rel_c_id and
+                         ps_date_end &gt;= &#x27;31.12.2999&#x27; and
+                         ps_is_working = 0 and
+                         ps_status = 1)) then
+          rel_link_with_company = &#x27;Бывший сотрудник&#x27;;
+
+        if (exists(select *
+                   from knclient, kontstate
+                   where kc_from_c_id = :rel_c_id and
+                         kc_amount_approved &gt; 0 and
+                         kc_from_k_id = ks_from_k_id and
+                         ks_ol_is_delete = 0 and
+                         ks_state = 1 and
+                         ks_date_end &gt;= &#x27;31.12.2999&#x27;)) then
+        begin
+          if (rel_link_with_company = &#x27;&#x27;) then
+            rel_link_with_company = &#x27;Активный клиент&#x27;;
+          else
+            rel_link_with_company = rel_link_with_company || &#x27;, активный клиент&#x27;;
+        end
+        else
+        begin
+          if (exists(select *
+                     from knclient, kontstate
+                     where kc_from_c_id = :rel_c_id and
+                           kc_amount_approved &gt; 0 and
+                           kc_from_k_id = ks_from_k_id and
+                           ks_ol_is_delete = 0 and
+                           ks_state = 1)) then
+          begin
+            if (rel_link_with_company = &#x27;&#x27;) then
+              rel_link_with_company = &#x27;Бывший клиент&#x27;;
+            else
+              rel_link_with_company = rel_link_with_company || &#x27;, бывший клиент&#x27;;
+          end
+        end
+        m_is_black = -1;
+        rel_black_list = &#x27;&#x27;;
+        if (rel_c_id is not null) then
+        begin
+          select m_is_black
+          from moratory
+          where m_from_c_id = :rel_c_id and
+                m_is_active = 1 and
+                m_is_black &gt; 0
+          order by m_date_begin desc
+          rows 1
+          into :m_is_black;
+
+          if (m_is_black = 1) then
+            rel_black_list = &#x27;Ранее отказано&#x27;;
+          if (m_is_black = 2) then
+            rel_black_list = &#x27;Стоп лист&#x27;;
+        end
+      end
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

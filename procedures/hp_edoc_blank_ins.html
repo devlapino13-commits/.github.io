@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EDOC_BLANK_INS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EDOC_BLANK_INS: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EDOC_BLANK_INS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">6 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_check_edf.html"><div class="to">HP_CHECK_EDF</div></a><a class="ref-card" href="hp_edoc_blank_lang.html"><div class="to">HP_EDOC_BLANK_LANG</div></a><a class="ref-card" href="hp_edoc_get_blank_info.html"><div class="to">HP_EDOC_GET_BLANK_INFO</div></a><a class="ref-card" href="hp_edoc_object_info.html"><div class="to">HP_EDOC_OBJECT_INFO</div></a><a class="ref-card" href="hp_edoc_sign_clients.html"><div class="to">HP_EDOC_SIGN_CLIENTS</div></a><a class="ref-card" href="hp_split_str.html"><div class="to">HP_SPLIT_STR</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_edoc_asp_insert.html"><div class="to">HP_EDOC_ASP_INSERT</div></a><a class="ref-card" href="hp_edoc_insert.html"><div class="to">HP_EDOC_INSERT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EDL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LANG</div><div class="ptype">VARCHAR(10)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">BLANK_COUNT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EDOC_BLANK_INS(
+    EDL_ID D_ID,
+    LANG D_STR_10 = null)
+RETURNS (
+    BLANK_COUNT D_INTEGER)
+AS
+declare variable edc_id d_integer;
+declare variable blank_date d_date;
+declare variable edf_id d_integer;
+declare variable bln_id d_integer;
+declare variable bls_id d_id;
+declare variable edf_add_code d_str_code;
+declare variable edb_id d_id;
+declare variable edb_status d_integer;
+declare variable edl_object_id d_id;
+declare variable err_text d_str_255;
+declare variable edl_object_kind d_integer;
+declare variable edf_for_each_client d_smallint;
+declare variable c_id d_id;
+declare variable pr_id d_integer;
+declare variable un_id d_id;
+declare variable tmp_obj_kind d_integer;
+declare variable tmp_obj_id d_id;
+declare variable blob_date d_date;
+declare variable edf_date_kind d_smallint;
+declare variable edf_need_approve d_smallint;
+declare variable blank_lang d_str_lang;
+declare variable db_id d_integer;
+declare variable edf_prepare_kind d_integer;
+declare variable edn_blank_list d_str_long;
+declare variable edc_code d_str_code;
+declare variable need_to_continue d_smallint;
+begin
+  -- Процедура заносит бланки в очередь для приготовления pdf сервисом
+  db_id = f_get_db_id();
+  blank_count = 0;
+
+  -- Получаем проект. Он должен быть действующим на дату или в режиме тестирования
+  select edl_from_edc_id, edl_blank_date, edl_object_kind, edl_object_id, edl_create_un_id, edc_code
+  from edoc_list, edoc_cfg
+  where edl_id = :edl_id and
+        edl_from_edc_id = edc_id
+  into edc_id, blank_date, edl_object_kind, edl_object_id, un_id, edc_code;
+
+  -- По недействующим проектам ничего не выполняем
+  if (edc_id is null) then
+  begin
+    suspend;
+    exit;
+  end
+
+  if (edc_code = &#x27;staff.orders&#x27;) then
+  begin
+    for select prb_blank_bln_id, prb_blank_blob
+    from ux$preblanks
+    where prb_prepared = 1 and
+          prb_selected = 1 and
+          prb_blank_bls_id is not null
+    as cursor cur
+    do
+    begin
+      edf_id = null;
+
+      select edf_id
+      from edoc_frx
+      where edf_from_edc_id = :edc_id and
+            edf_from_bln_id = cur.prb_blank_bln_id
+      into edf_id;
+
+      if (edf_id is not null) then
+      begin
+        blank_count = blank_count + 1;
+
+        insert into edoc_blank (edb_from_edf_id, edb_from_edl_id, edb_from_bln_id, edb_blob, edb_status)
+        values (:edf_id, :edl_id, cur.prb_blank_bln_id, cur.prb_blank_blob, 1);
+      end else
+        exception e_message &#x27;Бланк не настроен в электронном документе&#x27;;
+    end
+
+    if (blank_count = 0) then
+      exception e_message &#x27;Бланки не приготовлены&#x27;;
+    else
+      blank_count = 0;
+
+    suspend;
+    exit;
+  end
+
+  for select edf_id, edf_add_code, edf_for_each_client, edf_date_kind, edf_need_approve, edf_prepare_kind, edc_code
+      from edoc_frx, edoc_cfg
+      where edc_id = :edc_id and
+            edf_from_edc_id = edc_id and
+            :blank_date between edf_date_begin and coalesce(edf_date_end, :blank_date) and
+            edf_prepare_kind &lt;&gt; 0
+      into edf_id, edf_add_code, edf_for_each_client, edf_date_kind, edf_need_approve, edf_prepare_kind, edc_code
+  do
+  begin
+    select need_to_continue
+    from hp_check_edf(:edl_object_kind, :edl_object_id, :edf_add_code, :edc_code)
+    into need_to_continue;
+
+    if (need_to_continue = 1) then
+      continue;
+
+    if (edf_prepare_kind = 6) then
+    begin
+      edn_blank_list = &#x27;&#x27;;
+
+      select edn_blank_list
+      from edoc_conf
+      where edn_edl_id = :edl_id
+      into edn_blank_list;
+
+      if (edn_blank_list &lt;&gt; &#x27;&#x27;) then
+      begin
+        for select res_str
+        from hp_split_str(:edn_blank_list, &#x27;,&#x27;)
+        into :bln_id
+        do
+        begin
+          blank_count = blank_count + 1;
+
+          insert into edoc_blank (edb_from_edf_id, edb_from_edl_id, edb_from_c_id, edb_from_bln_id, edb_from_bls_id,
+                                  edb_status, edb_need_approve)
+          values (:edf_id, :edl_id, null, :bln_id, null, 0, :edf_need_approve);
+        end
+      end
+
+      Continue;
+    end
+
+    pr_id = null;
+    select pr_id
+    from hp_edoc_object_info(:edl_object_kind, :edl_object_id, :un_id, :blank_date)
+    into pr_id;
+
+    blob_date = blank_date;
+    if (edf_date_kind = 1) then -- версию бланка нужно брать на дату выдачи займа
+    begin
+      tmp_obj_kind = edl_object_kind;
+      tmp_obj_id = edl_object_id;
+      if (f_objkind(edl_object_kind, &#x27;name&#x27;) = &#x27;com_list&#x27;) then
+      begin
+        select cml_object_kind, cml_object_id
+        from com_list
+        where cml_id = :edl_object_id
+        into tmp_obj_kind, tmp_obj_id;
+      end
+
+      select blank_date
+      from hp_edoc_object_info(:tmp_obj_kind, :tmp_obj_id, :un_id, null)
+      into blob_date;
+    end
+
+    -- Получаем список необходых языков бланка для формирования бланка
+    for select blank_lang
+        from hp_edoc_blank_lang(:edc_id, :edl_object_kind, :edl_object_id, :edf_add_code)
+        into :blank_lang
+    do
+    begin
+      bln_id = null;
+      bls_id = null;
+      err_text = &#x27;&#x27;;
+
+      if (lang is not null and
+          (select edc.edc_code
+           from edoc_list edl
+           inner join edoc_cfg edc on edl.edl_from_edc_id = edc.edc_id
+           where edl.edl_id = :edl_id) = &#x27;asp.agreement&#x27;) then
+        blank_lang = :lang;
+
+      select bln_id, bls_id, err_text
+      from hp_edoc_get_blank_info(:edf_id, :pr_id, :blank_date, :blank_lang, :blob_date)
+      into bln_id, bls_id, err_text;
+
+      if (err_text &lt;&gt; &#x27;&#x27;) then
+        exception e_default err_text;
+
+      if (bln_id is null and
+          bls_id is null) then
+        continue;
+
+      tmp_obj_id = edl_object_id;
+      if (edf_for_each_client = 0) then
+        tmp_obj_id = null;
+
+      for select c_id
+          from hp_edoc_sign_clients(:edc_id, :edl_object_kind, :tmp_obj_id, :edf_add_code)
+          into c_id
+      do
+      begin
+        edb_id = null;
+
+        --Исключаю АНКЕТУ ПОФТЭ для лиц дающих согласие----------
+        if (:db_id in (39801, 41701) and
+            :edl_object_kind = f_objkind(&#x27;miniapp&#x27;, &#x27;id&#x27;) and
+            :edf_id = 2 and --Анкета ПОФТЭ
+            exists(select *
+                   from miniappclient mac
+                   where mac.mac_from_ma_id = :edl_object_id and
+                         mac.mac_from_c_id = :c_id and
+                         mac.mac_is_poruch = -1)) then
+          continue;
+        ----------------------------------------------------------
+        if (bln_id is not null) then
+        begin
+          select edb_id, edb_status
+          from edoc_blank
+          where edb_from_edl_id = :edl_id and
+                edb_from_edf_id = :edf_id and
+                edb_from_bln_id = :bln_id and
+                coalesce(edb_from_c_id, 0) = coalesce(:c_id, 0)
+          into edb_id, edb_status;
+        end
+        else
+        begin
+          select edb_id, edb_status
+          from edoc_blank
+          where edb_from_edl_id = :edl_id and
+                edb_from_edf_id = :edf_id and
+                edb_from_bls_id = :bls_id and
+                coalesce(edb_from_c_id, 0) = coalesce(:c_id, 0)
+          into edb_id, edb_status;
+        end
+
+        if (edb_id is not null) then
+        begin
+          if (edb_status not in (1, 2)) then
+          begin
+            blank_count = blank_count + 1;
+
+            update edoc_blank
+            set edb_from_bln_id = :bln_id,
+                edb_from_bls_id = :bls_id,
+                edb_blob = null,
+                edb_status = 0,
+                edb_need_approve = :edf_need_approve
+            where edb_id = :edb_id;
+          end
+        end
+        else
+        begin
+          blank_count = blank_count + 1;
+
+          insert into edoc_blank (edb_from_edf_id, edb_from_edl_id, edb_from_c_id, edb_from_bln_id, edb_from_bls_id,
+                                  edb_status, edb_need_approve)
+          values (:edf_id, :edl_id, :c_id, :bln_id, :bls_id, 0, :edf_need_approve);
+        end
+      end
+    end
+  end
+
+  -- Если бланк заранее готов (имеется BLS_ID), то отмечаем его приготовленным
+  update edoc_blank
+  set edb_status = 1
+  where edb_from_edl_id = :edl_id and
+        edb_from_bls_id is not null and
+        edb_status &lt;&gt; 1;
+
+  -- Если бланк готовится online, также отмечаем его приготовленным
+  for select edf_id
+      from edoc_frx
+      where edf_from_edc_id = :edc_id and
+            edf_is_online = 1
+      into edf_id
+  do
+    update edoc_blank
+    set edb_status = 1
+    where edb_from_edl_id = :edl_id and
+          edb_from_edf_id = :edf_id and
+          edb_status &lt;&gt; 1;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

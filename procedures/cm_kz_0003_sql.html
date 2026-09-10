@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_KZ_0003_SQL — процедура — схема БД</title>
+<meta name="description" content="Процедура CM_KZ_0003_SQL: 3 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_KZ_0003_SQL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_stop_credit_query_status.html"><div class="to">HP_STOP_CREDIT_QUERY_STATUS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_KZ_0003_SQL(
+    MA_ID D_INTEGER NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable OBJ_KIND D_INTEGER;
+declare variable STOP_CREDIT_STATUS D_SMALLINT;
+declare variable STOP_CREDIT_ANSWER_DATE D_DATE;
+declare variable STOP_CREDIT_QUERY_DATETIME D_DATETIME;
+declare variable SERVICE_MAX_DELAY_SECONDS D_INTEGER;
+declare variable C_ID D_ID;
+begin
+    -- RFCKG-4392, RFCKZ-23
+
+    if (f_get_const(&#x27;stop_credit_is_active&#x27;) = 0) then
+        exit;
+
+    res_error_text = &#x27;&#x27;;
+    res_error_is_critical = 2;
+    obj_kind = f_objkind(&#x27;miniapp&#x27;, &#x27;id&#x27;);
+    service_max_delay_seconds = cast(f_get_const(&#x27;stop_credit_service_max_delay_seconds&#x27;) as d_integer);
+
+    select status, answer_date, query_datetime
+    from hp_stop_credit_query_status(:obj_kind, :ma_id)
+    into :stop_credit_status, :stop_credit_answer_date, :stop_credit_query_datetime;
+
+    if (stop_credit_status = 1 and f_is_stopcred_actual(:stop_credit_answer_date) = 1) then -- Есть активный стоп-кредит
+        res_error_text = &#x27;У клиента действует стоп-кредит, выдача невозможна&#x27;;
+
+    if (stop_credit_status in (0, 1) and f_is_stopcred_actual(:stop_credit_answer_date) = 0) then -- Есть ответ по стоп-кредиту, но он уже неактуален
+        res_error_text = &#x27;Полученный статус клиента по стоп-кредиту уже не актуален, запросите новый&#x27;;
+
+    if (stop_credit_status = -1) then
+        res_error_text = &#x27;Запрос на сервис стоп-кредита еще не осуществлялся&#x27;;
+
+    if (stop_credit_status = -2) then
+    begin
+        if (datediff(second, stop_credit_query_datetime, current_timestamp) &gt;= service_max_delay_seconds) then
+        begin
+            if (f_is_stopcred_doc_loaded(:obj_kind, :ma_id) = 0) then
+                res_error_text = &#x27;Сервис стоп-кредит не отвечает, приложите документ или дождитесь ответа&#x27;;
+        end
+        else
+            res_error_text = &#x27;Ответ от сервиса Стоп-кредит ещё не получен&#x27;;
+    end
+
+    if (stop_credit_status = -3) then
+    begin
+        -- RFCKZ-23
+        if (f_is_stopcred_doc_loaded(:obj_kind, :ma_id) = 0) then
+            res_error_text = &#x27;Сервис стоп-кредит ответил с ошибкой, приложите документ&#x27;;
+    end
+
+    if (coalesce(res_error_text, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+        suspend;
+
+
+    -- Проверка банковской карты
+    select mac.mac_from_c_id
+    from miniappclient mac
+    where
+        mac.mac_from_ma_id = :ma_id and
+        mac.mac_is_cashier = 1
+    rows 1
+    into :c_id;
+
+    if (check_kind = &#x27;.create_loan.&#x27; and not exists (
+                                                    select et_cardnumber
+                                                    from extsys_token
+                                                    where
+                                                        et_from_c_id = :c_id and
+                                                        et_is_actual = 1
+                                                    )
+    ) then
+    begin
+        res_error_text = &#x27;У клиента не добавлена банковская карта в КМП&#x27;;
+        -- RFCKZ-877
+        res_error_is_critical = 2;
+        suspend;
+    end
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

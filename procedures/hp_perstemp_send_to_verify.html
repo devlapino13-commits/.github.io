@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_PERSTEMP_SEND_TO_VERIFY — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_PERSTEMP_SEND_TO_VERIFY: 2 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_PERSTEMP_SEND_TO_VERIFY</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_check_finpolis_one.html"><div class="to">AAREP_CHECK_FINPOLIS_ONE</div></a><a class="ref-card" href="hp_send_client_to_verify.html"><div class="to">HP_SEND_CLIENT_TO_VERIFY</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_IS_ERROR</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_PERSTEMP_SEND_TO_VERIFY(
+    C_ID D_ID,
+    UN_ID D_ID)
+RETURNS (
+    RES_TEXT D_STR_255,
+    RES_IS_ERROR D_BOOL)
+AS
+declare variable only_photo_changed d_smallint;
+declare variable c_type             d_integer;
+declare variable c_blob_pass1_id    d_id;
+declare variable c_blob_pass2_id    d_id;
+declare variable c_blob_photo_id    d_id;
+declare variable c_verify_status    d_smallint;
+declare variable cancel_verify      d_bool;
+begin
+  only_photo_changed = 0;
+  res_is_error = 1;
+  res_text = &#x27;&#x27;;
+
+  if (not exists(select * from refdata where rd_code starting &#x27;ActionGroup.Passport_Verify&#x27; and rd_is_active = 1)) then
+    res_text = &#x27;Модуль верификации паспорта отключен&#x27;;
+
+  if (exists(select * from actionorder
+              where aco_object_kind = 0 and
+                    aco_object_id = :c_id and
+                    aco_from_rd_id in (f_get_rd_id(&#x27;ActionGroup.Passport_Verify&#x27;), f_get_rd_id(&#x27;ActionGroup.Passport_Verify_OiVO&#x27;)))) then
+    res_text = &#x27;Данные уже находятся в очереди на верификацию&#x27;;
+
+  if (res_text = &#x27;&#x27;) then
+  begin
+    select c_type, c_blob_pass1_id, c_blob_pass2_id, c_blob_photo_id, c_verify_status
+    from clients
+    where c_id = :c_id
+    into c_type, c_blob_pass1_id, c_blob_pass2_id, c_blob_photo_id, c_verify_status;
+
+    select pte_blob_pass1_id, pte_blob_pass2_id, pte_blob_photo_id
+    from perstemp
+    where pte_from_c_id = :c_id
+    into c_blob_pass1_id, c_blob_pass2_id, c_blob_photo_id;
+
+    if (c_type &lt;&gt; 0) then
+      res_text = &#x27;Юр.лица не подлежат верификации&#x27;;
+    else
+    if (coalesce(c_blob_pass1_id, 0) = 0 or coalesce(c_blob_pass2_id, 0) = 0) then
+      res_text = &#x27;Скан паспорта не прикреплен&#x27;;
+    else
+    if (coalesce(c_blob_photo_id, 0) = 0) then
+      res_text = &#x27;Фото не прикреплено&#x27;;
+  end
+
+  if (res_text = &#x27;&#x27;) then
+  begin
+    if (exists(select * from aarep_check_finpolis_one(:c_id))) then
+    begin
+      res_text = &#x27;ВНИМАНИЕ,&#x27; ||
+                 &#x27;Необходимо связаться с комплайнс менеджером ГО.&#x27; ||
+                 &#x27;Дальнейшие операции с этим контрагентом запрещены.&#x27; ||
+                 &#x27;Детали в меню &quot;Проверка по спискам ТиЭ&quot;&#x27;;
+    end
+  end
+
+  if (res_text = &#x27;&#x27;) then
+  begin
+    cancel_verify = 1;
+    if (f_tmp_const(&#x27;use_perstemp&#x27;) = &#x27;1&#x27;) then
+    begin
+      if (not exists(select * from perstemp
+                     where pte_from_c_id = :c_id)) then
+      begin
+        insert into perstemp (pte_from_c_id)
+        values (:c_id);
+      end
+
+      if (c_verify_status = 2) then
+        cancel_verify = 0;
+    end
+
+    execute procedure hp_send_client_to_verify(:c_id, :un_id, :only_photo_changed);
+
+    if (cancel_verify = 1) then
+    begin
+      update clients
+      set c_verify_status = 0
+      where c_id = :c_id and
+            c_verify_status &lt;&gt; 0;
+    end
+
+    res_is_error = 0;
+    res_text = &#x27;Данные успешно отправлены на верификацию&#x27;;
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

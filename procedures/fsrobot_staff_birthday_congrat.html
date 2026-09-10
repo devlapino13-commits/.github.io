@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FSROBOT_STAFF_BIRTHDAY_CONGRAT — процедура — схема БД</title>
+<meta name="description" content="Процедура FSROBOT_STAFF_BIRTHDAY_CONGRAT: 3 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FSROBOT_STAFF_BIRTHDAY_CONGRAT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_PARAMS</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_EMAIL</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">USER_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_SUBJECT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_BODY</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_MAILLIST</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FSROBOT_STAFF_BIRTHDAY_CONGRAT(
+    REP_PARAMS VARCHAR(255),
+    REP_EMAIL VARCHAR(255),
+    USER_FIO VARCHAR(100))
+RETURNS (
+    RES_SUBJECT VARCHAR(255),
+    RES_BODY BLOB SUB_TYPE TEXT SEGMENT SIZE 80,
+    RES_MAILLIST VARCHAR(255),
+    RES_C_ID DECIMAL(18,0))
+AS
+declare variable C_NAME_FIO varchar(100);
+declare variable RES_TMP_BODY_1 blob sub_type 1 segment size 80;
+declare variable REG_NAME varchar(100);
+declare variable RES_TMP_BODY_2 blob sub_type 1 segment size 80;
+declare variable DD_MONTH integer;
+declare variable DD_DAY integer;
+declare variable JL_NAME varchar(100);
+declare variable CM_DATABASE_ID integer;
+declare variable HAS_REGION integer;
+declare variable REG_ID integer;
+declare variable HAS_HQ integer;
+declare variable NO_LEAP_YEAR integer;
+begin
+-- Процедура вызывается из FSROBOT_SH_MAIN
+-- Процедура готовит список уведомлений для отправки роботом по почте или sms
+-- REP_COMMAND_KIND. Настройки сообщения хранятся в таблице RefData:
+-- справочник NotifyMail || &#x27;.&#x27; || Rep_Command_Kind - строка настроек email
+-- справочник NotifySMS  || &#x27;.&#x27; || Rep_Command_Kind - строка настроек SMS
+
+-- RefData.RD_Memo    - Список получателей
+-- RefData.RD_Tag     - Срок жизни сообщения
+-- RefData.RD_STR_ID  - Название хранимой процедуры, которая готовит текст сообщения
+
+-- Rep_Params - входящий параметры в зависимости от команды, ID-СВЗ
+-- Rep_UN_ID - пользователь
+
+-- STAFF_BIRTHDAY_CONGRAT - поздравление сотрудников
+
+  res_maillist = rep_email;
+  res_tmp_body_1 = &#x27;&#x27;;
+  res_tmp_body_2 = &#x27;&#x27;;
+  rep_params = &#x27;&#x27;;
+
+  dd_month = extract(month from current_date);
+  dd_day = extract(day from current_date);
+  no_leap_year = 0;
+  if (dd_month * 100 + dd_day = 301 and
+      extract(month from dateadd(day, -1, current_date)) * 100 + extract(day from dateadd(day, -1, current_date)) = 228) then
+    no_leap_year = 1; -- не весокосный год
+
+  :cm_database_id = f_get_db_id();
+
+  res_maillist = &#x27;&#x27;;
+  has_region = 0;
+  has_hq = 0;
+  res_c_id = 0;
+
+  for select c_name_fio, jl_name, reg_code || &#x27; &#x27; || reg_name, ps_from_reg_id
+      from hr_pstatus, region, clients, joblist, jobkind
+      where ps_from_c_id = c_id and
+            ps_date_begin &lt;= current_date and
+            ps_date_end &gt;= current_date and
+            ps_status = 1 and
+            ps_is_working = 1 and
+            ps_from_reg_id = reg_unicode and
+            ps_from_jl_id = jl_id and
+            ((:cm_database_id not in (39801, 41701) and
+            ps_from_reg_id = 1010100) or
+            (:cm_database_id = 41701 and
+            ps_from_reg_id in (1090100, 1060100)) or
+            (:cm_database_id = 39801 and
+            ps_from_reg_id in (1010100, 1020100))) and
+            (extract(month from c_birth_date) * 100 + extract(day from c_birth_date) = :dd_month * 100 + :dd_day
+                or (:no_leap_year = 1
+                  and extract(month from c_birth_date) * 100 + extract(day from c_birth_date) = 229))and
+            jl_kind = jk_id and
+            c_id &lt;&gt; 1010100015257 -- Kərimov Səbuhi Abgül oğlu
+            and
+            c_id &lt;&gt; 1090100079709 -- Ким Венера Анатольевна
+            and
+            c_id &lt;&gt; 1090100839631 -- Ирода
+            and
+            c_id &lt;&gt; 1090100224546 -- Ирода
+            and
+            c_id &lt;&gt; 1010100029828 -- Ирода
+      order by jl_order_no, c_birth_date, c_name_fio
+      into :c_name_fio, jl_name, reg_name, reg_id
+  do
+  begin
+    res_tmp_body_1 = BLOB_APPEND(res_tmp_body_1, &#x27;&lt;b&gt;&#x27; || :c_name_fio || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;);
+    res_tmp_body_1 = BLOB_APPEND(res_tmp_body_1, reg_name || &#x27;, &#x27; || jl_name || &#x27;&lt;br&gt;&#x27;);
+    res_tmp_body_1 = BLOB_APPEND(res_tmp_body_1, &#x27;&lt;br&gt;&#x27;);
+
+    has_hq = 1;
+  end
+
+  for select c_name_fio, jl_name, reg_code || &#x27; &#x27; || reg_name, ps_from_reg_id
+      from hr_pstatus, region, clients, joblist, jobkind
+      where ps_from_c_id = c_id and
+            ps_date_begin &lt;= current_date and
+            ps_date_end &gt;= current_date and
+            ps_status = 1 and
+            ps_is_working = 1 and
+            ps_from_reg_id = reg_unicode and
+            ps_from_jl_id = jl_id and
+            not((:cm_database_id not in (39801, 41701) and
+            ps_from_reg_id = 1010100) or
+            (:cm_database_id = 41701 and
+            ps_from_reg_id in (1090100, 1060100)) or
+            (:cm_database_id = 39801 and
+            ps_from_reg_id in (1010100, 1020100))) and
+            (extract(month from c_birth_date) * 100 + extract(day from c_birth_date) = :dd_month * 100 + :dd_day
+            or (:no_leap_year = 1
+                  and extract(month from c_birth_date) * 100 + extract(day from c_birth_date) = 229))and
+            jl_kind = jk_id and
+            c_id &lt;&gt; 1010100015257 -- Kərimov Səbuhi Abgül oğlu
+            and
+            c_id &lt;&gt; 1090100079709 -- Ким Венера Анатольевна
+            and
+            c_id &lt;&gt; 1090100839631 -- Ирода
+            and
+            c_id &lt;&gt; 1090100224546 -- Ирода
+            and
+            c_id &lt;&gt; 1010100029828 -- Ирода
+      order by c_birth_date, c_name_fio
+      into :c_name_fio, jl_name, reg_name, reg_id
+  do
+  begin
+    res_tmp_body_1 = BLOB_APPEND(res_tmp_body_1, &#x27;&lt;b&gt;&#x27; || :c_name_fio || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;);
+    res_tmp_body_1 = BLOB_APPEND(res_tmp_body_1, reg_name || &#x27;, &#x27; || jl_name || &#x27;&lt;br&gt;&#x27;);
+    res_tmp_body_1 = BLOB_APPEND(res_tmp_body_1, &#x27;&lt;br&gt;&#x27;);
+
+    has_region = 1;
+  end
+
+  dd_month = extract(month from (current_date + 1));
+  dd_day = extract(day from (current_date + 1));
+  no_leap_year = 0;
+  if (dd_month * 100 + dd_day = 301 and
+      extract(month from dateadd(day, -1, current_date + 1)) * 100 + extract(day from dateadd(day, -1, current_date + 1)) = 228) then
+    no_leap_year = 1; -- не високосный год
+
+  for select c_name_fio, jl_name, reg_code || &#x27; &#x27; || reg_name, ps_from_reg_id
+      from hr_pstatus, region, clients, joblist, jobkind
+      where ps_from_c_id = c_id and
+            ps_date_begin &lt;= (current_date + 1) and
+            ps_date_end &gt;= (current_date + 1) and
+            ps_status = 1 and
+            ps_is_working = 1 and
+            ps_from_reg_id = reg_unicode and
+            ps_from_jl_id = jl_id and
+            (extract(month from c_birth_date) * 100 + extract(day from c_birth_date) = :dd_month  * 100 + :dd_day
+              or (:no_leap_year = 1
+                  and extract(month from c_birth_date) * 100 + extract(day from c_birth_date) = 229))and
+            jl_kind = jk_id and
+            c_id &lt;&gt; 1010100015257 -- Kərimov Səbuhi Abgül oğlu
+            and
+            c_id &lt;&gt; 1090100079709 -- Ким Венера Анатольевна
+            and
+            c_id &lt;&gt; 1090100839631 -- Ирода
+            and
+            c_id &lt;&gt; 1090100224546 -- Ирода
+            and
+            c_id &lt;&gt; 1010100029828 -- Ирода
+      order by c_birth_date, c_name_fio
+      into :c_name_fio, jl_name, reg_name, reg_id
+  do
+  begin
+    res_tmp_body_2 = BLOB_APPEND(res_tmp_body_2, &#x27;&lt;b&gt;&#x27; || :c_name_fio || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;);
+    res_tmp_body_2 = BLOB_APPEND(res_tmp_body_2, reg_name || &#x27;, &#x27; || jl_name || &#x27;&lt;br&gt;&#x27;);
+    res_tmp_body_2 = BLOB_APPEND(res_tmp_body_2, &#x27;&lt;br&gt;&#x27;);
+
+    if ((:cm_database_id not in (39801, 41701) and reg_id = 1010100) or
+        (:cm_database_id = 39801 and reg_id in (1010100, 1020100)) or
+        (:cm_database_id = 41701 and reg_id in (1090100, 1060100))) then
+      has_hq = 1;
+    else
+      has_region = 1;
+  end
+  if ((res_tmp_body_1 = &#x27;&#x27;) and
+      (res_tmp_body_2 = &#x27;&#x27;)) then
+    exit;
+
+  if (cm_database_id = 81001) then
+  begin
+    if ((has_hq = 1) and
+        (has_region = 1)) then
+      res_maillist = &#x27;ru.birthday@molbulak.com; ru.birthday2@molbulak.com&#x27;;
+    if ((has_hq = 1) and
+        (has_region = 0)) then
+      res_maillist = &#x27;ru.birthday@molbulak.com&#x27;;
+    if ((has_hq = 0) and
+        (has_region = 1)) then
+      res_maillist = &#x27;ru.birthday2@molbulak.com&#x27;;
+  end
+  if (cm_database_id = 94401) then
+  begin
+    if ((has_hq = 1) and
+        (has_region = 1)) then
+      res_maillist = &#x27;az.hq@mbulak.az; az.fm@mbulak.az&#x27;; -- RFCAZ-435. Почта изменена с az.hq@molbulak.com на az.hq@mbulak.az
+    if ((has_hq = 1) and
+        (has_region = 0)) then
+      res_maillist = &#x27;az.hq@mbulak.az&#x27;; -- RFCAZ-435. Почта заменена с az.hq@molbulak.com на az.hq@mbulak.az
+    if ((has_hq = 0) and
+        (has_region = 1)) then
+      res_maillist = &#x27;az.fm@mbulak.az&#x27;;
+  end
+  if (cm_database_id = 39801) then
+  begin
+    -- RFCKZ-327
+    if ((has_hq = 1) and (has_region = 1)) then
+      res_maillist = &#x27;kz.go@mbulak.kz; kz.mnm@mbulak.kz&#x27;;
+    if ((has_hq = 1) and (has_region = 0)) then
+      res_maillist = &#x27;kz.go@mbulak.kz&#x27;;
+    if ((has_hq = 0) and (has_region = 1)) then
+      res_maillist = &#x27;kz.mnm@mbulak.kz&#x27;;
+  end
+  if (cm_database_id = 41701) then
+  begin
+    if ((has_hq = 1) and (has_region = 1)) then
+      res_maillist = &#x27;hqa@mbulak.kg; kg.mnm@molbulakfinance.kg&#x27;;
+    if ((has_hq = 1) and (has_region = 0)) then
+      res_maillist = &#x27;hqa@mbulak.kg&#x27;;
+    if ((has_hq = 0) and (has_region = 1)) then
+      res_maillist = &#x27;kg.mnm@molbulakfinance.kg&#x27;;
+  end
+
+    res_subject = iif(cm_database_id &lt;&gt; 94401, &#x27;С Днем Рождения!&#x27;, &#x27;Ad günü təbriki!&#x27;);
+
+    if ((res_tmp_body_1 &lt;&gt; &#x27;&#x27;) and
+        (res_tmp_body_2 &lt;&gt; &#x27;&#x27;)) then
+    begin
+      res_body = iif(cm_database_id &lt;&gt; 94401, f_format(&#x27;&lt;b&gt;&lt;font color=&quot;blue&quot;&gt;%1&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&#x27;, &#x27;Коллеги, поздравляем сегодня наших именинников!&#x27;),
+                                              f_format(&#x27;&lt;b&gt;&lt;font color=&quot;blue&quot;&gt;%1&lt;br&gt;%2&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&#x27;, &#x27;Salam!&#x27;, &#x27;Ad günü münasibəti ilə həmkarlarımızı təbrik edirik!&#x27;));
+      res_body = BLOB_APPEND(res_body, &#x27;&lt;br&gt;&#x27;);
+      res_body = BLOB_APPEND(res_body, res_tmp_body_1);
+      res_body = BLOB_APPEND(res_body, &#x27;&lt;br&gt;&#x27;);
+      res_body = BLOB_APPEND(res_body, f_format(&#x27;&lt;b&gt;&lt;font color=&quot;green&quot;&gt;%1&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&#x27;, iif(cm_database_id &lt;&gt; 94401, &#x27;Желаем крепкого здоровья и успехов в работе!&#x27;,
+                                                                                                               &#x27;Can sağlığı və işinizdə uğurlar arzulayırıq!&#x27;)));
+      res_body = BLOB_APPEND(res_body, &#x27;&lt;br&gt;&#x27;);
+      res_body = BLOB_APPEND(res_body, &#x27;&lt;br&gt;&#x27;);
+      res_body = BLOB_APPEND(res_body, &#x27;&lt;br&gt;&#x27;);
+      res_body = BLOB_APPEND(res_body, f_format(&#x27;&lt;b&gt;&lt;font color=&quot;darkblue&quot;&gt;%1:&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&#x27;, iif(cm_database_id &lt;&gt; 94401, &#x27;Завтра будем поздравлять следующих сотрудников&#x27;,
+                                                                                                                   &#x27;Sabah təbrik edəcəyimiz həmkarlar&#x27;)));
+      res_body = BLOB_APPEND(res_body, &#x27;&lt;br&gt;&#x27;);
+      res_body = BLOB_APPEND(res_body, res_tmp_body_2);
+      res_body = BLOB_APPEND(res_body, &#x27;&lt;br&gt;&#x27;);
+      res_body = BLOB_APPEND(res_body, &#x27;&lt;br&gt;&#x27;);
+
+      suspend;
+    end
+
+    if ((res_tmp_body_1 = &#x27;&#x27;) and
+        (res_tmp_body_2 &lt;&gt; &#x27;&#x27;)) then
+    begin
+      res_body = f_format(&#x27;&lt;b&gt;&lt;font color=&quot;darkblue&quot;&gt;%1:&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&#x27;, iif(cm_database_id &lt;&gt; 94401, &#x27;Завтра будем поздравлять следующих сотрудников&#x27;,
+                                                                                                       &#x27;Sabah təbrik edəcəyimiz həmkarlar&#x27;));
+      res_body = BLOB_APPEND(res_body, &#x27;&lt;br&gt;&#x27;);
+      res_body = BLOB_APPEND(res_body, res_tmp_body_2);
+      res_body = BLOB_APPEND(res_body, &#x27;&lt;br&gt;&#x27;);
+      res_body = BLOB_APPEND(res_body, &#x27;&lt;br&gt;&#x27;);
+
+      suspend;
+    end
+
+    if ((res_tmp_body_1 &lt;&gt; &#x27;&#x27;) and
+        (res_tmp_body_2 = &#x27;&#x27;)) then
+    begin
+      res_body = iif(cm_database_id &lt;&gt; 94401, f_format(&#x27;&lt;b&gt;&lt;font color=&quot;blue&quot;&gt;%1&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&#x27;, &#x27;Коллеги, поздравляем сегодня наших именинников!&#x27;),
+                                              f_format(&#x27;&lt;b&gt;&lt;font color=&quot;blue&quot;&gt;%1&lt;br&gt;%2&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&#x27;, &#x27;Salam!&#x27;, &#x27;Ad günü münasibəti ilə həmkarlarımızı təbrik edirik.&#x27;));
+      res_body = BLOB_APPEND(res_body, &#x27;&lt;br&gt;&#x27;);
+      res_body = BLOB_APPEND(res_body, res_tmp_body_1);
+      res_body = BLOB_APPEND(res_body, &#x27;&lt;br&gt;&#x27;);
+      res_body = BLOB_APPEND(res_body, f_format(&#x27;&lt;b&gt;&lt;font color=&quot;green&quot;&gt;%1&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&#x27;, iif(cm_database_id &lt;&gt; 94401, &#x27;Желаем крепкого здоровья и успехов в работе!&#x27;,
+                                                                                                               &#x27;Can sağlığı və işinizdə uğurlar arzulayırıq!&#x27;)));
+      res_body = BLOB_APPEND(res_body, &#x27;&lt;br&gt;&#x27;);
+      res_body = BLOB_APPEND(res_body, &#x27;&lt;br&gt;&#x27;);
+      suspend;
+    end
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

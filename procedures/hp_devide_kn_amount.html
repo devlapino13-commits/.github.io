@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DEVIDE_KN_AMOUNT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DEVIDE_KN_AMOUNT: 4 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DEVIDE_KN_AMOUNT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fhp_round_bank.html"><div class="to">FHP_ROUND_BANK</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_perc_set_kn_saldo.html"><div class="to">HP_DO_PERC_SET_KN_SALDO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OK_FROM_K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OK_FROM_KC_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ROUND_SCALE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">KC_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DEVIDE_KN_AMOUNT(
+    OK_FROM_K_ID ID_TYPE,
+    OK_FROM_KC_ID ID_TYPE,
+    AMOUNT CURR_TYPE,
+    ROUND_SCALE INTEGER = 0)
+RETURNS (
+    KC_ID ID_TYPE,
+    RES_AMOUNT CURR_TYPE)
+AS
+declare variable k_amount curr_type;
+declare variable kc_amount curr_type;
+declare variable kc_count d_integer;
+declare variable curr_line d_integer;
+declare variable saldo_amount curr_type;
+declare variable koef double precision;
+declare variable diff_amount curr_type;
+begin
+  if (ok_from_kc_id is null) then
+    ok_from_kc_id = 0;
+
+  if (ok_from_k_id is null) then
+  begin
+    select kc_from_k_id
+    from knclient
+    where kc_id = :ok_from_kc_id
+    into ok_from_k_id;
+  end
+
+  select k_amount_approved, k_kolich_client_approved
+  from kontract
+  where k_id = :ok_from_k_id
+  into k_amount, kc_count;
+
+-- если участников группы только 1, возвращаем как есть
+  if (kc_count = 1) then
+  begin
+    select kc_id
+    from knclient
+    where kc_from_k_id = :ok_from_k_id and
+          kc_amount_approved &gt; 0
+    into :kc_id;
+
+    res_amount = amount;
+    suspend;
+    exit;
+  end
+
+  if (amount &lt; kc_count) then
+     round_scale = 2;
+
+  saldo_amount = amount;
+  diff_amount = 0;
+  curr_line = 0;
+  for select kc_id, kc_amount_approved
+      from knclient
+      where kc_from_k_id = :ok_from_k_id and
+            kc_amount_approved &gt; 0
+      into kc_id, kc_amount
+  do
+  begin
+    curr_line = curr_line + 1;
+    koef = cast(kc_amount as double precision) / k_amount;
+
+    if (curr_line &lt; kc_count) then
+    begin
+      res_amount = round(koef * amount + diff_amount, round_scale);
+
+      if (kc_count = 2) then
+        res_amount = (select res
+                      from fhp_round_bank(:koef * :amount, :round_scale));
+      else
+        diff_amount = round(koef * amount + diff_amount, 4) - res_amount;
+
+      saldo_amount = saldo_amount - res_amount;
+    end
+    else
+      res_amount = saldo_amount;
+
+    if (kc_id = ok_from_kc_id) then
+    begin
+      suspend;
+      exit;
+    end else
+      suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

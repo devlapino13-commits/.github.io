@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_RESTRUCT_KONTRACT_MOVEMENTS — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_RESTRUCT_KONTRACT_MOVEMENTS: 2 входных, 6 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_RESTRUCT_KONTRACT_MOVEMENTS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MOVEMENT_KIND</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CLIENT_FIO</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KFOLDER_NO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KONTRACT_NO</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MOVED_FROM</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MOVED_TO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DAYS_OVEDUE_QTY</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_RESTRUCT_KONTRACT_MOVEMENTS(
+    REP_DATE_END D_DATE,
+    MOVEMENT_KIND D_SMALLINT)
+RETURNS (
+    CLIENT_FIO D_STR_255,
+    KFOLDER_NO D_STR_100,
+    KONTRACT_NO D_STR_20,
+    MOVED_FROM D_STR_100,
+    MOVED_TO D_STR_100,
+    DAYS_OVEDUE_QTY D_INTEGER)
+AS
+declare variable k_id d_id;
+declare variable k_from_kf_id d_id;
+begin
+    /*
+      RFCKZ-705
+      Процедура возвращает данные для отчета по движениям контрактов между отделами (юр. отделом и ОРиВ)
+
+      movement_kind:
+      1 - Движения контрактов из юр. отдела в ОРиВ
+      2 - Движения контрактов из ОРиВ в юр. отдел
+    */
+
+    if (movement_kind = 1) then
+    begin
+        for
+            select
+                rbc.rbc_from_k_id,
+                k.k_kontract_no,
+                k.k_from_kf_id,
+                c.c_name_fio
+            from restruct_block_cancel rbc
+            inner join kontract k on rbc.rbc_from_k_id = k.k_id
+            inner join knclient kc on rbc.rbc_from_k_id = kc.kc_from_k_id and
+                                      kc.kc_amount_approved &gt; 0
+            inner join clients c on kc.kc_from_c_id = c.c_id
+            -- Передача кредита от юр. отдела в ОРиВ происходит при отмене испол. надписи (поле rbc_date_begin), поэтому для выборки берем это поле
+            where rbc.rbc_date_begin = :rep_date_end and
+                  rbc.rbc_moved_law_to_oriv = 1
+            into
+                :k_id,
+                :kontract_no,
+                :k_from_kf_id,
+                :client_fio
+        do
+        begin
+            select kal.kal_new_kf_name
+            from knaktlist kal
+            where :rep_date_end between kal.kal_date and kal.kal_date_end and
+                  kal.kal_from_kf_id = :k_from_kf_id and
+                  kal.is_delete = 0
+            into :kfolder_no;
+
+            select iif(cast(:rep_date_end as date) - oks.oks_delinq_date &lt; 0, 0, cast(:rep_date_end as date) - oks.oks_delinq_date)
+            from oksummary oks
+            where :rep_date_end between oks.oks_date_begin and oks.oks_date_end and
+                  oks.oks_from_k_id = :k_id and
+                  oks.oks_close_state = 0
+            into :days_ovedue_qty;
+
+
+            moved_from = &#x27;Юридический отдел&#x27;;
+            moved_to = &#x27;ОРиВ&#x27;;
+
+            suspend;
+        end
+    end
+
+    if (movement_kind = 2) then
+    begin
+        for
+            select
+                rbc.rbc_from_k_id,
+                k.k_kontract_no,
+                k.k_from_kf_id,
+                c.c_name_fio
+            from restruct_block_cancel rbc
+            inner join kontract k on rbc.rbc_from_k_id = k.k_id
+            inner join knclient kc on rbc.rbc_from_k_id = kc.kc_from_k_id and
+                                      kc.kc_amount_approved &gt; 0
+            inner join clients c on kc.kc_from_c_id = c.c_id
+            -- Передача кредита от ОРиВ в юр. отдел проводит робот по прошествии 30 дней с момента отмены испол. надписи,
+            -- поле rbc_date_end содержит как раз дату эту дату, поэтому выборку делаем по нему
+            where rbc.rbc_date_end = :rep_date_end and
+                  rbc.rbc_moved_oriv_to_law = 1
+            into
+                :k_id,
+                :kontract_no,
+                :k_from_kf_id,
+                :client_fio
+        do
+        begin
+            select kal.kal_new_kf_name
+            from knaktlist kal
+            where :rep_date_end between kal.kal_date and kal.kal_date_end and
+                  kal.kal_from_kf_id = :k_from_kf_id and
+                  kal.is_delete = 0
+            into :kfolder_no;
+
+            select iif(cast(:rep_date_end as date) - oks.oks_delinq_date &lt; 0, 0, cast(:rep_date_end as date) - oks.oks_delinq_date)
+            from oksummary oks
+            where :rep_date_end between oks.oks_date_begin and oks.oks_date_end and
+                  oks.oks_from_k_id = :k_id and
+                  oks.oks_close_state = 0
+            into :days_ovedue_qty;
+
+
+            moved_from = &#x27;ОРиВ&#x27;;
+            moved_to = &#x27;Юридический отдел&#x27;;
+
+            suspend;
+        end
+
+    end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

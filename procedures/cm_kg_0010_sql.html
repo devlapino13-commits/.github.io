@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_KG_0010_SQL — процедура — схема БД</title>
+<meta name="description" content="Приказ №57-07-15 о/д ≪Об утверждении шаблонов кредитных форм≫ привязка цели кредита к типу бизнеса">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_KG_0010_SQL</code></h1>
+<p class="desc">Приказ №57-07-15 о/д ≪Об утверждении шаблонов кредитных форм≫ привязка цели кредита к типу бизнеса</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_KG_0010_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable kc_amount curr_type;
+declare variable rd_code str_255;
+declare variable business_type d_integer;
+declare variable busuness_subtype d_integer;
+declare variable kc_loan_target d_integer;
+declare variable pr_code d_str_100;
+begin
+  res_error_is_critical = 2;
+
+  for select rd_code,
+             kc_business_type,
+             kc_busuness_subtype,
+             kc_loan_target,
+             c_name_fio,
+             pr_code
+      from knclient
+      inner join clients on c_id = kc_from_c_id
+      inner join refdata on rd_id = kc_loan_target
+      inner join kontract on k_id = kc_from_k_id
+      inner join product on pr_id = k_from_pr_id
+      where kc_from_k_id = :k_id and
+            kc_amount_approved &gt; 0
+      into rd_code,
+           business_type,
+           busuness_subtype,
+           kc_loan_target,
+           res_info_text,
+           pr_code
+  do
+  begin
+    if (coalesce(business_type, 0) = 0) then
+    begin
+      res_error_text = &#x27;Не указан тип бизнеса&#x27;;
+      suspend;
+    end
+
+    if (coalesce(busuness_subtype, 0) = 0) then
+    begin
+      res_error_text = &#x27;Не указан субтип бизнеса&#x27;;
+      suspend;
+    end
+
+    if (business_type is not null and busuness_subtype is not null) then
+    begin
+      if (rd_code = &#x27;Loan_Target.Consumer&#x27;) then -- Потребительский
+      begin
+        if (business_type &lt;&gt; 6) then -- Другое
+        begin
+          res_error_text = &#x27;Для цели займа &quot;Потребительский&quot;, может быть выбран только тип бизнеса &quot;Другое&quot;&#x27;;
+          suspend;
+        end
+      end
+      else
+      begin -- цель займа &quot;Создание бизнеса&quot; или &quot;Развитие бизнеса&quot;
+        if (business_type = 6) then -- Другое
+        begin
+          res_error_text = &#x27;Тип бизнеса &quot;Другое&quot; может быть выбран только для цели &quot;Потребительский&quot;&#x27;;
+          suspend;
+        end
+      end
+    end
+
+    if (coalesce(kc_loan_target, 0) &lt;= 1) then
+    begin
+      res_error_text = &#x27;Не указана цель кредитования&#x27;;
+      suspend;
+    end
+
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

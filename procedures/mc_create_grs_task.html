@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MC_CREATE_GRS_TASK — процедура — схема БД</title>
+<meta name="description" content="Процедура MC_CREATE_GRS_TASK: 1 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>MC_CREATE_GRS_TASK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_extinfo_to_send_tunduk.html"><div class="to">HP_EXTINFO_TO_SEND_TUNDUK</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MCL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">JSON_DATA</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE MC_CREATE_GRS_TASK(
+    MCL_ID D_ID)
+RETURNS (
+    ID D_ID,
+    JSON_DATA D_STR_8100)
+AS
+declare variable eic_id d_id;
+declare variable object_kind d_integer;
+declare variable drl_id d_id;
+declare variable db_is_actual d_smallint;
+declare variable object_id d_id;
+begin
+  object_id = mcl_id;
+
+  db_is_actual = 0;
+  if (exists(select *
+             from hp_db_is_actual)) then
+    db_is_actual = 1;
+
+  select eic.eic_id
+  from extinfocfg eic
+  where eic.eic_code = &#x27;Tunduk&#x27;
+  into eic_id;
+
+  object_kind = f_objkind(&#x27;mc_login&#x27;, &#x27;id&#x27;);
+
+  --  if (db_is_actual = 1) then        --При создании задачи по ГРС нам еще не известно c_id
+  --  begin
+  --    object_kind = f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;);
+  --    object_id = (select ml.mcl_from_c_id
+  --                 from mc_login ml
+  --                 where ml.mcl_id = :mcl_id);
+  --  end
+
+  select json_value, drl_id
+  from hp_extinfo_to_send_tunduk(:object_id, :object_kind, :object_id)
+  into :json_data, :drl_id;
+
+  select eil.eil_id
+  from extinfolist eil
+  where eil.eil_from_mcl_id = :mcl_id and
+        eil.eil_status in (0, 2)
+  order by eil.eil_id desc
+  rows 1
+  into id;
+
+  if ((id is null)) then
+  begin
+    insert into extinfolist (eil_from_eic_id, eil_date, eil_object_kind, eil_object_id, eil_is_json, eil_from_eip_id,
+                             eil_from_un_id, eil_from_mcl_id)
+    values (:eic_id, current_date, :object_kind, :object_id, 1, null, 1000000000000, :mcl_id)
+    returning eil_id
+    into :id;
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

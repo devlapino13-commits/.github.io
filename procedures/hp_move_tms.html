@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_MOVE_TMS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_MOVE_TMS: 0 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_MOVE_TMS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">4 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_loronostro_link.html"><div class="to">AAREP_LORONOSTRO_LINK</div></a><a class="ref-card" href="get_kv.html"><div class="to">GET_KV</div></a><a class="ref-card" href="get_kv_id.html"><div class="to">GET_KV_ID</div></a><a class="ref-card" href="hp_move_tms_detail.html"><div class="to">HP_MOVE_TMS_DETAIL</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REG_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">WP_REG_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">WP_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">WP_TO</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_MOVE_TMS
+RETURNS (
+    REG_ID INTEGER,
+    WP_REG_ID INTEGER,
+    WP_ID DECIMAL(18,0),
+    WP_TO DECIMAL(18,0))
+AS
+declare variable wp_name varchar(100);
+declare variable reg_loronostro_head integer;
+declare variable operlist_count integer;
+declare variable ol_id_1 decimal(18,0);
+declare variable ol_id_2 decimal(18,0);
+declare variable ol_id_3 decimal(18,0);
+declare variable doc_no integer;
+declare variable rep_date date;
+declare variable om_account varchar(20);
+declare variable om_amount_tms decimal(18,4);
+declare variable om_amount_amort decimal(18,4);
+declare variable acc_dt varchar(20);
+declare variable acc_kt varchar(20);
+declare variable ol_id decimal(18,0);
+declare variable line_no integer;
+declare variable ob_id integer;
+declare variable cm_default_currency varchar(3);
+declare variable wp_id_new decimal(18,0);
+declare variable key_id integer;
+begin
+  -- перенос ТМЦ на другой офис
+  -- Разовое решение для автоматической перекидки из филиалов в офисы
+  -- Sanjar, 30/06/2013
+
+  select cm_default_currency
+  from company
+  into :cm_default_currency;
+
+  rep_date = &#x27;30.06.2013&#x27;;
+  for select wp_id, reg.reg_unicode, wp_reg.reg_unicode
+      from region reg, workplace
+      left join region wp_reg on (left(wp_name, 4) = wp_reg.reg_code)
+      where wp_from_reg_id = reg.reg_unicode
+            --  and wp_id=1010100000007  -- для тестирования
+            --  and reg.reg_unicode=1010100  -- для тестирования
+      into :wp_id, :reg_id, :wp_reg_id
+  do
+  begin
+    if (reg_id &lt;&gt; wp_reg_id) then
+    begin
+      -- wp_status (5,6,7,8) - (Рабочие места сотрудников, Склад, отдел, транзит)
+
+      -- Создание рабочих мест (если нет ниодного)
+      if (not((exists(select *
+                      from workplace
+                      where wp_from_reg_id = :wp_reg_id and
+                            wp_status = 7)))) then
+      begin
+        select result
+        from get_kv_id(12)
+        into :wp_id_new;
+
+        select reg_code || reg_name || &#x27;, отделы &#x27;
+        from region
+        where reg_unicode = :wp_reg_id
+        into :wp_name;
+
+        insert into workplace (wp_id, parent, wp_name, wp_from_reg_id, lb, rb, wp_status, wp_can_include, wp_is_active,
+                               wp_number, wp_default_reg_id, wp_default_dep_id, wp_default_job_id, wp_ml_account)
+        values (:wp_id_new, null, :wp_name, :wp_reg_id, 0, 0, 7, 1, 1, 0, :wp_reg_id, null, null, null);
+      end
+
+      -- Создание транзитных мест (если нет ниодного)
+      if (not((exists(select *
+                      from workplace
+                      where wp_from_reg_id = :wp_reg_id and
+                            wp_status = 8)))) then
+      begin
+        select result
+        from get_kv_id(12)
+        into :wp_id_new;
+
+        select reg_code || reg_name || &#x27;, ТМЦ в пути&#x27; || reg_name
+        from region
+        where reg_unicode = :wp_reg_id
+        into :wp_name;
+
+        insert into workplace (wp_id, parent, wp_name, wp_from_reg_id, lb, rb, wp_status, wp_can_include, wp_is_active,
+                               wp_number, wp_default_reg_id, wp_default_dep_id, wp_default_job_id, wp_ml_account)
+        values (:wp_id_new, null, :wp_name, :wp_reg_id, 0, 0, 8, 1, 1, 0, :wp_reg_id, null, null, null);
+      end
+
+      select wp_id
+      from workplace
+      where wp_from_reg_id = :wp_reg_id and
+            wp_status = 7 rows 1
+      into :wp_to;
+      /*
+      REG_ID -- отправляющий
+      WP_REG_ID -- принимающий
+      */
+      select reg_loronostro_head
+      from region
+      where reg_unicode = :reg_id
+      into :reg_loronostro_head;
+
+      if ((reg_id &lt;&gt; reg_loronostro_head) and
+          (wp_reg_id &lt;&gt; reg_loronostro_head)) then
+        operlist_count = 3; -- постредник ГО (БРУ)
+      else
+        operlist_count = 2; -- один из них ГО (БРУ)
+      if (operlist_count = 2) then
+      begin
+        select kv
+        from get_kv(1090100, 5)
+        into :ol_id_1;
+        ol_id_2 = 0;
+        select kv
+        from get_kv(1090100, 5)
+        into :ol_id_3;
+      end
+      else
+      begin
+        select kv
+        from get_kv(1090100, 5)
+        into :ol_id_1;
+        select kv
+        from get_kv(1090100, 5)
+        into :ol_id_2;
+        select kv
+        from get_kv(1090100, 5)
+        into :ol_id_3;
+      end
+      doc_no = 0;
+      insert into operlist (ol_id, ol_from_reg_id, ol_oper_type, ol_date, ol_doc_no, ol_doc_no_str, ol_doc_kind,
+                            ol_memo, ol_status, is_delete, ol_datetime, ol_user_id, ol_document_client, ol_from_mo_id,
+                            ol_is_mo_modified, ol_document_office, ol_acc_no_client, ol_acc_no_office, ol_oper_subtype,
+                            ol_date_oper_day, ol_pocket, ol_doc_client_name, ol_is_client, ol_parent_id)
+      values (:ol_id_1, :reg_id, 3, :rep_date, :doc_no, &#x27;&#x27;, 10, &#x27;Передача ТМЦ по офисам&#x27;, 0, 0, null,
+              1000000000001, null, null, 0, :wp_reg_id, null, null, 5, :rep_date, 0, null, 0, null);
+
+      if (ol_id_2 &lt;&gt; 0) then
+      begin
+        insert into operlist (ol_id, ol_from_reg_id, ol_oper_type, ol_date, ol_doc_no, ol_doc_no_str, ol_doc_kind,
+                              ol_memo, ol_status, is_delete, ol_datetime, ol_user_id, ol_document_client, ol_from_mo_id,
+                              ol_is_mo_modified, ol_document_office, ol_acc_no_client, ol_acc_no_office,
+                              ol_oper_subtype, ol_date_oper_day, ol_pocket, ol_doc_client_name, ol_is_client,
+                              ol_parent_id)
+        values (:ol_id_2, :reg_loronostro_head, 3, :rep_date, :doc_no, &#x27;&#x27;, 10,
+                &#x27;Передача ТМЦ по офисам&#x27;, 0, 0, null, 1000000000001, null, null, 0, :reg_id, null,
+                null, 5, :rep_date, 0, null, 0, :ol_id_1);
+      end
+
+      insert into operlist (ol_id, ol_from_reg_id, ol_oper_type, ol_date, ol_doc_no, ol_doc_no_str, ol_doc_kind,
+                            ol_memo, ol_status, is_delete, ol_datetime, ol_user_id, ol_document_client, ol_from_mo_id,
+                            ol_is_mo_modified, ol_document_office, ol_acc_no_client, ol_acc_no_office, ol_oper_subtype,
+                            ol_date_oper_day, ol_pocket, ol_doc_client_name, ol_is_client, ol_parent_id)
+      values (:ol_id_3, :wp_reg_id, 3, :rep_date, :doc_no, &#x27;&#x27;, 10, &#x27;Передача ТМЦ по офисам&#x27;, 0, 0,
+              null, 1000000000001, null, null, 0, :reg_id, null, null, 5, :rep_date, 0, null, 0, :ol_id_1);
+
+      ob_id = 0;
+      for select om_account, sum(om_amount_tms), sum(om_amount_amort)
+          from hp_move_tms_detail(:rep_date, :ol_id_1, :ol_id_3, :reg_id, :wp_reg_id, :wp_id, :wp_to, 0, 0)
+          group by om_account
+          into :om_account, :om_amount_tms, :om_amount_amort
+      do
+      begin
+        if (om_amount_tms &lt;&gt; 0) then -- Передача стоимости
+        begin
+          ob_id = ob_id + 1;
+          acc_kt = :om_account;
+          select reg_code || right(:om_account, 14)
+          from region
+          where reg_unicode = :wp_reg_id
+          into :acc_dt;
+
+          line_no = 0;
+          for select res_acc_dt, res_acc_kt
+              from aarep_loronostro_link(:reg_id, :acc_dt, :acc_kt)
+              into :acc_dt, :acc_kt
+          do
+          begin
+            line_no = line_no + 1;
+            if (line_no = 1) then
+              ol_id = :ol_id_1;
+            if (line_no = 2) then
+            begin
+              if (operlist_count = 2) then
+                ol_id = :ol_id_3;
+              else
+                ol_id = :ol_id_2;
+            end
+            if (line_no = 3) then
+              ol_id = :ol_id_3;
+
+            insert into operbook (ob_from_ol_id, ob_number, ob_currency, ob_curr_rate, ob_client_dt, ob_account_dt,
+                                  ob_summa_val, ob_summa, ob_from_pc_id, ob_from_kp_id, ob_oper_mask, ob_account_kt,
+                                  ob_client_kt, ob_detail, ob_from_sac_id)
+            values (:ol_id, :ob_id, :cm_default_currency, 1, null, :acc_dt, :om_amount_tms, :om_amount_tms, null, null,
+                    null, :acc_kt, null, &#x27;Выбытие ТМЦ с рабочего места по офисам&#x27;, null);
+          end
+        end
+
+        if (om_amount_amort &lt;&gt; 0) then -- Передача износа
+        begin
+          ob_id = ob_id + 1;
+          acc_dt = :om_account;
+          select reg_code || right(:om_account, 14)
+          from region
+          where reg_unicode = :wp_reg_id
+          into :acc_kt;
+
+          line_no = 0;
+          for select res_acc_dt, res_acc_kt
+              from aarep_loronostro_link(:reg_id, :acc_dt, :acc_kt)
+              into :acc_dt, :acc_kt
+          do
+          begin
+            line_no = line_no + 1;
+            if (line_no = 1) then
+              ol_id = :ol_id_1;
+            if (line_no = 2) then
+            begin
+              if (operlist_count = 2) then
+                ol_id = :ol_id_3;
+              else
+                ol_id = :ol_id_2;
+            end
+            if (line_no = 3) then
+              ol_id = :ol_id_3;
+
+            insert into operbook (ob_from_ol_id, ob_number, ob_currency, ob_curr_rate, ob_client_dt, ob_account_dt,
+                                  ob_summa_val, ob_summa, ob_from_pc_id, ob_from_kp_id, ob_oper_mask, ob_account_kt,
+                                  ob_client_kt, ob_detail, ob_from_sac_id)
+            values (:ol_id, :ob_id, :cm_default_currency, 1, null, :acc_dt, :om_amount_amort, :om_amount_amort, null,
+                    null, null, :acc_kt, null, &#x27;Выбытие ТМЦ с рабочего места по офисам&#x27;, null);
+          end
+        end
+
+      end
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

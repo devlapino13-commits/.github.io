@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DAILY_SMS_DELINQ_DAYS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DAILY_SMS_DELINQ_DAYS: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DAILY_SMS_DELINQ_DAYS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_make_zad_list_temp.html"><div class="to">AAREP_MAKE_ZAD_LIST_TEMP</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">NUM_OF_DAYS</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DAILY_SMS_DELINQ_DAYS(
+    NUM_OF_DAYS D_INTEGER)
+AS
+declare variable C_ID D_ID;
+declare variable PREVIOUS_C_ID D_ID;
+declare variable K_ID D_ID;
+declare variable MSG_ID D_ID;
+declare variable MSG_TEXT_1 D_STR_255;
+declare variable MSG_TEXT_2 D_STR_255;
+declare variable PHONE_NUMBER D_STR_20;
+declare variable REP_AMOUNT decimal(18,0);
+declare variable NSD_PERCENT D_INTEGER;
+begin
+    if (num_of_days not in (5,70)) then
+        exit;
+
+    -- RFCAZ-381
+    previous_c_id = 0;
+    msg_text_1 = &#x27;Mehkemeye verilme barede!Hormetli musteri,“M Bulak BOKT” MMC-ne olan gecikdirilmis kredit borcunuzu odemediyiniz ucun isiniz Mehkemeye verilecek.&#x27;;
+    msg_text_2 = &#x27;İcra haqqında qanuna esasen barenizde Mecburi icra tedbirleri gorulecek(olkeden getmek huququnun mehdudlasdirilmasi,emlak uzerine hebs/telebin satmaq yolu ile emlaka,resmi gelirlerinize yoneldilmesi,mehkeme qerarı esasında mecburi getirilme ve s.)&#x27;;
+
+    for select
+        kc_from_c_id,
+        kc_from_k_id
+    from oksummary
+    inner join knclient on oks_from_k_id = kc_from_k_id
+        and kc_amount_approved &gt; 0
+    where current_date between oks_date_begin and oks_date_end
+        and current_date - oks_delinq_date = :num_of_days
+        and oks_close_state = 0
+    order by kc_from_c_id
+    into
+        c_id,
+        k_id
+    do
+    begin
+        if (previous_c_id = c_id) then continue;
+        else previous_c_id = c_id;
+
+        msg_id = null;
+        phone_number = null;
+        phone_number = f_cont_info(&#x27;clients&#x27;, :c_id, &#x27;cell&#x27;, &#x27;ok&#x27;);
+
+        if (num_of_days = 5 and phone_number is not null) then
+        begin
+            if (exists
+                (
+                    select ok_from_k_id
+                    from operkred, kontstate
+                    where ks_from_k_id = ok_from_k_id and
+                    ks_ol_is_delete = 0 and
+                    ks_date_begin &lt;= current_date and
+                    ks_date_end &gt;= current_date and
+                    ks_state = 1 and
+                    ok_ol_is_active = 1 and
+                    ok_sh_date = current_date - :num_of_days and
+                    ok_type &lt;&gt; 8 and
+                    ok_type &lt;&gt; 7 and
+                    ok_from_c_id = 0 and
+                    ok_from_k_id = :k_id
+                    group by ok_from_k_id
+                    having sum(ok_sh_os + ok_os + ok_sh_perc + ok_perc) &gt; 0
+                )
+            ) then
+            begin
+                select coalesce(nsd_percent / 100, 0)
+                from nspconfig_data
+                where nsd_from_nsm_id = -1 and
+                    (current_date + :num_of_days) between nsd_date_begin and nsd_date_end
+                into nsd_percent;
+
+                if (coalesce(nsd_percent, 0) = 0) then
+                    nsd_percent = 0;
+
+                select sum(round(zad_os + sh_calc_perc + sh_calc_perc * :nsd_percent + sh_calc_fine)) delinq_sum
+                from aarep_make_zad_list_temp(:k_id, current_date, 1)
+                where sh_date = current_date - :num_of_days
+                into rep_amount;
+    
+                msg_text_2 = &#x27;MBulaka odenishiniz &#x27;||:num_of_days||&#x27; gun gecikir. Bugune olan gecikme borcunuz &#x27;||:rep_amount||&#x27; AZN. Gecikmede olan her gune cerime hesablanir&#x27;;
+    
+                insert into fsrobot_msgbox (msg_type, msg_mail_to, msg_subject, msg_body, msg_lifetime_days, msg_from_un_id, msg_command_kind, msg_object_kind, msg_object_id)
+                values (1, :phone_number, &#x27;&#x27;, :msg_text_2, -1, 1000000000000, :num_of_days||&#x27;delinq_days&#x27;, 0, :c_id)
+                returning msg_id
+                into :msg_id;
+            end
+        end
+
+        if (num_of_days = 70 and phone_number is not null) then
+        begin
+            -- RFCAZ-385
+            -- чтобы не засорять таблицу delinquent_loan_notify, беру только один msg_id
+            insert into fsrobot_msgbox (msg_type, msg_mail_to, msg_subject, msg_body, msg_lifetime_days, msg_from_un_id, msg_command_kind, msg_object_kind, msg_object_id)
+            values (1, :phone_number, &#x27;&#x27;, :msg_text_1, -1, 1000000000000, :num_of_days||&#x27;delinq_days&#x27;, 0, :c_id);
+
+            insert into fsrobot_msgbox (msg_type, msg_mail_to, msg_subject, msg_body, msg_lifetime_days, msg_from_un_id, msg_command_kind, msg_object_kind, msg_object_id)
+            values (1, :phone_number, &#x27;&#x27;, :msg_text_2, -1, 1000000000000, :num_of_days||&#x27;delinq_days&#x27;, 0, :c_id)
+            returning msg_id
+            into :msg_id;
+
+        end
+
+        insert into delinquent_loan_notify (dl_from_c_id, dl_from_k_id, dl_from_msg_id, dl_from_el_code)
+        values (:c_id, :k_id, :msg_id, cast(:num_of_days as d_str_code));
+    end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

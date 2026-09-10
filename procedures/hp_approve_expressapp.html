@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_APPROVE_EXPRESSAPP — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_APPROVE_EXPRESSAPP: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_APPROVE_EXPRESSAPP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EXA_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_APPROVE_EXPRESSAPP(
+    EXA_ID D_INTEGER,
+    UN_ID D_ID)
+AS
+declare variable group_id d_integer;
+declare variable count_group_id d_integer;
+declare variable next_group_id d_integer;
+declare variable date_begin d_date;
+declare variable max_date_begin d_date;
+declare variable cl_count_in_one_day d_integer;
+declare variable reg_id d_integer;
+begin
+  -- Данная процедура начинает процесс обработки по кандидату
+  group_id = 0;
+  next_group_id = 0;
+  max_date_begin = null;
+
+  select un.un_curr_reg_id
+  from username un
+  where un.un_id = :un_id
+  into reg_id;
+
+  select max(exa.exa_date)
+  from expressapp exa
+  where exa.exa_from_exp_id &gt; 1 and
+        exa.exa_from_reg_id = :reg_id
+  into max_date_begin;
+
+  if (max_date_begin &lt; current_date or (max_date_begin is null)) then
+    date_begin = current_date;       --условие добавлено, так как запуск отложился на несколько дней, а самая последняя выдача была сегодня.
+  else
+    date_begin = max_date_begin;
+
+  if (extract(day from :date_begin) &lt;= 3) then
+  begin
+    date_begin = &#x27;04.&#x27; || extract(month from current_date) || &#x27;.&#x27; || extract(year from current_date);
+  end
+
+  select count(*)
+  from expressapp exa
+  where exa.exa_from_exp_id &gt; 1 and
+        exa.exa_date = :date_begin and
+        exa.exa_from_reg_id = :reg_id
+  into cl_count_in_one_day;
+
+  if (cl_count_in_one_day &gt; 20) then
+    date_begin = date_begin + 1;
+
+  if (extract(day from :date_begin) &gt; 27) then
+  begin
+    exception e_message(&#x27;Предложение отправляется до 27 числа включительно, утверждение отменяется&#x27;);
+    exit;
+  end 
+
+  next_group_id = 0;
+
+  with table1
+  as (select count(*) as exa_count, exa.exa_group_id as exa_group_id
+      from expressapp exa
+      where exa.exa_from_exp_id &gt; 1 and
+            exa.exa_final_status &gt;= 0 and
+            exa.exa_from_exc_id &gt; 0 and
+            exa.exa_from_exc_id &lt;&gt; 200
+      group by exa.exa_group_id)
+  select exa_group_id
+  from table1
+  order by exa_count
+  rows 1
+  into :next_group_id;  -- Беру группу с минимальным количеством кандидатов для того чтобы выставить группу для текущего кандидата
+
+  update expressapp exa set
+    exa.exa_from_exc_id = 10,
+    exa.exa_wait_status = 0,
+    exa.exa_from_un_id = :un_id,
+    exa.exa_group_id = :next_group_id,
+--    exa.exa_disb_date = :date_begin + 2,  Дата выдачи будет присваиваться после принятия предложения процедура hp_do_expressapp_process
+    exa.exa_date = :date_begin
+  where exa.exa_id = :exa_id;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

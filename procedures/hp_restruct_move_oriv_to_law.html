@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_RESTRUCT_MOVE_ORIV_TO_LAW — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_RESTRUCT_MOVE_ORIV_TO_LAW: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_RESTRUCT_MOVE_ORIV_TO_LAW</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_get_restructuring.html"><div class="to">AAREP_GET_RESTRUCTURING</div></a><a class="ref-card" href="hp_send_quick_message.html"><div class="to">HP_SEND_QUICK_MESSAGE</div></a><a class="ref-card" href="insert_sb_akt.html"><div class="to">INSERT_SB_AKT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PROCESS_MODE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_RESTRUCT_MOVE_ORIV_TO_LAW(
+    REP_DATE D_DATE,
+    PROCESS_MODE D_SMALLINT)
+AS
+declare variable rbc_id d_id;
+declare variable k_id d_id;
+declare variable res_k_id d_id;
+declare variable k_kontract_no d_str_20;
+begin
+    /*
+      RFCKZ-705. Процедура проводит автоматическую передачу контрактов с баланса ОРиВ
+      на баланс юр. отдела на 30-й с момента отмены исполнительной надписи, если по контракту
+      не была произведена реструктуризация или он не был погашен.
+
+      Примечание: при отмене испол. надписи через специальный модуль происходит передача контракта
+      с баланса юр. отдела на баланс ОРиВ, в данной же процедуре происходит обратный процесс
+
+      process_mode:
+        1 - обработка всех записей на rep_date (стандартная обработка)
+        2 - обработка только ошибочных записей
+    */
+
+    if (process_mode not in (1, 2)) then
+        exception e_message &#x27;Некорректный process_mode&#x27;;
+
+    for
+        select rbc.rbc_id, rbc.rbc_from_k_id
+        from restruct_block_cancel rbc
+        where rbc.rbc_date_end = :rep_date and
+              rbc.rbc_moved_law_to_oriv = 1 and -- перемещенные от юр. отдела в ОРиВ
+              rbc.rbc_moved_oriv_to_law = 0 and  -- но не перемещенные обратно
+              (
+                (:process_mode = 1 and coalesce(rbc.rbc_move_oriv_to_law_error, &#x27;&#x27;) = &#x27;&#x27;) or
+                (:process_mode = 2 and coalesce(rbc.rbc_move_oriv_to_law_error, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;)
+              )
+        into :rbc_id, :k_id
+    do
+    begin
+        begin
+            -- Если по контракту была проведена реструктуризация, не переводим на юр. отдел
+            if (exists(select *
+                       from aarep_get_restructuring(:k_id, :rep_date, f_get_db_id())
+                       where is_restruct = 1)
+            ) then
+                continue;
+    
+            -- Если контракт полностью закрыт, не переводим на юр. отдел
+            if (exists(select *
+                       from kontstate ks
+                       where :rep_date between ks.ks_date_begin and ks.ks_date_end and
+                             ks.ks_from_k_id = :k_id and
+                             ks.ks_state = 2 and
+                             ks.ks_ol_is_delete = 0)
+            ) then
+                continue;
+    
+            k_kontract_no = (select k.k_kontract_no from kontract k where k.k_id = :k_id);
+        
+            -- Передаем кредит из ОРиВ в юр. отдел
+            select k_id from insert_sb_akt(:k_kontract_no, :rep_date, 2, 2, 1000000000000)
+            into :res_k_id;
+    
+            -- Перемещение прошло успешно, обновляем запись
+            update restruct_block_cancel rbc
+            set rbc.rbc_moved_oriv_to_law = 1,
+                rbc.rbc_move_oriv_to_law_datetime = current_timestamp,
+                rbc.rbc_move_oriv_to_law_error = null
+            where rbc.rbc_id = :rbc_id;
+    
+            rbc_id = null;
+            k_id = null;
+    
+            when any do
+            begin
+                update restruct_block_cancel rbc
+                set rbc.rbc_move_oriv_to_law_error = left(rdb$error(message), 255)
+                where rbc.rbc_id = :rbc_id;
+
+                execute procedure hp_send_quick_message(&#x27;email&#x27;, &#x27;t.mavlyanov@mbulak.kg&#x27;,
+                    &#x27;Ошибка при переводе кредита ОРиВ -&gt; Юр. отдел&#x27;,
+                    f_format(&#x27;Возникла ошибка в контракте: %1, rbc_id: %2, текст ошибки: %3&#x27;, :k_id, :rbc_id, left(rdb$error(message), 2048)),
+                    &#x27;&#x27;, 7, 1000000000000
+                );
+
+                rbc_id = null;
+                k_id = null;
+            end
+        end
+    end
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

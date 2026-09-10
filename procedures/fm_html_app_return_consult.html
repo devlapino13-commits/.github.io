@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_HTML_APP_RETURN_CONSULT — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_HTML_APP_RETURN_CONSULT: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_HTML_APP_RETURN_CONSULT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="print_app_consult_info.html"><div class="to">PRINT_APP_CONSULT_INFO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_html_main.html"><div class="to">FM_REPORT_HTML_MAIN</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ARC_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_HTML_APP_RETURN_CONSULT(
+    ARC_ID D_INTEGER)
+RETURNS (
+    RES_TEXT BLOB SUB_TYPE TEXT SEGMENT SIZE 80)
+AS
+declare variable db_id d_integer;
+declare variable c_fio d_str_100;
+declare variable amount decimal(18,0);
+declare variable oper_no d_integer;
+declare variable return_reason varchar(30);
+declare variable pay_date date;
+declare variable k_no d_str_20;
+declare variable confirm_txt d_str_20;
+declare variable sign_type d_smallint;
+declare variable message_conf varchar(50);
+begin
+  res_text = (select res_style
+              from fm_html_styles) || &#x27;&lt;body&gt;&#x27;;
+
+  :db_id = f_get_db_id();
+
+  select c_name_fio, amount, doc_no_tmp, ol_date_tmp,
+    case arci.arci_return_reason
+        when 0 then &#x27;ошибочно внесенной суммой&#x27;
+        when 1 then &#x27;отказом от получения услуг&#x27;
+    end,
+    coalesce(k.k_kontract_no, &#x27;&#x27;),
+    arci.arci_sign_type
+  from print_app_consult_info(:arc_id)
+  inner join app_return_consult_info arci on arci.arci_id = :arc_id
+  inner join app_return_consult arc on arc.arc_id = arci.arci_id
+  inner join kontract k on arc.arc_from_k_id = k.k_id
+  into :c_fio, :amount, :oper_no, :pay_date, :return_reason, :k_no, :sign_type;
+
+  if (sign_type = 0) then
+    begin
+        confirm_txt = &#x27;Отправить СМС&#x27;;
+        message_conf = &#x27;Отправить ссылку на подписание через СМС?&#x27;;
+    end
+  if (sign_type = 1) then
+    begin
+        confirm_txt = &#x27;Утвердить&#x27;;
+        message_conf = &#x27;Утвердить заявление?&#x27;;
+    end
+
+  res_text = BLOB_APPEND(res_text, &#x27;&lt;h1 class=&quot;green_text&quot;&gt;&#x27; || :k_no || &#x27;&lt;/h1&gt;&#x27;);
+
+  res_text = BLOB_APPEND(res_text, &#x27;Я, &lt;b&gt;&#x27; || :c_fio || &#x27;&lt;/b&gt;&lt;br&gt;&#x27; ||
+    &#x27;Прошу вернуть внесенную мной сумму за консультационные услуги по квитанции на взнос наличными №&lt;b&gt;&#x27; ||
+    :oper_no || &#x27;&lt;/b&gt; от &lt;b&gt;&#x27; || :pay_date || &#x27;&lt;/b&gt; в размере &lt;b&gt;&#x27; || :amount ||
+    &#x27;&lt;/b&gt; сом в связи с &lt;b&gt;&#x27; || :return_reason || &#x27;&lt;/b&gt;.&lt;br&gt;&#x27;);
+
+
+  res_text = BLOB_APPEND(res_text, &#x27;&lt;h1&gt;&#x27; || f_uri_sql(f_lang(&#x27;ru&#x27;, :confirm_txt), &#x27;confirm_return_consultation&#x27;, &#x27;app_return_consult&#x27;, :arc_id, &#x27;none&#x27;, f_lang(&#x27;ru&#x27;, :message_conf),&#x27;&#x27;,0,0,&#x27;&#x27;,&#x27;&#x27;,&#x27;dialog&#x27;,&#x27;&#x27;)
+        || &#x27;&lt;/h1&gt;&#x27;);
+
+  res_text = BLOB_APPEND(res_text, &#x27;&lt;h1&gt;&#x27; || f_uri_sql(f_lang(&#x27;ru&#x27;, &#x27;Запретить&#x27;), &#x27;decline_return_consultation&#x27;, &#x27;app_return_consult&#x27;, :arc_id, &#x27;none&#x27;, f_lang(&#x27;ru&#x27;, &#x27;Запертить возврат?&#x27;),&#x27;&#x27;,0,0,&#x27;&#x27;,&#x27;&#x27;,&#x27;dialog&#x27;,&#x27;&#x27;)
+        || &#x27;&lt;/h1&gt;&#x27;);
+
+  res_text = BLOB_APPEND(res_text, &#x27;&lt;/body&gt;&#x27;);
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

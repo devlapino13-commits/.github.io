@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DO_KN_OPERBOOK_FIX_ONE_PAIR — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DO_KN_OPERBOOK_FIX_ONE_PAIR: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DO_KN_OPERBOOK_FIX_ONE_PAIR</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_close_kn_operbook_saldo.html"><div class="to">HP_DO_CLOSE_KN_OPERBOOK_SALDO</div></a><a class="ref-card" href="hp_do_kn_operbook_one_online.html"><div class="to">HP_DO_KN_OPERBOOK_ONE_ONLINE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ACC_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DO_KN_OPERBOOK_FIX_ONE_PAIR(
+    ACC_ID D_ID,
+    REP_DATE_BEGIN D_DATE)
+AS
+declare variable acc_active d_id;
+declare variable acc_passive d_id;
+declare variable detail_id d_id;
+declare variable kob_id d_id;
+declare variable ol_date d_date;
+declare variable ob_sum d_currency;
+declare variable ob_tax d_currency;
+declare variable is_found d_bool;
+declare variable bal_sum d_currency;
+declare variable bal_tax d_currency;
+declare variable tmp_acc d_id;
+declare variable ol_date_prv d_date;
+declare variable active_sum d_currency;
+declare variable active_tax d_currency;
+declare variable passive_sum d_currency;
+declare variable passive_tax d_currency;
+declare variable tmp_date d_date;
+declare variable need_reverse d_bool;
+declare variable date_active d_date;
+declare variable date_passive d_date;
+declare variable same_count d_integer;
+begin
+  select iif(acc_type = 0, acc_id, acc_pair_acc_id), iif(acc_type = 1, acc_id, acc_pair_acc_id)
+  from ref_account
+  where acc_id = :acc_id
+  into acc_active, acc_passive;
+
+  if (acc_active is null or acc_passive is null) then
+    exit;
+
+  if (exists(select *
+    from kn_obsummary
+    where kobs_acc_id in (:acc_active, :acc_passive) and
+          kobs_date &gt;= :rep_date_begin and
+          ((kobs_acc_id = :acc_active and kobs_bal_sum &lt; 0) or
+           (kobs_acc_id = :acc_passive and kobs_bal_sum &gt; 0)))) then
+  begin
+    update kn_operbook
+    set kob_summa = 0,
+        kob_summa_tax_dt = 0,
+        kob_summa_tax_kt = 0
+    where kob_ol_date &gt;= :rep_date_begin and
+          kob_ol_is_active = 1 and
+          ((kob_acc_dt = :acc_active and kob_acc_kt = :acc_passive) or
+           (kob_acc_dt = :acc_passive and kob_acc_kt = :acc_active)) and
+          (kob_summa &lt;&gt; 0 or kob_summa_tax_dt &lt;&gt; 0 or kob_summa_tax_kt &lt;&gt; 0);
+  end else
+    exit;
+
+  update or insert into kn_obdetail (obd_detail)
+  values (&#x27;Кор-ка остатка парных счетов&#x27;)
+  matching (obd_detail)
+  returning obd_id
+  into detail_id;
+
+  is_found = 1;
+  ol_date_prv = rep_date_begin - 1;
+  while (is_found = 1) do
+  begin
+    is_found = 0;
+    same_count = 0;
+    for select kobs_acc_id, kobs_date, kobs_bal_sum, kobs_bal_tax
+    from kn_obsummary
+    where kobs_acc_id in (:acc_active, :acc_passive) and
+          kobs_date &gt;= :rep_date_begin and
+          ((kobs_acc_id = :acc_active and (kobs_bal_sum &lt; 0 or kobs_bal_tax &lt; 0)) or
+           (kobs_acc_id = :acc_passive and (kobs_bal_sum &gt; 0 or kobs_bal_tax &gt; 0)))
+    order by kobs_date
+    rows 1
+    into tmp_acc, ol_date, bal_sum, bal_tax
+    do
+    begin
+      if (ol_date = ol_date_prv) then -- ошибка на дату не устранена
+      begin
+        same_count = same_count + 1;
+        if (same_count &gt; 1) then
+          exception e_default f_format(&#x27;Same date on acc_id: %1&#x27;, acc_id);
+      end else
+        same_count = 0;
+
+      is_found = 1;
+
+      ob_sum = 0;
+      ob_tax = 0;
+
+      if (tmp_acc = acc_active) then
+      begin
+        if (bal_sum &gt; 0) then
+          bal_sum = 0;
+        if (bal_tax &gt; 0) then
+          bal_tax = 0;
+
+        ob_sum = -bal_sum;
+        ob_tax = -bal_tax;
+      end else
+      begin
+        if (bal_sum &lt; 0) then
+          bal_sum = 0;
+        if (bal_tax &lt; 0) then
+          bal_tax = 0;
+
+        ob_sum = bal_sum;
+        ob_tax = bal_tax;
+      end
+
+      update kn_operbook
+      set kob_summa = kob_summa + :ob_sum,
+          kob_summa_tax_dt = kob_summa_tax_dt + :ob_tax,
+          kob_summa_tax_kt = kob_summa_tax_kt + :ob_tax
+      where kob_ol_date = :ol_date and
+            kob_ol_is_active = 1 and
+            kob_acc_dt = :acc_active and
+            kob_acc_kt = :acc_passive
+      rows 1;
+
+      if (row_count = 0) then
+      begin
+        kob_id = null;
+        select kob_id
+        from kn_operbook
+        where kob_ol_date = :ol_date and
+              kob_ol_is_active = 1 and
+              (kob_acc_dt = :tmp_acc or kob_acc_kt = :tmp_acc)
+        order by kob_id desc
+        rows 1
+        into kob_id;
+    
+        if (kob_id is null) then
+          exception e_default f_format(&#x27;Kn_Operbook rec not found with acc: %1 on date: %2&#x27;, acc_active, ol_date);
+  
+        insert into kn_operbook (kob_from_ol_id, kob_currency, kob_curr_rate, kob_acc_dt, kob_acc_kt,
+                                 kob_summa, kob_summa_val, kob_summa_tax_dt, kob_summa_tax_kt,
+                                 kob_ol_date, kob_ol_reg_id, kob_ol_is_active,
+                                 kob_detail_id, kob_client_dt, kob_client_kt, kob_from_kc_id)
+        select kob_from_ol_id, kob_currency, kob_curr_rate, :acc_active, :acc_passive,
+               :ob_sum, 0, :ob_tax, :ob_tax,
+               kob_ol_date, kob_ol_reg_id, kob_ol_is_active, :detail_id,
+               iif(kob_acc_dt in (:acc_active, :acc_passive), kob_client_dt, iif(kob_acc_kt in (:acc_active, :acc_passive), kob_client_kt, null)),
+               iif(kob_acc_dt in (:acc_active, :acc_passive), kob_client_dt, iif(kob_acc_kt in (:acc_active, :acc_passive), kob_client_kt, null)),
+               kob_from_kc_id
+        from kn_operbook
+        where kob_id = :kob_id;
+      end
+
+      date_active = null;
+      date_passive = null;
+      active_sum = 0;
+      active_tax = 0;
+      passive_sum = 0;
+      passive_tax = 0;
+
+      kob_id = null;
+      need_reverse = 0;
+      if (tmp_acc = acc_active) then
+      begin
+        select kobs_date, kobs_bal_sum, kobs_bal_tax
+        from kn_obsummary
+        where kobs_acc_id = :acc_active and
+              kobs_date &gt; :ol_date and
+              (kobs_bal_sum &gt; 0 or kobs_bal_tax &gt; 0)
+        order by kobs_date
+        rows 1
+        into date_active, active_sum, active_tax;
+  
+        if (date_active is not null) then
+        begin
+          if (active_sum &lt; 0) then
+            active_sum = 0;
+
+          if (active_tax &lt; 0) then
+            active_tax = 0;
+
+          select kobs_date, kobs_bal_sum, kobs_bal_tax
+          from kn_obsummary
+          where kobs_acc_id = :acc_passive and
+                kobs_date between :ol_date + 1 and :date_active and
+                (kobs_bal_sum &lt; 0 or kobs_bal_tax &lt; 0)
+          order by kobs_date
+          rows 1
+          into date_passive, passive_sum, passive_tax;
+  
+          if (date_passive is not null) then
+          begin
+            if (passive_sum &gt; 0) then
+              passive_sum = 0;
+
+            if (passive_tax &gt; 0) then
+              passive_tax = 0;
+
+            need_reverse = 1;
+            tmp_date = date_active;
+            ob_sum = minvalue(active_sum, abs(passive_sum));
+            ob_tax = minvalue(active_tax, abs(passive_tax));
+          end
+        end
+      end else
+      begin
+        select kobs_date, kobs_bal_sum, kobs_bal_tax
+        from kn_obsummary
+        where kobs_acc_id = :acc_passive and
+              kobs_date &gt; :ol_date and
+              (kobs_bal_sum &lt; 0 or kobs_bal_tax &lt; 0)
+        order by kobs_date
+        rows 1
+        into date_passive, passive_sum, passive_tax;
+  
+        if (date_passive is not null) then
+        begin
+          if (passive_sum &gt; 0) then
+            passive_sum = 0;
+
+          if (passive_tax &gt; 0) then
+            passive_tax = 0;
+
+          select kobs_date, kobs_bal_sum, kobs_bal_tax
+          from kn_obsummary
+          where kobs_acc_id = :acc_active and
+                kobs_date between :ol_date + 1 and :date_passive and
+                (kobs_bal_sum &gt; 0 or kobs_bal_tax &gt; 0)
+          order by kobs_date
+          rows 1
+          into date_active, active_sum, active_tax;
+  
+          if (date_active is not null) then
+          begin
+            if (active_sum &lt; 0) then
+              active_sum = 0;
+
+            if (active_tax &lt; 0) then
+              active_tax = 0;
+
+            need_reverse = 1;
+            tmp_date = date_passive;
+            ob_sum = minvalue(active_sum, abs(passive_sum));
+            ob_tax = minvalue(active_tax, abs(passive_tax));
+          end
+        end
+      end
+
+      if (need_reverse = 1) then
+      begin
+        kob_id = null;
+
+        select kob_id
+        from kn_operbook
+        where kob_ol_date = :tmp_date and
+              kob_ol_is_active = 1 and
+              (kob_acc_dt = :tmp_acc or kob_acc_kt = :tmp_acc)
+        order by kob_id desc
+        rows 1
+        into kob_id;
+
+        if (kob_id is null) then
+          exception e_default f_format(&#x27;Kn_Operbook rec not found with acc: %1 on date: %2&#x27;, acc_active, ol_date);
+  
+        insert into kn_operbook (kob_from_ol_id, kob_currency, kob_curr_rate, kob_acc_dt, kob_acc_kt,
+                                 kob_summa, kob_summa_val, kob_summa_tax_dt, kob_summa_tax_kt,
+                                 kob_ol_date, kob_ol_reg_id, kob_ol_is_active,
+                                 kob_detail_id, kob_client_dt, kob_client_kt, kob_from_kc_id)
+        select kob_from_ol_id, kob_currency, kob_curr_rate, :acc_passive, :acc_active,
+               :ob_sum, 0, :ob_tax, :ob_tax,
+               kob_ol_date, kob_ol_reg_id, kob_ol_is_active, :detail_id,
+               iif(kob_acc_dt in (:acc_active, :acc_passive), kob_client_dt, iif(kob_acc_kt in (:acc_active, :acc_passive), kob_client_kt, null)),
+               iif(kob_acc_dt in (:acc_active, :acc_passive), kob_client_dt, iif(kob_acc_kt in (:acc_active, :acc_passive), kob_client_kt, null)),
+               kob_from_kc_id
+        from kn_operbook
+        where kob_id = :kob_id;
+      end
+
+      ol_date_prv = ol_date;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

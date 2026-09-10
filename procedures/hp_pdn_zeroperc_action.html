@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_PDN_ZEROPERC_ACTION — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_PDN_ZEROPERC_ACTION: 4 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_PDN_ZEROPERC_ACTION</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_pdn_zeroperc_check.html"><div class="to">HP_PDN_ZEROPERC_CHECK</div></a><a class="ref-card" href="hp_split_str.html"><div class="to">HP_SPLIT_STR</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ACTION_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DISB_PERIOD</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">GROUP_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ID_LIST</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PZP_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_PDN_ZEROPERC_ACTION(
+    ACTION_KIND D_STR_CODE,
+    DISB_PERIOD D_INTEGER,
+    GROUP_ID D_INTEGER,
+    ID_LIST D_STR_LONG)
+RETURNS (
+    PZP_ID D_ID)
+AS
+declare variable res_id d_integer;
+declare variable tmp_id d_integer;
+declare variable curr_period d_integer;
+declare variable new_group_id d_integer;
+declare variable pcg_name d_str_100;
+begin
+  -- Действия над таблицей PDN_ZEROPERC
+  pzp_id = 0;
+
+  if (coalesce(disb_period, 0) = 0) then
+    exception e_message &#x27;Период не указан&#x27;;
+
+  if (coalesce(group_id, 0) = 0) then
+    exception e_message &#x27;Группа не указана&#x27;;
+
+  if (coalesce(action_kind, &#x27;&#x27;) = &#x27;&#x27;) then
+    exception e_message &#x27;Действие не указано&#x27;;
+
+  if (action_kind not in (&#x27;add&#x27;, &#x27;delete&#x27;, &#x27;check&#x27;, &#x27;clone&#x27;)) then
+    exception e_message &#x27;Неопределенное действие: &#x27; || action_kind;
+
+  id_list = trim(coalesce(id_list,&#x27;&#x27;));
+
+  if (action_kind = &#x27;add&#x27;) then
+  begin
+    if (disb_period &lt;= 0 or group_id &lt;= 0) then
+      exception e_message f_format(&#x27;Неверные команды, группа %1, период %2&#x27;, group_id, disb_period);
+
+    insert into pdn_zeroperc (pzp_disb_period, pzp_from_pcg_id)
+    values (:disb_period, :group_id)
+    returning pzp_id
+    into :pzp_id;
+  end
+
+  if (action_kind = &#x27;delete&#x27;) then
+  begin
+    if (id_list = &#x27;&#x27;) then
+      exception e_message &#x27;Записи для удаления не указаны&#x27;;
+
+    for select res_str
+    from hp_split_str(:id_list, &#x27;,&#x27;)
+    into :res_id
+    do
+    begin
+      delete from pdn_zeroperc
+      where pzp_id = :res_id;
+    end
+  end
+
+  if (action_kind = &#x27;clone&#x27;) then
+  begin
+    if (disb_period = -1 and group_id = -1 and id_list &lt;&gt; &#x27;&#x27;) then
+    begin
+      -- Клонирование выделенных строк
+      pzp_id = null;
+      for select res_str
+      from hp_split_str(:id_list, &#x27;,&#x27;)
+      into :res_id
+      do
+      begin
+        insert into pdn_zeroperc (pzp_disb_period, pzp_from_pcg_id, pzp_day_min, pzp_day_max, pzp_amount_min,
+                                  pzp_amount_max, pzp_zalog_kind, pzp_poruch_kind, pzp_line_id, pzp_percent)
+        select pzp_disb_period, pzp_from_pcg_id, pzp_day_min, pzp_day_max, pzp_amount_min, pzp_amount_max,
+               pzp_zalog_kind, pzp_poruch_kind, pzp_line_id, pzp_percent
+        from pdn_zeroperc
+        where pzp_id = :res_id
+        returning pzp_id
+        into tmp_id;
+
+        if (pzp_id is null) then
+          pzp_id = tmp_id;
+      end
+
+    end else
+    if (id_list &lt;&gt; &#x27;&#x27;) then
+    begin
+      pzp_id = null;
+      select pzp_disb_period
+      from pdn_zeroperc
+      where pzp_id = :id_list
+      into curr_period;
+
+      if (curr_period is null) then
+        curr_period = -1;
+
+      new_group_id = group_id;
+      if (group_id &gt; 0) then
+      begin
+        select pcg_name
+        from pdn_credgroup
+        where pcg_id = :group_id
+        into pcg_name;
+
+        if (coalesce(pcg_name, &#x27;&#x27;) = &#x27;&#x27;) then
+          exit;
+
+        pcg_name = pcg_name || &#x27; копия&#x27;;
+        insert into pdn_credgroup (pcg_name)
+        values (:pcg_name)
+        returning pcg_id
+        into :new_group_id;
+      end
+
+      insert into pdn_zeroperc (pzp_disb_period, pzp_from_pcg_id, pzp_day_min, pzp_day_max, pzp_amount_min,
+                                pzp_amount_max, pzp_zalog_kind, pzp_poruch_kind, pzp_line_id, pzp_percent)
+      select iif(:disb_period &gt; 0, :disb_period, pzp_disb_period),
+             iif(:group_id &gt; 0, :new_group_id, pzp_from_pcg_id),
+             pzp_day_min, pzp_day_max, pzp_amount_min, pzp_amount_max,
+             pzp_zalog_kind, pzp_poruch_kind, iif(:group_id = -1, pzp_line_id, 0), pzp_percent
+      from pdn_zeroperc
+      where (:disb_period = -1 or pzp_disb_period = :curr_period) and
+            (:group_id = -1 or pzp_from_pcg_id = :group_id);
+    end
+  end
+
+  select count(*)
+  from hp_pdn_zeroperc_check(null)
+  into res_id;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

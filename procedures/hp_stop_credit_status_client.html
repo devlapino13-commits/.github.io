@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_STOP_CREDIT_STATUS_CLIENT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_STOP_CREDIT_STATUS_CLIENT: 2 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_STOP_CREDIT_STATUS_CLIENT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_blobex_blob.html"><div class="to">HP_GET_BLOBEX_BLOB</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_afr_miniapp.html"><div class="to">AAREP_AFR_MINIAPP</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATETIME</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EIL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">STATUS</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">QUERY_DATETIME</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ANSWER_DATETIME</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_STOP_CREDIT_STATUS_CLIENT(
+    C_ID D_ID,
+    REP_DATETIME D_DATETIME)
+RETURNS (
+    EIL_ID D_ID,
+    STATUS D_SMALLINT,
+    QUERY_DATETIME D_DATETIME,
+    ANSWER_DATETIME D_DATETIME)
+AS
+declare variable BLS_ID D_ID;
+declare variable JSON_TEXT D_BLOB_TEXT;
+declare variable STATUS_TEMP D_STR_10;
+declare variable EIL_STATUS D_SMALLINT;
+begin
+  -- Процедура вернет статус запроса проверки клиента на STOP_CREDIT на заданную дату/время (RFCKZ-370)
+  -- Процедура создана на базе hp_stop_credit_query_status
+
+  /*
+  Возможные статусы (status):
+      1 -- есть активный стоп кредит (то есть, для данной заявки существует запись в таблице extinfolist с соответствующим json, содержащим положительный ответ от сервиса),
+           актуальность этой записи требуется проверять отдельно
+      0 -- нет активного стоп кредита (то есть, для данной заявки сущесвтует запись в таблице extinfolist с соответствующим json, содержащим отрицательный ответ от сервиса),
+           актуальность этой записи требуется проверять отдельно
+     -1 -- запрос еще не создавался (нет записи в extinfolist для данной заявки)
+     -2 -- запрос создан, но ответ еще не получен. Данный статус соответствует статусам (-1, 0, 1) поля extinfolist.eil_status
+     -3 -- сервис ответил с ошибкой. Данный статус соответствует статусам (-2, -3) поля extinfolist.eil_status
+  */
+
+  select eil.eil_id,
+         eil.eil_from_bls_id,
+         eil.eil_create_datetime,
+         eil.eil_status_datetime,
+         eil.eil_status
+  from extinfolist eil
+  inner join extinfocfg eic on eic.eic_id = eil.eil_from_eic_id
+  where eic.eic_code = &#x27;stop_credit&#x27; and
+        eil.eil_from_c_id = :c_id and
+        eil.eil_status_datetime &lt;= :rep_datetime
+  order by eil.eil_id desc
+  rows 1
+  into :eil_id,
+       :bls_id,
+       :query_datetime,
+       :answer_datetime,
+       :eil_status;
+
+  -- Запрос не создавался (запись не существует)
+  if (eil_status is null) then
+  begin
+    status = -1;
+    suspend;
+    exit;
+  end
+
+  -- Сервис ответил с ошибкой, запрос неуспешен
+  if (eil_status in (-2, -3)) then
+  begin
+    status = -3;
+    suspend;
+    exit;
+  end
+
+  if (eil_status in (-1, 0, 1) or coalesce(:bls_id, 0) = 0) then
+  begin
+    status = -2; -- Запрос был отправлен, но ответ еще не получен
+    suspend;
+    exit;
+  end
+
+  select blx_blob
+  from hp_get_blobex_blob(:bls_id)
+  into json_text;
+
+  status_temp = left(f_json_str_get_value(:json_text, &#x27;result&#x27;, &#x27;&#x27;), 10);
+
+  status = (case status_temp
+              when &#x27;true&#x27; then 1
+              when &#x27;false&#x27; then 0
+              else -3 -- RFCKZ-23: Если в ответе значение не совпадает с ожидаемым, считаем, что сервис ответил с ошибкой
+            end);
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

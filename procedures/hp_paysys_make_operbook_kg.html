@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_PAYSYS_MAKE_OPERBOOK_KG — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_PAYSYS_MAKE_OPERBOOK_KG: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_PAYSYS_MAKE_OPERBOOK_KG</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_paysys_make_operbook.html"><div class="to">HP_PAYSYS_MAKE_OPERBOOK</div></a><a class="ref-card" href="hp_paysys_one_card_oper.html"><div class="to">HP_PAYSYS_ONE_CARD_OPER</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PSM_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_PAYSYS_MAKE_OPERBOOK_KG(
+    PSM_ID D_ID)
+RETURNS (
+    OL_ID D_ID)
+AS
+declare variable psm_date d_date;
+declare variable psm_item_count d_integer;
+declare variable psm_memo d_str_long;
+declare variable psm_from_un_id d_id;
+declare variable psp_name d_str_255;
+declare variable psl_sign d_smallint;
+declare variable reg_id d_integer;
+declare variable psp_sname1 d_str_20;
+declare variable psp_sname2 d_str_20;
+declare variable psp_sname3 d_str_20;
+declare variable cu d_str_lang;
+declare variable acc_dt d_str_20;
+declare variable acc_kt d_str_20;
+declare variable ol_tmp_id d_id;
+declare variable ob_detail d_str_long;
+declare variable add_detail d_str_long;
+declare variable step_num d_integer;
+declare variable is_chbook boolean;
+begin
+  cu = f_get_const(&#x27;cm_default_currency&#x27;);
+  for
+    select
+      psm_date,
+      psm_item_count,
+      psm_memo,
+      psm_from_un_id
+    from paysys_main
+    where psm_id = :psm_id
+      and psm_oper_kind = 0
+      and psm_status = 1
+      and psm_from_ol_id is null
+      and psm_is_delete = 0
+  into
+    :psm_date,
+    :psm_item_count,
+    :psm_memo,
+    :psm_from_un_id
+  do
+  begin
+    psp_sname1 = &#x27;Чековая книжка&#x27;;
+    psp_sname2 = &#x27;ОВН&#x27;;
+    psp_sname3 = &#x27;РКО&#x27;;
+
+    if (psm_memo not starting &#x27;Закрепление БСО&#x27;) then
+      add_detail = (
+        select
+          &#x27;, &#x27; || list(name, &#x27; -&gt; &#x27;)
+        from (
+          select
+            iif(psl_object_kind = 0, &#x27;Эмитент&#x27;,
+              coalesce(reg_name, c_name_fio)) as name
+          from paysys_list
+            left join region
+              on reg_unicode = psl_object_id
+            left join clients
+              on c_id = psl_object_id
+          where psl_from_psm_id = :psm_id
+            and psl_id in (1, 2)
+          order by psl_id));
+
+    -- откуда psl_sign = -1
+    -- куда psl_sign = 1
+    step_num = 0;
+    for
+      select
+        psl_object_id,
+        psl_sign,
+        psp_name,
+        psp_name starting :psp_sname1
+      from paysys_list
+        inner join paysys_item
+          on psi_id = psl_from_psi_id
+        inner join paysys_project
+          on psp_id = psi_from_psp_id
+            and (psp_name starting :psp_sname1
+             or  psp_name starting :psp_sname2
+             or  psp_name starting :psp_sname3)
+      where psl_from_psm_id = :psm_id
+        and psl_id in (1, 2)
+        and psl_object_kind = 1
+    into
+      :reg_id,
+      :psl_sign,
+      :psp_name,
+      :is_chbook
+    do
+    begin
+      step_num = step_num + 1;
+      acc_dt = (select al_id from acc_list where al_from_reg_id = :reg_id and al_currency = :cu
+        and al_account = iif(:psl_sign = -1, iif(:is_chbook, &#x27;96002/3&#x27;, &#x27;96002/2&#x27;), iif(:is_chbook, &#x27;96001/3&#x27;, &#x27;96001/2&#x27;)));
+      acc_kt = (select al_id from acc_list where al_from_reg_id = :reg_id and al_currency = :cu
+        and al_account = iif(:psl_sign = -1, iif(:is_chbook, &#x27;96001/3&#x27;, &#x27;96001/2&#x27;), iif(:is_chbook, &#x27;96002/3&#x27;, &#x27;96002/2&#x27;)));
+      ob_detail = f_format(&#x27;БСО: %1&#x27;, psp_name) || coalesce(add_detail, &#x27;&#x27;) || &#x27;;&#x27;;
+
+      insert into operlist (
+        ol_parent_id,
+        ol_from_reg_id,
+        ol_oper_type, 
+        ol_oper_subtype,
+        ol_date,
+        ol_doc_no,
+        ol_doc_kind, 
+        ol_memo,
+        ol_user_id
+       )
+      values (
+        :ol_id,
+        :reg_id,
+        2,
+        11,
+        :psm_date,
+        :psm_id,
+        9,
+        :psm_memo,
+        :psm_from_un_id
+      )
+      returning ol_id
+      into :ol_tmp_id;
+
+      insert into operbook (
+        ob_from_ol_id,
+        ob_currency,
+        ob_curr_rate,
+        ob_account_dt,
+        ob_account_kt,
+        ob_detail,
+        ob_summa,
+        ob_summa_val
+      )
+      values (
+        :ol_tmp_id,
+        :cu,
+        1,
+        :acc_dt,
+        :acc_kt,
+        :ob_detail,
+        :psm_item_count,
+        :psm_item_count
+      );
+
+      if (step_num = 1) then
+        ol_id = ol_tmp_id;
+    end
+
+    if (ol_id &gt; 0) then
+    begin
+      update paysys_main set
+        psm_from_ol_id = :ol_id
+      where psm_id = :psm_id;
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

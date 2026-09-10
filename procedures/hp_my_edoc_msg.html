@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_MY_EDOC_MSG — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_MY_EDOC_MSG: 1 входных, 8 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_MY_EDOC_MSG</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">8</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">IN_EDL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">8 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EDS_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">EDS_STATUS</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">EDS_SIGN_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">EDS_STATUS_DATETIME</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MSG_TYPE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MSG_DATETIME</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MSG_SUBJECT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MSG_BODY</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_MY_EDOC_MSG(
+    IN_EDL_ID D_ID)
+RETURNS (
+    EDS_ID D_ID,
+    EDS_STATUS D_INTEGER,
+    EDS_SIGN_KIND D_STR_CODE,
+    EDS_STATUS_DATETIME D_DATETIME,
+    MSG_TYPE D_INTEGER,
+    MSG_DATETIME D_DATETIME,
+    MSG_SUBJECT D_STR_255,
+    MSG_BODY D_STR_8100)
+AS
+declare variable c_id d_id;
+declare variable eds_enum_edoc_sign_kind d_integer;
+begin
+  c_id = uxf$usr_cid(0);
+
+  if (c_id is null) then
+    exit;
+
+  if (not exists(select * from edoc_sign
+                 where eds_from_edl_id = :in_edl_id and
+                       eds_from_c_id = :c_id)) then
+    exit;
+
+
+  for select s.eds_id, s.eds_status, s.eds_enum_edoc_sign_kind, s.eds_status_datetime,
+             r.msg_type, r.msg_datetime, r.msg_subject, left(r.msg_body, 8100)
+  from edoc_sign s
+       left join edoc_msg m on m.edm_from_eds_id = s.eds_id
+       left join fsrobot_msgbox r on m.edm_from_msg_id = r.msg_id
+  where s.eds_from_edl_id = :in_edl_id and
+        s.eds_from_c_id = :c_id
+  into eds_id, eds_status, eds_enum_edoc_sign_kind, eds_status_datetime,
+       msg_type, msg_datetime, msg_subject, msg_body
+  do
+  begin
+    eds_sign_kind = f_enum_name(&#x27;edoc_sign_kind&#x27;, eds_enum_edoc_sign_kind);
+
+    if (eds_status &lt;&gt; 1) then
+      eds_status_datetime = null;
+
+    if (eds_status = 0) then
+      eds_status = null;
+
+    if (coalesce(msg_subject, &#x27;&#x27;) = &#x27;&#x27; and coalesce(msg_body, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+      msg_subject = left(msg_body, 255);
+
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

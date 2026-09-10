@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CASHCHECKMAIN_ACC_ENTRY — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CASHCHECKMAIN_ACC_ENTRY: 1 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CASHCHECKMAIN_ACC_ENTRY</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_cashcheck_sign.html"><div class="to">HP_CASHCHECK_SIGN</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CCM_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ERR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CASHCHECKMAIN_ACC_ENTRY(
+    CCM_ID D_INTEGER)
+RETURNS (
+    OL_ID D_ID,
+    ERR_TEXT D_STR_255)
+AS
+declare variable dtoper d_date;
+declare variable curr_code d_str_lang;
+declare variable reg_id d_integer;
+declare variable cashier_id d_id;
+declare variable cashier_name d_str_100;
+declare variable ccm_num_cash d_integer;
+declare variable un_id d_id;
+declare variable is_deficit boolean;
+declare variable acc d_str_20;
+declare variable acc_dt d_str_20;
+declare variable acc_kt d_str_20;
+declare variable amount d_currency;
+declare variable cash_id d_integer;
+declare variable is_ipf d_bool;
+declare variable ol_memo d_str_long;
+begin
+  err_text = &#x27;&#x27;;
+  curr_code = &#x27;417&#x27;;
+
+  for
+    select
+      ccm_date,
+      ccm_from_reg_id,
+      c_id,
+      c_name_fio,
+      iif(ccm_num_cash = 0 or ccm_num_cash is null, 1, ccm_num_cash),
+      ccm_from_un_id,
+      coalesce(ccm_cash_saldo_mannual,0) &gt; coalesce(ccm_cash_saldo_fact,0),
+      abs(coalesce(ccm_cash_saldo_mannual,0) - coalesce(ccm_cash_saldo_fact,0))
+    from cashcheckmain
+      inner join clients
+        on c_id = ccm_cashier_curr
+    where ccm_id = :ccm_id
+      and ccm_is_delete = 0
+      and coalesce(ccm_cash_saldo_mannual,0) &lt;&gt; coalesce(ccm_cash_saldo_fact,0)
+      and ccm_ol_id is null
+  into
+    :dtoper,
+    :reg_id,
+    :cashier_id,
+    :cashier_name,
+    :ccm_num_cash,
+    :un_id,
+    :is_deficit,
+    :amount
+  do
+  begin
+    ol_memo = f_format(&#x27;%1 при инвентаризации кассы; %2&#x27;,
+      trim(iif(:is_deficit, &#x27;Недостача&#x27;, &#x27;Излишек&#x27;)), :cashier_name);
+
+    insert into operlist (
+      ol_from_reg_id,
+      ol_oper_type,
+      ol_oper_subtype,
+      ol_date,
+      ol_doc_no,
+      ol_doc_kind,
+      ol_memo,
+      ol_user_id,
+      ol_document_client
+    )
+    values (
+      :reg_id,
+      iif(:is_deficit, 2, 1),
+      2,
+      :dtoper,
+      :ccm_id,
+      iif(:is_deficit, 0, 1),
+      :ol_memo,
+      :un_id,
+      :cashier_id
+    )
+    returning ol_id
+    into :ol_id;
+
+    acc = &#x27;10001/&#x27; || ccm_num_cash;
+    acc_dt = (
+      select
+        al_id
+      from acc_list
+      where al_from_reg_id = :reg_id
+        and al_currency = :curr_code
+        and al_account = iif(:is_deficit, &#x27;11504/1&#x27;, :acc));
+    acc_kt = (
+      select
+        al_id
+      from acc_list
+      where al_from_reg_id = :reg_id
+        and al_currency = :curr_code
+        and al_account = iif(:is_deficit, :acc, &#x27;80509/1&#x27;));
+
+    insert into operbook (
+      ob_from_ol_id,
+      ob_currency,
+      ob_curr_rate,
+      ob_account_dt,
+      ob_account_kt,
+      ob_summa,
+      ob_summa_val,
+      ob_client_dt,
+      ob_client_kt
+    )
+    values (
+      :ol_id,
+      :curr_code,
+      1,
+      :acc_dt,
+      :acc_kt,
+      :amount,
+      :amount,
+      iif(:is_deficit, :cashier_id, null),
+      iif(:is_deficit, null, :cashier_id)
+    );
+
+    if (ol_id &gt; 0) then
+    begin
+      acc = iif(:is_deficit, :acc_kt, :acc_dt);
+
+      select
+        csp_id,
+        iif(csp_cls_al_id = :acc, 0, 1)
+      from cashplace
+      where csp_office_id = :reg_id
+        and (csp_cls_al_id = :acc or csp_ipf_al_id = :acc)
+      into
+        :cash_id,
+        :is_ipf;
+
+      insert into opercash (
+        opc_date,
+        opc_doc_no,
+        opc_office_id,
+        opc_from_csp_id,
+        OPC_OPER_KIND,
+        opc_sign,
+        opc_amount,
+        opc_cashier_id,
+        opc_from_c_id,
+        opc_is_ipf,
+        opc_corr_al_id,
+        opc_corr_reg_id,
+        opc_memo,
+        opc_from_ol_id,
+        opc_from_un_id)
+      values (
+        :dtoper,
+        :ccm_id,
+        :reg_id,
+        :cash_id,
+        f_enum_id(&#x27;cashoperkind&#x27;, iif(:is_deficit, &#x27;minus.saldo&#x27;, &#x27;plus.saldo&#x27;)),
+        iif(:is_deficit, -1, 1),
+        :amount,
+        :cashier_id,
+        :cashier_id,
+        :is_ipf,
+        iif(:is_deficit, :acc_dt, :acc_kt),
+        :reg_id,
+        :ol_memo,
+        :ol_id,
+        :un_id);
+    end
+
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_KG_0002_SQL — процедура — схема БД</title>
+<meta name="description" content="Запрет новым выдачам если ПАР КС более 1%">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_KG_0002_SQL</code></h1>
+<p class="desc">Запрет новым выдачам если ПАР КС более 1%</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_KG_0002_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable kc_amount curr_type;
+declare variable kf_disb_date d_date;
+declare variable kol_new_cli smallint;
+declare variable kol_old_cli smallint;
+declare variable kal_new_kf_officer id_type;
+declare variable op_par8_180 decimal(5,5);
+declare variable op_date_begin date;
+declare variable rep_date_str varchar(20);
+declare variable officer_name varchar(100);
+declare variable pr_code d_str_100;
+begin
+  select pr.pr_code
+  from kontract kt
+  inner join product pr on pr.pr_id = kt.k_from_pr_id
+  where kt.k_id = :k_id
+  into pr_code;
+
+  if (pr_code containing &#x27;.auto_kk.&#x27; and check_kind = &#x27;.send_kk.&#x27;) then
+   exit;
+
+--    Проверка гурппа новая или повторная
+      kol_new_cli = null;
+      kol_old_cli = null;
+      select sum(iif(kc_circle &lt;= 1, 1, 0)),
+             sum(iif(kc_circle &gt; 1, 1, 0))
+      from knclient
+      where kc_from_k_id = :k_id
+      and kc_amount_approved &gt; 0
+      into kol_new_cli, kol_old_cli;
+      if (kol_new_cli is null) then kol_new_cli = 0;
+      if (kol_old_cli is null) then kol_old_cli = 0;
+
+      if (current_date &gt; &#x27;09.11.2014&#x27;) then -- Разработка по приказу от 10.11.2014г.
+      begin
+          if (kol_new_cli &gt; kol_old_cli) then
+          begin
+            select kal_new_kf_officer, k_disb_date from knaktlist, kontract
+            where knaktlist.is_delete = 0
+            and k_disb_date between kal_date and kal_date_end
+            and kal_from_kf_id = k_from_kf_id
+            and k_id = :k_id
+            into kal_new_kf_officer, KF_DISB_DATE;
+            op_par8_180 = null;
+            select op_par8_180, op_date_begin from officerpar7
+            where op_kc_id = :kal_new_kf_officer
+            and :KF_DISB_DATE between op_date_begin and op_date_end
+            into op_par8_180, op_date_begin;
+            if (op_par8_180 is null) then op_par8_180 = 0;
+            if (op_par8_180 &gt; 1.00000) then
+            begin
+--              op_date_begin = op_date_begin - 1;
+              rep_date_str = right((extract(day from :op_date_begin) + 100),2);
+              rep_date_str = rep_date_str||&#x27;.&#x27;||extract(month from :op_date_begin)||&#x27;.&#x27;||extract(year from :op_date_begin);
+    
+              officer_name = (select c_name_fio from clients where c_id = :kal_new_kf_officer);
+              res_error_text = &#x27;У КС - &#x27;||:officer_name||&#x27; на дату &#x27;||:rep_date_str||&#x27; PAR = &#x27;||op_par8_180||&#x27;; Запрет выдачи новым группам.&#x27;;
+              res_error_is_critical = 1;
+              suspend;
+            end
+          end
+      end 
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_KONT_NEXT_HISTORY — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_KONT_NEXT_HISTORY: 8 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_KONT_NEXT_HISTORY</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">8</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_repayment_koef_temp.html"><div class="to">AAREP_REPAYMENT_KOEF_TEMP</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">8 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_PR_LOAN_TYPE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_SH_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_OL_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_OS</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_CR_RATE</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">HIST_NEW</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">HIST_NO</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">HIST_STILL</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_KONT_NEXT_HISTORY(
+    REP_K_ID D_ID,
+    REP_PR_LOAN_TYPE D_SMALLINT,
+    REP_DATE_BEGIN D_DATE,
+    REP_DATE_END D_DATE,
+    REP_SH_DATE D_DATE,
+    REP_OL_DATE D_DATE,
+    REP_OS D_CURRENCY,
+    REP_CR_RATE D_CURRENCY)
+RETURNS (
+    HIST_NEW D_CURRENCY,
+    HIST_NO D_CURRENCY,
+    HIST_STILL D_CURRENCY)
+AS
+declare variable tmp_state d_integer;
+declare variable tmp_state_date d_date;
+declare variable c_id d_id;
+declare variable c_os d_currency;
+declare variable cnt d_integer;
+declare variable n d_integer;
+begin
+  -- Процедура возвращает полученный rep_os (сумма погашения) согласно последующей истории (RFCKG-2086)
+  -- Если контракт групповой и закрытый, то сумма досрочки считается по каждому клиенту отдельно.
+
+  -- Входящие параметры:
+  -- rep_k_id - контракт, по которому было погашение
+  -- rep_date_begin - начало отчетного периода
+  -- rep_date_end - конец отчетного периода
+  -- rep_os - сумма погашения
+
+  -- Исходящие параметры:
+  -- hist_new - rep_k_id закрыт, клиент получил новый кредит (есть новая история)
+  -- hist_no - rep_k_id закрыт, клиент не получил новый кредит (последующей истории нет)
+  -- hist_still - rep_k_id остается активным на rep_date_end (история сохраняется за rep_k_id)
+
+  hist_new = 0;
+  hist_no = 0;
+  hist_still = 0;
+
+  select ks_state,
+         ks_date_begin
+  from kontract
+  inner join kontstate on ks_from_k_id = k_id
+  where k_id = :rep_k_id and
+        ks_ol_is_delete = 0 and
+        :rep_date_end between ks_date_begin and ks_date_end
+  into tmp_state, -- состояние контракта на конец отчетного периода
+       tmp_state_date; -- дата начала состояния
+
+  if (tmp_state = 1) then -- контракт активный
+  begin
+    hist_still = :rep_os; -- вся сумма идет в &quot;частично досрочные&quot;
+    suspend;
+    exit;
+  end
+
+  if (tmp_state = 2) then -- контракт закрыт
+  begin
+
+    if (rep_pr_loan_type = 1) then -- контракт индивидуальный
+    begin
+      select kc_from_c_id
+      from knclient
+      where kc_amount_approved &gt; 0 and
+            kc_from_k_id = :rep_k_id
+      into c_id;
+
+      select count(*)
+      from kontstate
+      inner join knclient on kc_from_k_id = ks_from_k_id
+      where kc_amount_approved &gt; 0 and
+            kc_from_c_id = :c_id and
+            ks_ol_is_delete = 0 and
+            ks_state = 1 and
+            ks_date_begin between :tmp_state_date and :rep_date_end
+      into cnt; -- количество контрактов клиента, полученных после закрытия rep_k_id и до конца отчетного периода
+
+      if (cnt &gt; 0) then
+        hist_new = :rep_os;
+      else
+        hist_no = :rep_os;
+    end
+
+    if (rep_pr_loan_type = 0) then -- контракт групповой
+    begin
+      for select kc_from_c_id
+          from knclient
+          where kc_amount_approved &gt; 0 and
+                kc_from_k_id = :rep_k_id
+          into c_id
+      do
+      begin
+        cnt = 0;
+        c_os = 0;
+
+        select sum(-ok_os * :rep_cr_rate)
+        from operkred
+        inner join operlist on ol_id = ok_from_ol_id
+        where ok_ol_is_active = 1 and
+              ok_type = 4 and
+              ok_sh_date &gt; ok_ol_date and
+              ok_sh_date = :rep_sh_date and
+              ok_ol_date = :rep_ol_date and
+              ok_from_k_id = :rep_k_id and
+              ol_document_client = :c_id
+        into c_os; -- сумма досрочки клиента группового контракта в дату rep_ol_date
+
+        if (c_os &gt; 0) then
+        begin
+          select count(*)
+          from kontstate
+          inner join knclient on kc_from_k_id = ks_from_k_id
+          where kc_amount_approved &gt; 0 and
+                kc_from_c_id = :c_id and
+                ks_ol_is_delete = 0 and
+                ks_state = 1 and
+                ks_date_begin between :tmp_state_date and :rep_date_end
+          into cnt; -- количество контрактов клиента, полученных после закрытия rep_k_id и до конца отчетного периода
+
+          if (cnt &gt; 0) then
+            hist_new = hist_new + c_os;
+          else
+            hist_no = hist_no + c_os;
+        end
+      end
+    end
+
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

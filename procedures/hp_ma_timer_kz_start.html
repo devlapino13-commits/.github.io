@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_MA_TIMER_KZ_START — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_MA_TIMER_KZ_START: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_MA_TIMER_KZ_START</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fsrobot_insert_event.html"><div class="to">FSROBOT_INSERT_EVENT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_edoc_after_sign_action.html"><div class="to">HP_EDOC_AFTER_SIGN_ACTION</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_MA_TIMER_KZ_START(
+    MA_ID D_ID NOT NULL)
+AS
+declare variable SIGN_DT D_DATETIME;
+declare variable REG_ID D_INTEGER;
+declare variable C_NAME D_STR_100;
+declare variable MO_C_ID D_ID;
+declare variable SENT_TXT D_STR_255;
+begin
+  -- RFCKZ-659: Старт таймера 55 минут и первый пуш КМ
+  -- Вызывается из HP_EDOC_AFTER_SIGN_ACTION при подписании loan.application
+
+  -- Момент подписания заявки клиентом
+  select eds.eds_status_datetime
+  from edoc_list edl
+  inner join edoc_cfg edc on edc.edc_id = edl.edl_from_edc_id
+  inner join edoc_sign eds on eds.eds_from_edl_id = edl.edl_id
+  where edl.edl_object_kind = f_objkind(&#x27;miniapp&#x27;, &#x27;id&#x27;)
+    and edl.edl_object_id = :ma_id
+    and edc.edc_code = &#x27;loan.application&#x27;
+    and eds.eds_status = 1
+  order by edl.edl_id desc
+  rows 1
+  into sign_dt;
+
+  if (sign_dt is null) then exit;
+
+  -- RFCKZ-956
+  select ma.ma_office_id
+  from miniapp ma
+  where ma.ma_id = :ma_id and
+        ma.ma_is_active = 1 and
+        ma.ma_date_end &gt;= &#x27;31.12.9999&#x27;
+  rows 1
+  into reg_id;
+
+  select c.c_name_fio
+  from miniappclient mac
+  inner join clients c on c.c_id = mac.mac_from_c_id
+  where mac.mac_from_ma_id = :ma_id
+    and mac.mac_amount &gt; 0
+  rows 1
+  into c_name;
+
+  -- Записываем таймер
+  if (not exists(select *
+                 from ma_timer_kz
+                 where mtk_from_ma_id = :ma_id
+                   and mtk_is_closed = 0)) then
+  begin
+    insert into ma_timer_kz (mtk_from_ma_id, mtk_sign_datetime)
+    values (:ma_id, :sign_dt);
+  end
+
+  -- Пуш
+  for select ps.ps_from_c_id
+      from hr_pstatus ps
+      inner join joblist jl on jl.jl_id = ps.ps_from_jl_id
+      inner join jobkind jk on jk.jk_id = jl.jl_kind
+      where current_date between ps.ps_date_begin and ps.ps_date_end
+        and ps.ps_is_working = 1
+        and ps.ps_status = 1
+        and ps.ps_from_reg_id = :reg_id
+        and jk.jk_system_code = &#x27;JobSystem.Region_KM&#x27;
+      into mo_c_id
+  do
+  begin
+    sent_txt = mo_c_id || &#x27;; У вас 30 минут для принятия решения по заявке &#x27; || c_name;
+    execute procedure fsrobot_insert_event(&#x27;DoMailing&#x27;, &#x27;push_sent_app&#x27;, left(:sent_txt, 255), 1000000000000);
+  end                                     
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

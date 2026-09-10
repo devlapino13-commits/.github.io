@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PAYSYS_PRINT_AKT_ITEMS — процедура — схема БД</title>
+<meta name="description" content="Процедура PAYSYS_PRINT_AKT_ITEMS: 1 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>PAYSYS_PRINT_AKT_ITEMS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PSM_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PSI_CODE</div><div class="ptype">VARCHAR(45)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PSI_COUNT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FIRST_PSI_CODE</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LAST_PSI_CODE</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE PAYSYS_PRINT_AKT_ITEMS(
+    PSM_ID DECIMAL(18,0))
+RETURNS (
+    PSI_CODE VARCHAR(45),
+    PSI_COUNT INTEGER,
+    FIRST_PSI_CODE VARCHAR(20),
+    LAST_PSI_CODE VARCHAR(20))
+AS
+declare variable is_card smallint;
+declare variable psp_is_card smallint;
+declare variable tmp_psi_code varchar(20);
+begin
+  is_card = 0;
+  psi_count = 1;
+  for select distinct psp_is_card
+      from paysys_list, paysys_item, paysys_project
+      where psl_from_psm_id = :psm_id and
+            psl_from_psi_id = psi_id and
+            psi_from_psp_id = psp_id
+      into :psp_is_card
+  do
+  begin
+    if (psp_is_card = 1) then
+    begin
+      is_card = 1;
+      leave;
+    end
+  end
+  first_psi_code = null;
+  for select distinct psi_code
+      from paysys_list, paysys_item
+      where psl_from_psm_id = :psm_id and
+            psl_from_psi_id = psi_id and
+            psl_sign = -1
+      order by psi_code
+      into psi_code
+  do
+  begin
+    if (is_card = 1) then -- Номера карт, каждая выводится отдельным suspend
+    begin
+-- форматирование кода для повышения читаемости: XXXX-XXXX-XXXX-XXXX
+      if (char_length(psi_code) = 16) then
+        psi_code = left(psi_code, 4) || &#x27;-&#x27; || substring(psi_code from 5 for 4) || &#x27;-&#x27; || substring(psi_code from 9 for 4) || &#x27;-&#x27; || right(psi_code, 4);
+      suspend;
+    end -- Номера бланков выводим диапазонами XXXXXXX-XXXXXXX
+    else -- или по одной, если не входит в диапазон XXXXXXX
+    begin
+      tmp_psi_code = psi_code;
+      if (first_psi_code is null) then
+      begin -- Первый встреченный номер - инициализация
+        first_psi_code = psi_code;
+        last_psi_code = psi_code;
+      end
+      else
+      begin
+        if (cast(psi_code as decimal(18,0)) &lt;&gt; cast(last_psi_code as decimal(18,0)) + 1) then
+        begin -- Встретили разрыв
+          if (first_psi_code = last_psi_code) then
+          begin -- Возвращаем один номер
+            psi_code = last_psi_code;
+            psi_count = cast(last_psi_code as decimal(18,0)) - cast(first_psi_code as decimal(18,0)) + 1;
+            suspend;
+          end
+          else
+          begin -- Возвращаем диапазон
+            psi_code = first_psi_code || &#x27; - &#x27; || last_psi_code;
+            psi_count = cast(last_psi_code as decimal(18,0)) - cast(first_psi_code as decimal(18,0)) + 1;
+            suspend;
+          end
+          first_psi_code = tmp_psi_code;
+        end
+        last_psi_code = tmp_psi_code;
+      end
+    end
+  end
+  if (first_psi_code is not null) then
+  begin
+    if (first_psi_code = last_psi_code) then
+    begin -- Возвращаем один номер
+      psi_code = last_psi_code;
+      psi_count = 1;
+      suspend;
+    end
+    else
+    begin -- Возвращаем диапазон
+      psi_code = first_psi_code || &#x27; - &#x27; || last_psi_code;
+      psi_count = cast(last_psi_code as decimal(18,0)) - cast(first_psi_code as decimal(18,0)) + 1;
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

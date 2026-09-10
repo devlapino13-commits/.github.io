@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_PVNOPER_CASHING — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_PVNOPER_CASHING: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_PVNOPER_CASHING</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_loronostro_link.html"><div class="to">AAREP_LORONOSTRO_LINK</div></a><a class="ref-card" href="last_doc_number.html"><div class="to">LAST_DOC_NUMBER</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_cardsync_action_exec_one.html"><div class="to">HP_CARDSYNC_ACTION_EXEC_ONE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PO_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CS_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_PVNOPER_CASHING(
+    PO_ID D_INTEGER,
+    CS_ID D_INTEGER = null)
+AS
+declare variable acc_dt d_str_20;
+declare variable c_id d_id;
+declare variable ol_doc_no d_integer;
+declare variable ol_memo d_str_long;
+declare variable card_id d_integer;
+declare variable amount d_currency;
+declare variable un_id d_id;
+declare variable office_id d_integer;
+declare variable acc_kt d_str_20;
+declare variable ol_id d_id;
+declare variable oper_date d_date;
+declare variable card_acc_no d_str_code;
+declare variable card_disb_office_id d_integer;
+declare variable acc_bish_office d_str_code;
+declare variable bish_office_id d_integer;
+declare variable ol_id_child d_id;
+declare variable acc_bo_office_cashing d_str_code;
+declare variable acc_bo_office_disb_card d_str_code;
+declare variable ol_id1 d_id;
+declare variable res_reg_id d_integer;
+declare variable res_acc_dt d_str_20;
+declare variable res_acc_kt d_str_20;
+declare variable total_line d_integer;
+declare variable res_line_no d_integer;
+begin
+  if (po_id is null) then
+    exception e_message &#x27;po_id не определен&#x27;;
+
+  select po_card_id,
+         po_from_c_id,
+         po_amount,
+         po_un_id,
+         po_office_id,
+         po_acc_kt,
+         po_date,
+         po.po_card_office_id
+  from pvnopers po
+  where po.po_id = :po_id
+  into :card_id,
+       :c_id,
+       :amount,
+       :un_id,
+       :office_id,
+       :acc_kt,
+       :oper_date,
+       :card_disb_office_id;
+
+  if (office_id = 1090100) then
+    exception e_message &#x27;ПВН операции не могут быть осуществлены в Бишкек ГО&#x27;;
+
+  if (card_disb_office_id is null) then
+  begin
+      select cpl.cpl_from_reg_id
+      from  cardlist cal
+      inner join cardplace cpl on cal.cal_last_cpl_id = cpl.cpl_id
+      where cal.cal_card_id = :card_id
+      into :card_disb_office_id;
+  end
+
+  if (card_disb_office_id is null) then
+    exception e_message &#x27;Офис выдачи карты не определен&#x27;;
+
+   -- Операции по ПВН
+   select al_id
+   from acc_list
+   where al_from_reg_id = :card_disb_office_id
+     and al_currency = 417
+     and al_account = &#x27;20001/1&#x27;
+   into :acc_dt;
+
+  if (acc_dt is null) then
+    exception e_message &#x27;Счет Дт не определен&#x27;;
+
+  select cca.cca_code
+  from cardlist cal
+    inner join cardclientacc cca on cal.cal_from_cca_id = cca.cca_id
+  where cal.cal_card_id = :card_id
+  into :card_acc_no;
+
+  if (card_acc_no is null) then
+    exception e_message &#x27;Карт счет не определен&#x27;;
+
+--------------------------------------------------------------------------------
+  ol_id = null;
+
+  select num
+  from last_doc_number(:oper_date, 0, :office_id) -- 0 - т.к. нас интерсует расходный кассовый ордер
+  into :ol_doc_no;
+
+  for
+    select
+      res_reg_id,
+      res_acc_dt,
+      res_acc_kt,
+      total_line,
+      res_line_no
+    from aarep_loronostro_link(:card_disb_office_id, :acc_dt, :acc_kt)
+  into
+    :res_reg_id,
+    :res_acc_dt,
+    :res_acc_kt,
+    :total_line,
+    :res_line_no
+  do
+  begin
+    insert into operlist (
+      ol_parent_id,
+      ol_from_reg_id,
+      ol_oper_type,
+      ol_date,
+      ol_doc_no,
+      ol_doc_kind,
+      ol_document_client,
+      ol_memo,
+      ol_user_id
+    )
+    values (
+      :ol_id,
+      :res_reg_id,
+      2,
+      :oper_date,
+      :ol_doc_no,
+      0,
+      :c_id,
+      f_format(&#x27;Обналичивание средств по ПВН: ID %1 (сч.%2)&#x27;, :card_id, :card_acc_no),
+      :un_id
+    )
+    returning ol_id, ol_memo
+    into :ol_id1, :ol_memo;
+
+    if (res_line_no = 1)
+      then ol_id = ol_id1;
+
+    insert into operbook (
+      ob_from_ol_id,
+      ob_currency,
+      ob_curr_rate,
+      ob_account_dt,
+      ob_account_kt,
+      ob_detail,
+      ob_summa,
+      ob_summa_val,
+      ob_client_dt
+    )
+    values (
+      :ol_id1,
+      &#x27;417&#x27;,
+      1,
+      :res_acc_dt,
+      :res_acc_kt,
+      :ol_memo,
+      :amount,
+      :amount,
+      :c_id
+    );
+  end
+--------------------------------------------------------------------------------
+
+  update pvnopers po
+  set po.po_status = f_enum(&#x27;pvnopers_status&#x27;, &#x27;operation_ok&#x27;, &#x27;id&#x27;),
+      po.po_from_ol_id = :ol_id1 -- последняя операция, иначе пустой расходник
+  where po.po_id = :po_id;
+
+  if (:cs_id is not null) then
+    insert into cardsyncopers (cso_from_cs_id, cso_from_ol_id, cso_after_exec)
+    values (:cs_id, :ol_id, 1);
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

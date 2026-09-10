@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0023_SQL — процедура — схема БД</title>
+<meta name="description" content="Ограничение по ПСК">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0023_SQL</code></h1>
+<p class="desc">Ограничение по ПСК</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0023_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare kf_disb_date d_date;
+declare variable K_PERCENT_EFFECT PERC_TYPE;
+declare variable K_PERIOD integer;
+declare variable K_FROM_PR_ID integer;
+declare variable PR_CODE varchar(100);
+declare variable PR_NAME varchar(50);
+declare variable MIN_PSK PERC_TYPE;
+declare variable MAX_PSK PERC_TYPE;
+declare variable K_KREDLINE_END date;
+begin
+  K_PERCENT_EFFECT = null;
+  select K_PERCENT_EFFECT_FIFD, K_PERIOD, K_FROM_PR_ID, K_DISB_DATE, K_KREDLINE_END
+  from KONTRACT
+  where K_ID = :K_ID
+  into K_PERCENT_EFFECT, K_PERIOD, K_FROM_PR_ID, KF_DISB_DATE, K_KREDLINE_END;
+  K_PERCENT_EFFECT = coalesce(K_PERCENT_EFFECT, 0);
+  if (K_KREDLINE_END - KF_DISB_DATE &gt; 365) then
+  begin
+    res_error_is_critical = 1;
+    res_error_text = &#x27;Общий срок займа не должен превышать 365 дней&#x27;;
+    suspend;
+  end
+  select PR_CODE, PR_NAME
+  from PRODUCT
+  where PR_ID = :K_FROM_PR_ID
+  into PR_CODE, PR_NAME;
+  if (K_PERCENT_EFFECT is null) then
+    K_PERCENT_EFFECT = 0;
+  if (K_PERCENT_EFFECT &lt;= 0) then
+  begin
+    res_error_is_critical = 2;
+    res_error_text = &#x27;ПСК не правильно посчитан, заново перестройте график и попробуйте утвердить!&#x27;;
+    suspend;
+  end
+  if (KF_DISB_DATE &gt;= cast(&#x27;01.07.2015&#x27; as date) and
+      KF_DISB_DATE &lt;= cast(&#x27;22.10.2015&#x27; as date) -- Добавлено по письму Ироды от 22.10.2015
+      ) then
+  begin
+    if (K_PERCENT_EFFECT &gt; 244.00) then
+    begin
+      res_error_is_critical = 2;
+      res_error_text = &#x27;ПСК не должно превышать от 244%&#x27;;
+      suspend;
+    end
+  end
+  else
+  if (KF_DISB_DATE &lt;= cast(&#x27;01.01.2016&#x27; as date)) then
+  begin
+    select PR_CODE, PR_NAME
+    from PRODUCT
+    where PR_ID = :K_FROM_PR_ID
+    into PR_CODE, PR_NAME;
+    if (PR_CODE containing &#x27;.BARAKAT.&#x27;) then
+    begin
+      MIN_PSK = 69.598;
+      MAX_PSK = 121.232;
+    end
+    else
+    if (PR_CODE containing &#x27;.BARAKAT PLUS.&#x27;) then
+    begin
+      MIN_PSK = 59.502;
+      MAX_PSK = 109.230;
+    end
+    else
+    if (PR_CODE containing &#x27;.FAMILY.&#x27;) then
+    begin
+      MIN_PSK = 35.944;
+      MAX_PSK = 85.366;
+    end
+    else
+    if (PR_CODE containing &#x27;.FAMILY PLUS.&#x27;) then
+    begin
+      MIN_PSK = 50.358;
+      MAX_PSK = 99.322;
+    end
+    else
+    if (PR_CODE containing &#x27;.ONE.&#x27;) then
+    begin
+      MIN_PSK = 76.053;
+      MAX_PSK = 226.870;
+    end
+    else
+    if (PR_CODE containing &#x27;.PAR.&#x27;) then
+    begin
+      MIN_PSK = 30.377;
+      MAX_PSK = 107.945;
+    end
+    else
+    if (PR_CODE containing &#x27;.EMP.&#x27;) then
+    begin
+      MIN_PSK = 35.649;
+      MAX_PSK = 44.159;
+    end
+    else
+    if (PR_CODE containing &#x27;.GR.&#x27;) then
+    begin
+      MIN_PSK = 61.464;
+      MAX_PSK = 200.387;
+    end
+    else
+    begin
+      MIN_PSK = 0;
+      MAX_PSK = 244.00;
+    end
+    if (K_PERCENT_EFFECT &gt; MAX_PSK) then
+    begin
+      res_error_is_critical = 2;
+      res_error_text = &#x27;Для кр. продукта:&#x27; || :PR_NAME || &#x27; ПСК не должно превышать &#x27; || :MAX_PSK || &#x27;%&#x27;;
+      suspend;
+    end
+    else
+    if (K_PERCENT_EFFECT &lt; MIN_PSK) then
+    begin
+      res_error_is_critical = 2;
+      res_error_text = &#x27;Для кр. продукта:&#x27; || :PR_NAME || &#x27; ПСК не должно быть ниже &#x27; || :MIN_PSK || &#x27;%&#x27;;
+      suspend;
+    end
+  end
+  else
+  if (:KF_DISB_DATE &lt; cast(&#x27;01.04.2017&#x27; as date)) then
+  begin
+    if (PR_CODE containing &#x27;.BARAKAT.&#x27;) then
+    begin
+      MIN_PSK = 85.958;
+      MAX_PSK = 124.765;
+    end
+    else
+    if (PR_CODE containing &#x27;.BARAKAT PLUS.&#x27;) then
+    begin
+      MIN_PSK = 76.366;
+      MAX_PSK = 112.257;
+    end
+    else
+    if (PR_CODE containing &#x27;.FAMILY.&#x27;) then
+    begin
+      MIN_PSK = 54.674;
+      MAX_PSK = 85.331;
+    end
+    else
+    if (PR_CODE containing &#x27;.FAMILY PLUS.&#x27;) then
+    begin
+      MIN_PSK = 67.849;
+      MAX_PSK = 103.701;
+    end
+    else
+    if (PR_CODE containing &#x27;.ONE.&#x27;) then
+    begin
+      MIN_PSK = 76.053;
+      MAX_PSK = 226.870;
+    end
+    else
+    if (PR_CODE containing &#x27;.PAR.&#x27;) then
+    begin
+      MIN_PSK = 54.693;
+      MAX_PSK = 82.945;
+    end
+    else
+    if (PR_CODE containing &#x27;.PATENT PLUS.&#x27;) then
+    begin
+      MIN_PSK = 85.870;
+      MAX_PSK = 88.618;
+    end
+  end
+  else
+  if (:KF_DISB_DATE between cast(&#x27;01.04.2017&#x27; as date) and cast(&#x27;30.04.2017&#x27; as date)) then
+  begin
+    MIN_PSK = 0;
+    MAX_PSK = 244.00;
+    if (PR_CODE containing &#x27;.GR.&#x27;) then
+    begin
+      if (PR_CODE containing &#x27;.FAMILY.&#x27;) then --«Семья»
+      begin
+        MIN_PSK = 54.482;
+        MAX_PSK = 85.3;
+      end
+      else
+      if (PR_CODE containing &#x27;.FAMILY PLUS.&#x27;) then --«Семья Плюс»
+      begin
+        MIN_PSK = 65.486;
+        MAX_PSK = 103.676;
+      end
+      else
+      if (PR_CODE containing &#x27;.PATENT.&#x27;) then --«Групповой микрозаем на патент»
+      begin
+        MIN_PSK = 101.585;
+        MAX_PSK = 108.416;
+      end
+    end
+    if (PR_CODE containing &#x27;.IND.&#x27;) then
+    begin
+      if (PR_CODE containing &#x27;.OB.&#x27;) then --«Микрозаем сотруднику»
+      begin
+        MIN_PSK = 28.336;
+        MAX_PSK = 34.407;
+      end
+      else
+      if (PR_CODE containing &#x27;.FOREIGN.&#x27;) then --«Микрозаем  иностранному сотруднику»
+      begin
+        MIN_PSK = 23.252;
+        MAX_PSK = 29.344;
+      end
+      else
+      if (PR_CODE containing &#x27;.PAR.&#x27;) then --Микрозаем по программе лояльности
+      begin
+        MIN_PSK = 54.681;
+        MAX_PSK = 82.945;
+      end
+      else
+      if (PR_CODE containing &#x27;.BARAKAT.&#x27;) then --«Баракат»
+      begin
+        MIN_PSK = 82.294;
+        MAX_PSK = 124.748;
+      end
+      else
+      if (PR_CODE containing &#x27;.BARAKAT PLUS.&#x27;) then --«Баракат Плюс»
+      begin
+        MIN_PSK = 73.888;
+        MAX_PSK = 112.295;
+      end
+      else
+      if (PR_CODE containing &#x27;.PATENT.&#x27;) then --«Микрозаем на патент»
+      begin
+        MIN_PSK = 85.9;
+        MAX_PSK = 125.449;
+      end
+      else
+      if (PR_CODE containing &#x27;.PATENT PLUS.&#x27;) then --«Микрозаем на патент Плюс»
+      begin
+        MIN_PSK = 78.713;
+        MAX_PSK = 81.757;
+      end
+      else
+      if (PR_CODE containing &#x27;.WINNER.&#x27;) then --«Микрозаем для победителей»
+      begin
+        MIN_PSK = 19.251;
+        MAX_PSK = 25.277;
+      end
+    end
+  end
+  else
+  if (:KF_DISB_DATE &gt;= cast(&#x27;01.05.2017&#x27; as date)) then
+  begin
+    MIN_PSK = 0;
+    MAX_PSK = 244.00;
+    if (PR_CODE containing &#x27;.GR.&#x27;) then
+    begin
+      if (PR_CODE containing &#x27;.FAMILY.&#x27;) then --«Семья»
+      begin
+        if (KF_DISB_DATE &lt; &#x27;16.10.2017&#x27;) then
+        begin
+          MIN_PSK = 54.482;
+          MAX_PSK = iif(KF_DISB_DATE &lt; &#x27;07.06.17&#x27;, 85.305, 106.460);
+          if (KF_DISB_DATE between &#x27;05.10.17&#x27; and &#x27;31.10.17&#x27;) then
+            MIN_PSK = 53.482;
+        end
+        else
+        begin
+          MIN_PSK = 73.188;
+          MAX_PSK = 106.460;
+        end
+      end
+      else
+      if (PR_CODE containing &#x27;.FAMILY PLUS.&#x27;) then --«Семья Плюс»
+      begin
+        if (KF_DISB_DATE &lt; &#x27;16.10.2017&#x27;) then
+        begin
+          MIN_PSK = 65.486;
+          MAX_PSK = iif(KF_DISB_DATE &lt; &#x27;07.06.17&#x27;, 104.933, 120.890);
+          if (KF_DISB_DATE &gt;= &#x27;03.10.17&#x27;) then
+            MAX_PSK = 120.130;
+          if (KF_DISB_DATE between &#x27;05.10.17&#x27; and &#x27;31.10.17&#x27;) then
+            MIN_PSK = 64.486;
+        end
+        else
+        begin
+          MIN_PSK = 88.761;
+          MAX_PSK = 120.130;
+        end
+      end
+      else
+      if (PR_CODE containing &#x27;.PATENT.&#x27;) then --«Групповой микрозаем на патент»
+      begin
+        MIN_PSK = 101.585;
+        MAX_PSK = 108.426;
+      end
+    end
+    if (PR_CODE containing &#x27;.IND.&#x27;) then
+    begin
+      if (PR_CODE containing &#x27;.BARAKAT.&#x27;) then --«Баракат»
+      begin
+        if (KF_DISB_DATE &lt; &#x27;16.10.2017&#x27;) then
+        begin
+          MIN_PSK = 82.294;
+          MAX_PSK = iif(KF_DISB_DATE &lt; &#x27;07.06.17&#x27;, 126.719, 128.040);
+          if (KF_DISB_DATE between &#x27;05.10.17&#x27; and &#x27;31.10.17&#x27;) then
+            MIN_PSK = 81.294;
+        end
+        else
+        begin
+          MIN_PSK = 95.188;
+          MAX_PSK = 128.040;
+        end
+      end
+      else
+      if (PR_CODE containing &#x27;.BARAKAT PLUS.&#x27;) then --«Баракат Плюс»
+      begin
+        if (KF_DISB_DATE &lt; &#x27;16.10.2017&#x27;) then
+        begin
+          MIN_PSK = 73.888;
+          MAX_PSK = iif(KF_DISB_DATE &lt; &#x27;07.06.17&#x27;, 113.526, 117.195);
+          if (KF_DISB_DATE between &#x27;05.10.17&#x27; and &#x27;31.10.17&#x27;) then
+            MIN_PSK = 72.888;
+        end
+        else
+        begin
+          MIN_PSK = 85.147;
+          MAX_PSK = 117.195;
+        end
+      end
+      else
+      if (PR_CODE containing &#x27;.PATENT.&#x27;) then --«Микрозаем на патент»
+      begin
+        MIN_PSK = 85.9;
+        MAX_PSK = 125.462;
+      end
+      else
+      if (PR_CODE containing &#x27;.FOREIGN.&#x27;) then --«Микрозаем  иностранному сотруднику»
+      begin
+        MIN_PSK = 23.252;
+        MAX_PSK = 29.344;
+      end
+      else
+      if (PR_CODE containing &#x27;.OB.&#x27;) then --«Микрозаем сотруднику»
+      begin
+        MIN_PSK = 28.336;
+        MAX_PSK = 34.407;
+      end
+      else
+      if (PR_CODE containing &#x27;.PATENT PLUS.&#x27;) then --«Микрозаем на патент Плюс»
+      begin
+        if (KF_DISB_DATE &lt; &#x27;01.10.17&#x27;) then
+        begin
+          MIN_PSK = 78.713;
+          if (:KF_DISB_DATE &lt; &#x27;01.07.17&#x27;) then
+            MAX_PSK = 81.757;
+          else
+          if (:KF_DISB_DATE &lt; &#x27;01.01.18&#x27;) then
+            MAX_PSK = 69.990;
+          else
+            MAX_PSK = 80.145;
+        end
+        else   
+        if (KF_DISB_DATE &lt; &#x27;01.04.18&#x27;) then
+        begin
+          --макс ПСК  75,342%,  мин. ПСК 72,436 %.
+          MIN_PSK = 72.436;
+          MAX_PSK = 75.342;
+        end else          
+        if (KF_DISB_DATE &lt; &#x27;01.07.18&#x27;) then
+        begin
+          /*«Микрозаем на патент Плюс» и «Микрозаем на патент Плюс параллельный» 5.7 % в месяц
+            Мин. ПСК 67,850%, Макс. ПСК 69,675% */
+          MIN_PSK = 67.850;
+          MAX_PSK = 69.675;
+        end else
+        begin
+          /*с 1 июля 2018г. по продуктам «Микрозаем на патент Плюс» и «Микрозаем на патент плюс параллельный»:
+            Ставка – 4,95 % в месяц
+            Минимальный ПСК – 58.820% годовых
+            Максимальный ПСК – 60.410% годовых
+             */
+          MIN_PSK = 58.820;
+          MAX_PSK = 60.410;
+        end
+      end
+      else
+      if (PR_CODE containing &#x27;.PAR.&#x27;) then --Микрозаем по программе лояльности
+      begin
+        if (KF_DISB_DATE &lt; &#x27;16.10.17&#x27;) then
+        begin
+          MIN_PSK = 54.681;
+          MAX_PSK = 83.945;
+        end
+        else
+        begin
+          if (:KF_DISB_DATE between &#x27;01.01.18&#x27; and &#x27;31.03.18&#x27; and
+              PR_CODE containing &#x27;.PATENT PLUS.&#x27;) then --«Микрозаем на патент Плюс»
+            MAX_PSK = 69.990;
+          else
+          if (PR_CODE not containing &#x27;.PATENT PLUS.&#x27;) then --«Микрозаем на патент Плюс» условия ПСК по данному продукту совпадают с основным
+          begin
+            MIN_PSK = 73.188;
+            MAX_PSK = 128.040;
+          end
+        end
+      end
+      else
+      if (PR_CODE containing &#x27;.WINNER.&#x27;) then --«Микрозаем для победителей»
+      begin
+        MIN_PSK = 19.251;
+        MAX_PSK = 25.277;
+      end
+    end
+  end
+  if (K_PERCENT_EFFECT &gt; MAX_PSK) then
+  begin
+    res_error_is_critical = 2;
+    res_error_text = &#x27;Для кр. продукта: &quot;&#x27; || :PR_NAME || &#x27;&quot; ПСК не должно превышать &#x27; || :MAX_PSK || &#x27;%&#x27;;
+    suspend;
+  end
+  else
+  if (K_PERCENT_EFFECT &lt; MIN_PSK) then
+  begin
+    res_error_is_critical = 2;
+    res_error_text = &#x27;Для кр. продукта: &quot;&#x27; || :PR_NAME || &#x27;&quot; ПСК не должно быть ниже &#x27; || :MIN_PSK || &#x27;%&#x27;;
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

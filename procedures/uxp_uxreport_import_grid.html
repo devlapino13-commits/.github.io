@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$UXREPORT_IMPORT_GRID — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$UXREPORT_IMPORT_GRID: 2 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$UXREPORT_IMPORT_GRID</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RL_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">JSON_DATA</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_UX_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_UUID_STR</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$UXREPORT_IMPORT_GRID(
+    RL_ID D_INTEGER,
+    JSON_DATA D_BLOB_TEXT = null)
+RETURNS (
+    REP_UX_UUID D_UUID,
+    RES_UUID_STR D_STR_CODE,
+    RES_ERROR_TEXT D_STR_LONG)
+AS
+declare variable rl_name d_str_100;
+declare variable rl_hint d_str_long;
+declare variable rl_sql d_str_long;
+declare variable ugr_uuid d_uuid;
+declare variable us_uuid d_uuid;
+declare variable ufm_uuid d_uuid;
+declare variable uf_uuid d_uuid;
+declare variable rtf_summary d_integer;
+declare variable ugr_is_private d_bool;
+declare variable min_datetime d_datetime;
+declare variable ufr_uuid d_uuid;
+declare variable rl_date_kind d_smallint;
+declare variable ux_owner d_uuid;
+declare variable us_code d_str_code;
+declare variable rl_is_excel d_bool;
+declare variable share_uuid d_uuid;
+declare variable rl_group_field d_str_long;
+begin
+  res_error_text = &#x27;&#x27;;
+
+  select rl_name_rus, rl_hint_rus, rl_hint_eng, rl_sql, rl_date_kind, iif(rl_data_rus is null, 0, 1)
+  from reportlist
+  where rl_id = :rl_id
+  into rl_name, rl_hint, rl_group_field, rl_sql, rl_date_kind, rl_is_excel;
+
+  if (coalesce(json_data, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+    execute procedure uxp$uxsqlfields_fill(:json_data);
+
+  select ufr_uuid, ufm_uuid, ufm_ux_uuid
+  from ux$report, ux$frame, ux$form
+  where urt_import_kind = 1 and
+        urt_import_id = :rl_id and
+        urt_uuid = ufm_uuid and
+        ufm_uuid = ufr_owner and
+        ufr_is_mainframe = 1
+  into ufr_uuid, ufm_uuid, rep_ux_uuid;
+
+  if (ufm_uuid is not null) then
+  begin
+    delete from ux$frame
+    where ufr_uuid = :ufr_uuid;
+
+    select res_fr_uuid_str
+    from uxp$uxframe_add(:ufm_uuid, null, :rl_name, 1, :rl_sql)
+    into :res_uuid_str;
+  end else
+  begin
+    execute procedure uxp$uxsource_create(&#x27;reportlist&#x27;, &#x27;Отчеты&#x27;, 1, 0, &#x27;&#x27;, 1);
+    ux_owner = uxf$uniq(&#x27;reportlist&#x27;);
+
+    select res_ux_uuid, res_fr_uuid_str
+    from uxp$uxform_create(&#x27;uxreport_import&#x27;, :ux_owner, :rl_id, :rl_name, :rl_sql, :json_data)
+    into rep_ux_uuid, res_uuid_str;
+  end
+
+  select ufm_uuid, ufr_us_uuid, ufr_uuid, us_code
+  from ux$frame, ux$form, ux$code, ux$source
+  where ux_uuid = :rep_ux_uuid and
+        ufm_ux_uuid = ux_uuid and
+        ufm_uuid = ufr_owner and
+        us_uuid = ufr_us_uuid
+  into ufm_uuid, us_uuid, ufr_uuid, us_code;
+
+  min_datetime = null;
+
+  if (rl_is_excel = 0) then
+  begin
+    for select rt_from_rl_id, rt_number, rt_name, rt_name_eng, rt_user_id, rt_date_created, rt_for_all, rt_default,
+               rt_header, rt_footer, rt_autowidth, rt_page_orientation
+    from reptemplates
+    where rt_from_rl_id = :rl_id
+    as cursor tmp
+    do
+    begin
+      ugr_uuid = null;
+      ugr_is_private = 1;
+  
+      if (min_datetime is null or min_datetime &gt; tmp.rt_date_created) then
+        min_datetime = tmp.rt_date_created;
+  
+      if (tmp.rt_number = 1 or tmp.rt_default = 1 or (tmp.rt_user_id = 1000000000001 and tmp.rt_for_all = 1)) then
+        ugr_is_private = 0;
+  
+      insert into ux$grid (ugr_ufr_uuid, ugr_name, ugr_memo, ugr_is_private, ugr_default, ugr_datetime)
+      values (:ufr_uuid, tmp.rt_name, :rl_hint, :ugr_is_private, tmp.rt_default, tmp.rt_date_created)
+      returning ugr_uuid, ugr_share_uuid
+      into :ugr_uuid, share_uuid;
+  
+      if (ugr_is_private = 1) then
+      begin
+        update or insert into ux$grshare (ugs_ugr_uuid, ugs_un_id, ugs_share_datetime)
+        values (:share_uuid, tmp.rt_user_id, tmp.rt_date_created)
+        matching (ugs_ugr_uuid, ugs_un_id);
+      end
+  
+      for select rtf_from_rl_id, rtf_from_rt_number, rtf_from_rf_number, rtf_order_no, rtf_group_number, rtf_agr_function,
+                 rtf_width, rtf_sort_index, rtf_sort_order,
+                 rf_from_rl_id, rf_number, rf_field_name, rf_name_rus, rf_hint_rus, rf_name_eng, rf_hint_eng, rf_type,
+                 rf_width, rf_can_group, rf_agregate, rf_lookup_sql
+      from reptempfields, repfields
+      where rtf_from_rl_id = :rl_id and
+            rtf_from_rt_number = tmp.rt_number and
+            rf_from_rl_id = rtf_from_rl_id and
+            rf_number = rtf_from_rf_number
+      order by rtf_order_no
+      as cursor rtf
+      do
+      begin
+        uf_uuid = uxf$uuid(us_uuid, &#x27;uxfield&#x27;, rtf.rf_field_name);
+  
+        if (uf_uuid is null) then
+        begin
+          res_error_text = f_format(&#x27;Field not found: %1.%2&#x27;, :us_code, rtf.rf_field_name);
+          suspend;
+          exit;
+        end
+  
+        if (rtf.rf_name_rus is distinct from rtf.rf_field_name) then
+        begin
+          update ux$field
+          set uf_name = rtf.rf_name_rus
+          where uf_uuid = :uf_uuid;
+        end
+  
+        rtf_summary = case rtf.rtf_agr_function
+          when 0 then 0
+          when 1 then 1  -- sum
+          when 2 then 4  -- count
+          when 3 then 5  -- avg
+          when 4 then 2  -- min
+          when 5 then 3  -- max
+        end;
+  
+        insert into ux$gritem (ugi_ugr_uuid, ugi_uf_uuid, ugi_width, ugi_position,
+                               ugi_order_index, ugi_group_index, ugi_summary_kind)
+        values (:ugr_uuid, :uf_uuid, rtf.rtf_width, null,
+                rtf.rtf_sort_order * (rtf.rtf_sort_index + 1), rtf.rtf_group_number + 1, :rtf_summary);
+      end
+    end
+  end else
+  begin
+    update ux$report
+    set urt_kind = 1 -- Excel отчет
+    where urt_uuid = :ufm_uuid and
+          urt_kind &lt;&gt; 1;
+
+    ugr_uuid = null;
+    ugr_is_private = 0;
+
+    min_datetime = current_timestamp;
+
+    insert into ux$grid (ugr_ufr_uuid, ugr_name, ugr_memo, ugr_is_private, ugr_default, ugr_group_field, ugr_datetime)
+    values (:ufr_uuid, :rl_name, :rl_hint, 0, 1, :rl_group_field, :min_datetime)
+    returning ugr_uuid
+    into :ugr_uuid;
+
+    insert into ux$gritem (ugi_ugr_uuid, ugi_uf_uuid, ugi_position)
+    select :ugr_uuid, uf_uuid, null
+    from ux$field
+    where uf_owner = :us_uuid and
+          uf_is_param = 0
+    order by uf_position;
+  end
+
+  if (min_datetime is not null) then
+  begin
+    update ux$uniq
+    set uu_datetime = :min_datetime
+    where uu_id = :rep_ux_uuid and
+          (uu_datetime is null or uu_datetime &gt; :min_datetime);
+  end
+
+  if (coalesce(rl_date_kind, 0) &lt;&gt; 1) then
+  begin
+    delete from ux$fritem
+    where ufi_ufr_uuid = :ufr_uuid and
+          ufi_control = &#x27;current$date_begin&#x27;;
+
+    delete from ux$frparam
+    where ufp_ufr_uuid = :ufr_uuid and
+          ufp_editor = &#x27;current$date_begin&#x27;;
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

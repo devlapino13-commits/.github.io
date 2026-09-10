@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CALLS_DELIQ_KONT_LIST — процедура — схема БД</title>
+<meta name="description" content="Процедура CALLS_DELIQ_KONT_LIST: 6 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CALLS_DELIQ_KONT_LIST</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_REGION_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KONT_NUMBER</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KS_STATUS</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CALL_TYPE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DELIQ_TYPE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REG_NAME</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KONT_NO</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KS_STATE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CALLS_DELIQ_KONT_LIST(
+    REP_REGION_ID DECIMAL(18,0),
+    REP_DATE_END DATE,
+    KONT_NUMBER VARCHAR(255),
+    KS_STATUS SMALLINT,
+    CALL_TYPE SMALLINT,
+    DELIQ_TYPE SMALLINT)
+RETURNS (
+    REG_NAME VARCHAR(255),
+    KONT_NO VARCHAR(255),
+    K_ID VARCHAR(255),
+    KS_STATE SMALLINT)
+AS
+declare variable deliq_closed_date date;
+begin
+  /*
+        CREATED BY IGUSEV 17.07.2012
+        PURPOSE: Для &quot;аналитического отчета по звонкам должникам&quot;.     
+         Предоставляет список кредитных договоров в соответствии с выставленными фильтрами
+    */
+
+  if (kont_number = &#x27;&#x27;) then
+    kont_number = null;
+  if (ks_status is null) then
+    ks_status = 3;
+  if (call_type is null) then
+    call_type = 0;
+  if (:deliq_type is null) then
+    deliq_type = 2;
+
+  for select distinct regl.parent_name as reg_name, kont.k_kontract_no as kont_no,
+                      cast(kont.k_id as varchar(255)) as k_id, ks_state
+      from callcenter_debtors_list cdl
+      left join callcenter_debtors_result cdr on cdr.ccdr_from_ccdl_id = cdl.ccdl_id
+      inner join region_list(:rep_region_id, 1, -1, 1) regl on regl.id_list = ccdl_kf_branch_id
+      inner join kontract kont on k_id = cdl.ccdl_from_k_id
+      inner join kontstate ks on k_id = ks_from_k_id
+      where ks_ol_is_delete = 0 and
+            ((k_kontract_no = :kont_number) or
+            (:kont_number is null)) and
+            cdl.ccdl_create_date &lt;= :rep_date_end + 1 and
+            :rep_date_end between ks_date_begin and ks_date_end and
+            (((ks.ks_state = :ks_status) and
+            (:ks_status &lt;&gt; 3)) or
+            (ks.ks_state in (1, 2) and
+            (:ks_status = 3))) and
+            ((cdr.ccdr_call_datetime &lt; :rep_date_end + 1) or
+            (:call_type = 0))
+      order by reg_name, k_kontract_no
+      into :reg_name, :kont_no, :k_id, :ks_state
+  do
+  begin
+    if (:deliq_type = 2) then
+    begin
+      suspend;
+    end
+    else
+    begin
+      deliq_closed_date = null;
+
+      select cdl.ccdl_deliq_closed_date
+      from callcenter_debtors_list cdl
+      where cdl.ccdl_from_k_id = :k_id and
+            cdl.ccdl_create_date &lt;= :rep_date_end + 1
+      order by cdl.ccdl_create_date desc
+      rows 1
+      into :deliq_closed_date;
+
+      if (:deliq_type = 1) then
+      /* погашенный кредиты, на данный момент не имеют просрочки*/
+      begin
+        if ((deliq_closed_date is not null) and
+            (deliq_closed_date &lt;= :rep_date_end)) then
+          suspend;
+      end
+
+      if (:deliq_type = 0) then
+      /* активный кредит*/
+      begin
+        if ((deliq_closed_date &gt; :rep_date_end) or (deliq_closed_date is null)) then
+          suspend;
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

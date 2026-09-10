@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_GET_WORK_DAYS — процедура — схема БД</title>
+<meta name="description" content="Возвращает количество рабочих дней для расчета просрочки. / Рабочие дни - не субботы и не воскресенья">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_GET_WORK_DAYS</code></h1>
+<p class="desc">Возвращает количество рабочих дней для расчета просрочки. / Рабочие дни - не субботы и не воскресенья</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_make_zad_list_temp.html"><div class="to">AAREP_MAKE_ZAD_LIST_TEMP</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PR_IS_FINE_WEEKEND</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">WD_COUNT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_GET_WORK_DAYS(
+    DATE_BEGIN DATE,
+    DATE_END DATE,
+    PR_IS_FINE_WEEKEND INTEGER)
+RETURNS (
+    WD_COUNT INTEGER)
+AS
+declare variable wd_begin integer;
+declare variable wd_end integer;
+declare variable w1d_count integer;
+declare variable w2d_count integer;
+declare variable d date;
+declare variable hol_count integer;
+begin
+  /*
+  PR_IS_FINE_WEEKEND
+  0 - не начисляем в выходные, не начисляем в праздники
+  1 -    начисляем в выходные, не начисляем в праздники
+  2 - не начисляем в выходные,    начисляем в праздники
+  3 -    начисляем в выходные,    начисляем в праздники
+  */
+  wd_count = 0;
+  if (date_end &gt; date_begin) then
+  begin
+    if (pr_is_fine_weekend in (0, 2)) then
+    begin
+      if (date_end - date_begin &lt; 8) then
+      begin
+        /* Даты находятся близко */
+        d = date_begin;
+        while (d &lt; date_end) do
+        begin
+          if (extract(weekday from d) not in (0, 6)) then
+            wd_count = wd_count + 1;
+          d = d + 1;
+        end
+      end
+      else
+      begin
+        /* Даты находятся в разных неделях */
+        wd_begin = extract(weekday from date_begin);
+        if (wd_begin = 0) then
+          wd_begin = 7;
+        wd_end = extract(weekday from date_end);
+        if (wd_end = 0) then
+          wd_end = 7;
+        w1d_count = 0;
+        if (wd_begin &lt; 6) then
+          w1d_count = 6 - wd_begin;
+        w2d_count = 5;
+        if (wd_end &lt; 6) then
+          w2d_count = wd_end;
+        wd_count = ((date_end - wd_end) - (date_begin + 7 - wd_begin)) / 7 * 5 + w1d_count + w2d_count;
+        if (wd_end &lt; 6) then
+          wd_count = wd_count - 1;
+      end
+    end
+    else
+      wd_count = date_end - date_begin;
+
+    if (pr_is_fine_weekend in (0, 1)) then
+    begin
+      hol_count = 0;/* Отнимаем праздничние дни  */
+      select count(*)
+      from sa_calendays
+      where scd_date between :date_begin and :date_end - 1 and
+            scd_work_hours = 0 and
+            extract(weekday from scd_date) not in (0, 6)
+      into :hol_count;
+      if (hol_count is null) then
+        hol_count = 0;
+      wd_count = wd_count - hol_count;
+    end
+    if (wd_count &lt; 0) then
+      wd_count = 0;
+  end
+  suspend;
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

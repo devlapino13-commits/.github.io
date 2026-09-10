@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MC_OFFICE_INFO — процедура — схема БД</title>
+<meta name="description" content="Процедура MC_OFFICE_INFO: 1 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>MC_OFFICE_INFO</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MCL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OFFICE_CITY_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REG_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_CODE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE MC_OFFICE_INFO(
+    MCL_ID D_ID)
+RETURNS (
+    OFFICE_CITY_ID D_ID,
+    REG_ID D_INTEGER,
+    RES_TEXT D_STR_LONG,
+    RES_CODE D_SMALLINT)
+AS
+declare variable C_ID ID_TYPE;
+declare variable SVZ_ID ID_TYPE;
+declare variable SVZ_FIO STR_100;
+declare variable OFFICE_NAME STR_100;
+declare variable ADDRESS STR_255;
+declare variable K_ID decimal(18,0);
+declare variable LANG_CODE STR_10;
+begin
+
+  mcl_id = coalesce(mcl_id, 0);
+  res_text = null;
+  reg_id = null;
+  res_code = 0;
+
+  select mcl_from_c_id, mcl.mcl_lang_code
+  from mc_login mcl
+  where mcl_id = :mcl_id
+  into :c_id, lang_code;
+
+  if (c_id is not null) then
+  begin
+    select k_id, kal_new_kf_officer, c_name_fio, kal_new_reg_id
+    from knclient
+    inner join kontract on k_id = kc_from_k_id
+    inner join knaktlist on kal_from_kf_id = k_from_kf_id
+    inner join clients on c_id = kal_new_kf_officer
+    where kc_from_c_id = :c_id and
+          kal_date_end = &#x27;31.12.9999&#x27;
+    order by kc_id desc
+    rows 1
+    into k_id, svz_id, svz_fio, reg_id;
+
+    if (k_id is not null) then
+    begin
+      select office_city_id, office_name, address
+      from mc_office_list
+      where office_id = :reg_id
+      into office_city_id, office_name, address;
+
+      if (lang_code = &#x27;kg&#x27;) then
+      begin
+        res_text = &#x27;Сиз номер &#x27; || substring(reg_id from 2 for 2) || &#x27;-&#x27; || substring(reg_id from 4 for 2) || &#x27;, &quot;&#x27; || office_name || &#x27;&quot; офисинде катталгансыз&#x27;;
+
+        if ((select ps_is_working
+             from hr_pstatus
+             where ps_from_c_id = :svz_id and
+                   ps_date_end = &#x27;31.12.9999&#x27;) = 1) then
+          res_text = res_text || &#x27;, сиздин адис &#x27; || svz_fio || &#x27;, байланыш номери: &#x27; || f_cont_info(&#x27;clients&#x27;, svz_id, &#x27;cell_main&#x27;, &#x27;ok&#x27;) || &#x27;. Бирок сиз башка кеңсе тандай аласыз.&#x27;;
+      end
+      if (lang_code = &#x27;ru&#x27;) then
+      begin
+        res_text = &#x27;Вы обслуживаетесь в офисе №&#x27; || substring(reg_id from 2 for 2) || &#x27;-&#x27; || substring(reg_id from 4 for 2) || &#x27;, &quot;&#x27; || office_name;
+
+        if ((select ps_is_working
+             from hr_pstatus
+             where ps_from_c_id = :svz_id and
+                   ps_date_end = &#x27;31.12.9999&#x27;) = 1) then
+          res_text = res_text || &#x27;, у специалиста &#x27; || svz_fio || &#x27;, тел.: &#x27; || f_cont_info(&#x27;clients&#x27;, svz_id, &#x27;cell_main&#x27;, &#x27;ok&#x27;) || &#x27;. Но Вы можете выбрать другой офис.&#x27;;
+
+      end
+      if (lang_code = &#x27;az&#x27;) then
+      begin
+        res_text = &#x27;Sizə xidmət göstərən ofis №&#x27; || substring(reg_id from 2 for 2) || &#x27;-&#x27; || substring(reg_id from 4 for 2) || &#x27;, &quot;&#x27; || office_name;
+
+        if ((select ps_is_working
+             from hr_pstatus
+             where ps_from_c_id = :svz_id and
+                   ps_date_end = &#x27;31.12.9999&#x27;) = 1) then
+          res_text = res_text || &#x27;, mütəxəssis &#x27; || svz_fio || &#x27;, tel.: &#x27; || f_cont_info(&#x27;clients&#x27;, svz_id, &#x27;cell_main&#x27;, &#x27;ok&#x27;) || &#x27;. Lakin siz başqa ofis seçə bilərsiniz, bunun üçün «ofisi dəyişmək» düyməsini sıxın və başqa ofisi seçin.&#x27;;
+      end
+    end
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

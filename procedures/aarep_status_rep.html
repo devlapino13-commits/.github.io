@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_STATUS_REP — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_STATUS_REP: 2 входных, 6 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_STATUS_REP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_kontstate_loan_status.html"><div class="to">HP_KONTSTATE_LOAN_STATUS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_BONUS_TEXT_ON_DISB</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACTIVE_KOL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACTIVE_BALANCE</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DISB_KOL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DISB_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PR_LOAN_KIND</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_STATUS_REP(
+    REP_DATE_BEGIN DATE,
+    REP_DATE_END DATE)
+RETURNS (
+    K_BONUS_TEXT_ON_DISB VARCHAR(100),
+    ACTIVE_KOL INTEGER,
+    ACTIVE_BALANCE DECIMAL(18,4),
+    DISB_KOL INTEGER,
+    DISB_AMOUNT DECIMAL(18,4),
+    PR_LOAN_KIND VARCHAR(100))
+AS
+declare variable k_id decimal(18,0);
+declare variable c_last_bonus_status integer;
+declare variable c_curr_bonus_status integer;
+declare variable k_disb_date date;
+declare variable pr_category integer;
+begin
+  active_kol = 0;
+  active_balance = 0;
+  disb_kol = 0;
+  disb_amount = 0;
+
+  for select ks_from_k_id, k_kolich_client_approved, pr_category
+      from kontstate, kontract, product
+      where ks_date_begin &lt;= :rep_date_end and
+            ks_date_end &gt;= :rep_date_end and
+            ks_ol_is_delete = 0 and
+            k_id = ks_from_k_id and
+            ks_state = 1 and
+            k_from_pr_id = pr_id
+      into :k_id, :active_kol, :pr_category
+  do
+  begin
+    if (pr_category = 1) then
+      pr_loan_kind = &#x27;Параллельный&#x27;;
+    else
+      pr_loan_kind = &#x27;Основной&#x27;;
+
+    select c_last_bonus_status, c_curr_bonus_status, c_last_bonus_status_str
+    from hp_kontstate_loan_status(:k_id, 0, 0, :rep_date_end, &#x27;&#x27;)
+    into :c_last_bonus_status, :c_curr_bonus_status, :k_bonus_text_on_disb;
+
+    active_balance = 0;
+    select oks_balance
+    from oksummary
+    where oks_from_k_id = :k_id and
+          oks_date_begin &lt;= :rep_date_end and
+          oks_date_end &gt;= :rep_date_end and
+          oks_close_state = 0
+    into :active_balance;
+    if (active_balance &lt; 0) then
+      active_balance = 0;
+
+    suspend;
+  end
+
+  active_kol = 0;
+  active_balance = 0;
+  disb_kol = 0;
+  disb_amount = 0;
+
+  for select ks_from_k_id, k_kolich_client_approved, ks_date_begin, k_amount_approved, pr_category
+      from kontstate, kontract, product
+      where ks_date_begin between :rep_date_begin and :rep_date_end and
+            ks_ol_is_delete = 0 and
+            k_id = ks_from_k_id and
+            ks_state = 1 and
+            k_from_pr_id = pr_id
+      into :k_id, :disb_kol, :k_disb_date, :disb_amount, :pr_category
+  do
+  begin
+    if (pr_category = 1) then
+      pr_loan_kind = &#x27;Параллельный&#x27;;
+    else
+      pr_loan_kind = &#x27;Основной&#x27;;
+
+    select c_last_bonus_status, c_curr_bonus_status, c_last_bonus_status_str
+    from hp_kontstate_loan_status(:k_id, 0, 0, :k_disb_date, &#x27;&#x27;)
+    into :c_last_bonus_status, :c_curr_bonus_status, :k_bonus_text_on_disb;
+
+    suspend;
+  end
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

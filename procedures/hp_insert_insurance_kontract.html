@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_INSERT_INSURANCE_KONTRACT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_INSERT_INSURANCE_KONTRACT: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_INSERT_INSURANCE_KONTRACT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">7</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">7 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="calc_insurance_amount.html"><div class="to">CALC_INSURANCE_AMOUNT</div></a><a class="ref-card" href="hp_check_rating_result.html"><div class="to">HP_CHECK_RATING_RESULT</div></a><a class="ref-card" href="hp_edoc_insert.html"><div class="to">HP_EDOC_INSERT</div></a><a class="ref-card" href="hp_effect_rate_common.html"><div class="to">HP_EFFECT_RATE_COMMON</div></a><a class="ref-card" href="hp_get_percent.html"><div class="to">HP_GET_PERCENT</div></a><a class="ref-card" href="hp_make_schedule.html"><div class="to">HP_MAKE_SCHEDULE</div></a><a class="ref-card" href="hp_miniapp_kontract_sync.html"><div class="to">HP_MINIAPP_KONTRACT_SYNC</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_edoc_after_sign_action.html"><div class="to">HP_EDOC_AFTER_SIGN_ACTION</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OLD_K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_INSERT_INSURANCE_KONTRACT(
+    OLD_K_ID D_ID,
+    UN_ID D_ID)
+AS
+declare variable pr_id d_integer;
+declare variable disb_date d_date;
+declare variable kolich_client d_integer;
+declare variable kolich_repay d_integer;
+declare variable ma_amount d_currency;
+declare variable min_cl_amount d_currency;
+declare variable max_cl_amount d_currency;
+declare variable kf_id d_id;
+declare variable c_id_list d_str_255;
+declare variable perc_default d_percent;
+declare variable new_k_id d_id;
+declare variable by_rating d_smallint;
+declare variable k_rating_source d_integer;
+declare variable new_ma_id d_integer;
+declare variable new_ma_number d_integer;
+declare variable res_schedule_id d_integer;
+declare variable kommis_perc_max d_percent;
+declare variable pr_currency varchar(3);
+declare variable v_from_reg_id d_integer;
+declare variable v_from_c_id d_id;
+declare variable v_is_poruch d_integer;
+declare variable v_is_cashier d_integer;
+declare variable v_kommis d_currency;
+declare variable v_allow d_smallint;
+declare variable old_k_kontract_no d_str_20;
+declare variable old_k_from_ma_reg_id d_integer;
+declare variable old_k_from_f_id d_str_20;
+declare variable old_k_from_pt_id d_str_20;
+declare variable old_ma_id d_integer;
+declare variable old_ma_number d_integer;
+declare variable k_amount_approved d_currency;
+declare variable n_value d_integer;
+declare variable old_pr_code d_str_100;
+declare variable k_disb_date d_date;
+declare variable k_circle d_integer;
+declare variable k_circle_internal d_integer;
+declare variable effect_rate decimal(18,7);
+declare variable effect_rate_common decimal(18,7);
+declare variable c_id d_id;
+declare variable db_id d_integer;
+declare variable error_text d_str_255;
+begin
+-- RFCKG-4831
+-- .insur_base.      основной заем
+-- .insur_kontrakt.  заем страховка
+
+db_id = f_get_db_id ();
+
+  if (exists(select *
+             from loan_insurance_relation lir
+             where lir.lir_kontract_base = :old_k_id)) then
+    exit;
+
+  select k.k_kontract_no,
+         k.k_from_ma_reg_id,
+         k.k_from_f_id,
+         k.k_from_pt_id,
+         ma.ma_id,
+         ma.ma_number,
+         k.k_amount_approved,
+         k.k_kredline_end - k.k_disb_date,
+         pr.pr_code,
+         k.k_disb_date
+  from kontract k
+  inner join miniapp ma on ma.ma_id = k.k_from_ma_app_id
+  inner join product pr on pr.pr_id = k.k_from_pr_id
+  where k.k_id = :old_k_id and
+        ma.ma_date_end = &#x27;31.12.9999&#x27;
+  order by ma.ma_number desc
+  rows 1
+  into old_k_kontract_no,
+       old_k_from_ma_reg_id,
+       old_k_from_f_id,
+       old_k_from_pt_id,
+       old_ma_id,
+       old_ma_number,
+       k_amount_approved,
+       n_value,
+       old_pr_code,
+       k_disb_date;
+
+  if (:old_pr_code not containing &#x27;.insur_base.&#x27;) then
+    exit;
+
+  select pr.pr_id,
+         pr.pr_currency
+  from product pr
+  where pr.pr_code containing &#x27;.insur_kontrakt.&#x27;
+       and
+       (
+         (:old_pr_code containing &#x27;.365.&#x27; and pr.pr_code containing &#x27;.365.&#x27;)
+         or
+         (not (:old_pr_code containing &#x27;.365.&#x27;))
+       )
+      and
+      (
+        (:old_pr_code containing &#x27;.MOB.&#x27; and pr.pr_code containing &#x27;.MOB.&#x27;)
+        or
+        (not (:old_pr_code containing &#x27;.MOB.&#x27;))
+      )
+  rows 1
+  into pr_id,
+       pr_currency;
+
+  -----------получаем сумму нового займа ---------------------------------------------------------
+
+  select commission_amount
+  from calc_insurance_amount(:k_amount_approved, :n_value, :old_pr_code, :k_disb_date, :old_k_id)
+  into ma_amount;
+
+  --------------- получаем проценты --------------------------------------------------------------------------
+   select ma.ma_date_oper,
+          ma.ma_kolich_client,
+          ma.ma_kolich_repay,
+          ma.ma_from_kf_id
+  from miniapp ma
+  where ma.ma_id = :old_ma_id and
+        ma_number = :old_ma_number
+   order by ma.ma_number desc
+  rows 1
+  into disb_date,
+       kolich_client,
+       kolich_repay,
+       kf_id;
+
+  select prl_amount_cl_min, prl_amount_cl_max
+  from prodlogic
+  where prl_from_pr_id = :pr_id
+  and :disb_date between prl_date_begin and prl_date_end
+  rows 1
+  into min_cl_amount, max_cl_amount;
+
+  c_id_list = &#x27;&#x27;;
+  select list(mac.mac_from_c_id, &#x27;;&#x27;)
+  from miniappclient mac
+  where mac.mac_from_ma_id = :old_ma_id
+  and mac.mac_amount &gt; 0
+  into c_id_list;
+
+  -- считаем процент по доп контракту
+  select perc_default, kommis_perc_max
+  from hp_get_percent(:pr_id, :disb_date, :kolich_client, :ma_amount, :kolich_repay, :min_cl_amount, :max_cl_amount, :c_id_list)
+  into perc_default, kommis_perc_max;
+
+  ------------Создаем новую заявку----------------------------------------------------------------------
+  insert into miniapp (ma_date_app, ma_date_oper, ma_from_kf_id, ma_from_pr_id,
+                       ma_kolich_repay, ma_percent, ma_kommis_perc, ma_kolich_client, ma_memo, ma_is_active,
+                       ma_is_auto, ma_summa_minus, ma_from_un_id, ma_office_id, ma_currency_id,
+
+                       ma_percent_category, ma_manager_id, ma_repay_day, ma_source_system, ma_refund,
+                       ma_add_month, ma_add_info, ma_prepayment_summa, ma_prepayment_type, ma_disb_kind, ma_from_tkt_id,
+                       ma_is_online)
+
+  select old_ma.ma_date_app, old_ma.ma_date_oper, old_ma.ma_from_kf_id, :pr_id,
+         old_ma.ma_kolich_repay, :perc_default, :kommis_perc_max, old_ma.ma_kolich_client, old_ma.ma_memo, old_ma.ma_is_active, -- взял kommis_perc_max из HP_GET_PERCENT
+         old_ma.ma_is_auto, :ma_amount, old_ma.ma_from_un_id, old_ma.ma_office_id, :pr_currency,
+
+         :perc_default, old_ma.ma_manager_id, old_ma.ma_repay_day, old_ma.ma_source_system, 0,   -- ma_refund сделал 0
+         old_ma.ma_add_month, old_ma.ma_add_info, old_ma.ma_prepayment_summa, old_ma.ma_prepayment_type, old_ma.ma_disb_kind, old_ma.ma_from_tkt_id,
+         old_ma.ma_is_online
+
+  from miniapp old_ma
+  where old_ma.ma_id = :old_ma_id and
+        old_ma.ma_number = :old_ma_number
+  returning ma_id, ma_number
+  into :new_ma_id, :new_ma_number;
+
+  -- Переносим клиентов в новую заявку
+  for select mac.mac_from_reg_id,
+             mac.mac_from_c_id,
+             mac.mac_is_poruch,
+             mac.mac_is_cashier,
+             mac.mac_kommis_lgota,
+             mac.mac_allow_transfer_rights
+  from miniappclient mac
+  where mac.mac_from_ma_id = :old_ma_id
+  into
+    :v_from_reg_id,
+    :v_from_c_id,
+    :v_is_poruch,
+    :v_is_cashier,
+    :v_kommis,
+    :v_allow
+  do
+  begin
+    insert into miniappclient (
+          mac_from_reg_id,
+          mac_from_ma_id,
+          mac_from_c_id,
+          mac_amount,
+          mac_is_poruch,
+          mac_loan_target,
+          mac_is_cashier,
+          mac_business_subtype,
+          mac_kommis_lgota,
+          mac_allow_transfer_rights
+      ) values (
+          :v_from_reg_id,
+          :new_ma_id,
+          :v_from_c_id,
+          iif(:v_is_poruch = 0, :ma_amount, 0), -- если не поручитель то вешаем сумму на него
+          :v_is_poruch,
+          63,             -- Потребительский
+          :v_is_cashier,
+          21,             -- Потребительский
+          :v_kommis,
+          :v_allow
+      );  
+
+  end
+
+  select kc.kc_from_c_id
+  from knclient kc
+  where kc.kc_from_k_id = :old_k_id and
+        kc.kc_amount_approved &gt; 0
+  into c_id;
+
+  -- Переносим цель кредита
+  -- 31  Страховая премия
+  -- 319 Для оплаты Страховой премии
+  insert into clp_miniappclient (cmc_from_ma_id, cmc_from_c_id, cmc_questions_id, cmc_clarification_id, cmc_from_un_id)
+  values (:new_ma_id, :c_id, 31, 319, :un_id);
+
+
+  -- строим график по новой заявке
+  select res_id
+  from hp_make_schedule(:un_id, 11, :new_ma_id, 0, null, 0)
+  into res_schedule_id;
+
+  ----------Создаем контракт-----------------------------------------------------------------------
+  k_circle = 0;
+  select max(k_circle)
+  from kontract
+  where k_from_kf_id = :kf_id
+  into :k_circle;
+
+  if (k_circle is null) then
+    k_circle = 0;
+
+  k_circle = k_circle + 1;
+  k_circle_internal = 1;
+  new_k_id = (:kf_id * 1000 + :k_circle) * 100 + 1;
+
+  by_rating = 0;
+  k_rating_source = 0;
+  select by_rating, k_rating_source
+  from hp_check_rating_result(&#x27;miniapp&#x27;, :new_ma_id)
+  into by_rating, k_rating_source;
+
+  insert into kontract (  k_id, k_from_kf_id, k_currency, k_applicate_date, k_applicate_no, k_kontract_no,
+                          k_kontract_date, k_from_pr_id, k_disb_date, k_amount_applicate, k_stage, k_period,
+                          k_kolich_lgota, k_percent, k_percent_lgota, k_kolich_repay, k_status, k_circle,
+
+                          k_circle_internal, k_percent_per_day, k_amount_approved, k_percent_for_days,
+                          k_kolich_client_applicate, k_kolich_client_approved, k_from_pac_id, k_index_curr_code,
+                          k_index_curr_rate, k_from_ma_reg_id, k_from_ma_app_id, k_percent_input, k_percent_category,
+
+                          k_percent_effect, k_percent_effect_fifd,
+                          k_user_id, k_kommis_perc, k_from_f_id, k_from_pt_id, k_repay_day, k_refund, k_add_info,
+                          k_prepayment_summa, k_disb_kind, k_is_online, k_by_rating, k_rating_source)
+  
+  
+  select :new_k_id, :kf_id, pr.pr_currency, ma.ma_date_app, ma.ma_no, :old_k_kontract_no || &#x27;/C&#x27;,
+         ma.ma_date_oper, pr.pr_id, ma.ma_date_oper, ma.ma_summa_minus, 1, ma.ma_kolich_repay,
+         0, ma.ma_percent, 0, ma.ma_kolich_repay, 0, :k_circle,
+
+         :k_circle_internal, cast(ma.ma_percent / pr_percent_for_days as decimal(15,7)), ma.ma_summa_minus, pr.pr_percent_for_days,
+         ma.ma_kolich_client, ma.ma_kolich_client, pr.pr_from_pac_id, pr.pr_index_curr_code,
+         1, :old_k_from_ma_reg_id, :new_ma_id, 0, 0,
+
+         0, 0,
+         :un_id, 0, :old_k_from_f_id, :old_k_from_pt_id, ma_repay_day, coalesce(ma.ma_refund, 0), coalesce(ma.ma_add_info, &#x27;&#x27;),
+         ma.ma_prepayment_summa, ma.ma_disb_kind, ma.ma_is_online, :by_rating, :k_rating_source
+
+  from miniapp ma, product pr
+  where ma.ma_id = :new_ma_id and
+        ma.ma_number = :new_ma_number and
+        pr.pr_id = ma.ma_from_pr_id;
+
+  update schedule
+  set sh_from_k_id = :new_k_id
+  where sh_from_k_id = -:new_ma_id;
+
+  effect_rate = 0;
+  effect_rate_common = 0;
+
+  select effect_rate, effect_rate_common
+  from hp_effect_rate_common(:new_k_id, null)
+  into :effect_rate, :effect_rate_common;
+
+  update kontract
+  set k_percent_effect = coalesce(:effect_rate_common, 0),
+      k_percent_effect_fifd = coalesce(:effect_rate, 0)
+  where k_id = :new_k_id;
+
+  execute procedure hp_miniapp_kontract_sync(11, :new_ma_id);
+
+  -- RFCKG-4732 Информационный лист
+  if (db_id = 41701 and f_get_const(&#x27;new_loan_conditions&#x27;) = &#x27;1&#x27;) then
+  begin
+    if (exists(
+      select 1
+      from knclient kncl
+      where kncl.kc_from_k_id = :new_k_id
+        and kncl.kc_amount_approved &gt; 0
+        and kncl.kc_loan_target = f_get_rd_id(&#x27;Loan_Target.Consumer&#x27;)
+    )) then
+    begin
+      select res_text
+      from hp_edoc_insert(&#x27;loan.application_new_conditions&#x27;, f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;), :new_k_id, :un_id)
+      into :error_text;
+
+      if (error_text is not null and error_text &lt;&gt; &#x27;&#x27;) then
+        exception e_message(:error_text);
+    end
+  end
+
+  insert into loan_insurance_relation (lir_kontract_base, lir_kontract_insurance)
+  values (:old_k_id, :new_k_id);
+
+  if (not(exists(select *
+                 from schedule
+                 where sh_from_k_id = :new_k_id))) then
+  begin
+    select res_id
+    from hp_make_schedule(:un_id, 9, :new_k_id, 0, null, 0)
+    into :res_schedule_id;
+  end
+  else
+  begin
+    select res_id
+    from hp_make_schedule(:un_id, 9, :new_k_id, 0, null, -2)
+    into :res_schedule_id;
+  end
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

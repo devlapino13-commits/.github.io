@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ELCARD_DO_DISBURSEMENT — процедура — схема БД</title>
+<meta name="description" content="Процедура ELCARD_DO_DISBURSEMENT: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>ELCARD_DO_DISBURSEMENT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_client_bank_card.html"><div class="to">HP_CLIENT_BANK_CARD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_disbursement_card.html"><div class="to">HP_DO_DISBURSEMENT_CARD</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE ELCARD_DO_DISBURSEMENT(
+    K_ID ID_TYPE)
+AS
+declare variable CARD_ID STR_100;
+declare variable C_ID D_ID;
+declare variable DISB_AMOUNT CURR_TYPE;
+begin
+  -- если имеется актианя задача &quot;на проверку карты&quot; или &quot;переод на карту&quot; или эта задача уже успешно обработкана,
+  -- тогда перевыдача займа ни к чему не приведет.
+  -- Если же после выдачи займа, Элкарт вернул ошибку и деньги не ушли, перевыдача займа заново сформирует задачу на переод денег и деньги попытаются уйти
+
+  if (exists(select *
+             from extsysmain em
+             where em.esm_project = &#x27;elcard_disb&#x27; and
+                   em.esm_action = &#x27;CardDisb&#x27; and
+                   em.esm_from_k_id = :k_id and
+                   em.esm_status in (0, 1))) then
+    exit;
+
+  if (exists(select *
+             from extsysmain em
+             where em.esm_project = &#x27;elcard_disb&#x27; and
+                   em.esm_action = &#x27;CardCheck&#x27; and
+                   em.esm_from_k_id = :k_id and
+                   em.esm_status = 0)) then
+    exit;
+
+  -- если вдруг ранее уже была успешная проверка карты, обнуляю результат этой проверки,
+  -- чтобы она не повлияла на формирвоание задач по текущей выдаче ------------&gt;
+  update extsysmain em
+  set em.esm_status = -2
+  where em.esm_project = &#x27;elcard_disb&#x27; and
+        em.esm_action = &#x27;CardCheck&#x27; and
+        em.esm_from_k_id = :k_id and
+        em.esm_status = 1;
+  ---------------------------- &lt; -----------------------------------------------
+
+  for select kncl.kc_from_c_id, kncl.kc_amount_approved
+  from knclient kncl
+  where kncl.kc_from_k_id = :k_id
+  and kncl.kc_amount_approved &gt; 0
+  into :c_id, disb_amount
+  do
+  begin
+      -------------------------------------------------&lt;
+      -- получаю последнюю активную карту клиента -----&gt;
+      card_id = (select token
+               from hp_client_bank_card(:c_id));
+    
+      if (card_id is null) then
+        exception e_default &#x27;Card ID not exists&#x27;;
+      -----------------------------------------------&lt;
+    
+      -- создаю задачу на проверку карты
+      insert into extsysmain (esm_project, esm_action, esm_date, esm_object_kind, esm_object_id, esm_status,
+                              esm_full_source, esm_amount, esm_from_k_id, esm_account)
+      values (&#x27;elcard_disb&#x27;, &#x27;CardCheck&#x27;, current_date, 0, :c_id, 0, &#x27;&#x27;, :disb_amount, :k_id, :card_id);
+   end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

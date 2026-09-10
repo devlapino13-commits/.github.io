@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_NEW_PROGRAMM_KC — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_NEW_PROGRAMM_KC: 3 входных, 6 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_NEW_PROGRAMM_KC</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_REGION_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">BONUS</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">QTY_DISB</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REG_NAME</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LO_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">QTY_DELINQ</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">STAJE_MONTH</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_NEW_PROGRAMM_KC(
+    REP_REGION_ID D_ID,
+    REP_DATE_BEGIN D_DATE,
+    REP_DATE_END D_DATE)
+RETURNS (
+    BONUS D_INTEGER,
+    QTY_DISB D_INTEGER,
+    REG_NAME VARCHAR(50),
+    LO_NAME D_STR_100,
+    QTY_DELINQ D_INTEGER,
+    STAJE_MONTH INTEGER)
+AS
+declare variable lo_id id_type; /* айди кс */
+declare variable qty_disb_tmp d_integer;
+declare variable ps_date_begin d_date; /* дата найма */
+declare variable reg_id d_integer;
+declare variable qty_delinq_tmp d_integer;
+declare variable ps_date_begin_day d_integer; /* день найма */
+declare variable ps_date_begin_month d_integer; /* месяц найма */
+declare variable ps_date_begin_year d_integer; /* год найма */
+declare variable c_worked_months d_integer; /* стаж в месяцах */
+declare variable rep_date_end_month d_integer;
+declare variable rep_date_end_year d_integer;
+declare variable diff_year d_integer;
+declare variable tmp d_smallint;
+declare variable ps_date_end date;
+declare variable c_stage integer;
+begin
+  for select distinct ps.ps_from_c_id, t.id_list
+      from hr_pstatus ps
+      inner join region_list(:rep_region_id, 1, 3, 1) t on t.id_list = cast(ps.ps_from_reg_id as integer)
+      inner join joblist jl on jl.jl_id = ps.ps_from_jl_id
+      inner join jobkind jk on jk.jk_id = jl.jl_kind
+      where jk.jk_system_code in (&#x27;JobSystem.LO_Standart&#x27;, &#x27;JobSystem.LO_Senior&#x27;) and
+            ps.ps_is_working = 1 and
+            ps.ps_status = 1 and
+            :rep_date_end between ps.ps_date_begin and ps.ps_date_end
+      into lo_id, reg_id
+  do
+  begin
+    ps_date_begin = null;
+
+    select ps.ps_date_begin
+    from hr_pstatus ps
+    inner join hr_orders ho on ho.ho_id = ps.ps_from_ho_id
+    where ps.ps_from_c_id = :lo_id and
+          ps.ps_is_working = 1 and
+          ps.ps_status = 1 and
+          ps.ps_from_jl_id = 227 and -- должность &quot;специалист по финансированию&quot;
+          --          :rep_date_end between ps.ps_date_begin and ps.ps_date_end and
+          ho.ho_status = 1 and
+          ho.ho_order_type in (1, 3)
+    order by ps_date_begin desc
+    rows 1
+    into ps_date_begin;
+
+    if (:lo_id = 1090101248857) then
+      ps_date_begin = &#x27;27.05.2021&#x27;; -- по просьбе Нуржан 28.01.2021
+
+    ps_date_begin_day = extract(day from ps_date_begin);
+    ps_date_begin_month = extract(month from ps_date_begin);
+    ps_date_begin_year = extract(year from ps_date_begin);
+    rep_date_end_month = extract(month from :rep_date_end);
+    rep_date_end_year = extract(year from :rep_date_end);
+
+    c_worked_months = 0;
+
+    diff_year = rep_date_end_year - ps_date_begin_year;
+    if (diff_year &gt; 0) then
+    begin
+      --      diff_year = diff_year + 1;
+      tmp = diff_year * 12;
+      ps_date_begin_month = abs(rep_date_end_month - ps_date_begin_month);
+      c_worked_months = tmp - ps_date_begin_month;
+      if (ps_date_begin_day = 1) then
+        c_worked_months = c_worked_months + 1;
+    end
+    else
+    begin
+      c_worked_months = rep_date_end_month - ps_date_begin_month;
+      if (ps_date_begin_day between 1 and 15) then
+        c_worked_months = c_worked_months + 1;
+    end
+
+    if (c_worked_months is null) then
+      c_worked_months = 0;
+
+    if (not(c_worked_months between 2 and 7) -- Интересуют только ВИПС-ы работающие от 2 до 7 месяцев
+        or (:lo_id = 1090100339928)) then --по просьбе Нуржан
+      continue;
+
+    lo_name = null;
+
+    select cl.c_name_fio
+    from clients cl
+    where cl.c_id = :lo_id
+    into lo_name;
+
+    reg_name = null;
+
+    select rg.reg_name
+    from region rg
+    where rg.reg_unicode = :reg_id
+    into reg_name;
+
+    qty_disb = 0;
+
+    select count(distinct kc.kc_from_c_id)
+    from kontstate ks
+    inner join kontract kt on kt.k_id = ks.ks_from_k_id
+    inner join knclient kc on kc.kc_from_k_id = ks.ks_from_k_id
+    where ks.ks_kc_id = :lo_id and
+          ks.ks_state = 1 and
+          ks.ks_ol_is_delete = 0 and
+          ks.ks_date_begin between :rep_date_begin and :rep_date_end and
+          kt.k_fact_disb_lo_id = ks.ks_kc_id and
+          kc.kc_amount_approved &gt; 0
+    into qty_disb;
+
+    qty_delinq = 0;
+
+    select count(oks_from_k_id) -- кол. просрочен. кредит на конец отчет. мес 0+
+    from oksummary oks
+    inner join kontract k on k.k_id = oks.oks_from_k_id
+    where :rep_date_end between oks.oks_date_begin and oks.oks_date_end and
+          oks.oks_kc_id = :lo_id and
+          k.k_fact_disb_lo_id = oks.oks_kc_id and
+          oks.oks_close_state = 0 and
+          oks.oks_delinq_os &gt; 0 and
+          cast(:rep_date_end as date) - oks.oks_delinq_date &gt; 0
+    into qty_delinq;
+
+    qty_disb_tmp = qty_disb * 150;
+
+    qty_delinq_tmp = (qty_delinq * 400);
+
+    bonus = qty_disb_tmp - qty_delinq_tmp;
+    c_stage = 0;
+    staje_month = 0;
+    for select ps.ps_date_begin, ps.ps_date_end
+        from hr_pstatus ps
+        inner join joblist jl on jl.jl_id = ps.ps_from_jl_id
+        inner join jobkind jk on jk.jk_id = jl.jl_kind
+        where ps.ps_from_c_id = :lo_id and
+              ps.ps_is_working = 1 and
+              ps.ps_status = 1 and
+              jk.jk_system_code in (&#x27;JobSystem.LO_Standart&#x27;, &#x27;JobSystem.LO_Senior&#x27;)
+        into ps_date_begin, ps_date_end
+    do
+    begin
+      if (ps_date_begin &lt; rep_date_end) then
+      begin
+        if (ps_date_end &gt; rep_date_end) then
+          ps_date_end = rep_date_end;
+        c_stage = datediff(month, ps_date_begin, ps_date_end);
+        if (extract(day from ps_date_begin) between 1 and 15) then
+            staje_month = staje_month + 1;
+        staje_month = staje_month + c_stage;
+      end
+    end
+
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

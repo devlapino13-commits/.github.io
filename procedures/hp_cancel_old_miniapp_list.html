@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CANCEL_OLD_MINIAPP_LIST — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CANCEL_OLD_MINIAPP_LIST: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CANCEL_OLD_MINIAPP_LIST</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_miniapp_status_change.html"><div class="to">HP_MINIAPP_STATUS_CHANGE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CANCEL_OLD_MINIAPP_LIST(
+    REP_DATE DATE)
+AS
+declare variable un_id id_type;
+declare variable can_cancel d_bool;
+declare variable k_status smallint;
+declare variable k_id bigint;
+declare variable ks_state integer;
+declare variable ma_id integer;
+begin
+  un_id = 1000000000000;
+
+  for select ma_id
+      from miniapp
+      where datediff(day, ma_date_oper, :rep_date) &gt; 30 and
+            ma_is_active = 1 and
+            ma_date_end = &#x27;31.12.9999&#x27;
+      into ma_id
+  do
+  begin
+    can_cancel = 1;
+
+    k_id = null;
+    k_status = null;
+    ks_state = null;
+
+    for select k_id, k_status from kontract
+    where k_from_ma_app_id = :ma_id
+    into k_id, k_status do
+    begin
+      if (k_id is not null) then
+      begin
+        ks_state = null;
+        select ks_state
+        from kontstate
+        where ks_from_k_id = :k_id and
+              ks_ol_is_delete = 0 and
+              ks_date_end &gt;= &#x27;31.12.2999&#x27;
+        into ks_state;
+        if (ks_state &gt; 0) then
+          can_cancel = 0;
+      end
+    end
+
+    if (can_cancel = 1) then
+    begin
+      if (k_status in (0, -2)) then
+      begin
+        -- Контракт аннулируем, заявку он сам переведет в неактивную в KONTRACT_AU0
+        update kontract
+        set k_status = -1,
+            k_user_id = :un_id
+        where k_status in (0, -2) and
+              k_from_ma_app_id = :ma_id;
+      end
+
+      -- Либо контракта нет, либо он уже отказан, заявку переводим отдельно
+      if (k_status is null or k_status = -1) then
+        execute procedure hp_miniapp_status_change(ma_id, un_id, 0);
+
+      -- Причина отказа: Клиент или документы клиента не соответствуют требованиям Компании (kr_id = 18)
+      insert into kontreslist (krl_from_kr_id, krl_from_un_id, krl_from_k_id, krl_ma_reg_id, krl_ma_id)
+      values (18, :un_id, null, 0, :ma_id);
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

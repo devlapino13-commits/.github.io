@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_RKO_FOR_CONFIRM_CNT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_RKO_FOR_CONFIRM_CNT: 1 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_RKO_FOR_CONFIRM_CNT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_list.html"><div class="to">FM_REPORT_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RKO_OWN_CNT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RKO_OTHER_CNT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_RKO_FOR_CONFIRM_CNT(
+    UN_ID D_ID)
+RETURNS (
+    RKO_OWN_CNT D_INTEGER,
+    RKO_OTHER_CNT D_INTEGER)
+AS
+declare variable c_id d_id;
+declare variable mo_reg_id d_integer;
+begin
+  -- возвращает кол-во Расходно-кассовых ордеров для подтверждения контролером (RFCKG-4031)
+  -- un_id - контролер, менеджер офиса (МО)
+  -- rko_own_cnt - кол-во расходно-кассовых ордеров (РКО), в которых контролер заданный un_id
+  -- rko_other_cnt - кол-во РКО, в которых контролер другой, но созданы в офисе МО
+
+  select un_from_c_id
+  from username
+  where un_id = :un_id
+  into :c_id;
+
+  select ps_from_reg_id
+  from hr_pstatus
+  inner join joblist on jl_id = ps_from_jl_id
+  inner join jobkind on jk_id = jl_kind
+  where ps_from_c_id = :c_id and
+        ps_status = 1 and
+        ps_is_working = 1 and
+        current_date between ps_date_begin and ps_date_end and
+        jk_system_code in (&#x27;JobSystem.Region_KM&#x27;, &#x27;JobSystem.LO_Senior&#x27;) -- менеджер офиса (МО)
+  into mo_reg_id;
+  mo_reg_id = coalesce(mo_reg_id, 0); -- офис МО
+
+  if (exists(select *
+             from cashoffice
+             where cso_is_online = 1 and
+                   cso_is_active = 1 and
+                   cso_activate_date &lt; current_date and
+                   cso_office_id = :mo_reg_id)) then -- кассы офиса работают в электронном режиме
+  begin
+    select count(*)
+    from opercash
+    where opc_is_delete = 0 and
+          opc_is_signed = 0 and
+          opc_sign = -1 and
+          opc_date = current_date and
+          opc_office_id = :mo_reg_id and
+          opc_manager_id = :c_id
+    into rko_own_cnt;
+
+    select count(*)
+    from opercash
+    where opc_is_delete = 0 and
+          opc_is_signed = 0 and
+          opc_sign = -1 and
+          opc_date = current_date and
+          opc_office_id = :mo_reg_id and
+          opc_manager_id &lt;&gt; :c_id
+    into rko_other_cnt;
+  end
+
+  rko_own_cnt = coalesce(rko_own_cnt, 0);
+  rko_other_cnt = coalesce(rko_other_cnt, 0);
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

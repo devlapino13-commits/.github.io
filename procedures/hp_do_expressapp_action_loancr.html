@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DO_EXPRESSAPP_ACTION_LOANCR — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DO_EXPRESSAPP_ACTION_LOANCR: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DO_EXPRESSAPP_ACTION_LOANCR</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="make_new_kontract.html"><div class="to">MAKE_NEW_KONTRACT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_expressapp_action.html"><div class="to">HP_DO_EXPRESSAPP_ACTION</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EXA_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_STATUS</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DO_EXPRESSAPP_ACTION_LOANCR(
+    EXA_ID D_INTEGER)
+RETURNS (
+    RES_STATUS D_SMALLINT)
+AS
+declare variable exa_from_ma_id d_integer;
+declare variable exa_from_un_id id_type;
+declare variable k_id id_type;
+declare variable k_status d_smallint;
+declare variable obj_kind d_integer;
+declare variable obj_id d_id;
+declare variable exa_date d_date;
+declare variable eic_id d_integer;
+begin
+  res_status = 0;
+  exa_from_ma_id = null;
+  select exa_from_ma_id, exa_from_k_id, exa_from_un_id, exa_date
+  from expressapp
+  where exa_id = :exa_id
+  into exa_from_ma_id, k_id, exa_from_un_id, exa_date;
+
+  if (res_status = 0 and k_id is not null and k_status &lt;= -1) then
+    res_status = -1;
+
+  if (res_status = 0 and exa_from_ma_id is null) then
+    res_status = -1;
+
+  if (res_status = 0 and k_id is null) then
+  begin
+    k_id = null;
+    select k_id, k_status from kontract
+    where k_from_ma_app_id = :exa_from_ma_id
+    into k_id, k_status;
+
+    if (k_id is not null and k_status &gt;= -1) then
+    begin
+      if (k_status = -1) then res_status = -1;
+    end else
+    begin
+      select k_id from make_new_kontract(:exa_from_ma_id, 0, :exa_from_un_id)
+      into :k_id;
+    end
+
+    if (k_id is not null) then
+    begin
+      update expressapp
+      set exa_from_k_id = :k_id,
+          exa_from_edl_id = null  -- обнуляем, чтобы в следующих обработках не мешала
+      where exa_id = :exa_id;
+    end
+  end
+
+  -- После создания договора, если это тестовая база то фиксируем что ответы от внешних источников получены
+  if (res_status = 0 and
+      k_id is not null and
+      not exists(select * from hp_db_is_actual)) then
+  begin
+    for select f_objkind(&#x27;miniapp&#x27;, &#x27;id&#x27;), :exa_from_ma_id
+    from rdb$database
+    union
+    select f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;), :k_id
+    from rdb$database
+    union
+    select f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;), kc_from_c_id
+    from knclient
+    where kc_from_k_id = :k_id and
+          kc_amount_approved &gt; 0
+    union
+    select f_objkind(&#x27;clients&#x27;, &#x27;id&#x27;), mac_from_c_id
+    from miniappclient
+    where mac_from_ma_id = :exa_from_ma_id and
+          mac_amount &gt; 0
+    into obj_kind, obj_id
+    do
+    begin
+      -- Получаем все конфигурации, по которым создавался запрос
+      for select distinct eil_from_eic_id
+      from extinfolist
+      where eil_date &gt;= :exa_date and
+            eil_object_kind = :obj_kind and
+            eil_object_id = :obj_id
+      into eic_id
+      do
+      begin
+        -- Если это тестовая база, фиксируем что ответы получены
+        update extinfolist
+        set eil_status = 2
+        where eil_date &gt;= :exa_date and
+              eil_object_kind = :obj_kind and
+              eil_object_id = :obj_id and
+              eil_from_eic_id = :eic_id and
+              eil_status &lt;&gt; 2;
+      end
+    end
+  end
+
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

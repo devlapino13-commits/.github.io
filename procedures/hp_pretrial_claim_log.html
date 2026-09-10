@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_PRETRIAL_CLAIM_LOG — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_PRETRIAL_CLAIM_LOG: 1 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_PRETRIAL_CLAIM_LOG</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_pre_sud_action_log_ins.html"><div class="to">HP_PRE_SUD_ACTION_LOG_INS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EDL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_PRETRIAL_CLAIM_LOG(
+    EDL_ID D_ID)
+AS
+declare variable edl_object_id d_id;
+declare variable k_id d_id;
+declare variable c_id d_id;
+declare variable msg_datetime d_datetime;
+declare variable smr_lawyer_fio d_str_100;
+begin
+  -- добавление отправленнной клиенту претензии досудебной в журнал учета действий модуля досудебных взысканий (RFCRU-5302)
+
+  select edl_object_id
+  from edoc_list
+  where edl_id = :edl_id
+  into edl_object_id;
+
+  select smr_from_k_id,
+         smr_from_c_id
+  from sud_mainreq
+  where smr_id = :edl_object_id
+  into k_id,
+       c_id;
+
+  if (exists(select *
+             from pre_sud_kontract_list
+             where pskl_k_id = :k_id)) then
+  begin
+    select c_name_fio
+    from clients
+    where c_id = :c_id
+    into smr_lawyer_fio; -- ФИО сотрудника создавшего запрос на отправку в суд
+
+    select kc_from_c_id
+    from knclient
+    where kc_from_k_id = :k_id and
+          kc_amount_approved &gt; 0
+    into c_id; -- клиент
+
+    select msg_datetime
+    from fsrobot_msgbox
+    inner join edoc_msg on edm_from_msg_id = msg_id
+    inner join edoc_sign on eds_id = edm_from_eds_id
+    where msg_type = 1 and
+          eds_from_edl_id = :edl_id and
+          eds_from_c_id = :c_id
+    order by msg_datetime desc
+    rows 1
+    into msg_datetime; -- дата и время отправки СМС
+
+    execute procedure hp_pre_sud_action_log_ins(f_enum_id(&#x27;pre_sud_actions&#x27;, &#x27;pretrial_claim&#x27;, 1), :edl_id, :k_id, :msg_datetime, :smr_lawyer_fio);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

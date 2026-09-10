@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FSROBOT_PUSH_AGR_EXCHANGE — процедура — схема БД</title>
+<meta name="description" content="Процедура FSROBOT_PUSH_AGR_EXCHANGE: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FSROBOT_PUSH_AGR_EXCHANGE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="mc_get_activity.html"><div class="to">MC_GET_ACTIVITY</div></a><a class="ref-card" href="mc_send_push.html"><div class="to">MC_SEND_PUSH</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FSROBOT_PUSH_AGR_EXCHANGE
+AS
+declare variable c_id id_type;
+declare variable mcl_id id_type;
+declare variable combo_active d_bool;
+declare variable score d_smallint;
+declare variable cl_name str_100;
+declare variable push_text d_str_long;
+declare variable rd_id d_integer;
+begin
+  rd_id = f_get_rd_id(&#x27;AgreementKinds.loyal_agreement&#x27;);
+
+  for select ag_object_id
+      from agreements ag
+      where ag.ag_object_kind = 0 and
+            ag.ag_from_rd_id = :rd_id and
+            coalesce(ag_date_end, &#x27;31.12.9999&#x27;) &gt;= current_date and
+            ag_status = 1
+      into c_id
+  do
+  begin
+    mcl_id = null;
+    combo_active = null;
+    cl_name = &#x27;&#x27;;
+
+    select fl_name2
+    from clients
+    inner join fiolist on fl_id = c_from_fl_id
+    where c_id = :c_id
+    into cl_name;
+
+    select mcl_id
+    from mc_login
+    where mcl_from_c_id = :c_id and
+          mcl_is_delete = 0 and
+          mcl_google_id &lt;&gt; &#x27;&#x27;
+    order by mcl_last_login_datetime desc
+    rows 1
+    into mcl_id;
+
+    if (mcl_id is not null) then
+    begin
+      combo_active = 0;
+      score = 0;
+      push_text = &#x27;&#x27;;
+
+      select combo_active, score
+      from mc_get_activity(:mcl_id)
+      into combo_active, score;
+      if (combo_active = 1) then
+      begin
+        push_text = &#x27;Уважаемый, &#x27; || cl_name || ascii_char(10) || &#x27;Поздравляем! Вы накопили &#x27; || :score || &#x27; бонусов.&#x27; || ascii_char(10) || &#x27;Вы можете обменять их на деньги или продолжить копить дальше в разделе Партнерская программа в мобильном приложении.&#x27;;
+        execute procedure mc_send_push(&#x27;mc_login&#x27;, :mcl_id, &#x27;У Вас накопились бонусы!&#x27;, :push_text,
+            7);
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

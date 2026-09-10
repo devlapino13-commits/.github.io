@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_KG_0237_SQL — процедура — схема БД</title>
+<meta name="description" content="Процедура CM_KG_0237_SQL: 3 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_KG_0237_SQL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_KG_0237_SQL(
+    MA_ID D_INTEGER NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable C_ID D_ID;
+declare variable C_INN D_STR_20;
+declare variable BLOB_ID D_ID;
+declare variable DATE_CREATE D_DATE;
+declare variable DATE_BEGIN D_DATE;
+declare variable DATE_END D_DATE;
+begin
+    -- RFCKG-3692
+    for select
+        c.c_id,
+        c.c_inn
+    from miniappclient mac
+    inner join clients c on mac.mac_from_c_id = c.c_id
+    where mac.mac_from_ma_id = :ma_id
+        and mac.mac_amount &gt; 0
+    into
+        :c_id,
+        :c_inn
+    do
+    begin
+        with cte_temp_table as
+        (
+            select
+                cds.cds_doc_blob_1 as blob_id,
+                cast(cds.cds_create_datetime as d_date) as date_create,
+                cds.cds_doc_date_begin as date_begin,
+                coalesce(cds.cds_doc_date_end, &#x27;31.12.2999&#x27;) as date_end
+            from clients c
+            inner join clientdocs cds on cds.cds_from_c_id = c.c_id
+                and cds.cds_is_delete = 0
+                and cds.cds_is_main_doc = 1
+            inner join passkind psk on cds.cds_from_pk_id = psk.pk_id
+            inner join passdoctype pdt on psk.pk_from_pdt_id = pdt.pdt_id
+                and pdt.pdt_code starting &#x27;passport&#x27;
+                and pdt.pdt_is_main_doc = 1
+            where c.c_id = :c_id
+                and c.c_verify_status = 2
+
+            union all
+        
+            select
+                erp.erp_pdf_blob as blob_id,
+                cast(er.er_timestamp as date) as date_create,
+                cast(f_json_str_get_value(erp.erp_json, &#x27;date_of_issue&#x27;, &#x27;01.01.1900&#x27;) as date) as date_begin,
+                cast(f_json_str_get_value(erp.erp_json, &#x27;date_of_expiry&#x27;, &#x27;01.01.1900&#x27;) as date) as date_end
+            from epass_req er
+            inner join epass_response erp on erp.erp_from_er_id = er.er_id
+            where er.er_inn = :c_inn
+                and er.er_status = 2
+        )
+        select first 1
+            t.blob_id,
+            t.date_create,
+            t.date_begin,
+            t.date_end
+        from cte_temp_table t
+        order by t.date_create desc
+        into
+            :blob_id,
+            :date_create,
+            :date_begin,
+            :date_end;
+
+        if (date_create &lt; date_begin
+            or current_date not between date_begin and date_end
+            or coalesce(blob_id, 0) = 0
+        ) then
+        begin
+            res_error_is_critical = 2;
+            res_error_text = &#x27;Нужно прикрепить актуальное фото паспорта (237 блок)&#x27;;
+            suspend;
+            exit;
+        end
+    end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

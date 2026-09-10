@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CONTVERI_SET_OK — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CONTVERI_SET_OK: 3 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CONTVERI_SET_OK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">4</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_contdata_delete_cascade.html"><div class="to">HP_CONTDATA_DELETE_CASCADE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">4 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_contdata_import.html"><div class="to">HP_CONTDATA_IMPORT</div></a><a class="ref-card" href="hp_continfo_force_update.html"><div class="to">HP_CONTINFO_FORCE_UPDATE</div></a><a class="ref-card" href="hp_edoc_after_sign_action.html"><div class="to">HP_EDOC_AFTER_SIGN_ACTION</div></a><a class="ref-card" href="hp_join_double_client_contdata.html"><div class="to">HP_JOIN_DOUBLE_CLIENT_CONTDATA</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CDA_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">VERIFY_DATETIME</div><div class="ptype">TIMESTAMP</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CONTVERI_SET_OK(
+    CDA_ID D_ID,
+    UN_ID D_ID,
+    VERIFY_DATETIME D_DATETIME = null)
+AS
+declare variable c_id d_id;
+declare variable cda_status d_smallint;
+declare variable cda_date d_date;
+declare variable cda_cont_kind d_integer;
+declare variable cda_is_main d_smallint;
+declare variable cda_is_delete d_smallint;
+declare variable tmp_cda_id d_id;
+begin
+  -- Процедура устанавливает статус &quot;Верифицирован&quot; к контактной информации.
+
+  if (cda_id is null) then
+    exit;
+
+  if (verify_datetime is null) then
+    verify_datetime = current_timestamp;
+
+  if (un_id is null) then
+    un_id = 1000000000000; -- user: fsrobot
+
+  select cda_from_c_id, cda_status, cda_date, cda_cont_kind, cda_is_main, cda_is_delete
+  from contdata
+  where cda_id = :cda_id
+  into c_id, cda_status, cda_date, cda_cont_kind, cda_is_main, cda_is_delete;
+
+  if (row_count = 0) then
+    exception e_default &#x27;cda_id not found: &#x27; || cda_id;
+
+  if (cda_date &gt; cast(:verify_datetime as date)) then Exit;
+
+  -- если он еще не верифицирован, меняем статус
+  if (cda_status &lt;&gt; 1) then
+  begin
+    update contdata
+    set cda_status = 1,
+        cda_date = maxvalue(cda_date, cast(:verify_datetime as date)),
+        cda_from_un_id = :un_id
+    where cda_id = :cda_id;
+
+    -- так как на уровне триггера могут быть внесены изменения в другие записи этого клиента,
+    -- обновляем данные пользователя и время изменений
+    for select cda_id
+    from contdata
+    where cda_from_c_id = :c_id and
+          cda_cont_kind = :cda_cont_kind
+    into tmp_cda_id
+    do
+    begin
+      update contlog
+      set clg_from_un_id = :un_id,
+          clg_datetime = :verify_datetime
+      where clg_from_cda_id = :tmp_cda_id and
+            clg_from_un_id is null;
+    end
+
+    if (cda_is_main = 1 and cda_is_delete = 0 and f_enum(&#x27;cont_kind&#x27;, cda_cont_kind, &#x27;code&#x27;) = &#x27;cell&#x27;) then
+      execute procedure hp_contdata_delete_cascade(:cda_id, :un_id);
+  end else
+  begin
+    -- иначе просто обновляем дату последней верификации
+    -- изменений даты не приводит к появлению логирований
+    if (cast(verify_datetime as date) &gt; cda_date) then
+    begin
+      update contdata
+      set cda_date = cast(:verify_datetime as date),
+          cda_from_un_id = :un_id
+      where cda_id = :cda_id;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

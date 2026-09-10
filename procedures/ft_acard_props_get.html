@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FT_ACARD_PROPS_GET — процедура — схема БД</title>
+<meta name="description" content="Процедура FT_ACARD_PROPS_GET: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FT_ACARD_PROPS_GET</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_ft_fieldvalue_calc_tmp.html"><div class="to">HP_FT_FIELDVALUE_CALC_TMP</div></a><a class="ref-card" href="hp_ft_infofield_value.html"><div class="to">HP_FT_INFOFIELD_VALUE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FT_ACARD_PROPS_GET(
+    C_ID D_ID,
+    REP_DATE D_DATE)
+RETURNS (
+    RES_TEXT D_STR_LONG)
+AS
+declare variable cds_doc_no str_100;
+declare variable cds_doc_date_begin str_100;
+declare variable cds_doc_date_end str_100;
+declare variable citizen_id d_integer;
+declare variable is_found d_smallint;
+declare variable is_old d_bool;
+declare variable doc_name d_str_100;
+begin
+  cds_doc_no = &#x27;&#x27;;
+  is_found = 0;
+  is_old = iif(rep_date &lt; date&#x27;30.10.2024&#x27;, 1, 0);
+
+  select pk_country_id
+  from clientdocs cds
+  inner join passkind pask on pask.pk_id = cds.cds_from_pk_id
+  where cds_from_c_id = :c_id and
+        cds_create_datetime &lt; (:rep_date + 1) and
+        cds_is_main_doc = 1
+  order by cds_create_datetime desc
+  rows 1
+  into :citizen_id;
+
+  if (citizen_id is null) then
+  begin
+    select cl.c_citizen
+    from clients cl
+    where cl.c_id = :c_id
+    into citizen_id;
+  end
+
+  if (citizen_id &lt;&gt; 13) then
+  begin
+    select coalesce(cds_doc_no, &#x27;&#x27;), f_datetostr(cds_doc_date_begin), f_datetostr(cd.cds_doc_date_end), 1
+    from clientdocs cd, passkind, passdoctype
+    where cds_from_c_id = :c_id and
+          cds_from_pk_id = pk_id and
+          pk_from_pdt_id = pdt_id and
+          pdt_code = &#x27;registration_vnj&#x27; and
+          cds_is_delete = 0 and
+          :rep_date between cd.cds_doc_date_begin and cd.cds_doc_date_end and
+          cds_create_datetime &lt; (:rep_date + 1)
+    order by cds_create_datetime desc
+    rows 1
+    into :cds_doc_no, :cds_doc_date_begin, :cds_doc_date_end, :is_found;
+    doc_name = &#x27;ВНЖ&#x27;;
+
+    if (is_found  = 0) then
+    begin
+      select coalesce(cds_doc_no, &#x27;&#x27;), f_datetostr(cds_doc_date_begin), f_datetostr(cd.cds_doc_date_end), 1
+      from clientdocs cd, passkind, passdoctype
+      where cds_from_c_id = :c_id and
+            cds_from_pk_id = pk_id and
+            pk_from_pdt_id = pdt_id and
+            pdt_code = &#x27;registration_rvp&#x27; and
+            cds_is_delete = 0 and
+            :rep_date between cd.cds_doc_date_begin and cd.cds_doc_date_end and
+            cds_create_datetime &lt; (:rep_date + 1)
+      order by cds_create_datetime desc
+      rows 1
+      into :cds_doc_no, :cds_doc_date_begin, :cds_doc_date_end, :is_found;
+      doc_name = &#x27;РВП&#x27;;
+    end
+
+    if (is_found  = 0 and is_old = 1) then
+    begin
+      select coalesce(cds_doc_no, &#x27;&#x27;), f_datetostr(cds_doc_date_begin), f_datetostr(cd.cds_doc_date_end), 1
+      from clientdocs cd, passkind, passdoctype
+      where cds_from_c_id = :c_id and
+            cds_from_pk_id = pk_id and
+            pk_from_pdt_id = pdt_id and
+            pdt_code = &#x27;work_permit&#x27; and
+            cds_is_delete = 0 and
+            :rep_date between cd.cds_doc_date_begin and cd.cds_doc_date_end and
+            cds_create_datetime &lt; (:rep_date + 1)
+      order by cds_create_datetime desc
+      rows 1
+      into :cds_doc_no, :cds_doc_date_begin, :cds_doc_date_end, :is_found;
+      doc_name = &#x27;Разрешение на работу&#x27;;
+    end
+
+    if (is_found  = 0 and is_old = 1) then
+    begin
+      select coalesce(cds_doc_no, &#x27;&#x27;), f_datetostr(cds_doc_date_begin), f_datetostr(cd.cds_doc_date_end), 1
+      from clientdocs cd, passkind, passdoctype
+      where cds_from_c_id = :c_id and
+            cds_from_pk_id = pk_id and
+            pk_from_pdt_id = pdt_id and
+            pdt_code = &#x27;work_patent&#x27; and
+            cds_is_delete = 0 and
+            :rep_date between cd.cds_doc_date_begin and cd.cds_doc_date_end and
+            cds_create_datetime &lt; (:rep_date + 1)
+      order by cds_create_datetime desc
+      rows 1
+      into :cds_doc_no, :cds_doc_date_begin, :cds_doc_date_end, :is_found;
+    doc_name = &#x27;Патент&#x27;;
+    end
+
+    if (is_found  = 0 and is_old = 1) then
+    begin
+      select coalesce(cds_doc_no, &#x27;&#x27;), f_datetostr(cds_doc_date_begin), f_datetostr(cd.cds_doc_date_end), 1
+      from clientdocs cd, passkind, passdoctype
+      where cds_from_c_id = :c_id and
+            cds_from_pk_id = pk_id and
+            pk_from_pdt_id = pdt_id and
+            pdt_code = &#x27;job_agreement&#x27; and
+            cds_is_delete = 0 and
+            :rep_date between cd.cds_doc_date_begin and cd.cds_doc_date_end and
+            cds_create_datetime &lt; (:rep_date + 1)
+      order by cds_create_datetime desc
+      rows 1
+      into :cds_doc_no, :cds_doc_date_begin, :cds_doc_date_end, :is_found;
+      doc_name = &#x27;Трудовой договор&#x27;;
+    end
+
+    if (is_found  = 0 and is_old = 1) then
+    begin
+      select coalesce(cds_doc_no, &#x27;&#x27;), f_datetostr(cds_doc_date_begin), f_datetostr(cd.cds_doc_date_end), 1
+      from clientdocs cd, passkind, passdoctype
+      where cds_from_c_id = :c_id and
+            cds_from_pk_id = pk_id and
+            pk_from_pdt_id = pdt_id and
+            pdt_code = &#x27;relocation_docs&#x27; and
+            cds_is_delete = 0 and
+            :rep_date between cd.cds_doc_date_begin and cd.cds_doc_date_end and
+            cds_create_datetime &lt; (:rep_date + 1)
+      order by cds_create_datetime desc
+      rows 1
+      into :cds_doc_no, :cds_doc_date_begin, :cds_doc_date_end, :is_found;
+      doc_name = &#x27;Свидетельство участника программы добровольного переселения&#x27;;
+    end
+
+    if (is_found  = 0) then
+    begin
+      select coalesce(cds_doc_no, &#x27;&#x27;),
+          f_datetostr(cds_doc_date_begin),
+          f_datetostr(iif(:rep_date &lt; cast(&#x27;24.07.2025&#x27; as date), cds_doc_date_end, cds_doc_date_begin + 89)),
+          1
+      from clientdocs, passkind, passdoctype
+      where cds_from_c_id = :c_id and
+            cds_from_pk_id = pk_id and
+            pk_from_pdt_id = pdt_id and
+            pdt_code = &#x27;magration_card&#x27; and
+            cds_is_delete = 0 and
+            :rep_date between cds_doc_date_begin and iif(:rep_date &lt; cast(&#x27;24.07.2025&#x27; as date), cds_doc_date_end, cds_doc_date_begin + 89) and
+            cds_create_datetime &lt; (:rep_date + 1)
+      order by cds_create_datetime desc
+      rows 1
+      into :cds_doc_no, :cds_doc_date_begin, :cds_doc_date_end, :is_found;
+      doc_name = &#x27;Миграционная карта&#x27;;
+    end
+
+    if (is_found  = 0 and rep_date &gt;= cast(&#x27;24.07.2025&#x27; as date)) then -- RFCRU-4992
+    begin
+      select pdt_name, coalesce(cds_doc_no, &#x27;&#x27;), f_datetostr(cds_doc_date_begin),
+          f_datetostr(iif(pdt_code = &#x27;magration_card&#x27;, cds_doc_date_begin + 89, cds_doc_date_end)), 1
+      from clientdocs, passkind, passdoctype
+      where cds_from_c_id = :c_id and
+            cds_from_pk_id = pk_id and
+            pk_from_pdt_id = pdt_id and
+            pdt_code in(&#x27;registration_vnj&#x27;,&#x27;registration_rvp&#x27;,&#x27;magration_card&#x27;) and
+            cds_is_delete = 0 and
+            cds_create_datetime &lt; (:rep_date + 1)
+      order by cds_create_datetime desc
+      rows 1
+      into doc_name, :cds_doc_no, :cds_doc_date_begin, :cds_doc_date_end, is_found;
+
+    end
+  end
+
+  if (is_found = 1) then
+    res_text = doc_name || &#x27;: Серия/номер: &#x27; || cds_doc_no || &#x27;; Дата начала срока действия права пребывания (проживания): &#x27; || cds_doc_date_begin || &#x27;; Дата окончания срока действия права пребывания: &#x27; || cds_doc_date_end || &#x27;;&#x27;;
+  else
+    res_text = &#x27;---&#x27;;
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

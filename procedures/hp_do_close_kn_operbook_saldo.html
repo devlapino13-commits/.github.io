@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DO_CLOSE_KN_OPERBOOK_SALDO — процедура — схема БД</title>
+<meta name="description" content="Закрывает доходные и расходные счета текущего года">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DO_CLOSE_KN_OPERBOOK_SALDO</code></h1>
+<p class="desc">Закрывает доходные и расходные счета текущего года</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_kn_operbook_fix_one_pair.html"><div class="to">HP_DO_KN_OPERBOOK_FIX_ONE_PAIR</div></a><a class="ref-card" href="hp_do_kn_operbook_ol_memorder.html"><div class="to">HP_DO_KN_OPERBOOK_OL_MEMORDER</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AB_SOURCE_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">AB_DESTIN_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DO_CLOSE_KN_OPERBOOK_SALDO(
+    REP_DATE D_DATE,
+    AB_SOURCE_CODE D_STR_CODE,
+    AB_DESTIN_CODE D_STR_CODE)
+RETURNS (
+    OL_ID D_ID)
+AS
+declare variable main_acc_id d_id;
+declare variable ab_id d_id;
+declare variable acc_id d_id;
+declare variable acc_code d_str_code;
+declare variable acc_from_reg_id d_integer;
+declare variable kobs_bal_sum d_currency;
+declare variable kobs_bal_tax d_currency;
+declare variable kobs_bal_val d_currency;
+declare variable reg_id_prv d_integer;
+declare variable new_acc_id d_str_code;
+declare variable acc_dt d_id;
+declare variable acc_kt d_id;
+declare variable need_fix_pair d_smallint;
+declare variable pair_acc_id d_id;
+declare variable ol_id_prv d_id;
+declare variable len d_integer;
+declare variable new_ol_id d_id;
+declare variable new_acc_code d_str_code;
+begin
+  if (char_length(ab_destin_code) &gt;= 5) then
+    exception e_default &#x27;Destination account code lenth must be less 5&#x27;;
+
+  len = char_length(:ab_destin_code) + 1;
+
+  for select ab_id, iif(ab_pair_kind = 0 and ab_pair_ab_id is not null, 1, 0)
+      from ref_accbalance
+      where ab_code starting :ab_source_code
+      into ab_id, need_fix_pair
+  do
+  begin
+    ol_id = null;
+    ol_id_prv = 0;
+    reg_id_prv = 0;
+    for select acc_id, acc_pair_acc_id, acc_from_reg_id
+        from ref_account
+        where acc_from_ab_id = :ab_id
+        order by acc_from_reg_id, acc_code
+        into main_acc_id, pair_acc_id, acc_from_reg_id
+    do
+    begin
+      if (reg_id_prv &lt;&gt; acc_from_reg_id) then
+        ol_id = null;
+
+      for select acc_id, acc_code, kobs_bal_sum, kobs_bal_tax, kobs_bal_val
+          from ref_account, kn_obsummary
+          where acc_id = :main_acc_id and
+                kobs_acc_id = acc_id and
+                kobs_date &lt;= :rep_date and
+                kobs_date_end &gt;= :rep_date and
+                (kobs_bal_sum &lt;&gt; 0 or
+                kobs_bal_tax &lt;&gt; 0 or
+                kobs_bal_val &lt;&gt; 0)
+          union
+          select acc_id, acc_code, kobs_bal_sum, kobs_bal_tax, kobs_bal_val
+          from ref_account, kn_obsummary
+          where acc_id = :pair_acc_id and
+                kobs_acc_id = acc_id and
+                kobs_date &lt;= :rep_date and
+                kobs_date_end &gt;= :rep_date and
+                (kobs_bal_sum &lt;&gt; 0 or
+                kobs_bal_tax &lt;&gt; 0 or
+                kobs_bal_val &lt;&gt; 0)
+          into acc_id, acc_code, kobs_bal_sum, kobs_bal_tax, kobs_bal_val
+      do
+      begin
+        new_acc_id = null;
+
+        new_acc_code = ab_destin_code || substring(:acc_code from :len);
+        select acc_id
+        from ref_account
+        where acc_code = :new_acc_code
+        into new_acc_id;
+
+        if (new_acc_id is null) then
+        begin
+          insert into ref_account (acc_from_reg_id, acc_from_cu_id, acc_from_inx_id, acc_object_kind, acc_object_id,
+                                   acc_code, acc_number, acc_is_currency, acc_name, acc_memo, acc_type, acc_out_balance,
+                                   acc_date_open, acc_non_resident)
+          select acc_from_reg_id, acc_from_cu_id, acc_from_inx_id, acc_object_kind, acc_object_id, :new_acc_code,
+                 acc_number, acc_is_currency, acc_name, acc_memo, acc_type, acc_out_balance, acc_date_open,
+                 acc_non_resident
+          from ref_account
+          where acc_id = :acc_id
+          returning acc_id
+          into new_acc_id;
+        end
+
+        if (kobs_bal_sum &gt; 0 or kobs_bal_tax &gt; 0 or kobs_bal_val &gt; 0) then
+        begin
+          acc_dt = new_acc_id;
+          acc_kt = acc_id;
+        end
+        else
+        begin
+          kobs_bal_sum = -kobs_bal_sum;
+          kobs_bal_tax = -kobs_bal_tax;
+          kobs_bal_val = -kobs_bal_val;
+          acc_dt = acc_id;
+          acc_kt = new_acc_id;
+        end
+
+        new_ol_id = null;
+        select ol_id
+        from hp_do_kn_operbook_ol_memorder(:ol_id, null, null, null, :kobs_bal_sum, :kobs_bal_val, :kobs_bal_tax, :kobs_bal_tax, &#x27;Закрытие дохода/расхода текущего года&#x27;, :acc_dt, :acc_kt, :rep_date, 2, 11, 9, :acc_from_reg_id, 1000000000000)
+        into new_ol_id;
+        ol_id = new_ol_id;
+      end
+
+      if (need_fix_pair = 1 and
+          pair_acc_id is not null) then
+        execute procedure hp_do_kn_operbook_fix_one_pair(:main_acc_id, dateadd(day, 1, :rep_date));
+
+      reg_id_prv = acc_from_reg_id;
+
+      if (ol_id_prv &lt;&gt; ol_id) then
+        suspend;
+
+      if (ol_id is not null) then
+        ol_id_prv = ol_id;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

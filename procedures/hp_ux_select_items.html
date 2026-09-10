@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_UX_SELECT_ITEMS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_UX_SELECT_ITEMS: 2 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_UX_SELECT_ITEMS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_uxactionparam_for_ins.html"><div class="to">HP_UXACTIONPARAM_FOR_INS</div></a><a class="ref-card" href="hp_uxfrparam_fk_list.html"><div class="to">HP_UXFRPARAM_FK_LIST</div></a><a class="ref-card" href="hp_ux_source_fields.html"><div class="to">HP_UX_SOURCE_FIELDS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">LIST_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ITEM_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">ID</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ID_VISIBLE</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_UX_SELECT_ITEMS(
+    LIST_KIND D_STR_CODE,
+    ITEM_CODE D_STR_CODE)
+RETURNS (
+    ID D_STR_255,
+    ID_VISIBLE D_STR_255,
+    TEXT D_STR_255)
+AS
+declare variable ux_kind d_integer;
+declare variable source_name d_str_code;
+declare variable fr_code d_str_code;
+declare variable root_grid d_str_code;
+declare variable ux_code d_str_code;
+declare variable ux_kind_str d_str_code;
+declare variable field_name d_str_code;
+declare variable ufi_parent_code d_str_100;
+declare variable table_name d_str_code;
+declare variable uxcommand_kind d_smallint;
+declare variable dont_show_fields d_bool;
+begin
+  if (trim(coalesce(list_kind, &#x27;&#x27;)) = &#x27;&#x27;) then
+    exit;
+
+  if (list_kind is null) then
+    list_kind = &#x27;&#x27;;
+
+  item_code = trim(coalesce(item_code, &#x27;&#x27;));
+
+  if (list_kind = &#x27;ufp_buttonedit_uxa&#x27;) then
+  begin
+    select ufd_source, ufp_origin_name
+    from uxfrparam, uxfrdata
+    where ufp_code = :item_code and
+          ufp_ufr_code = ufd_ufr_code and
+          ufd_kind = 0
+    into source_name, field_name;
+
+    for select fk_table
+    from hp_uxfrparam_fk_list(:source_name, :field_name)
+    into :table_name
+    do
+    begin
+      for select uxa_code, uxa_code, uxa_name || &#x27;  - &#x27; || Upper(ux_table_name)
+      from uxalias, uxcode, uxcodeframe, uxframe
+      where ux_table_name = :table_name and
+            ucf_ux_code = ux_code and
+            ucf_ufr_code = ufr_code and
+            ucf_is_mainframe = 1 and
+            ufr_show_kind = 2 and -- Набор данных
+            uxa_ux_code = ux_code
+      into id, id_visible, text
+      do
+        suspend;
+    end
+
+    exit;
+  end
+
+  if (list_kind = &#x27;lookup_source&#x27;) then
+  begin
+    if (not exists(select * from uxlookup
+    where ulp_table_name = :item_code and
+          ulp_source = :id)) then
+    begin
+      id = item_code;
+      id_visible = item_code;
+      text = &#x27;Текущая таблица&#x27;;
+      suspend;
+    end
+
+    text = &#x27;&#x27;;
+
+    for select lower(trim(p.rdb$procedure_name))
+    from rdb$procedures p
+    into id
+    do
+    begin
+      id_visible = id;
+
+      if (exists(select * from uxlookup
+      where ulp_table_name = :item_code and
+            ulp_source = :id)) then
+        Continue;
+
+      suspend;
+    end
+
+    exit;
+  end
+
+  if (list_kind = &#x27;ufp_lookup_code&#x27;) then
+  begin
+    select ufd_source, ufp_origin_name
+    from uxfrparam, uxfrdata
+    where ufp_code = :item_code and
+          ufp_ufr_code = ufd_ufr_code and
+          ufd_kind = 0
+    into source_name, field_name;
+
+    for select fk_table
+    from hp_uxfrparam_fk_list(:source_name, :field_name)
+    into :table_name
+    do
+    begin
+      for select ulp_code, ulp_code, ulp_name
+      from uxlookup
+      where ulp_table_name = :table_name
+      into id, id_visible, text
+      do
+        suspend;
+    end
+
+    exit;
+  end
+
+  if (list_kind = &#x27;ufp_combobox_code&#x27;) then
+  begin
+    for select ucm_code, ucm_code, ucm_name
+    from uxcombomain
+    into id, id_visible, text
+    do
+      suspend;
+
+    exit;
+  end
+
+  if (list_kind = &#x27;uxcodeframe_new_frames&#x27;) then
+  begin
+    if (item_code = &#x27;&#x27;) then
+      exit;
+
+    ux_kind = uxf$kind(&#x27;uxframe&#x27;, &#x27;id&#x27;);
+    select ux_table_name
+    from uxcode
+    where ux_code = :item_code
+    into table_name;
+
+    for select ux_code, ux_code, ux_name
+    from uxcode
+    where ux_kind = :ux_kind and
+          ux_table_name = :table_name
+    into id, id_visible, text
+    do
+    begin
+      if (exists(select * from uxcodeframe
+      where ucf_ux_code = :item_code and
+            ucf_ufr_code = :id)) then
+        continue;
+
+      suspend;
+    end
+
+    for select ux_code, ux_code, ux_name || &#x27;  - &#x27; || Upper(ux_table_name)
+    from uxcode
+    where ux_kind = :ux_kind and
+          ux_table_name &lt;&gt; :table_name
+    into id, id_visible, text
+    do
+    begin
+      if (exists(select * from uxcodeframe
+      where ucf_ux_code = :item_code and
+            ucf_ufr_code = :id)) then
+        continue;
+
+      suspend;
+    end
+
+    exit;
+  end
+
+  if (list_kind = &#x27;uxcodeframe_existing_frames&#x27;) then
+  begin
+    if (item_code = &#x27;&#x27;) then
+      exit;
+
+    for select ucf_ufr_code, ucf_ufr_code, ux_name
+    from uxcodeframe, uxcode
+    where ucf_ux_code = :item_code and
+          ucf_ufr_code = ux_code
+    into id, id_visible, text
+    do
+    begin
+      if (exists(select * from uxfritem
+      where ufi_ux_code = :item_code and
+            ufi_ufr_code = :id)) then
+        continue;
+
+      suspend;
+    end
+
+    exit;
+  end
+
+
+  if (list_kind = &#x27;frame_master_fields&#x27;) then
+  begin
+    if (item_code = &#x27;&#x27;) then
+      exit;
+
+    for select ufp_origin_name,
+               ufp_origin_name,
+               iif(ufp_pk_field = 0, &#x27;&#x27;, &#x27;pk&#x27; || ufp_pk_field ||&#x27;  &#x27;) ||
+               iif(ufp_name &lt;&gt; ufp_origin_name,
+                   ufp_origin_name || &#x27;  - &#x27; || ufp_name, ufp_origin_name)
+    from uxfrparam
+    where ufp_ufr_code = :item_code and
+          ufp_is_delete= 0 and
+          ufp_in_use = 1
+    into id, id_visible, text
+    do
+      suspend;
+
+    exit;
+  end
+
+  if (list_kind = &#x27;frame_detail_fields&#x27;) then
+  begin
+    if (item_code = &#x27;&#x27;) then
+      exit;
+
+    select ufd_source
+    from uxfrdata
+    where ufd_ufr_code = :item_code and
+          ufd_kind = 0
+    into source_name;
+
+    -- Дочерное поле для связки мастер-деталь
+    -- Отображаем только тех у кого есть ссылка на другие таблицы
+    for select ufp_origin_name,
+               ufp_origin_name,
+               iif(ufp_pk_field = 0, &#x27;&#x27;, &#x27;pk&#x27; || ufp_pk_field ||&#x27;  &#x27;) ||
+               iif(ufp_name &lt;&gt; ufp_origin_name,
+                   ufp_origin_name || &#x27;  - &#x27; || ufp_name, ufp_origin_name)
+    from uxfrparam
+    where ufp_ufr_code = :item_code and
+          ufp_is_delete = 0 and
+          ufp_in_use = 1
+    into id, id_visible, text
+    do
+    begin
+      if (exists(select * from hp_uxfrparam_fk_list(:source_name, :id))) then
+        suspend;
+    end
+
+    exit;
+  end
+
+  if (list_kind = &#x27;action_form_open&#x27;) then
+  begin
+    for select uxa_code, uxa_code, uxa_name || &#x27;  - &#x27; || Upper(ux_table_name)
+    from uxcode, uxform, uxalias
+    where ux_code = ufm_code and
+          ux_code = uxa_ux_code and
+          uxa_ux_code &lt;&gt; :item_code
+    into id, id_visible, text
+    do
+    begin
+      -- Если ранее добавлен, не показываем в списке чтобы повторно не добавить
+      if (exists(select * from uxaction
+      where ua_ux_code = :item_code and
+            ua_uxa_code = :id)) then
+        Continue;
+
+      suspend;
+    end
+
+    exit;
+  end
+
+  if (list_kind = &#x27;action_form_insert&#x27;) then
+  begin
+    for select uxa_code, uxa_code, ux_code, uxa_name || &#x27;  - &#x27; || Upper(ux_table_name)
+    from uxcode, uxform, uxalias
+    where ux_code = ufm_code and
+          ux_code = uxa_ux_code and
+          uxa_ux_code &lt;&gt; :item_code
+    into id, id_visible, ux_code, text
+    do
+    begin
+      -- Если ранее добавлен, не показываем в списке чтобы повторно не добавить
+      if (exists(select * from uxaction
+      where ua_ux_code = :item_code and
+            ua_uxa_code = :id)) then
+        Continue;
+
+      if (not exists(select *
+      from uxcodeframe, uxframe
+      where ucf_ux_code = :ux_code and
+            ucf_ufr_code = ufr_code and
+            ucf_is_mainframe = 1 and
+            ufr_show_kind = 1)) then
+        continue;
+
+      suspend;
+    end
+
+    exit;
+  end
+
+  if (list_kind = &#x27;action_command_open&#x27;) then
+  begin
+    for select uxa_code, uxa_code, uxa_name || &#x27;  - &#x27; || Upper(ux_table_name)
+    from uxcode, uxcommand, uxalias
+    where ux_code = cmd_code and
+          uxa_ux_code = ux_code
+    into id, id_visible, text
+    do
+    begin
+      suspend;
+    end
+
+    exit;
+  end
+
+
+  if (list_kind = &#x27;action_blank_open&#x27;) then
+  begin
+    for select uxa_code, uxa_code, uxa_name || &#x27;  - &#x27; || Upper(ux_table_name)
+    from uxcode, uxblank, uxalias
+    where ux_code = ub_code and
+          ux_code = uxa_ux_code
+    into id, id_visible, text
+    do
+    begin
+      -- Если ранее добавлен, не показываем в списке чтобы повторно не добавить
+      if (exists(select * from uxaction
+      where ua_ux_code = :item_code and
+            ua_uxa_code = :id)) then
+        Continue;
+
+      suspend;
+    end
+
+    exit;
+  end
+
+  if (list_kind = &#x27;uxframe_create_kind&#x27;) then
+  begin
+    id = &#x27;uxframe&#x27;;
+    id_visible = &#x27;Только фрейм&#x27;;
+    text = &#x27;Создать только фрейм&#x27;;
+    suspend;
+
+    id = &#x27;uxform&#x27;;
+    id_visible = &#x27;Фрейм и табличная форма&#x27;;
+    text = &#x27;Создать фрейм и форму с набором данных&#x27;;
+    suspend;
+
+    id = &#x27;uxform_one&#x27;;
+    id_visible = &#x27;Фрейм с одной записю&#x27;;
+    text = &#x27;Создать фрейм и форму с одной записю&#x27;;
+    suspend;
+
+    exit;
+  end
+
+  if (list_kind = &#x27;uxcode_actions&#x27;) then
+  begin
+    select uxf$kind(ux_kind, &#x27;code&#x27;)
+    from uxcode
+    where ux_code = :item_code
+    into ux_kind_str;
+
+    if (ux_kind_str &lt;&gt; &#x27;uxFrame&#x27;) then
+    begin
+      for select ua_code, uxa_code,
+                 trim(case uxa_kind
+                    when 0 then &#x27;Открыть:&#x27;
+                    when 2 then &#x27;Создать:&#x27;
+                 end) || &#x27; &#x27; || uxa_name
+      from uxalias, uxaction
+      where uxa_ux_code = :item_code and
+            uxa_code = ua_uxa_code
+      into id, id_visible, text
+      do
+      begin
+        if (id starting &#x27;fmMainMenu#&#x27;) then
+          text = replace(text, &#x27;Открыть:&#x27;, &#x27;Главное меню:&#x27;);
+
+        suspend;
+      end
+
+      if (row_count = 0) then
+      begin
+        for select &#x27;fmMainMenu#&#x27; || uxa_code, uxa_code, &#x27;Тест:  &#x27; || uxa_name
+        from uxalias
+        where uxa_ux_code = :item_code
+        into id, id_visible, text
+        do
+          suspend;
+      end
+    end
+
+    exit;
+  end
+
+  if (list_kind = &#x27;uxaction_add_def_param&#x27;) then
+  begin
+    for select id, id_visible, text
+    from hp_uxactionparam_for_ins(:item_code)
+    into :id, :id_visible, :text
+    do
+      suspend;
+
+    exit;
+  end
+
+  if (list_kind = &#x27;uxfrparam_add_source&#x27;) then
+  begin
+    for select lower(ut_code), coalesce(ut_name, &#x27;&#x27;), left(ut_memo, 255)
+    from hp_uxtable_list
+    into :id, :id_visible, :text
+    do
+    begin
+      if (id_visible &lt;&gt; &#x27;&#x27;) then
+        text = id_visible;
+
+      id_visible = id;
+      suspend;
+    end
+
+    exit;
+  end
+
+  if (list_kind = &#x27;uxfrparam_del_source&#x27;) then
+  begin
+    select ufd_source, ufp_origin_name
+    from uxfrparam, uxfrdata
+    where ufp_code = :item_code and
+          ufp_ufr_code = ufd_ufr_code and
+          ufd_kind = 0
+    into ux_code, field_name;
+
+    for select url_fk_table
+    from uxrelation
+    where url_source = :ux_code and
+          url_field_name = :field_name
+    into :id
+    do
+    begin
+      id_visible = id;
+      text = &#x27;&#x27;;
+
+      select ut_caption
+      from uxtable
+      where ut_table_name = :id
+      into text;
+
+      if (text = &#x27;&#x27;) then
+      begin
+        select left(trim(rdb$description), 255)
+        from rdb$relations r
+        where r.rdb$system_flag = 0 and
+              r.rdb$relation_type in (0, 1, 4) and
+              r.rdb$relation_name = upper(:id)
+        into text;
+      end
+
+      suspend;
+    end
+
+    exit;
+  end
+
+  if (list_kind = &#x27;uxfrparam_add_params&#x27;) then
+  begin
+    select ufi_ux_code, ufi_parent_code
+    from uxfritem
+    where ufi_code = :item_code
+    into fr_code, ufi_parent_code;
+
+    uxcommand_kind = uxf$kind(&#x27;uxcommand&#x27;, &#x27;id&#x27;);
+
+    -- если фрейм участвует в командах, не показываем исходящие поля
+    dont_show_fields = 0;
+    if (exists(select * from uxcodeframe, uxcode
+    where ucf_ufr_code = :fr_code and
+          ucf_ux_code = ux_code and
+          ux_kind = :uxcommand_kind)) then
+      dont_show_fields = 1;
+
+    if (ufi_parent_code is null) then
+      ufi_parent_code = item_code;
+
+    root_grid = fr_code || &#x27;#g&#x27;;
+
+
+    for select ufp_code,
+               ufp_origin_name,
+               iif(ufp_origin_name = ufp_name,
+                   ufd_source || &#x27;.&#x27; || ufp_origin_name,
+                   ufd_source || &#x27;.&#x27; || ufp_origin_name || &#x27;   - &#x27; || ufp_name)
+    from uxfrparam, uxfrdata
+    where ufp_ufr_code = :fr_code and
+          ufp_is_delete = 0 and
+          ufp_in_use = 1 and
+          ufd_ufr_code = ufp_ufr_code and
+          ufd_kind = 0 and
+          ufp_editor &lt;&gt; &#x27;current_user&#x27; and
+          not(:dont_show_fields =1 and ufp_is_param = 0)
+    into id, id_visible, text
+    do
+    begin
+      if (ufi_parent_code = root_grid or item_code = root_grid) then
+      begin
+        if (exists(select * from uxfritem
+        where ufi_ux_code = :fr_code and
+              ufi_parent_code = :root_grid and
+              ufi_ufp_code = :id)) then
+         Continue;
+      end else
+      begin
+        if (exists(select * from uxfritem
+        where ufi_ux_code = :fr_code and
+              ufi_parent_code &lt;&gt; :root_grid and
+              ufi_ufp_code = :id)) then
+         Continue;
+      end
+
+      suspend;
+    end
+
+    exit;
+  end
+
+  if (list_kind = &#x27;source_fields&#x27;) then
+  begin
+    text = &#x27;&#x27;;
+    for select field_name
+    from hp_ux_source_fields(:item_code)
+    where param_kind = 1
+    into :id
+    do
+    begin
+      id_visible = id;
+      suspend;
+    end
+
+    exit;
+  end
+
+  if (list_kind = &#x27;FsConfig_TestUsers&#x27;) then
+  begin
+    for select un_name, un_name, un_fio
+    from username
+    into id, id_visible, text
+    do
+      suspend;
+
+    Exit;
+  end
+
+  exception e_message f_format(&#x27;Undefined params: list_kind: %1, item_code: %2&#x27;, list_kind,  item_code);
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

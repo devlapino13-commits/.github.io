@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_GET_HTML_LOAN_LIMIT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_GET_HTML_LOAN_LIMIT: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_GET_HTML_LOAN_LIMIT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_html_client_info.html"><div class="to">FM_HTML_CLIENT_INFO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_GET_HTML_LOAN_LIMIT(
+    C_ID D_ID)
+RETURNS (
+    RES_TEXT D_BLOB_TEXT)
+AS
+declare variable cli_balance d_currency;
+declare variable secured_balance d_currency; /* Баланс залоговых займов клиента */
+declare variable unsecured_balance d_currency; /* Баланс беззалоговых займов клиента */
+declare variable l1_limit d_currency; /* Лимит Л1 из документа */
+declare variable l2_limit d_currency; /* Лимит Л2 из документа */
+declare variable amount_max d_currency;
+declare variable available_limit d_currency;
+declare variable client_point d_integer;
+declare variable pr_id d_integer;
+declare variable temp_limit d_currency;
+begin
+  -- RFCRU-5521
+  cli_balance = 0;
+  secured_balance = 0;
+  unsecured_balance = 0;
+  l1_limit = 0;
+  l2_limit = 0;
+  amount_max = 0;
+  available_limit = 0;
+  client_point = 0;
+  pr_id = null;
+  res_text = &#x27;&#x27;;
+
+  select coalesce(sum(oks.oks_balance), 0),                             -- Общий баланс
+         coalesce(sum(iif(p.pr_is_secured = 1, oks.oks_balance, 0)), 0) -- Только залоговый баланс
+  from knclient kc
+  join oksummary oks on kc.kc_from_k_id = oks.oks_from_k_id
+  left join miniapp ma on kc.kc_from_c_id = ma.ma_id
+  left join product p on ma.ma_from_pr_id = p.pr_id
+  where kc.kc_from_c_id = :c_id
+    and kc.kc_amount_approved &gt; 0
+    and oks.oks_balance &gt; 0
+    and oks.oks_close_state = 0
+    and current_date between oks.oks_date_begin and oks.oks_date_end
+  into :cli_balance, :secured_balance;
+
+  -- Вычисляем БЕЗЗАЛОГОВЫЙ баланс клиента
+  unsecured_balance = cli_balance - secured_balance;
+
+  -- Получаем баллы клиента
+  client_point = f_point(:c_id, current_date, 0);
+
+  l1_limit = case
+    when :client_point between 0 and 6   then 100000
+    when :client_point between 7 and 11  then 150000
+    when :client_point between 12 and 17 then 200000
+    when :client_point between 18 and 24 then 250000
+    when :client_point between 25 and 35 then 300000
+    when :client_point between 36 and 45 then 350000
+    when :client_point &gt;= 46             then 450000
+    else 100000
+  end;
+
+  l2_limit = case
+    when :client_point between 0 and 11  then 200000
+    when :client_point between 12 and 17 then 250000
+    when :client_point between 18 and 24 then 300000
+    when :client_point between 25 and 35 then 350000
+    when :client_point between 36 and 45 then 400000
+    when :client_point &gt;= 46             then 500000
+    else 200000
+  end;
+
+  select first 1 ma.ma_from_pr_id
+  from miniapp ma
+  join miniappclient mac on mac.mac_from_ma_id = ma.ma_id
+  where mac.mac_from_c_id = :c_id
+    and mac.mac_amount &gt; 0
+    and ma.ma_is_active = 1
+    and ma.ma_from_pr_id is not null
+  order by ma.ma_date_app desc
+  into :pr_id;
+
+  if (pr_id is not null) then
+  begin
+    begin
+      if (secured_balance &gt; 0) then
+      begin
+        temp_limit = l2_limit - secured_balance;
+        if (l1_limit &lt; temp_limit) then
+          temp_limit = l1_limit;
+
+        available_limit = temp_limit - unsecured_balance;
+      end
+      else
+      begin
+        available_limit = l1_limit - cli_balance;
+      end
+
+      if (available_limit &lt; 0) then
+        available_limit = 0;
+
+    when any do
+      begin
+        available_limit = 0;
+      end
+    end
+  end
+
+  res_text =
+      &#x27;&lt;br&gt;&lt;b&gt;&#x27; ||
+      &#x27;Общий баланс активных займов (ОД): &#x27; || round(:cli_balance) || &#x27; руб.&lt;br&gt;&#x27; ||
+      &#x27;Доступный лимит: &#x27; || round(:available_limit) || &#x27; руб.&#x27; ||
+      &#x27;&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&#x27;;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

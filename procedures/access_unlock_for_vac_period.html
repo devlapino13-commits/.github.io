@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ACCESS_UNLOCK_FOR_VAC_PERIOD — процедура — схема БД</title>
+<meta name="description" content="Процедура ACCESS_UNLOCK_FOR_VAC_PERIOD: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>ACCESS_UNLOCK_FOR_VAC_PERIOD</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE ACCESS_UNLOCK_FOR_VAC_PERIOD
+AS
+declare variable un_id id_type;
+declare variable subject_kind integer;
+declare variable subject_id id_type;
+declare variable pm_id integer;
+declare variable subject_kind_tmp integer;
+declare variable subject_id_tmp id_type;
+declare variable day_begin d_date;
+declare variable c_id d_id;
+begin
+  /*
+    По просьбе Алмаза исключил из автооткрытия доступа:
+    24 - Трудовой отпуск декретницы
+    16 - Декретный отпуск
+    17 - Отпуск по беременности и родам
+    18 - Отпуск без содерж.по уходу за ребенком
+    */
+  for select un.un_id, hrv.hrv_date_begin, hrv.hrv_from_c_id
+      from hr_voctravel hrv
+      inner join username un on un.un_from_c_id = hrv.hrv_from_c_id
+      inner join hr_orders ho on ho.ho_id = hrv.hrv_from_ho_id and
+            ho.ho_order_type in (7, 8, 9, 10, 13)
+      where hrv.hrv_status = 1 and
+            hrv.hrv_day_back = current_date
+      into :un_id, :day_begin, :c_id
+
+  do
+  begin
+    -- Проверяю, не было ли приказа на увольнение за период отпуска.
+    if (exists(select *
+               from hr_orders ho
+               inner join hr_pstatus hp on hp.ps_from_ho_id = ho.ho_id and
+                     hp.ps_from_c_id = :c_id
+               where ho.ho_order_type = 6 and
+                     ho.ho_date between :day_begin and current_date and
+                     ho.ho_status = 1) or (exists(select *
+                                                  from hr_orders ho
+                                                  inner join hr_voctravel hrv on ho.ho_id = hrv.hrv_from_ho_id and
+                                                        hrv.hrv_date_begin &lt;= :day_begin and
+                                                        hrv.hrv_date_end_fact &gt;= current_date and
+                                                        hrv.hrv_from_c_id = :c_id
+                                                  where ho.ho_order_type in (16, 17, 18, 24) and
+                                                        ho.ho_status = 1)) or (exists(select *
+                                                                                      from hr_pstatus ps
+                                                                                      where ps.ps_date_begin &lt;= (current_date + 1) and
+                                                                                            ps.ps_date_end &gt;= &#x27;31.12.2099&#x27; and
+                                                                                            ps.ps_from_c_id = :c_id and
+                                                                                            ps.ps_is_working = 0 and
+                                                                                            ps.ps_status = 1))) then
+      continue;
+
+    subject_kind_tmp = 0;
+    subject_id_tmp = 0;
+    for select pm.pm_subject_kind, pm.pm_subject_id, pm.pm_id
+        from permissions pm
+        where pm.pm_object_id = :un_id and
+              pm.pm_date_begin &gt;= :day_begin and
+              pm.pm_is_delete = 0
+        order by 1, 2
+        into :subject_kind, :subject_id, :pm_id
+
+    do
+    begin
+
+      update permissions
+      set pm_is_delete = 1
+      where (pm_id = :pm_id);
+
+      if (:subject_kind_tmp = :subject_kind and
+          :subject_id_tmp = :subject_id) then
+        continue;
+      if (:subject_kind_tmp &lt;&gt; :subject_kind) then
+        :subject_kind_tmp = :subject_kind;
+      if (:subject_id_tmp &lt;&gt; :subject_id) then
+        :subject_id_tmp = :subject_id;
+
+      insert into permissions (pm_id, pm_object_kind, pm_object_id, pm_subject_kind, pm_subject_id, pm_date_begin,
+                               pm_date_end, pm_access_kind, pm_is_delete, pm_from_un_id, pm_datetime, pm_delete_un_id,
+                               pm_delete_datetime)
+      values (null, 0, :un_id, :subject_kind, :subject_id, current_date, &#x27;31.12.2999&#x27;, 1, 0, 1000000000000,
+              current_timestamp, null, null);
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

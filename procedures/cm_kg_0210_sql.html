@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_KG_0210_SQL — процедура — схема БД</title>
+<meta name="description" content="Процедура CM_KG_0210_SQL: 3 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_KG_0210_SQL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="duplicated_imei_actions.html"><div class="to">DUPLICATED_IMEI_ACTIONS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_KG_0210_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable KMI_IMEI D_ID;
+declare variable KONTRACT_OBJ_KIND D_INTEGER;
+declare variable EXISTING_KML_ID D_INTEGER;
+declare variable KML_ID D_INTEGER;
+begin
+  -- блок 210 проверяет контракт на этапах: сохранения, проверки на условия;
+  -- утверждения; отправки на кредитный комитет; выдаче займа.
+  --.loan.create_loan.check_preview.loan_approve.send_kk.loan_disb.
+  -- срабатывает только тогда, когда есть другой активный или закрытый контракт с этим imei кодом
+
+  check_kind = &#x27;&#x27;; -- заглушка, не используется
+  un_id = 0; -- заглушка, не используется
+  kontract_obj_kind = f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;);
+
+  for select kmi.kmi_imei, km.kml_id
+      from kontmat km
+      inner join kontmat_imei kmi on kmi.kmi_kml_id = km.kml_id
+      where km.kml_object_kind = :kontract_obj_kind and
+            km.kml_object_id = :k_id and
+            km.kml_status = 1
+      into kmi_imei, kml_id
+  do
+  begin
+    select km.kml_id
+    from kontmat_imei kmi
+    inner join kontmat km on km.kml_id = kmi.kmi_kml_id
+    inner join kontstate ks on ks.ks_from_k_id = km.kml_object_id
+    where km.kml_object_kind = :kontract_obj_kind and
+      km.kml_object_id &lt;&gt; :k_id and -- другие займы
+      km.kml_status = 1 and
+      ks.ks_ol_is_delete = 0 and -- не удаленные
+      ks.ks_state in (1, 2) and  -- только активные и закрытые
+      current_date between ks.ks_date_begin and ks.ks_date_end and  -- добавил RFCKG-4871
+      kmi.kmi_imei = :kmi_imei -- с таким же imei кодом
+    into :existing_kml_id;
+
+    if (:existing_kml_id is not null and :existing_kml_id &lt;&gt; 0) then                  --RFCKG-4854
+    begin
+      if (not exists (select 1
+                   from duplicated_imei di
+                   where di.di_from_k_id = :k_id and
+                     di.di_from_kml_id = :kml_id)) then
+        execute procedure duplicated_imei_actions(:kmi_imei, :k_id, :existing_kml_id, :un_id);
+
+      res_info_text = &#x27;&#x27;;
+      res_error_text = &#x27;Есть другой активный или закрытый контракт с таким же IMEI кодом&#x27;;
+      res_error_is_critical = 1;
+      suspend;
+      leave;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

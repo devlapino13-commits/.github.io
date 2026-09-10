@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_CONTDATA_GET_DATA_TMP — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_CONTDATA_GET_DATA_TMP: 3 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_CONTDATA_GET_DATA_TMP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_contdata_get_data.html"><div class="to">HP_CONTDATA_GET_DATA</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OBJ_KIND</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJ_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DATA_TYPE</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">CONT_VALUE</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CONT_STATUS</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CD_TYPE</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CD_ORDERNO</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_CONTDATA_GET_DATA_TMP(
+    OBJ_KIND VARCHAR(100),
+    OBJ_ID DECIMAL(18,0),
+    DATA_TYPE VARCHAR(100))
+RETURNS (
+    CONT_VALUE VARCHAR(255),
+    CONT_STATUS INTEGER,
+    CD_TYPE VARCHAR(100),
+    CD_ORDERNO INTEGER)
+AS
+declare variable ok_data_main varchar(100);
+declare variable ok_data_add varchar(100);
+declare variable last_data_main varchar(100);
+declare variable last_data_add varchar(100);
+declare variable main_founded integer;
+declare variable cda_is_main d_smallint;
+declare variable cda_status d_smallint;
+begin
+  -- Data_type:         - тип контактных данных
+  -- cell, email и т.д. - из справочника
+  -- all                - все виды (только заполненные)
+  -- Можно задавать через запятую
+
+  -- Если параметр не указан, не возращаем знаение
+  if (coalesce(obj_id, &#x27;&#x27;) = &#x27;&#x27; or
+      obj_id = 0) then
+    exit;
+
+  obj_kind = f_objkind(:obj_kind, &#x27;id&#x27;);
+
+  if (f_get_const(&#x27;new_contdata&#x27;) = 0) then
+  begin
+    if (position(&#x27;cell&#x27;, data_type) &gt; 0 or
+        data_type = &#x27;all&#x27;) then -- сотовый или все существующие контактные данные
+    begin
+      cd_orderno = 0;
+      main_founded = 0;
+      for select coalesce(ok_cell_main, &#x27;&#x27;), coalesce(ok_cell_add, &#x27;&#x27;), coalesce(last_cell_main, &#x27;&#x27;),
+                 coalesce(last_cell_add, &#x27;&#x27;)
+          from continfo
+          where cci_object_kind = :obj_kind and
+                cci_object_id = :obj_id
+          into :ok_data_main, ok_data_add, last_data_main, last_data_add
+      do
+      begin
+        if (ok_data_main &lt;&gt; &#x27;&#x27;) then
+        begin
+          -- Основной верифицированный номер
+          cd_type = &#x27;ContactInfo.cell_main&#x27;;
+          cont_value = ok_data_main;
+          cont_status = 2;
+          suspend;
+          main_founded = 1;
+        end
+
+        if (ok_data_add &lt;&gt; &#x27;&#x27; and
+            ok_data_add &lt;&gt; ok_data_main) then
+        begin
+          -- Дополнительный верифицированный номер
+          if (main_founded = 1) then
+          begin
+            cd_type = &#x27;ContactInfo.cell_add&#x27;;
+            cont_value = ok_data_add;
+            cont_status = 1;
+          end
+          else
+          begin
+            cd_type = &#x27;ContactInfo.cell_main&#x27;;
+            cont_value = ok_data_main;
+            cont_status = 2;
+          end
+          suspend;
+        end
+
+        if (last_data_main &lt;&gt; &#x27;&#x27; and
+            last_data_main &lt;&gt; ok_data_main and
+            last_data_main &lt;&gt; ok_data_add) then
+        begin
+          -- Новый основной номер, не подтвержден
+          cd_type = &#x27;ContactInfo.cell_main&#x27;;
+          cont_value = last_data_main;
+          cont_status = 0;
+          suspend;
+        end
+
+        if (last_data_add &lt;&gt; &#x27;&#x27; and
+            last_data_add &lt;&gt; ok_data_add and
+            last_data_add &lt;&gt; ok_data_main and
+            last_data_add &lt;&gt; last_data_main) then
+        begin
+          -- Новый доп.номер, не подтвержден
+          cd_type = &#x27;ContactInfo.cell_add&#x27;;
+          cont_value = last_data_add;
+          cont_status = 0;
+          suspend;
+        end
+      end
+    end
+
+    if (position(&#x27;email&#x27;, data_type) &gt; 0 or
+        data_type = &#x27;all&#x27;) then -- email или все существующие контактные данные
+    begin
+      cd_orderno = 1;
+      cd_type = &#x27;ContactInfo.email&#x27;;
+      for select coalesce(ok_email, &#x27;&#x27;), coalesce(last_email, &#x27;&#x27;)
+          from continfo
+          where cci_object_kind = :obj_kind and
+                cci_object_id = :obj_id
+          into :ok_data_main, last_data_main
+      do
+      begin
+        if (ok_data_main &lt;&gt; &#x27;&#x27;) then
+        begin
+          -- Основной верифицированный email
+          cont_value = ok_data_main;
+          cont_status = 2;
+          suspend;
+        end
+
+        if (last_data_main &lt;&gt; &#x27;&#x27; and
+            last_data_main &lt;&gt; ok_data_main) then
+        begin
+          -- Новый email, не подтвержден
+          cont_value = last_data_main;
+          cont_status = 0;
+          suspend;
+        end
+      end
+    end
+
+    if (position(&#x27;phone&#x27;, data_type) &gt; 0 or
+        data_type = &#x27;all&#x27;) then -- стационарные или все существующие контактные данные
+    begin
+      cd_orderno = 2;
+      for select coalesce(ok_phone_home, &#x27;&#x27;), coalesce(ok_phone_work, &#x27;&#x27;), coalesce(last_phone_home, &#x27;&#x27;),
+                 coalesce(last_phone_work, &#x27;&#x27;)
+          from continfo
+          where cci_object_kind = :obj_kind and
+                cci_object_id = :obj_id
+          into :ok_data_main, ok_data_add, last_data_main, last_data_add
+      do
+      begin
+        if (ok_data_main &lt;&gt; &#x27;&#x27;) then
+        begin
+          -- Основной домашний номер
+          cd_type = &#x27;ContactInfo.phone_home&#x27;;
+          cont_value = ok_data_main;
+          cont_status = 2;
+          suspend;
+        end
+
+        if (ok_data_add &lt;&gt; &#x27;&#x27; and
+            ok_data_add &lt;&gt; ok_data_main) then
+        begin
+          -- Основном рабочий номер
+          cd_type = &#x27;ContactInfo.phone_work&#x27;;
+          cont_value = ok_data_add;
+          cont_status = 1;
+          suspend;
+        end
+
+        if (last_data_main &lt;&gt; &#x27;&#x27; and
+            last_data_main &lt;&gt; ok_data_main and
+            last_data_main &lt;&gt; ok_data_add) then
+        begin
+          -- Новый основной номер, не подтвержден
+          cd_type = &#x27;ContactInfo.phone_home&#x27;;
+          cont_value = last_data_main;
+          cont_status = 0;
+          suspend;
+        end
+
+        if (last_data_add &lt;&gt; &#x27;&#x27; and
+            last_data_add &lt;&gt; ok_data_add and
+            ok_data_add &lt;&gt; ok_data_main and
+            ok_data_add &lt;&gt; last_data_main) then
+        begin
+          -- Новый доп.номер, не подтвержден
+          cd_type = &#x27;ContactInfo.phone_work&#x27;;
+          cont_value = last_data_add;
+          cont_status = 0;
+          suspend;
+        end
+      end
+    end
+
+    if (position(&#x27;skype&#x27;, data_type) &gt; 0 or
+        data_type = &#x27;all&#x27;) then -- skype или все существующие контактные данные
+    begin
+      cd_orderno = 3;
+      cd_type = &#x27;ContactInfo.skype&#x27;;
+      for select coalesce(ok_skype, &#x27;&#x27;), coalesce(last_skype, &#x27;&#x27;)
+          from continfo
+          where cci_object_kind = :obj_kind and
+                cci_object_id = :obj_id
+          into :ok_data_main, last_data_main
+      do
+      begin
+        if (ok_data_main &lt;&gt; &#x27;&#x27;) then
+        begin
+          -- Основной верифицированный skype
+          cont_value = ok_data_main;
+          cont_status = 2;
+          suspend;
+        end
+
+        if (last_data_main &lt;&gt; &#x27;&#x27; and
+            last_data_main &lt;&gt; ok_data_main) then
+        begin
+          -- Новый skype, не подтвержден
+          cont_value = last_data_main;
+          cont_status = 0;
+          suspend;
+        end
+      end
+    end
+
+    if (position(&#x27;whatsapp&#x27;, data_type) &gt; 0 or
+        data_type = &#x27;all&#x27;) then -- whatsapp или все существующие контактные данные
+    begin
+      cd_orderno = 4;
+      cd_type = &#x27;ContactInfo.whatsapp&#x27;;
+      for select coalesce(ok_whatsapp, &#x27;&#x27;), coalesce(last_whatsapp, &#x27;&#x27;)
+          from continfo
+          where cci_object_kind = :obj_kind and
+                cci_object_id = :obj_id
+          into :ok_data_main, last_data_main
+      do
+      begin
+        if (ok_data_main &lt;&gt; &#x27;&#x27;) then
+        begin
+          -- Основной верифицированный whatsapp
+          cont_value = ok_data_main;
+          cont_status = 2;
+          suspend;
+        end
+
+        if (last_data_main &lt;&gt; &#x27;&#x27; and
+            last_data_main &lt;&gt; ok_data_main) then
+        begin
+          -- Новый whatsapp, не подтвержден
+          cont_value = last_data_main;
+          cont_status = 0;
+          suspend;
+        end
+      end
+    end
+
+    if (position(&#x27;viber&#x27;, data_type) &gt; 0 or
+        data_type = &#x27;all&#x27;) then -- viber или все существующие контактные данные
+    begin
+      cd_orderno = 4;
+      cd_type = &#x27;ContactInfo.viber&#x27;;
+      for select coalesce(ok_viber, &#x27;&#x27;), coalesce(last_viber, &#x27;&#x27;)
+          from continfo
+          where cci_object_kind = :obj_kind and
+                cci_object_id = :obj_id
+          into :ok_data_main, last_data_main
+      do
+      begin
+        if (ok_data_main &lt;&gt; &#x27;&#x27;) then
+        begin
+          -- Основной верифицированный viber
+          cont_value = ok_data_main;
+          cont_status = 2;
+          suspend;
+        end
+
+        if (last_data_main &lt;&gt; &#x27;&#x27; and
+            last_data_main &lt;&gt; ok_data_main) then
+        begin
+          -- Новый viber, не подтвержден
+          cont_value = last_data_main;
+          cont_status = 0;
+          suspend;
+        end
+      end
+    end
+
+    if (position(&#x27;telegram&#x27;, data_type) &gt; 0 or
+        data_type = &#x27;all&#x27;) then -- telegram или все существующие контактные данные
+    begin
+      cd_orderno = 4;
+      cd_type = &#x27;ContactInfo.telegram&#x27;;
+      for select coalesce(ok_telegram, &#x27;&#x27;), coalesce(last_telegram, &#x27;&#x27;)
+          from continfo
+          where cci_object_kind = :obj_kind and
+                cci_object_id = :obj_id
+          into :ok_data_main, last_data_main
+      do
+      begin
+        if (ok_data_main &lt;&gt; &#x27;&#x27;) then
+        begin
+          -- Основной верифицированный telegram
+          cont_value = ok_data_main;
+          cont_status = 2;
+          suspend;
+        end
+
+        if (last_data_main &lt;&gt; &#x27;&#x27; and
+            last_data_main &lt;&gt; ok_data_main) then
+        begin
+          -- Новый telegram, не подтвержден
+          cont_value = last_data_main;
+          cont_status = 0;
+          suspend;
+        end
+      end
+    end
+
+    if (position(&#x27;imo&#x27;, data_type) &gt; 0 or
+        data_type = &#x27;all&#x27;) then -- imo или все существующие контактные данные
+    begin
+      cd_orderno = 4;
+      cd_type = &#x27;ContactInfo.imo&#x27;;
+      for select coalesce(ok_imo, &#x27;&#x27;), coalesce(last_imo, &#x27;&#x27;)
+          from continfo
+          where cci_object_kind = :obj_kind and
+                cci_object_id = :obj_id
+          into :ok_data_main, last_data_main
+      do
+      begin
+        if (ok_data_main &lt;&gt; &#x27;&#x27;) then
+        begin
+          -- Основной верифицированный imo
+          cont_value = ok_data_main;
+          cont_status = 2;
+          suspend;
+        end
+
+        if (last_data_main &lt;&gt; &#x27;&#x27; and
+            last_data_main &lt;&gt; ok_data_main) then
+        begin
+          -- Новый imo, не подтвержден
+          cont_value = last_data_main;
+          cont_status = 0;
+          suspend;
+        end
+      end
+    end
+
+    if (position(&#x27;OK&#x27;, data_type) &gt; 0 or
+        data_type = &#x27;all&#x27;) then -- OK или все существующие контактные данные
+    begin
+      cd_orderno = 4;
+      cd_type = &#x27;ContactInfo.OK&#x27;;
+      for select coalesce(ok_ok, &#x27;&#x27;), coalesce(last_ok, &#x27;&#x27;)
+          from continfo
+          where cci_object_kind = :obj_kind and
+                cci_object_id = :obj_id
+          into :ok_data_main, last_data_main
+      do
+      begin
+        if (ok_data_main &lt;&gt; &#x27;&#x27;) then
+        begin
+          -- Основной верифицированный OK
+          cont_value = ok_data_main;
+          cont_status = 2;
+          suspend;
+        end
+
+        if (last_data_main &lt;&gt; &#x27;&#x27; and
+            last_data_main &lt;&gt; ok_data_main) then
+        begin
+          -- Новый OK, не подтвержден
+          cont_value = last_data_main;
+          cont_status = 0;
+          suspend;
+        end
+      end
+    end
+
+    if (position(&#x27;facebook&#x27;, data_type) &gt; 0 or
+        data_type = &#x27;all&#x27;) then -- facebook или все существующие контактные данные
+    begin
+      cd_orderno = 4;
+      cd_type = &#x27;ContactInfo.facebook&#x27;;
+      for select coalesce(ok_facebook, &#x27;&#x27;), coalesce(last_facebook, &#x27;&#x27;)
+          from continfo
+          where cci_object_kind = :obj_kind and
+                cci_object_id = :obj_id
+          into :ok_data_main, last_data_main
+      do
+      begin
+        if (ok_data_main &lt;&gt; &#x27;&#x27;) then
+        begin
+          -- Основной верифицированный facebook
+          cont_value = ok_data_main;
+          cont_status = 2;
+          suspend;
+        end
+
+        if (last_data_main &lt;&gt; &#x27;&#x27; and
+            last_data_main &lt;&gt; ok_data_main) then
+        begin
+          -- Новый facebook, не подтвержден
+          cont_value = last_data_main;
+          cont_status = 0;
+          suspend;
+        end
+      end
+    end
+
+    if (position(&#x27;VK&#x27;, data_type) &gt; 0 or
+        data_type = &#x27;all&#x27;) then -- VK или все существующие контактные данные
+    begin
+      cd_type = &#x27;ContactInfo.VK&#x27;;
+      cd_orderno = 4;
+      for select coalesce(ok_vk, &#x27;&#x27;), coalesce(last_vk, &#x27;&#x27;)
+          from continfo
+          where cci_object_kind = :obj_kind and
+                cci_object_id = :obj_id
+          into :ok_data_main, last_data_main
+      do
+      begin
+        if (ok_data_main &lt;&gt; &#x27;&#x27;) then
+        begin
+          -- Основной верифицированный VK
+          cont_value = ok_data_main;
+          cont_status = 2;
+          suspend;
+        end
+
+        if (last_data_main &lt;&gt; &#x27;&#x27; and
+            last_data_main &lt;&gt; ok_data_main) then
+        begin
+          -- Новый VK, не подтвержден
+          cont_value = last_data_main;
+          cont_status = 0;
+          suspend;
+        end
+      end
+    end
+  end
+  else
+  begin
+    -- новая структура хранения данных
+    cd_orderno = 0;
+    for select f_cont_code(cda_from_clt_id), f_enum(&#x27;cont_kind&#x27;, cda_cont_kind, &#x27;code&#x27;),
+               cda_is_main, cda_status, cda_cont_kind
+        from contdata
+        where cda_from_c_id = :obj_id and
+              cda_is_delete = 0 and
+              (:data_type = &#x27;all&#x27; or
+              position(f_enum(&#x27;cont_kind&#x27;, cda_cont_kind, &#x27;code&#x27;), :data_type) &gt; 0)
+        order by cda_cont_kind, cda_is_main desc, cda_status desc, cda_id desc
+        into cont_value, cd_type, cda_is_main, cda_status, cd_orderno
+    do
+    begin
+      cont_status = cda_status;
+
+      if (cda_status = 1 and
+          cda_is_main = 1) then
+        cont_status = 2;
+
+      if (cd_type = &#x27;cell&#x27;) then
+      begin
+        if (cda_is_main = 1) then
+          cd_type = &#x27;cell_main&#x27;;
+        else
+          cd_type = &#x27;cell_add&#x27;;
+      end
+      cd_type = &#x27;ContactInfo.&#x27; || cd_type;
+
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

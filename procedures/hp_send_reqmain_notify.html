@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_SEND_REQMAIN_NOTIFY — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_SEND_REQMAIN_NOTIFY: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_SEND_REQMAIN_NOTIFY</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_send_message.html"><div class="to">HP_SEND_MESSAGE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_SEND_REQMAIN_NOTIFY
+AS
+declare variable OFFICE_MANAGER_ID D_ID;
+declare variable CASHIER_ID D_ID;
+declare variable REG_ID D_INTEGER;
+declare variable RM_ID D_ID;
+declare variable RM_DATE D_DATE;
+declare variable RM_STATUS D_STR_CODE;
+declare variable RM_NO D_INTEGER;
+declare variable MESSAGE_BODY D_BLOB_TEXT;
+declare variable EMAIL_ADDRESS D_STR_255;
+begin
+    message_body = &#x27;&#x27;;
+
+    for select
+        ps.ps_from_c_id,
+        ps.ps_from_reg_id
+    from hr_pstatus ps
+    where ps.ps_from_jl_id = 225 -- Менеджер офиса
+        and ps.ps_is_working = 1
+        and current_date between ps.ps_date_begin and ps.ps_date_end
+    order by ps.ps_from_reg_id
+    into
+        :office_manager_id,
+        :reg_id
+    do
+    begin
+        cashier_id = 0;
+        message_body = &#x27;&#x27;;
+
+        -- в теле сообщения будут находится только последниии 50 запросов, так как их может быть большое множество
+        -- если сотрудник с ними разберётся, то ему прилетят следующие 50 и так далее пока они не кончатся полностью
+        for select
+            rm.rm_id,
+            rm.rm_date,
+            iif(rm.rm_status = 0,&#x27;в процессе&#x27;, &#x27;согласованно с менеджером&#x27;),
+            rm.rm_no
+        from reqmain rm
+        where rm.rm_from_reg_id = :reg_id
+            and rm.rm_status in (0,5)
+            and extract(month from rm.rm_date) = extract(month from current_date)
+            and extract(year from rm.rm_date) = extract(year from current_date)
+        order by rm.rm_date desc
+        into
+            :rm_id,
+            :rm_date,
+            :rm_status,
+            :rm_no
+        do
+            message_body = blob_append
+            (
+                message_body,
+                &#x27;Запрос:&#x27; || rm_id || &#x27;;     Дата:&#x27; || rm_date || &#x27;;     статус: &#x27; || rm_status || &#x27;;     № заявки: &#x27; || rm_no || &#x27;&lt;br&gt;&#x27;
+            );
+
+        if(message_body = &#x27;&#x27;) then
+            continue;
+
+        -- если МО в отпуске или на больничном, то уведомление получат все кассиры
+        if (exists
+            (
+                select 1
+                from hr_voctravel hrv
+                inner join hr_orders hro on hrv.hrv_from_ho_id = hro.ho_id
+                inner join sa_worktype sawt on hro.ho_order_type = sawt.sawt_id
+                    and sawt.sawt_id &lt;&gt; 20
+                    and sawt.sawt_hours_real &gt;= 0
+                    and (sawt.sawt_base_type in (4, 5) or sawt.sawt_id = 17) -- отпуск, больничный
+                where hrv_from_c_id = :office_manager_id
+                    and hrv_status = 1
+                    and current_date between hrv.hrv_date_begin and hrv.hrv_date_end
+            )) then
+        begin
+            for select ps.ps_from_c_id
+            from hr_pstatus ps
+            where ps.ps_from_jl_id in (7, 36, 195) -- кассиры
+                and ps.ps_from_reg_id = :reg_id
+                and ps.ps_is_working = 1
+                and current_date between ps.ps_date_begin and ps.ps_date_end
+            into :cashier_id
+            do
+            begin
+                email_address = f_cont_info(&#x27;Clients&#x27;, :cashier_id, &#x27;email&#x27;, &#x27;ok&#x27;);
+                execute procedure hp_send_message(&#x27;email&#x27;, :cashier_id, :email_address, &#x27;УВЕДОМЛЕНИЕ О НЕ ИСПОЛНЕННЫХ ЗАПРОСАХ&#x27;, :message_body , &#x27;&#x27;, 1, 1000000000000);
+
+            end
+        end
+        else
+        begin
+            email_address = f_cont_info(&#x27;Clients&#x27;, :office_manager_id, &#x27;email&#x27;, &#x27;ok&#x27;);
+            execute procedure hp_send_message(&#x27;email&#x27;, :office_manager_id, :email_address, &#x27;УВЕДОМЛЕНИЕ О НЕ ИСПОЛНЕННЫХ ЗАПРОСАХ&#x27;, :message_body , &#x27;&#x27;, 1, 1000000000000);
+
+        end
+    end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_DO_ZALOG_ONE_REVALUE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_DO_ZALOG_ONE_REVALUE: 5 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_DO_ZALOG_ONE_REVALUE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">4 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="get_ref_account_knclient.html"><div class="to">GET_REF_ACCOUNT_KNCLIENT</div></a><a class="ref-card" href="hp_do_kn_operbook_memorder.html"><div class="to">HP_DO_KN_OPERBOOK_MEMORDER</div></a><a class="ref-card" href="hp_do_kn_operbook_one_online.html"><div class="to">HP_DO_KN_OPERBOOK_ONE_ONLINE</div></a><a class="ref-card" href="hp_get_kn_client_resident.html"><div class="to">HP_GET_KN_CLIENT_RESIDENT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">KC_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">EXIST_OL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACC_99998</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">SAB_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">TOTAL_DT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">TOTAL_KT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_DO_ZALOG_ONE_REVALUE(
+    KC_ID D_ID,
+    REP_DATE D_DATE,
+    EXIST_OL_ID D_ID,
+    ACC_99998 D_ID,
+    SAB_ID D_ID)
+RETURNS (
+    OL_ID D_ID,
+    TOTAL_DT D_CURRENCY,
+    TOTAL_KT D_CURRENCY)
+AS
+declare variable amount_sum d_currency;
+declare variable acc_dt d_id;
+declare variable acc_kt d_id;
+declare variable acc_id d_id;
+declare variable kob_id d_id;
+declare variable kob_summa d_currency;
+declare variable new_zalog_amount d_currency;
+declare variable k_id d_id;
+declare variable non_resident d_smallint;
+declare variable client_type d_smallint;
+declare variable zap_id d_integer;
+begin
+-- процедура переоценивает по займу залоговую стоимость
+-- список KC_ID займа предоставляет бухгалтерия
+-- После чего этот список KC_ID и новая стоимость залога загружается в таблицу Temp_KC_ID и запускается данная процедура.
+-- Перед заполнением Temp_KC_ID нужно очистить
+
+  total_dt = 0;
+  total_kt = 0;
+
+  if (exist_ol_id is not null) then
+    ol_id = exist_ol_id;
+  else
+  begin
+    select ol_id
+    from operlist ol
+    where ol.ol_date = :rep_date and
+          ol.is_delete = 0 and
+          ol.ol_oper_type = 2 and
+          ol.ol_oper_subtype = 11 and
+          ol.ol_from_reg_id = 1010100 and
+          ol.ol_memo = &#x27;Переоценка залоговой стоимости&#x27;
+    rows 1
+    into ol_id;
+  end
+
+  if (Acc_99998 is null) then
+  begin
+    select acc_id
+    from ref_account, sys_accbalance
+    where acc_from_sab_id = sab_id and
+          sab_full_code = &#x27;Внебаланс.99998&#x27;
+    into Acc_99998;
+  end
+
+  if (sab_id is null) then
+  begin
+    select sab_id
+    from sys_accbalance
+    where sab_full_code = &#x27;Микрозаймы.Внебаланс.Залог&#x27;
+    into :sab_id;
+  end
+
+  for select zap_id, kc_from_k_id, zap_zalog_cost
+  from zalogautoprof, zalogauto, kontract, knclient
+  where zap_date = :rep_date and
+        zap_status = 2 and
+        zap_from_za_id = za_id and
+        za_from_k_id = k_id and
+        kc_from_k_id = k_id and
+        kc_amount_approved &gt; 0 and
+        kc_id = :kc_id
+  into zap_id, k_id, new_zalog_amount
+  do
+  begin
+    acc_id = null;
+    amount_sum = 0;
+
+    select acc_id
+    from ref_account
+    where acc_from_sab_id = :sab_id and
+          acc_object_kind = 8 and
+          acc_object_id = :kc_id
+    into acc_id;
+
+    if (acc_id is null) then
+    begin
+      select non_resident, client_type
+      from hp_get_kn_client_resident(:kc_id, :rep_date)
+      into non_resident, client_type;
+
+      select acc_id
+      from get_ref_account_knclient(&#x27;Микрозаймы&#x27;, &#x27;Залог.ВнеБаланс&#x27;, :kc_id, :non_resident, :client_type, :rep_date)
+      into acc_id;
+    end
+
+    if (acc_id is null) then
+      exception e_default &#x27;Acc_ID not found for KC_ID: &#x27; || kc_id;
+
+    select -kobs_bal_sum
+    from kn_obsummary
+    where kobs_acc_id = :acc_id and
+          kobs_date &lt;= :rep_date
+    order by kobs_acc_id desc, kobs_date desc
+    rows 1
+    into amount_sum;
+
+    kob_summa = abs(amount_sum - new_zalog_amount);
+
+    if (kob_summa = 0) then
+      continue;
+
+    if (new_zalog_amount &gt; amount_sum) then
+    begin
+      acc_dt = acc_99998;
+      acc_kt = acc_id;
+      total_kt = total_kt + kob_summa;
+    end
+    else
+    begin
+      acc_dt = acc_id;
+      acc_kt = acc_99998;
+      total_dt = total_dt + kob_summa;
+    end
+
+    if (ol_id is null) then
+    begin
+      insert into operlist (ol_from_reg_id, ol_oper_type, ol_oper_subtype, ol_date, ol_doc_kind, ol_doc_no,
+                            ol_doc_no_str, ol_memo, ol_parent_id, is_delete, ol_user_id)
+      values (1010100, 2, 11, :rep_date, 9, 0, &#x27;&#x27;, &#x27;Переоценка залоговой стоимости&#x27;,
+              null, 0, 1000000000001)
+      returning ol_id
+      into :ol_id;
+    end
+
+    kob_id = null;
+    select kob_id
+    from hp_do_kn_operbook_memorder(:ol_id, :kc_id, null, null, :kob_summa, 0, 0, 0, &#x27;Переоценка залоговой стоимостипо по займу за балансом&#x27;, :acc_dt, :acc_kt, :rep_date, &#x27;810&#x27;)
+    into :kob_id;
+    if (kob_id is null) then
+      exception e_default &#x27;kob_id is null&#x27;;
+
+    update zalogautoprof
+    set zap_from_ol_id = :ol_id
+    where zap_id = :zap_id;
+
+    if (exists(select * from kontstate
+    where ks_from_k_id = :k_id and
+          ks_state = 2 and
+          ks_ol_is_delete = 0 and
+          ks_date_begin &gt;= :rep_date)) then
+      execute procedure hp_do_kn_operbook_one_online(:k_id, current_date, null, :rep_date - 1);
+
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

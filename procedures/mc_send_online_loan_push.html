@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MC_SEND_ONLINE_LOAN_PUSH — процедура — схема БД</title>
+<meta name="description" content="Процедура MC_SEND_ONLINE_LOAN_PUSH: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>MC_SEND_ONLINE_LOAN_PUSH</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_kibminiapp_last.html"><div class="to">HP_KIBMINIAPP_LAST</div></a><a class="ref-card" href="hp_send_message.html"><div class="to">HP_SEND_MESSAGE</div></a><a class="ref-card" href="mc_send_push.html"><div class="to">MC_SEND_PUSH</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE MC_SEND_ONLINE_LOAN_PUSH
+AS
+declare variable C_ID D_ID;
+declare variable MCL_ID D_INTEGER;
+declare variable SUBJECT D_STR_255;
+declare variable MSG_BODY D_STR_2048;
+declare variable CLIENT_POINTS D_INTEGER;
+declare variable CLIENT_LAST_KIB_DATE_CHECK D_DATETIME;
+declare variable OFFICE_ID D_INTEGER;
+declare variable EMPOLOYEE_ID D_ID;
+begin   
+    if(current_date not in (&#x27;25.07.2024&#x27;, &#x27;28.07.2024&#x27;)) then
+        exit;
+
+    subject =   &#x27;Акция, лучшим клиентам!!!&#x27;;
+    msg_body =  &#x27;Зайди в приложении в &quot;Онлайн кредиты&quot; и получи до 50.000сом прямо сейчас на карту МБулак Элкарт&#x27;;
+
+    for select
+        c_id,
+        mcl_id
+    from mc_send_online_loan_push_tmp
+    into
+        c_id,
+        mcl_id
+    do
+    begin
+        execute procedure mc_send_push(&#x27;mc_login&#x27;, :mcl_id, :subject, :msg_body, 1);
+        
+        -- RFCKG-2721
+        select
+            k.k_fact_disb_lo_id,
+            k.k_fact_disb_reg_id
+        from knclient kc
+        inner join kontstate ks on kc.kc_from_k_id = ks.ks_from_k_id
+            and ks.ks_ol_is_delete = 0
+            and ks.ks_state = 1
+        inner join kontract k on kc.kc_from_k_id = k.k_id
+        where kc.kc_from_c_id = :c_id
+            and kc.kc_amount_approved &gt; 0
+        order by ks.ks_date_begin desc
+        rows 1
+        into
+            empoloyee_id,
+            office_id;
+
+        client_points = f_point(:c_id, current_date, 0);
+        client_last_kib_date_check = (select kbm_datetime from hp_kibminiapp_last(:c_id, null));
+
+        insert into online_loan_push_log (olp_date, olp_datetime, olp_c_id, olp_point_qty, olp_cib_last_check, olp_cli_office_id, olp_from_lo_id)
+        values (current_date,  current_timestamp, :c_id, :client_points, :client_last_kib_date_check, :office_id, :empoloyee_id);
+    end
+
+    -- проверка о том, что процедура отработала
+    execute procedure hp_send_message(&#x27;email&#x27;, 1090101807439, &#x27;d.mihailechko@mbulak.kg&#x27;, &#x27;КМП dmmhlchk&#x27;, &#x27;Пуш уведомления были отправлены&#x27;, &#x27;&#x27;, 1, 1000000000000);
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

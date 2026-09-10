@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_SVZ_PAR — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_SVZ_PAR: 2 входных, 7 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_SVZ_PAR</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">7</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_REGION_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">7 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REG_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OFFICER_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">JL_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">BALANCE_END</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KOL_DISB_AVG</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PAR7_PERCENT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KOL_POS_PAR7</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_SVZ_PAR(
+    REP_REGION_ID INTEGER,
+    REP_DATE_END DATE)
+RETURNS (
+    REG_NAME STR_100,
+    OFFICER_NAME STR_100,
+    JL_NAME D_STR_100,
+    BALANCE_END D_CURRENCY,
+    KOL_DISB_AVG D_CURRENCY,
+    PAR7_PERCENT D_CURRENCY,
+    KOL_POS_PAR7 D_CURRENCY)
+AS
+declare variable oks_region_id d_currency;
+declare variable reg_id_prior d_currency;
+declare variable kc_id_prior id_type;
+declare variable sawt_name str_100;
+declare variable ps_from_c_id id_type;
+declare variable hrv_days d_currency;
+declare variable last_date_prv_month date;
+declare variable reg_unicode d_id;
+declare variable work_days_qty d_currency;
+declare variable svz_kol_act d_currency;
+declare variable kol_disb d_currency;
+declare variable first_date_month d_date;
+declare variable disb_sum d_currency;
+declare variable del_bal_end_7 d_currency;
+declare variable prosroch_par7 d_currency;
+declare variable oks_kc_id d_id;
+begin
+
+  par7_percent = 0;
+  first_date_month = cast(&#x27;01.&#x27; || extract(month from :rep_date_end) || &#x27;.&#x27; || extract(year from :rep_date_end) as date);
+  last_date_prv_month = first_date_month - 1;
+
+  --считаем количество рабочих дней
+  select count(scd_work_hours) work_days_qty
+  from sa_calendays sc
+  where sc.scd_date between :first_date_month and :rep_date_end and
+        scd_work_hours &gt; 0
+  into :work_days_qty;
+
+  reg_id_prior = -1;
+  kc_id_prior = -1;
+
+  for select ps_from_c_id, jl_name, reg_name
+      from jobkind, joblist, hr_pstatus, region_list(:rep_region_id, 1, 3, 1), region
+      where jk_system_code = &#x27;JobSystem.LO_Standart&#x27; and --SVZ
+            jk_id = jl_kind and
+            jl_id = ps_from_jl_id and
+            ps_status = 1 and
+            ps_is_working = 1 and
+            :rep_date_end between ps_date_begin and ps_date_end and
+            ps_from_reg_id = id_list and
+            reg_unicode = id_list
+      into ps_from_c_id, jl_name, reg_name
+  do
+  begin
+  balance_end = 0;
+  del_bal_end_7 = 0;
+    select oks_kc_id, coalesce(sum(oks_balance), 0),
+           coalesce(sum(iif((cast(:rep_date_end as date) - oks_delinq_date) &gt; 7, oks_balance, 0)), 0)
+    from oksummary
+    where :rep_date_end between oks_date_begin and oks_date_end and
+          oks_balance &gt; 0 and
+          oks_close_state = 0 and
+          oks_kc_id = :ps_from_c_id
+    group by oks_kc_id
+    into oks_kc_id, balance_end, del_bal_end_7;
+    --ФИО сотрудника
+    officer_name = null;
+    select count(c_id), c_name_fio
+    from clients
+    where c_id = :ps_from_c_id
+    group by c_name_fio
+    into svz_kol_act, officer_name;
+
+    if (jl_name not in (&#x27;Kredit mütəxəssisi&#x27;, &#x27;Baş kredit mütəxəssisi&#x27;, &#x27;Aparıcı kredit mütəxəssisi&#x27;)) then
+      svz_kol_act = 0;
+
+    sawt_name = null;
+    select sawt_name, hrv_days
+    from hr_voctravel, hr_orders, sa_worktype
+    where hrv_from_ho_id = ho_id and
+          ho_order_type = sawt_id and
+          hrv_from_c_id = :ps_from_c_id and
+          :rep_date_end between hrv_date_begin and hrv_date_end_fact
+    order by hrv_date_begin desc
+    rows 1
+    into sawt_name, hrv_days;
+
+    sawt_name = coalesce(sawt_name, &#x27;  &#x27;);
+    if (hrv_days &gt; 14 and
+        sawt_name in (&#x27;Декретный отпуск&#x27;, &#x27;Отпуск по уходу за ребенком&#x27;, &#x27;Оплачиваемый больнич.отпуск&#x27;, &#x27;Неоплачиваемый больнич.отпуск&#x27;)) then
+      svz_kol_act = 0;
+
+    --Выданные кредиты
+    --Сумма выданных кредитов
+    kol_disb = 0;
+    disb_sum = 0;
+    select count(*), sum(k_amount_approved)
+    from kontstate, kontract
+    where ks_ol_is_delete = 0 and
+          ks_state = 1 and
+          ks_date_begin between :first_date_month and :rep_date_end and
+          ks_kc_id = :ps_from_c_id and
+          ks_from_k_id = k_id
+    into kol_disb, disb_sum;
+    if (disb_sum is null) then
+      disb_sum = 0;
+
+    kol_pos_par7 = 0;
+
+    select count(*)
+    from oksummary oks
+    where :rep_date_end between oks.oks_date_begin and oks.oks_date_end and
+          oks.oks_kc_id = :ps_from_c_id and
+          oks_close_state = 0 and
+          (cast(:rep_date_end as date) - oks.oks_delinq_date) &gt; 7
+    into kol_pos_par7;
+
+    -- Средняя выдача на 1 КС считается как = количество выдач/количество КС/количество рабочих дней, рабочих дней в январе в АЗ включая 28 января – 17.
+    if (svz_kol_act &gt; 0 and
+        work_days_qty &lt;&gt; 0) then
+      kol_disb_avg = round(cast(kol_disb as d_currency) / cast(svz_kol_act as d_currency) / cast(work_days_qty as d_currency), 2);
+    else
+      kol_disb_avg = 0.0;
+
+    if (balance_end &lt;&gt; 0) then
+    begin
+      par7_percent = del_bal_end_7 / balance_end;
+      par7_percent = round((par7_percent * 100), 2);
+    end
+    else
+      par7_percent = 0;
+    if (sawt_name in (&#x27;Декретный отпуск&#x27;, &#x27;Отпуск по уходу за ребенком&#x27;, &#x27;Оплачиваемый больнич.отпуск&#x27;, &#x27;Неоплачиваемый больнич.отпуск&#x27;)) then
+      continue;
+    else
+      suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_EPAY_LOYAL_DO_CHECK — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_EPAY_LOYAL_DO_CHECK: 3 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_EPAY_LOYAL_DO_CHECK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_epay_client_info.html"><div class="to">AAREP_EPAY_CLIENT_INFO</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">AG_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_IS_ERROR</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_EPAY_LOYAL_DO_CHECK(
+    AG_ID D_INTEGER,
+    REP_DATE D_DATE,
+    UN_ID D_ID)
+RETURNS (
+    RES_IS_ERROR D_SMALLINT,
+    RES_TEXT D_STR_255)
+AS
+declare variable c_id d_id;
+declare variable epd_id d_integer;
+declare variable epd_date_end d_date;
+declare variable epd_status d_integer;
+declare variable epd_from_epl_id d_id;
+declare variable epr_id d_integer;
+declare variable client_non_resident d_integer;
+begin
+  res_text = &#x27;&#x27;;
+  res_is_error = 0;
+
+  select epr_id
+  from epay_project
+  where epr_code = &#x27;epay_loyal&#x27;
+  into :epr_id;
+
+  select ag_object_id
+  from agreements
+  where ag_id = :ag_id and
+        ag_status = 1 and
+        :rep_date between ag_date_begin and coalesce(ag_date_end, :rep_date)
+  into c_id;
+
+  if (c_id is null) then
+  begin
+    res_is_error = 1;
+    res_text = &#x27;Не найден клиент с действующим соглашением&#x27;;
+  end
+
+  if (res_text = &#x27;&#x27;) then
+  begin
+    select epd_id, epd_date_end, epd_status, epd_from_epl_id
+    from epay_doc
+    where epd_from_c_id = :c_id and
+          epd_object_kind = f_objkind(&#x27;agreements&#x27;, &#x27;id&#x27;) and
+          epd_object_id = :ag_id and
+          epd_date_end &lt;= :rep_date
+    order by epd_date_end desc, epd_id desc
+    into epd_id, epd_date_end, epd_status, epd_from_epl_id;
+    if (epd_status = 1) then
+    begin
+      if (epd_date_end &gt;= rep_date) then
+      begin
+        res_is_error = 1;
+        res_text = &#x27;Документы уже подтверждены на дату: &#x27; || f_datetostr(epd_date_end);
+      end
+    end
+
+    if (epd_from_epl_id is not null) then
+    begin
+      res_is_error = 1;
+      res_text = &#x27;По данной строке выплата баллов уже произведена&#x27;;
+    end
+  end
+
+  if (res_text = &#x27;&#x27;) then
+  begin
+    select 1 - resident
+    from aarep_epay_client_info(:c_id, :rep_date)
+    into client_non_resident;
+    if (client_non_resident is null) then client_non_resident = 0;
+
+    if (epd_id is not null) then
+    begin
+      update epay_doc
+      set epd_date_end = :rep_date,
+          epd_non_resident = :client_non_resident,
+          epd_status = 1,
+          epd_from_un_id = :un_id
+      where epd_id = :epd_id;
+    end else
+    begin
+      insert into epay_doc (epd_from_epr_id, epd_from_c_id, epd_object_kind, epd_object_id, epd_date_end, epd_amount,
+                            epd_non_resident, epd_status, epd_from_epl_id, epd_memo_id, epd_from_un_id)
+      values (:epr_id, :c_id, f_objkind(&#x27;agreements&#x27;, &#x27;id&#x27;), :ag_id, :rep_date, 0, :client_non_resident, 1, null, 0, :un_id);
+    end
+
+    res_text = &#x27;Данные по документам успешно подтверждены&#x27;;
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$UXEXPRESSION_PARCE — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$UXEXPRESSION_PARCE: 4 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$UXEXPRESSION_PARCE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">EXP_UX_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">EXP_EXPRESSION</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">EXP_IS_SQL</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">EXP_UFR_UUID</div><div class="ptype">CHAR(16)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">NEW_EXPRESSION</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEW_CALC_EXPR</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEW_CHECK_EXPR</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$UXEXPRESSION_PARCE(
+    EXP_UX_UUID D_UUID,
+    EXP_EXPRESSION D_STR_LONG,
+    EXP_IS_SQL D_BOOL,
+    EXP_UFR_UUID D_UUID)
+RETURNS (
+    NEW_EXPRESSION D_STR_LONG,
+    NEW_CALC_EXPR D_STR_LONG,
+    NEW_CHECK_EXPR D_STR_LONG)
+AS
+declare variable us_uuid d_uuid;
+declare variable uf_field_name d_str_code;
+declare variable uf_is_param d_bool;
+declare variable txt d_str_code;
+declare variable uf_domain d_str_code;
+declare variable uf_uuid_code d_str_code;
+declare variable p d_integer;
+begin
+  new_expression = trim(coalesce(exp_expression, &#x27;&#x27;));
+
+  p = position(&#x27; as  &#x27;, new_expression);
+  while (p &gt; 0) do
+  begin
+    new_expression = replace(new_expression, &#x27; as  &#x27;, &#x27; as &#x27;);
+    p = position(&#x27; as  &#x27;, new_expression);
+  end
+  new_expression = replace(new_expression, &#x27; as &#x27;, &#x27; as•&#x27;);
+
+  new_calc_expr = new_expression;
+  new_check_expr = new_expression;
+
+  if (new_expression &lt;&gt; &#x27;&#x27;) then
+  begin
+    select us_uuid
+    from uxp$uxframe_source(:exp_ux_uuid, :exp_ufr_uuid)
+    into us_uuid;
+
+    if (us_uuid is null) then
+      exception e_default &#x27;Source not found for : &#x27; || coalesce(exp_ux_uuid, &#x27;&lt;Null&gt;&#x27;);
+
+    for select &#x27;[&#x27; || uuid_to_char(uf_uuid) || &#x27;]&#x27;, uf_field_name
+    from ux$field
+    where uf_owner = :us_uuid
+    order by char_length(uf_field_name) desc
+    into uf_uuid_code, uf_field_name
+    do
+    begin
+      new_expression = replace(new_expression, uf_field_name, uf_uuid_code);
+      new_expression = replace(new_expression, &#x27;•&#x27;||uf_uuid_code, &#x27;•&#x27;||uf_field_name);
+    end
+
+    for select &#x27;[&#x27; || uuid_to_char(uf_uuid) || &#x27;]&#x27;, uf_is_param
+    from ux$field
+    where uf_owner = :us_uuid
+    order by char_length(uf_field_name) desc
+    into uf_field_name, uf_is_param
+    do
+    begin
+      if (uf_is_param = 1) then
+      begin
+        txt = &#x27;old.&#x27; || uf_field_name;
+        if (position(txt, new_expression) &gt; 0) then
+          new_expression = replace(new_expression, txt, &#x27;:&#x27; || uf_field_name);
+
+        txt = &#x27;new.&#x27; || uf_field_name;
+        if (position(txt, new_expression) &gt; 0) then
+          new_expression = replace(new_expression, txt, &#x27;:&#x27; || uf_field_name);
+
+        if (exp_is_sql = 0) then
+        begin
+          if (position(uf_field_name, new_expression) &gt; 0 and
+              position(&#x27;new.&#x27; || uf_field_name, new_expression) = 0 and
+              position(&#x27;old.&#x27; || uf_field_name, new_expression) = 0 and
+              position(&#x27;:&#x27; || uf_field_name, new_expression) = 0) then
+            new_expression = replace(new_expression, uf_field_name, &#x27;:&#x27; || uf_field_name);
+        end
+      end else
+      begin
+        if (position(&#x27;:&#x27; || uf_field_name, new_expression) &gt; 0) then
+          new_expression = replace(new_expression, &#x27;:&#x27; || uf_field_name, &#x27;new.&#x27; || uf_field_name);
+
+        if (exp_is_sql = 0) then
+        begin
+          if (position(uf_field_name, new_expression) &gt; 0 and
+              position(&#x27;new.&#x27; || uf_field_name, new_expression) = 0 and
+              position(&#x27;old.&#x27; || uf_field_name, new_expression) = 0 and
+              position(&#x27;:&#x27; || uf_field_name, new_expression) = 0) then
+            new_expression = replace(new_expression, uf_field_name, &#x27;new.&#x27; || uf_field_name);
+        end
+      end
+    end
+
+    new_calc_expr = new_expression;
+    new_check_expr = new_expression;
+
+    for select &#x27;[&#x27; || uuid_to_char(uf_uuid) || &#x27;]&#x27;, uf_is_param, trim(iif(:exp_is_sql = 1, uf_domain, uf_data_type))
+    from ux$field
+    where uf_owner = :us_uuid
+    order by char_length(uf_field_name) desc
+    into uf_field_name, uf_is_param, uf_domain
+    do
+    begin
+      txt = &#x27;old.&#x27; || uf_field_name;
+      if (position(txt, new_expression) &gt; 0) then
+      begin
+        new_calc_expr = replace(new_calc_expr, txt, &#x27;:old$&#x27; || uf_field_name);
+        new_check_expr = replace(new_check_expr, txt, &#x27;:&#x27; || uf_field_name);
+      end
+
+      txt = &#x27;new.&#x27; || uf_field_name;
+      if (position(txt, new_expression) &gt; 0) then
+      begin
+        new_calc_expr = replace(new_calc_expr, txt, &#x27;:new$&#x27; || uf_field_name);
+        new_check_expr = replace(new_check_expr, txt, &#x27;:&#x27; || uf_field_name);
+      end
+
+      new_check_expr = replace(new_check_expr, &#x27;:&#x27; || uf_field_name, &#x27;cast(:&#x27; || uf_field_name || &#x27; as &#x27; || uf_domain || &#x27;)&#x27;);
+    end
+
+    for select &#x27;[&#x27; || uuid_to_char(uf_uuid) || &#x27;]&#x27;, uf_field_name
+    from ux$field
+    where uf_owner = :us_uuid
+    order by char_length(uf_field_name) desc
+    into uf_uuid_code, uf_field_name
+    do
+    begin
+      new_expression = replace(new_expression, uf_uuid_code, uf_field_name);
+      new_calc_expr = replace(new_calc_expr, uf_uuid_code, uf_field_name);
+      new_check_expr = replace(new_check_expr, uf_uuid_code, uf_field_name);
+    end
+
+    if (not(new_check_expr starting &#x27;select &#x27;)) then
+    begin
+      new_check_expr = &#x27;select &#x27; || new_check_expr;
+
+      if (exp_is_sql = 1) then
+        new_check_expr = new_check_expr || &#x27; from rdb$database&#x27;;
+      else
+        new_check_expr = new_check_expr || &#x27; from MemoryTable&#x27;;
+    end
+  end
+
+  new_expression = replace(new_expression, &#x27; as•&#x27;, &#x27; as &#x27;);
+  new_check_expr = replace(new_check_expr, &#x27; as•&#x27;, &#x27; as &#x27;);
+  new_calc_expr = replace(new_calc_expr, &#x27; as•&#x27;, &#x27; as &#x27;);
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

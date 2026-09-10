@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FSROBOT_MAILING_KNAKTLIST_OK — процедура — схема БД</title>
+<meta name="description" content="Процедура FSROBOT_MAILING_KNAKTLIST_OK: 3 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FSROBOT_MAILING_KNAKTLIST_OK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_contdata_get_cell_main.html"><div class="to">HP_CONTDATA_GET_CELL_MAIN</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_PARAMS</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_EMAIL</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">USER_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_SUBJECT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_BODY</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_MAILLIST</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FSROBOT_MAILING_KNAKTLIST_OK(
+    REP_PARAMS VARCHAR(255),
+    REP_EMAIL VARCHAR(255),
+    USER_FIO VARCHAR(100))
+RETURNS (
+    RES_SUBJECT VARCHAR(255),
+    RES_BODY BLOB SUB_TYPE TEXT SEGMENT SIZE 80,
+    RES_MAILLIST VARCHAR(255),
+    RES_C_ID DECIMAL(18,0))
+AS
+declare variable kal_new_kf_officer id_type;
+declare variable kal_new_kf_name str_100;
+declare variable kal_date date;
+declare variable kal_prior_lo_id id_type;
+declare variable k_id id_type;
+declare variable kal_date_str str_100;
+declare variable new_officer_fio_full str_100;
+declare variable prior_officer_fio_full str_100;
+declare variable kc_closed_ol_id id_type;
+declare variable fname str_100;
+declare variable lname str_100;
+declare variable kk integer;
+declare variable firstname str_100;
+declare variable lastname str_100;
+declare variable new_officer_fio_short str_100;
+declare variable prior_officer_fio_short str_100;
+declare variable c_cell_no str_100;
+declare variable counter smallint;
+declare variable cell_no str_20;
+begin
+-- Процедура вызывается из FSROBOT_ON_MAILING
+-- Процедура готовит список уведомлений для отправки роботом по почте или sms
+-- REP_COMMAND_KIND. Настройки сообщения хранятся в таблице RefData:
+-- справочник NotifyMail || &#x27;.&#x27; || Rep_Command_Kind - строка настроек email
+-- справочник NotifySMS  || &#x27;.&#x27; || Rep_Command_Kind - строка настроек SMS
+
+-- RefData.RD_Memo    - Список получателей
+-- RefData.RD_Tag     - Срок жизни сообщения
+-- RefData.RD_STR_ID  - Название хранимой процедуры, которая готовит текст сообщения
+
+-- Rep_Params - входящий параметры в зависимости от команды
+-- Rep_UN_ID  - пользователь
+
+-- СМС при передачи группы
+  if (user_fio is null) then
+    user_fio = &#x27;&#x27;;
+  res_maillist = :rep_email;
+
+  counter = 0;
+
+  for select kal.kal_new_kf_officer, kal.kal_new_kf_name, kal.kal_date, kal.kal_prior_lo_id, kont.k_id
+      from knaktlist kal
+      inner join kontract kont on kal.kal_from_kf_id = kont.k_from_kf_id
+      inner join kontstate ks on kont.k_id = ks.ks_from_k_id
+      where kal.is_delete = 0 and
+            kal.kal_from_ka_id = :rep_params and
+            current_date between kal.kal_date and kal.kal_date_end and
+            current_date between ks.ks_date_begin and ks.ks_date_end and
+            ks.ks_state = 1 -- только активные контракты
+            and
+            ks.ks_ol_is_delete = 0
+      into :kal_new_kf_officer, :kal_new_kf_name, :kal_date, :kal_prior_lo_id, :k_id
+  do
+  begin
+    if (kal_new_kf_officer &lt;&gt; kal_prior_lo_id) then
+    begin
+      if (counter = 0) then
+      begin
+        counter = 1;
+        kal_date_str = right(&#x27;0&#x27; || extract(day from kal_date), 2) || &#x27;.&#x27; || right(&#x27;0&#x27; || extract(month from kal_date), 2) || &#x27;.&#x27; || extract(year from kal_date);
+
+------- КС, которому передали группу ------------- &gt;&gt;
+        select cl.c_name_fio
+        from clients cl
+        where cl.c_id = :kal_new_kf_officer
+        into :new_officer_fio_full;
+
+        cell_no = null;
+        select cont_value
+        from hp_contdata_get_cell_main(0, :kal_new_kf_officer)
+        into :cell_no;
+
+        fname = &#x27;&#x27;;
+        lname = &#x27;&#x27;;
+        kk = position(&#x27; &#x27;, :new_officer_fio_full) - 1;
+        if (kk &gt; 0) then
+        begin
+          lname = substring(:new_officer_fio_full from 1 for kk);
+          new_officer_fio_full = substring(:new_officer_fio_full from kk + 2 for 255);
+          kk = position(&#x27; &#x27;, new_officer_fio_full) - 1;
+          if (kk &gt; 0) then
+          begin
+            fname = substring(:new_officer_fio_full from 1 for kk);
+            new_officer_fio_full = substring(:new_officer_fio_full from kk + 2 for 255);
+          end
+          else
+            fname = :new_officer_fio_full;
+        end
+        firstname = trim(fname);
+        lastname = trim(lname);
+
+--if (character_length(firstname)&gt;1) then firstname = substring(firstname from 1 for 1)||&#x27;.&#x27;;
+        new_officer_fio_short = coalesce(lastname || &#x27; &#x27; || firstname, &#x27;&#x27;);
+--------- &lt;&lt;
+
+------- КС, от которого передали группу  ------------- &gt;&gt;
+        select cl.c_name_fio
+        from clients cl
+        where cl.c_id = :kal_prior_lo_id
+        into :prior_officer_fio_full;
+
+        fname = &#x27;&#x27;;
+        lname = &#x27;&#x27;;
+        kk = position(&#x27; &#x27;, :prior_officer_fio_full) - 1;
+        if (kk &gt; 0) then
+        begin
+          lname = substring(:prior_officer_fio_full from 1 for kk);
+          prior_officer_fio_full = substring(:prior_officer_fio_full from kk + 2 for 255);
+          kk = position(&#x27; &#x27;, prior_officer_fio_full) - 1;
+          if (kk &gt; 0) then
+          begin
+            fname = substring(:prior_officer_fio_full from 1 for kk);
+            prior_officer_fio_full = substring(:prior_officer_fio_full from kk + 2 for 255);
+          end
+          else
+            fname = :prior_officer_fio_full;
+        end
+        firstname = trim(fname);
+        lastname = trim(lname);
+
+--if (character_length(firstname)&gt;1) then firstname = substring(firstname from 1 for 1)||&#x27;.&#x27;;
+        prior_officer_fio_short = coalesce(lastname || &#x27; &#x27; || firstname, &#x27;&#x27;);
+--------  &lt;&lt;
+
+-- Первый СМС, о транзакции
+        res_body = &#x27;&#x27;;
+        res_subject = &#x27;Передача группы другому КС&#x27;;
+        res_body = &#x27;C&#x27; || kal_date_str || &#x27;г.Кредитный Служащий &#x27; || prior_officer_fio_short || &#x27; не работает.Ваш новый Кред.Служ. &#x27; || new_officer_fio_short || &#x27;,&#x27; || cell_no;
+      end
+
+-- вытаскиваю всех участников группы
+      for select c_id,
+                 (select cont_value
+                  from hp_contdata_get_cell_main(0, cl.c_id)), iif(kncl.kc_closed_ol_id is null, null,
+                 (select ol.ol_id
+                  from operlist ol
+                  where ol.ol_id = kncl.kc_closed_ol_id and
+                        ol.is_delete = 0))
+          from knclient kncl, clients cl
+          where kncl.kc_from_k_id = :k_id and
+                cl.c_id = kncl.kc_from_c_id and
+                kncl.kc_amount_approved &gt; 0
+          into :res_c_id, :c_cell_no, :kc_closed_ol_id
+      do
+      begin
+        if (kc_closed_ol_id is null and
+            c_cell_no &lt;&gt; &#x27;&#x27;) then
+        begin
+          res_maillist = :c_cell_no;
+          suspend;
+        end
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

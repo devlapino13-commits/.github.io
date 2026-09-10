@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EDOC_LOAN_APP_BLACKLIST_CHECK — процедура — схема БД</title>
+<meta name="description" content="Процедура EDOC_LOAN_APP_BLACKLIST_CHECK: 1 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>EDOC_LOAN_APP_BLACKLIST_CHECK</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_blacklist_search.html"><div class="to">HP_BLACKLIST_SEARCH</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_edoc_ins_loan_application.html"><div class="to">HP_EDOC_INS_LOAN_APPLICATION</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE EDOC_LOAN_APP_BLACKLIST_CHECK(
+    C_ID D_ID)
+RETURNS (
+    RES_ERROR_TEXT D_STR_255)
+AS
+declare variable par_c_fio d_str_100;
+declare variable par_c_birth_date d_date;
+declare variable par_c_pass_no d_str_20;
+declare variable par_c_inn d_str_20;
+declare variable par_c_cell_no d_str_20;
+declare variable m_date_begin d_date;
+declare variable m_date_end d_date;
+begin
+    if (c_id in (1010101181000, 1010100491679, 1010100758675, 1010100206410, 1010101299224)) then exit;
+    -- RFCRU-3451, RFCRU-5104
+   res_error_text = &#x27;&#x27;;
+
+   select c_name_fio,
+          c_birth_date,
+          coalesce(c_pass_no, &#x27;&#x27;),
+          coalesce(c_inn, &#x27;&#x27;),
+          f_cont_info(&#x27;clients&#x27;, :c_id, &#x27;cell_main&#x27;, &#x27;ok&#x27;)
+   from clients cl
+   where cl.c_id = :c_id
+   into par_c_fio,
+        par_c_birth_date,
+        par_c_pass_no,
+        par_c_inn,
+        par_c_cell_no;
+
+   select coalesce(left(c_comment || &#x27;, &#x27; || bl_comment, 255), &#x27;&#x27;)
+   from hp_blacklist_search(:c_id, :par_c_fio, :par_c_birth_date, :par_c_pass_no, :par_c_inn, :par_c_cell_no, 1, 0, 0)
+   where c_comment_id = 1 rows 1
+   into :res_error_text;
+
+   if (res_error_text &lt;&gt; &#x27;&#x27;) then
+   begin
+        res_error_text = &#x27;Клиент в стоп-листе, сначала выведите его из стоп-листа&#x27;;
+   end
+   else
+   begin
+      select coalesce(left(c_comment || &#x27;, &#x27; || bl_comment, 255), &#x27;&#x27;),
+             coalesce(m_date_begin, &#x27;01.01.1900&#x27;),
+             coalesce(m_date_end, &#x27;31.12.2999&#x27;)
+      from hp_blacklist_search(:c_id, :par_c_fio, :par_c_birth_date, :par_c_pass_no, :par_c_inn, :par_c_cell_no, 0, 1, 0)
+      where c_comment_id = 1 rows 1
+      into res_error_text,
+           m_date_begin,
+           m_date_end;
+
+      if ((res_error_text &lt;&gt; &#x27;&#x27;) and (current_date between m_date_begin and m_date_end)) then
+        res_error_text = &#x27;Клиент в отказниках, сначала выведите его из отказников&#x27;;
+   end
+
+   suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

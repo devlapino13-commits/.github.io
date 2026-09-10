@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_PANTERA_TRANSFER_INSERT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_PANTERA_TRANSFER_INSERT: 4 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_PANTERA_TRANSFER_INSERT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">3</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_make_zad_list.html"><div class="to">AAREP_MAKE_ZAD_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="okt_pantera_make_call.html"><div class="to">OKT_PANTERA_MAKE_CALL</div></a><a class="ref-card" href="okt_pantera_to_command_transfer.html"><div class="to">OKT_PANTERA_TO_COMMAND_TRANSFER</div></a><a class="ref-card" href="okt_sirena_make_call.html"><div class="to">OKT_SIRENA_MAKE_CALL</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">TRANSFER_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PANT_ID_FROM</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PANT_ID_TO</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">TRANSFER_REASON_CODE</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_PANTERA_TRANSFER_INSERT(
+    TRANSFER_DATE DATE,
+    PANT_ID_FROM ID_TYPE,
+    PANT_ID_TO ID_TYPE,
+    TRANSFER_REASON_CODE STR_100)
+AS
+declare variable delinq_days integer;
+declare variable k_id id_type;
+declare variable transfer_reason integer;
+declare variable delinq_os curr_type;
+declare variable delinq_perc curr_type;
+declare variable delinq_fine curr_type;
+declare variable zad_os_total curr_type;
+declare variable zad_perc_total curr_type;
+declare variable sh_date date;
+declare variable zad_os curr_type;
+declare variable sh_calc_perc curr_type;
+declare variable sh_calc_fine curr_type;
+declare variable pt_id d_id;
+declare variable close_state d_smallint;
+declare variable delinq_date d_date;
+declare variable out_pcm_id d_integer;
+declare variable input_pcm_id d_integer;
+declare variable db_id d_integer;
+begin
+  /*  igsuev
+    Процедура предназаначена для фиксирвоания передач, блокировок, разблокировок групп по проектам КЦ
+    (Сирена, Пантера и аналогичным им проектам)
+
+    таблица PANTERA_TRANSFER 
+    */
+
+  db_id = f_get_db_id();
+  if (coalesce(transfer_reason_code, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;) then
+    transfer_reason = f_get_rd_id(:transfer_reason_code);
+
+  if (pant_id_from is not null) then
+  begin
+    select pantk.pant_from_k_id
+    from pantera_kontracts pantk
+    where pantk.pant_id = :pant_id_from
+    into :k_id;
+  end
+  else
+  begin
+    select pantk.pant_from_k_id
+    from pantera_kontracts pantk
+    where pantk.pant_id = :pant_id_to
+    into :k_id;
+  end
+
+  delinq_days = null;
+
+  select :transfer_date - oks.oks_delinq_date,
+         oks.oks_close_state
+  from oksummary oks
+  where :transfer_date between oks.oks_date_begin and oks.oks_date_end and
+        oks.oks_from_k_id = :k_id
+  into :delinq_days,
+       :close_state;
+
+  if (close_state = 1) then
+  begin
+    delinq_date = null;
+
+    select oks_delinq_date
+    from oksummary
+    where oks_from_k_id = :k_id and
+          oks_delinq_date &lt; &#x27;31.12.9999&#x27;
+    order by oks_date_begin desc
+    rows 1
+    into delinq_date;
+
+    if (delinq_date is not null) then
+      delinq_days = :transfer_date - delinq_date;
+  end
+
+  delinq_days = coalesce(delinq_days, 0);
+  if (delinq_days &lt; 0) then
+    delinq_days = 0;
+
+  delinq_os = 0;
+  delinq_perc = 0;
+  delinq_fine = 0;
+
+  zad_os_total = 0;
+  zad_perc_total = 0;
+
+  for select sh_date, zad_os, sh_calc_perc, sh_calc_fine
+      from aarep_make_zad_list(:k_id, :transfer_date, 1)
+      into :sh_date, :zad_os, :sh_calc_perc, :sh_calc_fine
+  do
+  begin
+    if (coalesce(sh_date, &#x27;01.01.1900&#x27;) &lt; transfer_date) then -- просрочка
+    begin
+      delinq_os = delinq_os + zad_os;
+      delinq_perc = delinq_perc + sh_calc_perc;
+      delinq_fine = delinq_fine + sh_calc_fine;
+    end
+
+    -- общая задолжность по кредиту
+    zad_os_total = zad_os_total + zad_os;
+    zad_perc_total = zad_perc_total + sh_calc_perc;
+  end
+
+  if (db_id in (39801, 41701)) then
+  begin
+    if (f_tmp_const(&#x27;kg_make_zad_list_okf_show&#x27;) = 0) then
+    begin
+        for select coalesce(sum(okf.oko_os + okf.oko_sh_os), 0),
+                   coalesce(sum(okf.oko_perc + okf.oko_sh_perc), 0),
+                   coalesce(sum(okf.oko_other + okf.oko_sh_other), 0)
+        from operkroff okf
+        where okf.oko_from_k_id = :k_id
+        and okf.oko_ol_is_active = 1
+        and okf.oko_ol_date &lt;= :transfer_date
+        into :zad_os,
+             :sh_calc_perc,
+             :sh_calc_fine
+        do
+        begin
+            delinq_os = delinq_os + zad_os;
+            delinq_perc = delinq_perc + sh_calc_perc;
+            delinq_fine = delinq_fine + sh_calc_fine;
+
+            zad_os_total = zad_os_total + zad_os;
+            zad_perc_total = zad_perc_total + sh_calc_perc;
+        end
+    end
+  end
+
+  -- фиксирую передачу
+  insert into pantera_transfer (pt_out_pant_id, pt_input_pant_id, pt_delinq_os, pt_delinq_perc, pt_delinq_fine,
+                                pt_zad_os, pt_zad_perc, pt_delinq_days, pt_reason_rd_id, pt_date)
+  values (:pant_id_from, :pant_id_to, :delinq_os, :delinq_perc, :delinq_fine, :zad_os_total, :zad_perc_total,
+          :delinq_days, :transfer_reason, :transfer_date)
+  returning pt_id
+  into :pt_id;
+
+  out_pcm_id = (select pkm.pkc_from_pcm_id from pantera_kontracts_com pkm where pkm.pkc_from_pant_id = :pant_id_from);
+  input_pcm_id = (select pkm.pkc_from_pcm_id from pantera_kontracts_com pkm where pkm.pkc_from_pant_id = :pant_id_to);
+
+  if ((out_pcm_id is not null) or (input_pcm_id is not null)) then
+  begin
+     insert into pantera_transfer_com (ptc_from_pt_id, ptc_out_pcm_id, ptc_input_pcm_id)
+     values (:pt_id, :out_pcm_id, :input_pcm_id);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

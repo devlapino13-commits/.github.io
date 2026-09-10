@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_SEND_EDOC_PACK_RU — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_SEND_EDOC_PACK_RU: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_SEND_EDOC_PACK_RU</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_edoc_ins_loan_agreement.html"><div class="to">HP_EDOC_INS_LOAN_AGREEMENT</div></a><a class="ref-card" href="hp_edoc_ins_loan_pdn.html"><div class="to">HP_EDOC_INS_LOAN_PDN</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_edoc_after_sign_action.html"><div class="to">HP_EDOC_AFTER_SIGN_ACTION</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_SEND_EDOC_PACK_RU(
+    K_ID D_ID,
+    KIND D_STR_CODE)
+AS
+declare variable un_id d_id;
+declare variable res_text d_str_255;
+declare variable db_id d_integer;
+declare variable k_status d_integer;
+declare variable ks_state d_integer;
+declare variable edoc_status d_str_255;
+declare variable pr_code d_str_100;
+declare variable sh_date d_date;
+declare variable k_disb_date d_date;
+begin
+  --RFCRU-2184
+  db_id = f_get_db_id();
+
+  if (db_id &lt;&gt; 81001) then
+    exit;
+
+  un_id = 1000000000000;
+  res_text = &#x27;&#x27;;
+
+  select k.k_status, k.k_disb_date, pr.pr_code
+  from kontract k
+  inner join product pr on k.k_from_pr_id = pr.pr_id
+  where k_id = :k_id
+  into k_status, k_disb_date, pr_code;
+
+  --Получаем дату выдачи из журнала
+  select sh.sh_date
+  from SCHEDULE sh
+  where sh.sh_from_k_id = :k_id
+  order by sh.sh_date
+  rows 1
+  into sh_date;
+
+  if(k_disb_date &lt;&gt; sh_date) then
+    res_text = &#x27;Планируемая дата выдачи у договора не совпадает с журналом&#x27;;
+
+  if (k_status &lt;&gt; 1) then
+    res_text = &#x27;Сначала утвердите договор займа&#x27;;
+
+  if (res_text = &#x27;&#x27;) then
+  begin
+    select ks_state
+    from kontstate
+    where ks_from_k_id = :k_id and
+          ks_ol_is_delete = 0 and
+          ks_date_end &gt;= &#x27;31.12.2999&#x27;
+    into ks_state;
+
+    if (ks_state = 1) then
+      res_text = &#x27;Займ уже действующий&#x27;;
+
+    if (ks_state = 2) then
+      res_text = &#x27;Займ уже закрыт&#x27;;
+  end
+
+
+    --До подписания ПДН
+  if (res_text = &#x27;&#x27; and kind = &#x27;loan_approve&#x27;) then
+  begin
+    -- Проверяем статус ПДН
+    edoc_status = f_edoc_check(&#x27;loan.pdn&#x27;, :k_id, current_date);
+    
+    if (edoc_status containing &#x27;документ не сформирован&#x27; or edoc_status containing &#x27;документ аннулирован&#x27;) then
+    begin
+        --Отправляем ПДН
+        select res_text
+        from hp_edoc_ins_loan_pdn(:k_id, :un_id)
+        into res_text;
+
+         if (res_text = &#x27;ПДН не превышает 50%, уведомлять не нужно&#x27; or pr_code similar to &#x27;%(.selfemployed.|.business.)%&#x27;) then  -- RFCRU-2301 -- Для продукта &quot;Самозанятый&quot; и &quot;Бизнес&quot; ПДН не рассчитывается
+         begin
+             res_text = &#x27;&#x27;;
+             --Отправляем Договор займа
+             select res_text
+             from hp_edoc_ins_loan_agreement(:k_id, :un_id)
+             into res_text;
+         end
+    end
+  end
+
+  --После подписания ПДН
+  if (res_text = &#x27;&#x27; and kind = &#x27;loan.agreement_send&#x27;) then --после подписания ПДН
+  begin
+    -- Отправляем Договор займа
+    res_text = (select res_text
+                from hp_edoc_ins_loan_agreement(:k_id, :un_id));
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

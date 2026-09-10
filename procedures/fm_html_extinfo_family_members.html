@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_HTML_EXTINFO_FAMILY_MEMBERS — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_HTML_EXTINFO_FAMILY_MEMBERS: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_HTML_EXTINFO_FAMILY_MEMBERS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_blob_get.html"><div class="to">FM_BLOB_GET</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_report_html_main.html"><div class="to">FM_REPORT_HTML_MAIN</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_HTML</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_HTML_EXTINFO_FAMILY_MEMBERS(
+    C_ID D_ID,
+    UN_ID D_ID)
+RETURNS (
+    RES_HTML BLOB SUB_TYPE TEXT SEGMENT SIZE 80)
+AS
+declare variable lang d_str_lang;
+declare variable eil_date d_date;
+declare variable bls_id d_id;
+declare variable c_name_fio d_str_255;
+declare variable calc_status d_str_255;
+declare variable json d_blob_text;
+declare variable counter d_integer;
+declare variable json_one d_blob_text;
+declare variable json_count d_integer;
+begin
+  lang = f_get_lang_code(un_id, null);
+
+  select eil.eil_date, eil.eil_from_bls_id
+  from extinfolist eil
+  inner join extinfocfg eic on eil.eil_from_eic_id = eic.eic_id and
+        eic.eic_code = &#x27;family_members&#x27;
+  where eil.eil_from_c_id = :c_id and
+        eil.eil_is_json = 1 and
+        eil.eil_status = 2
+  order by eil.eil_id desc
+  rows 1
+  into eil_date, bls_id;
+
+  c_name_fio = f_lang(lang, &#x27;Клиент не найден&#x27;);
+  if (row_count = 0) then
+  begin
+    calc_status = f_lang(lang, &#x27;Информация о семье не получена&#x27;);
+    suspend;
+    exit;
+  end
+  else
+  begin
+    if (coalesce(bls_id, 0) &lt;= 0) then
+    begin
+      calc_status = f_lang(lang, &#x27;Информация о семье по клиенту отсутствует.&#x27;);
+      suspend;
+      exit;
+    end
+    else
+    begin
+      calc_status = f_format(&#x27;&lt;br&gt;%1: %2&#x27;, f_lang(lang, &#x27;Дата проверки&#x27;), f_datetostr(eil_date));
+    end
+  end
+
+  select c_name_fio
+  from clients
+  where c_id = :c_id
+  into c_name_fio;
+  res_html = (select res_style
+              from fm_html_styles) || f_format(&#x27;&lt;body&gt;&lt;a name=&quot;top&quot;&gt;&lt;/a&gt;&lt;h2&gt;%1&lt;/h2&gt;%2&lt;br&gt;&#x27;, c_name_fio, calc_status);
+
+  select res_blob
+  from fm_blob_get(:bls_id)
+  into :json;
+  if (f_json_str_get_value(:json, &#x27;message&#x27;, &#x27;&#x27;) = &#x27;person has no family&#x27;) then
+  begin
+    res_html = BLOB_APPEND(res_html, &#x27;&lt;br&gt;&#x27; || f_lang(lang, &#x27;Информация о семье не найдена&#x27;) || &#x27;&lt;/br&gt;&#x27;);
+    suspend;
+    exit;
+  end
+  if (f_json_str_get_value(:json, &#x27;message&#x27;, &#x27;&#x27;) = &#x27;person not found&#x27;) then
+  begin
+    res_html = BLOB_APPEND(res_html, &#x27;&lt;br&gt;&#x27; || f_lang(lang, &#x27;Клиент не найден&#x27;) || &#x27;&lt;/br&gt;&#x27;);
+    suspend;
+    exit;
+  end
+
+  if (coalesce(json, &#x27;&#x27;) = &#x27;&#x27; or :json containing &#x27;Информация о клиенте не найдена&#x27;) then
+  begin
+    res_html = BLOB_APPEND(res_html, &#x27;&lt;br&gt;&#x27; || f_lang(lang, &#x27;Информация о клиенте не найдена&#x27;) || &#x27;&lt;/br&gt;&#x27;);
+    suspend;
+    exit;
+  end
+  json_count = f_json_blob_get_count(:json, &#x27;members&#x27;);
+  counter = 0;
+  res_html = BLOB_APPEND(res_html, &#x27;&lt;br&gt;&lt;h1&gt;&#x27; || f_lang(lang, &#x27;Информации о семье&#x27;) || &#x27;&lt;br&gt;&lt;/h1&gt;&#x27;);
+  res_html = BLOB_APPEND(res_html, &#x27;&lt;table width=&quot;100%&quot;&gt;&lt;col width=&quot;60%&quot;&gt;&lt;col width=&quot;40%&quot;&gt;&#x27; || f_html_table_row(&#x27;ФИО&#x27;, &#x27;Степень родства&#x27;, &#x27;&#x27;, &#x27;&#x27;, -1, -1, -1, -1, 2, &#x27;&#x27;));
+  while (json_count &gt; counter) do
+  begin
+    json_one = f_json_blob_get_value(:json, f_format(&#x27;members[%1]&#x27;, :counter), &#x27;&#x27;);
+    res_html = BLOB_APPEND(res_html, f_html_table_row(f_json_str_get_value(:json_one, &#x27;name&#x27;, &#x27;&#x27;), f_json_str_get_value(:json_one, &#x27;role&#x27;, &#x27;&#x27;), &#x27;&#x27;, &#x27;&#x27;, -1, -1, -1, -1, 2, &#x27;&#x27;));
+    counter = counter + 1;
+  end
+  res_html = BLOB_APPEND(res_html, &#x27;&lt;/table&gt;&#x27;);
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

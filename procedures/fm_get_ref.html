@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM_GET_REF — процедура — схема БД</title>
+<meta name="description" content="Процедура FM_GET_REF: 1 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FM_GET_REF</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">3</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_docrecog_field_extra.html"><div class="to">FM_DOCRECOG_FIELD_EXTRA</div></a><a class="ref-card" href="fm_report_cmd_mru.html"><div class="to">FM_REPORT_CMD_MRU</div></a><a class="ref-card" href="hp_qr_verify_info_list.html"><div class="to">HP_QR_VERIFY_INFO_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REF_CODE</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RD_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RD_CODE</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RD_NAME</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FM_GET_REF(
+    REF_CODE VARCHAR(255))
+RETURNS (
+    RD_ID INTEGER,
+    RD_CODE VARCHAR(255),
+    RD_NAME VARCHAR(255))
+AS
+declare variable tmp_rd_code varchar(255);
+declare variable db_id integer;
+begin
+
+  db_id = f_get_db_id();
+
+  if (ref_code = &#x27;citizen&#x27;) then
+  begin
+    -- На первом месте страна БД
+    tmp_rd_code = case db_id
+                    when 41701 then &#x27;citizen.kg&#x27;
+                    when 39801 then &#x27;citizen.kz&#x27;
+                    when 94401 then &#x27;citizen.az&#x27;
+                    else &#x27;citizen.ru&#x27;
+                  end;
+
+    for select rd_id, replace(rd_code, &#x27;citizen.&#x27;, &#x27;&#x27;), rd_name
+        from refdata
+        where rd_code = :tmp_rd_code and
+              rd_is_active = 1
+        union all
+        select rd_id, replace(rd_code, &#x27;citizen.&#x27;, &#x27;&#x27;), rd_name
+        from refdata
+        where rd_main_code = &#x27;citizen&#x27; and
+              rd_is_active = 1 and
+              rd_code &lt;&gt; rd_main_code and
+              coalesce(rd_str_id, &#x27;&#x27;) &lt;&gt; &#x27;&#x27; and
+              rd_code &lt;&gt; :tmp_rd_code
+        into :rd_id, :rd_code, :rd_name
+    do
+    begin
+      suspend;
+    end
+    exit;
+  end
+
+  if (ref_code = &#x27;nation&#x27;) then
+  begin
+    for select rd_id, rd_name
+        from refdata
+        where rd_main_code = &#x27;nation&#x27; and
+              rd_is_active = 1 and
+              rd_code &lt;&gt; rd_main_code
+        into :rd_id, :rd_name
+    do
+      suspend;
+    exit;
+  end
+
+  if (ref_code = &#x27;relation&#x27;) then
+  begin
+    rd_id = null;
+    rd_code = null;
+    for select rd_name
+        from refdata
+        where rd_main_code = :ref_code and
+              rd_is_active = 1 and
+              rd_code &lt;&gt; rd_main_code and
+              coalesce(rd_str_id, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;
+        order by rd_orderno
+        into :rd_name
+    do
+    begin
+      suspend;
+    end
+    rd_name = &#x27;Коллега&#x27;;
+    suspend;
+    rd_name = &#x27;Друг&#x27;;
+    suspend;
+    rd_name = &#x27;Знакомый&#x27;;
+    suspend;
+
+    exit;
+  end
+  if (ref_code = &#x27;language_call_center&#x27;) then
+  begin
+
+    rd_code = null;
+    for select rd_id, rd_name
+        from refdata
+        where rd_main_code = &#x27;Language&#x27; and
+              rd_is_active = 1 and
+              rd_code in (&#x27;Language.RU&#x27;, &#x27;Language.UZ&#x27;, &#x27;Language.KG&#x27;, &#x27;Language.TJ&#x27;, &#x27;Language.AZ&#x27;)
+        order by case
+                   when :db_id = 81001 and rd_code = &#x27;Language.RU&#x27; then -999
+                   when :db_id in (39801, 41701) and rd_code = &#x27;Language.KG&#x27; then -999
+                   when :db_id = 94401 and rd_code = &#x27;Language.AZ&#x27; then -999
+                   else rd_orderno
+                 end
+        into :rd_id, :rd_name
+    do
+    begin
+      suspend;
+    end
+    exit;
+  end
+
+  if (ref_code = &#x27;reltype&#x27;) then
+  begin
+    rd_code = &#x27;&#x27;;
+    for select rel_id, rel_name
+        from relationtype
+        where rel_can_select = 1 and
+              char_length(rel_id) = 1
+        into rd_id, rd_name
+    do
+      suspend;
+    exit;
+  end
+
+  if (ref_code = &#x27;qr_reason&#x27;) then
+  begin
+    rd_id = 1;
+    rd_name = &#x27;У клиента кнопочный телефон&#x27;;
+    suspend;
+
+    rd_id = 2;
+    rd_name = &#x27;У клиента не Android телефон&#x27;;
+    suspend;
+
+    rd_id = 3;
+    rd_name = &#x27;Клиент не может установить моб. приложение&#x27;;
+    suspend;
+
+    rd_id = 4;
+    rd_name = &#x27;Клиент не хочет установить моб. приложение&#x27;;
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

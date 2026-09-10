@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_CARD_BALANCES_EMPLOYEE — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_CARD_BALANCES_EMPLOYEE: 3 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_CARD_BALANCES_EMPLOYEE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REG_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ON_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">NUM_CARD</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NUM_PINC</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_CARD_BALANCES_EMPLOYEE(
+    C_ID D_ID NOT NULL,
+    REG_ID D_INTEGER NOT NULL,
+    ON_DATE D_DATE = null)
+RETURNS (
+    NUM_CARD D_INTEGER,
+    NUM_PINC D_INTEGER)
+AS
+declare variable num d_integer;
+declare variable is_card d_bool;
+begin
+  on_date = coalesce(on_date, current_date);
+  if (on_date = current_date) then
+  begin
+    num_card = coalesce((
+      select count(*)
+      from cardlist
+        inner join cardplace
+          on cpl_id = cal_last_cpl_id
+            and cpl_from_reg_id = :reg_id
+            and cpl_from_c_id = :c_id
+            and cpl_is_transfer = 0
+      where cal_status = 1), 0);
+    num_pinc = coalesce((
+      select count(*)
+      from cardlist
+        inner join cardplace
+          on cpl_id = cal_last_pin_cpl_id
+            and cpl_from_reg_id = :reg_id
+            and cpl_from_c_id = :c_id
+            and cpl_is_transfer = 0
+      where cal_status = 1), 0);
+  end else
+  begin
+    for
+      with Tmp as (
+        select
+          cem_is_pincover as is_pincover,
+          max(ol_datetime) as ol_datetime
+        from cardaktmain
+          inner join cardplace
+            on cpl_id = cam_dst_cpl_id
+              and cpl_is_transfer = 0
+          inner join operlist
+            on ol_id = cam_from_ol_id
+              and ol_date &lt;= :on_date
+              and is_delete = 0
+          inner join cardaktrange
+            on car_from_cam_id = cam_id
+          inner join cardlist
+            on cal_card_id between car_first_card_id and car_last_card_id
+              and coalesce(cal_date_issue, :on_date) &gt;= :on_date
+          inner join cardembomain
+            on cem_id = cal_from_cem_id
+        group by cal_card_id, cem_is_pincover)
+
+      select
+        coalesce(count(*), 0),
+        1
+      from cardaktmain
+        inner join cardplace
+          on cpl_id = cam_dst_cpl_id
+            and cpl_from_reg_id = :reg_id
+            and cpl_from_c_id = :c_id
+            and cpl_is_transfer = 0
+        inner join tmp
+          on ol_datetime = cam_ol_datetime
+      union
+      select
+        coalesce(sum(is_pincover), 0),
+        0
+      from cardaktmain
+        inner join cardplace
+          on cpl_id = cam_dst_pin_cpl_id
+            and cpl_from_reg_id = :reg_id
+            and cpl_from_c_id = :c_id
+            and cpl_is_transfer = 0
+        inner join tmp
+          on ol_datetime = cam_ol_datetime
+    into
+      :num,
+      :is_card
+    do
+    begin
+      if (is_card = 1) then num_card = num;
+        else num_pinc = num;
+    end
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

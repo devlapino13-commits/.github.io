@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$UXREPORT_IMPORT_CFG — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$UXREPORT_IMPORT_CFG: 3 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$UXREPORT_IMPORT_CFG</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">IMPORT_KIND</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">IMPORT_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">JSON_DATA</div><div class="ptype">BLOB SUB_TYPE TEXT SEGMENT SIZE 80</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_US_UUID_STR</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_UUID_STR</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$UXREPORT_IMPORT_CFG(
+    IMPORT_KIND D_SMALLINT,
+    IMPORT_ID D_INTEGER,
+    JSON_DATA D_BLOB_TEXT = null)
+RETURNS (
+    RES_US_UUID_STR D_STR_CODE,
+    RES_UUID_STR D_STR_CODE,
+    RES_ERROR_TEXT D_STR_LONG)
+AS
+declare variable rep_ux_uuid d_uuid;
+declare variable uxa_uuid d_uuid;
+declare variable rl_name d_str_100;
+declare variable rl_hint d_str_long;
+declare variable mm_uuid d_uuid;
+declare variable ua_uuid d_uuid;
+declare variable rl_report_kind d_smallint;
+declare variable ufm_uuid d_uuid;
+declare variable us_uuid d_uuid;
+declare variable rl_datetime d_datetime;
+declare variable uxa_fcode d_str_100;
+begin
+  if (coalesce(import_kind, 0) = 0) then
+    exception e_message &#x27;Не указан вариант импорта&#x27;;
+
+  mm_uuid = uxf$mainmenu();
+
+  res_us_uuid_str = &#x27;&#x27;;
+  res_uuid_str = &#x27;&#x27;;
+  res_error_text = &#x27;&#x27;;
+
+  delete from ux$repimport
+  where rim_kind = :import_kind and
+        rim_id = :import_id;
+
+  if (import_kind = 1) then -- Импорт отчета
+  begin
+    select rl_name_rus, rl_hint_rus, rl_report_kind, rl_datetime
+    from reportlist
+    where rl_id = :import_id
+    into rl_name, rl_hint, rl_report_kind, rl_datetime;
+  
+    if (row_count = 0) then
+      res_error_text = f_format(&#x27;Не найден отчет с RL_ID: %1&#x27;, coalesce(import_id, &#x27;&lt;Null&gt;&#x27;));
+    else
+    begin
+      if (rl_report_kind in (1, 2)) then
+      begin
+        select rep_ux_uuid, res_uuid_str, res_error_text
+        from uxp$uxreport_import_grid(:import_id, :json_data)
+        into :rep_ux_uuid, :res_uuid_str, res_error_text;
+      end else
+      if (rl_report_kind in (3, 4)) then -- FastReport, Бух.расчеты
+      begin
+        select rep_ux_uuid, res_uuid_str
+        from uxp$uxreport_import_frx(1, :import_id, :json_data)
+        into :rep_ux_uuid, :res_uuid_str;
+      end else
+        res_error_text = f_format(&#x27;Unknown report kind: %1&#x27;, rl_report_kind);
+     end
+  end else
+  if (import_kind = 2) then -- Импорт бланка
+  begin
+    rl_hint = &#x27;&#x27;;
+    select bln_name
+    from blankname
+    where bln_id = :import_id
+    into rl_name;
+
+    if (row_count = 0) then
+      res_error_text = f_format(&#x27;Не найден бланк № %1&#x27;, coalesce(import_id, &#x27;&lt;Null&gt;&#x27;));
+    else
+    begin
+      select rep_ux_uuid, res_uuid_str, res_datetime
+      from uxp$uxreport_import_frx(2, :import_id, :json_data)
+      into :rep_ux_uuid, :res_uuid_str, rl_datetime;
+    end
+  end
+
+  if (res_error_text = &#x27;&#x27; and rep_ux_uuid is null) then
+    res_error_text = &#x27;Не удалось импортировать&#x27;;
+
+  if (res_error_text &lt;&gt; &#x27;&#x27;) then
+  begin
+    suspend;
+    exit;
+  end
+
+  select uuid_to_char(ux_us_uuid), ufm_uuid
+  from ux$code, ux$form
+  where ux_uuid = :rep_ux_uuid and
+        ufm_ux_uuid = ux_uuid
+  into res_us_uuid_str, ufm_uuid;
+
+  if (ufm_uuid is not null) then
+  begin
+    us_uuid = null;
+
+    select ufr_us_uuid
+    from ux$frame, ux$source
+    where ufr_owner = :ufm_uuid and
+          ufr_us_uuid = us_uuid and
+          coalesce(us_sql, &#x27;&#x27;) = &#x27;&#x27;
+    order by us_is_table desc, ufr_is_mainframe desc
+    rows 1
+    into us_uuid;
+
+    if (us_uuid is not null) then
+    begin
+      update ux$code
+      set ux_us_uuid = :us_uuid
+      where ux_uuid = :rep_ux_uuid;
+    end
+  end
+
+  select uxa_uuid, uxa_fcode
+  from ux$alias
+  where uxa_owner = :rep_ux_uuid
+  into uxa_uuid, uxa_fcode;
+
+  update or insert into ux$action (ua_owner, ua_uxa_uuid, ua_uxa_fcode, ua_name, ua_hint, ua_readonly)
+  values (:mm_uuid, :uxa_uuid, :uxa_fcode, :rl_name, :rl_hint, 1)
+  matching (ua_owner, ua_uxa_fcode)
+  returning ua_uuid
+  into ua_uuid;
+
+  update ux$report
+  set urt_import_kind = :import_kind,
+      urt_import_id = :import_id,
+      urt_import_datetime = :rl_datetime
+  where urt_uuid = :ufm_uuid;
+
+  -- если импортируется отчет, добавляем в Главное меню
+  if (import_kind = 1) then
+  begin
+    update or insert into ux$menulist (uml_ml_id, uml_ua_uuid)
+    values (:import_id, :ua_uuid)
+    matching (uml_ml_id);
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

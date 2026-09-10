@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FIND_US_CLIENTS — процедура — схема БД</title>
+<meta name="description" content="Процедура FIND_US_CLIENTS: 4 входных, 5 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FIND_US_CLIENTS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_find_client_tmp.html"><div class="to">FM_FIND_CLIENT_TMP</div></a><a class="ref-card" href="hp_find_client_status.html"><div class="to">HP_FIND_CLIENT_STATUS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_search_config.html"><div class="to">HP_GET_SEARCH_CONFIG</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">FIND_ID</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FIND_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ADD_PARAMS</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_CODE</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_INFO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_STATUS</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FIND_US_CLIENTS(
+    FIND_ID D_STR_CODE,
+    FIND_TEXT D_STR_255,
+    ADD_PARAMS D_STR_8100,
+    UN_ID DECIMAL(18,0))
+RETURNS (
+    RES_ID TYPE OF D_ID,
+    RES_CODE TYPE OF D_STR_255,
+    RES_TEXT TYPE OF D_STR_255,
+    RES_INFO D_STR_100,
+    C_STATUS D_STR_100)
+AS
+declare variable rows_count_max integer;
+declare variable isfound integer;
+begin
+  rows_count_max = 100; -- Максимальное количество возвращаемых строк
+
+  res_code = &#x27;&#x27;;
+  res_text = &#x27;&#x27;;
+  find_text = coalesce(find_text, &#x27;&#x27;);
+  if (add_params is null) then add_params = &#x27;&#x27;;
+
+  if (coalesce(find_id, &#x27;&#x27;) &lt;&gt; &#x27;&#x27; and find_id &lt;&gt; &#x27;0&#x27;) then
+  begin
+    for select c_id, iif(c_type = 0, f_datetostr(c_birth_date), coalesce(c_inn, &#x27;&#x27;))
+        from clients
+        where c_id = :find_id
+        into res_id, res_info
+    do
+    begin
+      select c_status
+      from hp_find_client_status(:res_id)
+      into :c_status;
+      if (c_status = &#x27;Кредит&#x27;) then c_status = &#x27;Клиент&#x27;;
+
+      res_code = f_objname(&#x27;clients&#x27;, find_id);
+
+      res_text = res_code;
+      if (res_info &lt;&gt; &#x27;&#x27;) then
+        res_text = res_text || &#x27; (&#x27; || res_info || &#x27;)&#x27;;
+      suspend;
+    end
+
+    Exit;
+  end
+
+  isfound = 0;
+  for select distinct fc_id
+      from fm_find_client_tmp(:find_text)
+      rows :rows_count_max
+      into :res_id
+  do
+  begin
+    isfound = isfound + 1;
+    for select iif(c_type = 0, f_datetostr(c_birth_date), coalesce(c_inn, &#x27;&#x27;))
+        from clients
+        where c_id = :res_id
+        into res_info
+    do
+    begin
+      select c_status
+      from hp_find_client_status(:res_id)
+      into :c_status;
+      if (c_status = &#x27;Кредит&#x27;) then c_status = &#x27;Клиент&#x27;;
+
+      res_code = f_objname(&#x27;clients&#x27;, res_id);
+
+      res_text = res_code;
+      if (res_info &lt;&gt; &#x27;&#x27;) then
+        res_text = res_text || &#x27; (&#x27; || res_info || &#x27;)&#x27;;
+      suspend;
+    end
+  end
+  if (isfound &gt; 0) then
+    exit;
+
+  if (find_text &lt;&gt; &#x27;&#x27;) then
+  begin
+    -- Поиск клиентов через fiolist
+    for select distinct c_id, iif(c_type = 0, f_datetostr(c_birth_date), coalesce(c_inn, &#x27;&#x27;))
+        from clients, hp_find_from_namelist(0, 0, :find_text)
+        where c_id = object_id
+--              c_type = 0 -- Берем только физ. лиц
+        order by res_priority, c_name_fio
+        rows :rows_count_max
+        into res_id, res_info
+    do
+    begin
+      select c_status
+      from hp_find_client_status(:res_id)
+      into :c_status;
+      if (c_status = &#x27;Кредит&#x27;) then c_status = &#x27;Клиент&#x27;;
+
+      res_code = f_objname(&#x27;clients&#x27;, res_id);
+
+      res_text = res_code;
+      if (res_info &lt;&gt; &#x27;&#x27;) then
+        res_text = res_text || &#x27; (&#x27; || res_info || &#x27;)&#x27;;
+      suspend;
+    end
+  end
+  else
+  begin
+    -- Если строка поиска пустая, выдаем список клиентов офиса/ов пользователя
+    -- у которых есть заявка, и нет фото
+    for with last_clients
+        as (select cul_from_c_id, max(cul_datetime) as cul_datetime
+            from clientlast
+            where cul_from_un_id = :un_id
+            group by cul_from_c_id
+            order by 2 desc)
+        select c_id, iif(c_type = 0, f_datetostr(c_birth_date), coalesce(c_inn, &#x27;&#x27;))
+        from clients, last_clients
+        where c_id = cul_from_c_id
+        order by cul_datetime desc
+        rows :rows_count_max
+        into res_id, res_info
+    do
+    begin
+      select c_status
+      from hp_find_client_status(:res_id)
+      into :c_status;
+      if (c_status = &#x27;Кредит&#x27;) then c_status = &#x27;Клиент&#x27;;
+
+      res_code = f_objname(&#x27;clients&#x27;, res_id);
+
+      res_text = res_code;
+      if (res_info &lt;&gt; &#x27;&#x27;) then
+        res_text = res_text || &#x27; (&#x27; || res_info || &#x27;)&#x27;;
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

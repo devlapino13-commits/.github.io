@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_GET_MC_APP_VERSION — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_GET_MC_APP_VERSION: 4 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_GET_MC_APP_VERSION</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_login_action_validation.html"><div class="to">HP_LOGIN_ACTION_VALIDATION</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MCL_LOGIN</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">MCL_PROJECT</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">APPLICATION_VERSION</div><div class="ptype">VARCHAR(10)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OPERATING_SYSTEM</div><div class="ptype">VARCHAR(10)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">APP_VERSION_IN_DECIMAL</div><div class="ptype">DECIMAL(18,7)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_CODE</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ERR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_GET_MC_APP_VERSION(
+    MCL_LOGIN D_STR_CODE,
+    MCL_PROJECT D_STR_CODE,
+    APPLICATION_VERSION D_STR_10,
+    OPERATING_SYSTEM D_STR_10)
+RETURNS (
+    APP_VERSION_IN_DECIMAL DECIMAL(18,7),
+    RES_CODE D_STR_CODE,
+    ERR_TEXT D_STR_255)
+AS
+declare variable APP_VERSION D_STR_10;
+declare variable TMP_APP_VER_IN_DECIMAL decimal(18,7);
+declare variable IS_MANDATORY_UPDATE D_SMALLINT;
+begin
+    --RFCKG 2344
+    res_code = &#x27;&#x27;;
+    err_text = &#x27;&#x27;;
+
+    app_version = f_get_const(:mcl_project||&#x27;_client_&#x27;||:operating_system ||&#x27;_ver&#x27;);
+    app_version_in_decimal = left(application_version, position(&#x27;.&#x27;, application_version) - 1) || &#x27;.&#x27; || replace(substring(application_version from position(&#x27;.&#x27;, application_version)), &#x27;.&#x27;, &#x27;&#x27;);
+    tmp_app_ver_in_decimal = left(app_version, position(&#x27;.&#x27;, app_version) - 1) || &#x27;.&#x27; || replace(substring(app_version from position(&#x27;.&#x27;, app_version)), &#x27;.&#x27;, &#x27;&#x27;);
+
+    -- RFCKG-2670
+    if(tmp_app_ver_in_decimal &gt; app_version_in_decimal) then
+    begin
+        is_mandatory_update = cast(f_get_const(:mcl_project||&#x27;_is_mandatory_update&#x27;) as d_smallint);
+        if(is_mandatory_update = 1) then
+        begin
+            -- RFCRU-2599
+            res_code = &#x27;version_error&#x27;;
+            if (f_get_db_id() = 81001 and operating_system = &#x27;android&#x27;) then
+                err_text = &#x27;Обновите приложение через наш сайт&#x27;;
+            else
+                err_text = &#x27;Приложение устарело. Необходимо установить актуальную версию приложения&#x27;;
+        end
+        else if(exists
+        (
+            select 1
+            from mc_login mcl
+            where mcl.mcl_login = :mcl_login
+                and mcl.mcl_is_delete = 0
+                and datediff
+                (
+                    day,
+                    cast(mcl.mcl_last_login_datetime as date),
+                    coalesce(cast(mcl.mcl_last_update_notify as date), current_date - 1)
+                ) &lt; 0
+        )) then
+        begin
+            -- RFCRU-2599
+            res_code = &#x27;version_warning&#x27;;
+            if (f_get_db_id() = 81001 and operating_system = &#x27;android&#x27;) then
+                err_text = &#x27;Обновите приложение через наш сайт&#x27;;
+            else
+                err_text = &#x27;Приложение устарело. Необходимо установить актуальную версию приложения&#x27;;
+
+            update mc_login mcl
+            set mcl.mcl_last_update_notify = current_timestamp,
+                mcl.mcl_last_login_datetime = current_timestamp
+            where mcl.mcl_login = :mcl_login
+                and mcl.mcl_is_delete = 0;
+
+        end
+    end
+
+    suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

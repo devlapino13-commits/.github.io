@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_HR_CONTROL_DOC — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_HR_CONTROL_DOC: 2 входных, 6 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_HR_CONTROL_DOC</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_REGION_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REG_NAME</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_NAME_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">JL_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CDS_DOC_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">HIRED_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ADD_INFO</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_HR_CONTROL_DOC(
+    REP_REGION_ID INTEGER,
+    REP_DATE_END DATE)
+RETURNS (
+    REG_NAME D_STR_CODE,
+    C_NAME_FIO D_STR_100,
+    JL_NAME D_STR_100,
+    CDS_DOC_DATE_BEGIN D_DATE,
+    HIRED_DATE D_DATE,
+    ADD_INFO STR_255)
+AS
+declare variable ER_CANCELLED integer;
+declare variable C_ID D_ID;
+declare variable CDS_DOC_DATE_END D_DATE;
+declare variable IS_IN_ORDER D_SMALLINT;
+begin
+
+  for select cl.c_name_fio, ps_from_c_id, r1.reg_code || &#x27; &#x27; || r1.reg_name, j.jl_name, h.ps_from_c_id
+      from hr_pstatus h
+      inner join region_list(:rep_region_id, 1, 3, 1) on ps_from_reg_id = id_list
+      inner join clients cl on cl.c_id = h.ps_from_c_id
+      inner join joblist j on ps_from_jl_id = jl_id
+      inner join region r1 on id_list = r1.reg_unicode
+      where :rep_date_end between ps_date_begin and ps_date_end and
+            ps_is_working = 1
+      into :c_name_fio, c_id, reg_name, jl_name, c_id
+  do
+  begin
+    cds_doc_date_begin = null;
+
+    select cds_doc_date_begin
+    from clientdocs cds, passkind, passdoctype
+    where cds_from_c_id = :c_id and
+          cds_from_pk_id = pk_id and
+          cds_is_delete = 0 and
+          pk_from_pdt_id = pdt_id and
+          :rep_date_end between cds_doc_date_begin and coalesce(cds_doc_date_end, :rep_date_end) and
+          pdt_code in (&#x27;certificate_of_no_criminal_record&#x27;)
+    order by cds.cds_doc_date_begin desc
+    rows 1
+    into :cds_doc_date_begin;
+
+    select max(ps_date_begin)
+    from hr_pstatus
+    inner join hr_orders on ho_id = ps_from_ho_id
+    where ps_from_c_id = :c_id and
+          ps_status = 1 and
+          ho_order_type = 1
+    into hired_date;
+
+    add_info = &#x27;&#x27;;
+    if (exists(select ps_date_begin
+               from hr_pstatus
+               inner join hr_orders on ho_id = ps_from_ho_id
+               where ps_from_c_id = :c_id and
+                     ps_status = 1 and
+                     :rep_date_end between ps_date_begin and ps_date_end and
+                     ho_order_type = 6 and
+                     ho_come_back_date is not null)) then
+      add_info = &#x27;Техническое увольнение&#x27;;
+
+    select list(sawt_name, &#x27;, &#x27;)
+    from hr_voctravel
+    inner join hr_orders on ho_id = hrv_from_ho_id
+    inner join sa_worktype on sawt_id = ho_order_type
+    where hrv_from_c_id = :c_id and
+          :rep_date_end between hrv_date_begin and hrv_date_end_fact and
+          hrv_status = 1 and
+          sawt_base_type = 5 and
+          sawt_id &lt;&gt; 20
+    into add_info;
+
+    is_in_order = 0;
+    if ((jl_name = &#x27;Директор регионального развития&#x27;) or (jl_name = &#x27;Администратор&#x27;) or
+
+        (jl_name = &#x27;Юрист департамента розыска и принудительного взыскания&#x27;) or (jl_name = &#x27;Директор по управлению качеством&#x27;) or
+
+        (jl_name = &#x27;Специалист отдела контроля качества&#x27;) or (jl_name = &#x27;Руководитель отдела контроля качества&#x27;) or
+
+        (jl_name = &#x27;Старший специалист департамента розыска и принудительного взыскания&#x27;) or (jl_name = &#x27;Специалист департамента розыска и принудительного взыскания&#x27;) or
+
+        (jl_name = &#x27;Директор регионального развития/Антикризисный менеджер&#x27;) or (jl_name = &#x27;Специалист&#x27;) or (jl_name = &#x27;Менеджер офиса&#x27;) or
+
+        (jl_name = &#x27;Ведущий специалист&#x27;) or (jl_name = &#x27;Специалист по продажам&#x27;) or (jl_name = &#x27;Менеджер&#x27;) or (jl_name = &#x27;Специалист по работе с просроченной задолженностью&#x27;) or
+
+        (jl_name = &#x27;Специалист службы безопасности&#x27;) or (jl_name = &#x27;Ведущий специалист отдела по работе с просроченной задолженностью&#x27;) or (jl_name = &#x27;Кредитный эксперт&#x27;) or
+
+        -- RFCRU-3082
+        (jl_name = &#x27;Руководитель отдела по работе с просроченной задолженностью&#x27;) or (jl_name = &#x27;И.о. менеджера офиса&#x27;) or (jl_name = &#x27;Инспектор кредитный&#x27;) or
+
+        (jl_name = &#x27;Кредитный специалист&#x27;) or (jl_name = &#x27;Руководитель отдела внутреннего контроля&#x27;) or (jl_name = &#x27;Специалист отдела внутреннего контроля&#x27;) or
+
+        (jl_name = &#x27;И.о.руководителя департамента розыска и принудительного взыскания&#x27;) or (jl_name = &#x27;Руководитель департамента розыска и принудительного взыскания&#x27;)) then
+      is_in_order = 1;
+
+    if (is_in_order = 1) then
+      suspend;
+  end
+
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

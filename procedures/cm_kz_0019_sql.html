@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_KZ_0019_SQL — процедура — схема БД</title>
+<meta name="description" content="Процедура CM_KZ_0019_SQL: 3 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_KZ_0019_SQL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_antifraud_checks_link_insert.html"><div class="to">HP_ANTIFRAUD_CHECKS_LINK_INSERT</div></a><a class="ref-card" href="hp_check_client_fio_ft.html"><div class="to">HP_CHECK_CLIENT_FIO_FT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_KZ_0019_SQL(
+    K_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable C_ID D_ID;
+declare variable ANTIFRAUD_CHECK_STAGE D_INTEGER;
+declare variable CLIENT_WAS_FOUND_ANTIFRAUD D_SMALLINT;
+declare variable AFCL_ID D_ID;
+begin
+    -- RFCKZ-192: Проверка на Антифрод на уровне контракта
+    antifraud_check_stage =
+        case :check_kind
+            when &#x27;.check_preview.&#x27; then f_enum_id(&#x27;antifraud_check_stage&#x27;, &#x27;loan_check_preview&#x27;)
+            when &#x27;.loan_approve.&#x27; then f_enum_id(&#x27;antifraud_check_stage&#x27;, &#x27;loan_approve&#x27;)
+            when &#x27;.loan_disb.&#x27; then f_enum_id(&#x27;antifraud_check_stage&#x27;, &#x27;loan_disb&#x27;)
+            else f_enum_id(&#x27;antifraud_check_stage&#x27;, &#x27;unknown&#x27;)
+        end;
+
+    for select kc.kc_from_c_id
+        from knclient kc
+        where kc.kc_from_k_id = :k_id and
+              kc.kc_amount_approved &gt; 0
+        into :c_id
+    do
+    begin
+        client_was_found_antifraud = iif (
+            exists (select c_name_fio
+                    from hp_check_client_fio_ft(:c_id, 1)
+                   ), 1, 0);
+
+        if (client_was_found_antifraud = 1) then
+        begin
+            res_info_text = (select c_name_fio from clients where c_id = :c_id);
+            -- RFCKZ-877
+            res_error_is_critical = 2;
+            res_error_text = f_format(&#x27;Клиент %1 найден в гос.списках. К сожалению, вы не можете далее обслуживать данного клиента.&#x27;, :res_info_text);
+        end
+
+        select afcl_id from hp_antifraud_checks_link_insert(:c_id, f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;), :k_id, f_enum_id(&#x27;antifraud_check_type&#x27;, &#x27;internal&#x27;),
+                                                            :antifraud_check_stage, :client_was_found_antifraud)
+        into :afcl_id;
+
+        suspend;
+    end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

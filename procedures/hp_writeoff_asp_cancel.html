@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_WRITEOFF_ASP_CANCEL — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_WRITEOFF_ASP_CANCEL: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_WRITEOFF_ASP_CANCEL</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_clientstate_get.html"><div class="to">HP_CLIENTSTATE_GET</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_WRITEOFF_ASP_CANCEL
+AS
+declare variable c_id d_id;
+declare variable rep_date d_date;
+declare variable cancel_date d_date;
+declare variable asp_kind d_integer;
+declare variable cell_app_kind d_integer;
+declare variable push_body d_str_long;
+begin
+  -- RFCRU-4701
+  -- процедура ищет клиентов у кого все договоры списаны а АСП активен
+  -- и расторгает АСП с отправкой ПУШ
+  asp_kind = f_edoc_kind(&#x27;asp.agreement&#x27;, &#x27;id&#x27;);
+  cell_app_kind = f_edoc_kind(&#x27;cell.application&#x27;, &#x27;id&#x27;);
+  rep_date = current_date - extract(day from current_date);  -- ищем только до конца предыдущего месяца
+
+  for select kc_from_c_id
+  from oksummary
+  inner join knclient on kc_from_k_id = oks_from_k_id
+  inner join edoc_list on edl_object_kind = 0 and edl_object_id = kc_from_c_id + 0
+                      and edl_from_edc_id = :asp_kind
+                      and coalesce(edl_date_end, current_date) &gt;= current_date
+                      and edl_status &gt;= 0
+  left join operkroff on oko_from_k_id = kc_from_k_id
+                      and oko_ol_is_active = 1
+                      and oko_type = 1
+                      and oko_sh_os + oko_sh_perc + oko_other &gt; 0
+  where current_date between oks_date_begin and oks_date_end
+    and (oks_curr_sh_os + oks_curr_sh_perc + oks_delinq_os + oks_delinq_perc + oks_out_os + oks_out_perc) &gt; 0 -- без ГП
+  group by 1
+  having min(oks_close_state) = 1
+    and min(oks_out_os + oks_out_perc + oks_out_other) &gt; 0
+    and max(oko_ol_date) &lt;= :rep_date
+  into c_id
+  do
+  begin
+    -- удостоверимся что нет открытых заявок
+    if (exists(select 1 from hp_clientstate_get(:c_id) where res_client_state in (0,1))) then
+      continue;
+
+    -- расторгаем АСП
+    cancel_date = f_date_work_day(current_date + 1); -- дата расторжения - следующий рабочий день
+
+    update edoc_list
+    set edl_date_end = :cancel_date - 1
+    where edl_object_kind = 0
+      and edl_object_id = :c_id
+      and edl_from_edc_id in (:asp_kind, :cell_app_kind)
+      and coalesce(edl_date_end, :cancel_date) &gt;= :cancel_date
+      and edl_status &gt;= 0;
+
+    -- отправка ПУШ клиенту
+    push_body = f_format(&#x27;Уважаемый(ая) %1, уведомляем Вас о досрочном расторжении Договора на оказание информационных услуг заключенного с ООО «МКК М Булак» с %2.&#x27;,
+                         (select c_name_fio from clients where c_id = :c_id),
+                         f_datetostr(cancel_date));
+
+    f_send_push(&#x27;clients&#x27;, c_id, &#x27;Расторжение договора АСП&#x27;, push_body, &#x27;hp_writeoff_asp_cancel&#x27;, -1);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

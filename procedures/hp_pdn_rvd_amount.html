@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_PDN_RVD_AMOUNT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_PDN_RVD_AMOUNT: 2 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_PDN_RVD_AMOUNT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_extinfolist_pdn_one_income.html"><div class="to">HP_EXTINFOLIST_PDN_ONE_INCOME</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="cm_ru_0260_sql.html"><div class="to">CM_RU_0260_SQL</div></a><a class="ref-card" href="hp_do_actionsave.html"><div class="to">HP_DO_ACTIONSAVE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OBJECT_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJECT_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RVD_MIN</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RVD_MAX</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_PDN_RVD_AMOUNT(
+    OBJECT_KIND D_STR_CODE,
+    OBJECT_ID D_ID)
+RETURNS (
+    RVD_MIN D_CURRENCY,
+    RVD_MAX D_CURRENCY)
+AS
+declare variable c_id d_id;
+declare variable res_address d_str_255;
+declare variable k d_currency;
+declare variable k1 d_currency;
+begin
+  -- РВД: рекомендуемая величина дохода
+  -- OBJECT_KIND может быть miniapp, kontract, clients
+
+  rvd_min = 0;
+  c_id = case object_kind
+            when &#x27;clients&#x27;   then object_id
+            when &#x27;miniapp&#x27;  then (select mac_from_c_id from miniappclient where mac_from_ma_id = :object_id)
+            when &#x27;kontract&#x27; then (select kc_from_c_id from knclient where kc_from_k_id = :object_id)
+         end;
+
+  if (c_id is null) then
+    exception e_default f_format(&#x27;Not found c_id for object_kind = %1, object_id = %2&#x27;, object_kind, object_id);
+
+  --* если клиент в течение 60 календарных дней, предшествующих дате текущей Заявки, получал в М Булак займы,   
+  --  то значение РВД = максимальной величине анкетного дохода, которое использовалось для расчета ПДН по этим займам, в течение последних 60 дней.
+  select max(coalesce(kc_anketa_income_calc, kc_anketa_income, 0))
+  from knclient_pdn kcp, knclient kc, kontstate
+  where kc.kc_id = kcp.kc_id
+    and ks_from_k_id = kc_from_k_id
+    and ks_ol_is_delete = 0
+    and ks_state = 1
+    and kcp_kind = 0
+    and kcp.kc_from_c_id = :c_id
+    and kc_date &gt; current_date - 61
+  into rvd_min;
+
+  if (rvd_min &gt; 0) then
+  begin
+    -- RFCRU-3689 если в течение 60 дней, предшествующих дате ввода обновленных данных дохода, клиент получал в Компании займы,
+    -- то ограничитель сверху рассчитывается от РВД по формуле «РВД * %%, но не более 350 000»
+    rvd_max = case
+                when rvd_min &lt;= 25000 then rvd_min * 10.0000
+                when rvd_min &lt;= 120000 then 150000
+                when rvd_min &lt;= 150000 then rvd_min * 1.2000
+                when rvd_min &lt;= 190000 then rvd_min * 1.1500
+                else rvd_min * 1.1000
+              end;
+
+    if (rvd_max &gt; 350000) then
+      rvd_max = 350000;
+
+    if (rvd_min &gt; rvd_max) then
+      rvd_max = rvd_min;
+
+    suspend;
+    exit;
+  end 
+
+  select res_income_avg, res_address
+  from hp_extinfolist_pdn_one_income(null, current_date, :c_id)
+  into rvd_min, res_address;
+
+  if (rvd_min &lt;= 0) then
+    exception e_message iif(trim(coalesce(res_address, &#x27;&#x27;)) in (&#x27;&#x27;, &#x27;Не указан&#x27;), &#x27;Не указан адрес регистрации клиента&#x27;, &#x27;Некорректно указан регион регистрации клиента&#x27;);
+
+  --множитель - 2 или 2,5 или 3 или 4, в зависимости от величины дохода клиента по Росстату:
+  k = case
+        when rvd_min &gt; 100000 then 1.1
+        when rvd_min &gt; 70000 then 1.2
+        when rvd_min &gt; 50000 then 1.7
+        else 2.3
+      end;
+      
+  --значение РДВ = ОКРУГЛВВЕРХ(доход клиента по Росстату * множитель * случайный коэффициент; до целой тысячи)
+  select coalesce(extract(year from c_birth_date), 0)
+  from clients
+  where c_id = :c_id
+  into k1;
+
+  k1 = k1 - trunc(k1, -2) + c_id - trunc(c_id, -2);
+  k1 = (k1 - trunc(k1, -2))/100.00 + (c_id - trunc(c_id, -2))/10000.0000;
+
+  rvd_min = rvd_min * k;
+  rvd_min = rvd_min * (0.80 + k1 * 0.40);
+  rvd_min = round(rvd_min, -3) + iif(round(rvd_min, -3) &lt; rvd_min, 1000, 0);
+
+  -- RFCRU-3689 если в течение последних 60 дней до даты ввода новых данных дохода в раздел &quot;Ежемесячный доход&quot; клиент НЕ получал займы в Компании, ограничитель сверху = 350 000 руб.
+  rvd_max = 350000;
+
+  if (rvd_min &gt; rvd_max) then
+    rvd_min = rvd_max;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

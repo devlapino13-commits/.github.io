@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CM_RU_0136_SQL — процедура — схема БД</title>
+<meta name="description" content="Срок действия паспорт граждан РФ">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>CM_RU_0136_SQL</code></h1>
+<p class="desc">Срок действия паспорт граждан РФ</p>
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="cli_passport_actual_check.html"><div class="to">CLI_PASSPORT_ACTUAL_CHECK</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CHECK_KIND</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_INFO_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_ERROR_IS_CRITICAL</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE CM_RU_0136_SQL(
+    MA_ID D_ID NOT NULL,
+    CHECK_KIND D_STR_CODE NOT NULL,
+    UN_ID D_ID NOT NULL)
+RETURNS (
+    RES_INFO_TEXT D_STR_100,
+    RES_ERROR_TEXT D_STR_255,
+    RES_ERROR_IS_CRITICAL D_INTEGER)
+AS
+declare variable KC_AMOUNT CURR_TYPE;
+declare variable KF_DISB_DATE D_DATE;
+declare variable KF_CLIENT_PASS_NO varchar(30);
+declare variable C_ID ID_TYPE;
+declare variable AGE_CHECK integer;
+declare variable PASS_DATE date;
+declare variable C_PASS_DATE_EXPIRE date;
+declare variable IS_PROBLEM smallint;
+begin
+--if (ma_id in 913481) then exit;
+if (ma_id  = 992664) then exit;
+  for select c_id, c_name_fio, c_pass_no, mac_amount, ma.ma_date_oper
+      from miniapp ma, miniappclient mac, clients c
+      where ma_id = :ma_id and
+            current_date between ma.ma_date_app and ma.ma_date_end and
+            ma.ma_is_active = 1 and
+            ma_id = mac_from_ma_id and
+            mac_amount &gt; 0 and
+            mac_from_c_id = c_id and
+            c.c_citizen = 13 --rossiya
+      into c_id, res_info_text, kf_client_pass_no, kc_amount, :kf_disb_date
+  do
+  begin
+    select age_check, pass_date, c_pass_date_expire, is_problem
+    from cli_passport_actual_check(:c_id, :kf_disb_date)
+    into :age_check, :pass_date, :c_pass_date_expire, :is_problem;
+    if (coalesce(age_check, 0) &gt; 0 and
+        is_problem = 1) then
+    begin
+      if (c_pass_date_expire between &#x27;01.02.2020&#x27; and &#x27;15.07.2020&#x27; and
+          kf_disb_date &lt;= &#x27;31.12.2020&#x27;) then
+        exit;
+      if ((c_pass_date_expire &lt; &#x27;01.02.2020&#x27; or c_pass_date_expire &gt; &#x27;15.07.2020&#x27;) and
+          kf_disb_date &lt;= &#x27;30.09.2020&#x27;) then
+        exit;
+      res_error_text = &#x27;Срок окончания паспорта: &#x27; || f_datetostr(c_pass_date_expire);
+      res_error_is_critical = 1;
+      if (c_pass_date_expire &gt; kf_disb_date) then
+      res_error_is_critical = 0;
+      suspend;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

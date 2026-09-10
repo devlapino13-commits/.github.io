@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UXP$PERSFIELD_PREPARE_VIEW — процедура — схема БД</title>
+<meta name="description" content="Процедура UXP$PERSFIELD_PREPARE_VIEW: 1 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>UXP$PERSFIELD_PREPARE_VIEW</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">TABLE_NAME</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_IS_ERROR</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_SCRIPT</div><div class="ptype">VARCHAR(8100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE UXP$PERSFIELD_PREPARE_VIEW(
+    TABLE_NAME D_STR_CODE)
+RETURNS (
+    RES_IS_ERROR D_BOOL,
+    RES_SCRIPT D_STR_8100)
+AS
+declare variable field_name d_str_code;
+declare variable is_pers_field d_bool;
+declare variable return_fields d_str_8100;
+declare variable select_fields d_str_8100;
+declare variable key_field d_str_code;
+declare variable key_count d_integer;
+declare variable pif_mask_kind d_str_code;
+declare variable pif_mask_add_field d_str_code;
+declare variable pif_link_source d_str_code;
+begin
+  res_is_error = 0;
+  res_script = &#x27;&#x27;;
+  return_fields = &#x27;&#x27;;
+  select_fields = &#x27;&#x27;;
+
+  /*
+create or alter view v$contlist(
+    clt_id,
+    clt_code)
+as
+select
+    clt_id,
+    clt_code
+from contlist
+;
+  */
+
+  table_name = trim(lower(table_name));
+  key_field = &#x27;&#x27;;
+  key_count = 0;
+
+  if (not exists(select * from ux$persfield where pif_source = :table_name)) then
+    res_script = &#x27;Нет полей в таблице зарегистрированные как персональные данные &#x27; || upper(table_name);
+  else
+  begin
+    select key_fields, key_count
+    from uxp$uxfield_db_keyfields(:table_name, 0)
+    into key_field, key_count;
+  
+    if (key_field = &#x27;&#x27;) then
+      res_script = &#x27;Не найдено ключевое поле таблицы: &#x27; || upper(table_name);
+    else
+    if (key_count &gt; 1) then
+      res_script = &#x27;Таблицы с составными первичными ключами не поддерживаются: &#x27; || upper(table_name);
+  end
+
+  if (res_script &lt;&gt; &#x27;&#x27;) then
+  begin
+    res_is_error = 1;
+    suspend;
+    exit;
+  end
+
+  for select lower(trim(r.rdb$field_name))
+  from rdb$relation_fields r
+  where r.rdb$relation_name = upper(:table_name)
+  order by r.rdb$field_position
+  into field_name
+  do
+  begin
+    is_pers_field = 0;
+    for select pif_mask_kind, pif_mask_add_field, pif_link_source
+    from ux$persfield
+    where pif_source = :table_name and
+          pif_field_name = :field_name
+    into pif_mask_kind, pif_mask_add_field, pif_link_source
+    do
+    begin
+      is_pers_field = 1;
+
+      if (return_fields &lt;&gt; &#x27;&#x27;) then
+        return_fields = return_fields || &#x27;,&#x27; || ascii_char(13) || &#x27;    &#x27;;
+      else
+        return_fields = &#x27;    &#x27;;
+
+      return_fields = return_fields || field_name;
+      return_fields = return_fields || &#x27;,&#x27; || ascii_char(13) || &#x27;    &#x27;;
+      return_fields = return_fields || &#x27;orig$&#x27; || field_name;
+      return_fields = return_fields || &#x27;,&#x27; || ascii_char(13) || &#x27;    &#x27;;
+      return_fields = return_fields || &#x27;mask$&#x27; || field_name;
+
+      if (select_fields &lt;&gt; &#x27;&#x27;) then
+        select_fields = select_fields || &#x27;,&#x27; || ascii_char(13) || &#x27;    &#x27;;
+      else
+        select_fields = &#x27;    &#x27;;
+
+      select_fields = select_fields || field_name;
+      select_fields = select_fields || &#x27;,&#x27; || ascii_char(13) || &#x27;    &#x27;;
+      select_fields = select_fields || &#x27;cast(pif$value(&#x27;&#x27;&#x27; || table_name || &#x27;&#x27;&#x27;, &#x27;&#x27;&#x27; || field_name || &#x27;&#x27;&#x27;, &#x27; || key_field || &#x27;, &#x27; || field_name || &#x27;)&#x27;;
+      select_fields = select_fields || &#x27; as type of column &#x27; || table_name || &#x27;.&#x27; || field_name || &#x27;)&#x27;;
+      select_fields = select_fields || &#x27;,&#x27; || ascii_char(13) || &#x27;    &#x27;;
+
+      if (pif_mask_kind = &#x27;&#x27; and pif_link_source = &#x27;&#x27;) then
+        pif_mask_kind = &#x27;text&#x27;;
+
+      if (pif_mask_kind &lt;&gt; &#x27;&#x27;) then
+      begin
+        if (pif_mask_add_field &lt;&gt; &#x27;&#x27;) then
+          select_fields = select_fields || &#x27;pif$mask(&#x27; || field_name || &#x27;, &#x27;&#x27;&#x27; || pif_mask_kind || &#x27;&#x27;&#x27;, &#x27; || pif_mask_add_field || &#x27;)&#x27;;
+        else
+          select_fields = select_fields || &#x27;pif$mask(&#x27; || field_name || &#x27;, &#x27;&#x27;&#x27; || pif_mask_kind || &#x27;&#x27;&#x27;)&#x27;;
+      end else
+      begin
+        if (pif_link_source &lt;&gt; &#x27;&#x27;) then
+          select_fields = select_fields || field_name;
+        else
+        begin
+          if (pif_mask_add_field &lt;&gt; &#x27;&#x27;) then
+            select_fields = select_fields || &#x27;&#x27;&#x27;Id_&#x27;&#x27;&#x27; || pif_mask_add_field;
+          else
+            select_fields = select_fields || &#x27;&#x27;&#x27;Id_&#x27;&#x27;&#x27; || field_name;
+        end
+      end
+    end
+
+    if (is_pers_field = 0) then
+    begin
+      if (return_fields &lt;&gt; &#x27;&#x27;) then
+        return_fields = return_fields || &#x27;,&#x27; || ascii_char(13) || &#x27;    &#x27;;
+      else
+        return_fields = &#x27;    &#x27;;
+
+      return_fields = return_fields || field_name;
+
+      if (select_fields &lt;&gt; &#x27;&#x27;) then
+        select_fields = select_fields || &#x27;,&#x27; || ascii_char(13) || &#x27;    &#x27;;
+      else
+        select_fields = &#x27;    &#x27;;
+
+      select_fields = select_fields || field_name;
+    end
+  end
+
+  res_script = &#x27;create or alter view v$&#x27; || lower(table_name) || &#x27;(&#x27; || ascii_char(13) || return_fields || &#x27;)&#x27; || ascii_char(13) ||
+               &#x27;as&#x27; || ascii_char(13) ||
+               &#x27;select&#x27; || ascii_char(13) ||
+               select_fields || ascii_char(13) ||
+               &#x27;from &#x27; || table_name || ascii_char(13) ||
+               &#x27;;&#x27; || ascii_char(13) || ascii_char(13);
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

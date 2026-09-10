@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_MINIAPP_FOR_PENALTY_UPDATE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_MINIAPP_FOR_PENALTY_UPDATE: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_MINIAPP_FOR_PENALTY_UPDATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_get_check_loan_data.html"><div class="to">HP_GET_CHECK_LOAN_DATA</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_send_client_to_kk.html"><div class="to">FM_SEND_CLIENT_TO_KK</div></a><a class="ref-card" href="hp_ma_hours_cancel.html"><div class="to">HP_MA_HOURS_CANCEL</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OBJECT_KIND</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJECT_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_MINIAPP_FOR_PENALTY_UPDATE(
+    OBJECT_KIND STR_100,
+    OBJECT_ID ID_TYPE)
+AS
+declare variable ma_id id_type;
+declare variable ma_date_save timestamp;
+declare variable ma_from_kf_id id_type;
+declare variable ma_state integer;
+declare variable ma_date_end date;
+declare variable state_datetime timestamp;
+declare variable k_id id_type;
+declare variable k_from_kf_id id_type;
+declare variable k_status integer;
+declare variable rd_id integer;
+declare variable acl_id id_type;
+declare variable db_id integer;
+declare variable kf_id id_type;
+declare variable lo_id id_type;
+declare variable mfp_state smallint;
+declare variable pr_code str_100;
+begin
+
+  db_id = f_get_db_id();
+  if (db_id &lt;&gt; 81001) then
+    exit;
+
+-- получаю id заявки
+  if (object_kind = &#x27;kontract&#x27;) then
+  begin
+    select kont.k_from_ma_app_id, k_from_kf_id, k_status, pr_code
+    from kontract kont
+      inner join product
+        on pr_id = k_from_pr_id
+    where kont.k_id = :object_id rows 1
+    into :ma_id, :k_from_kf_id, :k_status, :pr_code;
+
+    k_id = :object_id;
+  end
+  else
+  begin
+    ma_id = object_id;
+
+    select kont.k_id, kont.k_from_kf_id, kont.k_status, pr_code
+    from kontract kont
+      inner join product
+        on pr_id = k_from_pr_id
+    where kont.k_from_ma_app_id = :ma_id
+    rows 1
+    into :k_id, :k_from_kf_id, :k_status, :pr_code;
+
+    if (pr_code is null) then
+    begin
+        select pr_code
+        from miniapp maa
+        inner join product pr on pr.pr_id = maa.ma_from_pr_id
+        where maa.ma_date_end = &#x27;31.12.9999&#x27; and
+              maa.ma_id = :ma_id
+        into :pr_code;
+    end
+  end
+  --S.K.
+  if (pr_code containing &#x27;.ZALOG_CAR.&#x27;) then begin
+    update miniapp_for_penalty set mfp_state = -2 where mfp_ma_id = :ma_id;
+    exit;
+  end
+
+  mfp_state = null;
+
+-- если запись в miniapp_for_penalty отсутствует, добавляю ее с первичным статусом
+  select t.mfp_state
+  from miniapp_for_penalty t
+  where t.mfp_ma_id = :ma_id
+  into :mfp_state;
+
+  if (mfp_state is null) then -- заявки еще нет
+  begin
+    select ma.ma_date_save, ma.ma_from_kf_id, iif(ma.ma_is_active = 1, 0, -1),
+           coalesce(ma_date_end, cast(&#x27;01.01.1900&#x27; as date))
+    from miniapp ma
+    where ma.ma_id = :ma_id
+    order by ma.ma_id, ma.ma_number
+    rows 1
+    into :ma_date_save, :ma_from_kf_id, :ma_state, ma_date_end;
+
+    kf_id = ma_from_kf_id;
+    if (k_from_kf_id is not null) then
+    begin
+      if (k_from_kf_id &lt;&gt; ma_from_kf_id) then
+        kf_id = k_from_kf_id;
+    end
+
+    select kal.kal_new_kf_officer
+    from knaktlist kal
+    where is_delete = 0 and
+          kal_from_kf_id = :kf_id and
+          kal_date_end &gt;= cast(&#x27;01.01.2999&#x27; as date) and
+          kal_date &lt; kal_date_end rows 1
+    into lo_id;
+
+    insert into miniapp_for_penalty (mfp_ma_id, mfp_date_save, mfp_from_kf_id, mfp_state, mfp_state_datetime,
+                                     mfk_from_k_id, mfp_current_lo_id)
+    values (:ma_id, :ma_date_save, :kf_id, :ma_state, :ma_date_save, :k_id, :lo_id);
+  end
+  else
+  begin
+    if (mfp_state &lt;&gt; 0) then -- если уже присвоен конечный статус
+      exit;
+  end
+
+  ma_date_end = coalesce(ma_date_end, cast(&#x27;01.01.1900&#x27; as date));
+
+  if (ma_date_end &lt;&gt; cast(&#x27;31.12.9999&#x27; as date)) then
+  begin
+-- проверяю заявку по последнему ее состоянию, на предмет аннулирования
+    select maa.ma_date_save, iif(maa.ma_is_active = 1, 0, -1), maa.ma_from_kf_id
+    from miniapp maa
+    where maa.ma_id = :ma_id and
+          maa.ma_date_end = &#x27;31.12.9999&#x27; rows 1
+    into :state_datetime, ma_state, ma_from_kf_id;
+
+    kf_id = ma_from_kf_id;
+    if (k_from_kf_id is not null) then
+    begin
+      if (k_from_kf_id &lt;&gt; ma_from_kf_id) then
+        kf_id = k_from_kf_id;
+    end
+
+    select kal.kal_new_kf_officer
+    from knaktlist kal
+    where is_delete = 0 and
+          kal_from_kf_id = :kf_id and
+          kal_date_end &gt;= cast(&#x27;01.01.2999&#x27; as date) and
+          kal_date &lt; kal_date_end rows 1
+    into lo_id;
+  end
+  else
+  begin
+    state_datetime = ma_date_save;
+  end
+
+  if (ma_state = -1) then
+  begin
+    if (ma_date_end &lt;&gt; cast(&#x27;31.12.9999&#x27; as date)) then
+    begin
+      update miniapp_for_penalty
+      set mfp_from_kf_id = :kf_id,
+          mfk_from_k_id = :k_id,
+          mfp_state = -1,
+          mfp_state_datetime = :state_datetime,
+          mfp_current_lo_id = :lo_id
+      where (mfp_ma_id = :ma_id);
+
+      if (ma_state &lt;&gt; 0) then
+        exit;
+    end
+  end
+  else
+  begin
+    if (k_id is not null) then
+    begin
+      if (k_status &lt; 0) then
+      begin
+        update miniapp_for_penalty
+        set mfp_from_kf_id = :kf_id,
+            mfk_from_k_id = :k_id,
+            mfp_state = -1,
+            mfp_state_datetime = null,
+            mfp_current_lo_id = :lo_id
+        where (mfp_ma_id = :ma_id);
+
+        exit;
+      end
+      else
+      begin
+        select rd_id
+        from hp_get_check_loan_data(:k_id)
+        into:rd_id;
+
+        /*select rd.rd_id
+        from refdata rd
+        where rd.rd_code = &#x27;actiongroup.check_loan_data&#x27;
+        into :rd_id;*/
+
+        select al.acl_id, al.acl_datetime
+        from actionlist al
+        where al.acl_object_kind = 9 and
+              al.acl_object_id = :k_id and
+              al.acl_from_rd_id = :rd_id
+        order by al.acl_id
+        rows 1
+        into :acl_id, :state_datetime;
+
+        if (acl_id is not null) then
+        begin
+          update miniapp_for_penalty
+          set mfp_from_kf_id = :k_from_kf_id,
+              mfk_from_k_id = :k_id,
+              mfp_state = 1,
+              mfp_state_datetime = :state_datetime,
+              mfp_current_lo_id = :lo_id
+          where (mfp_ma_id = :ma_id);
+
+          exit;
+        end
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

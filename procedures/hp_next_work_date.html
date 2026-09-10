@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_NEXT_WORK_DATE — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_NEXT_WORK_DATE: 3 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_NEXT_WORK_DATE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_hr_next_date.html"><div class="to">HP_HR_NEXT_DATE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PLUS_DAYS</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">WEEK_WORKDAYS</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEXT_WORK_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_NEXT_WORK_DATE(
+    DATE_BEGIN D_DATE,
+    PLUS_DAYS D_INTEGER,
+    WEEK_WORKDAYS D_INTEGER = 0)
+RETURNS (
+    DATE_END D_DATE,
+    NEXT_WORK_DATE D_DATE)
+AS
+declare variable counter d_integer;
+declare variable scd_work_hours d_smallint;
+declare variable weekday_id d_smallint;
+begin
+  counter = 1;
+  date_end = date_begin;
+
+  if (coalesce(week_workdays, 0) = 0) then
+    week_workdays = 5;
+
+  if (coalesce(plus_days, 0) = 0) then
+    plus_days = 1;
+
+  if (week_workdays = -1) then
+    date_end = dateadd(day, plus_days - 1, date_begin);
+  else
+  begin
+    while (:counter &lt; :plus_days) do
+    begin
+      date_end = date_end + 1;
+      scd_work_hours = null;
+  
+      select scd_work_hours
+      from sa_calendays
+      where scd_date = :date_end
+      into scd_work_hours;
+  
+      weekday_id = extract(weekday from date_end);
+      if (scd_work_hours = 0 and weekday_id not in (0, 6)) then
+        continue;
+
+      if (scd_work_hours = 0 and weekday_id in (0, 6) and week_workdays = 7) then
+      begin
+        if (exists(select *
+                   from sa_calendar
+                   where scal_month = extract(month from :date_end) and
+                         scal_day = extract(day from :date_end) and
+                             scal_active = 1)) then
+          continue;
+      end
+  
+      if (scd_work_hours is null) then
+      begin
+        if (week_workdays &lt;= 5) then
+        begin
+          if (weekday_id in (0, 6)) then
+            scd_work_hours = 0;
+        end else
+        if (week_workdays = 6) then
+        begin
+          if (weekday_id = 0) then
+            scd_work_hours = 0;
+        end
+      end
+  
+      if (scd_work_hours = 0) then
+      begin
+        if (week_workdays &lt;= 5) then
+          continue;
+  
+        if (week_workdays = 6 and weekday_id = 0) then
+          continue;
+      end
+  
+      counter = counter + 1;
+    end
+  end
+
+  counter = 0;
+  plus_days = 1;
+  week_workdays = 5;
+  next_work_date = date_end;
+  while (:counter &lt; plus_days) do
+  begin
+    next_work_date = next_work_date + 1;
+    scd_work_hours = null;
+
+    select scd_work_hours
+    from sa_calendays
+    where scd_date = :next_work_date
+    into scd_work_hours;
+
+    if (scd_work_hours is null) then
+    begin
+      if (week_workdays &lt;= 5) then
+      begin
+        if (extract(weekday from next_work_date) in (0, 6)) then
+          scd_work_hours = 0;
+      end else
+      if (week_workdays = 6) then
+      begin
+        if (extract(weekday from next_work_date) = 0) then
+          scd_work_hours = 0;
+      end
+    end
+
+    if (scd_work_hours = 0) then
+      continue;
+
+    counter = counter + 1;
+  end
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

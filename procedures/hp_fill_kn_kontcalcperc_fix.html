@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_FILL_KN_KONTCALCPERC_FIX — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_FILL_KN_KONTCALCPERC_FIX: 0 входных, 4 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_FILL_KN_KONTCALCPERC_FIX</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">IS_DONE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_IS_DEVIDED</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ITER</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_FILL_KN_KONTCALCPERC_FIX
+RETURNS (
+    K_ID DECIMAL(18,0),
+    IS_DONE INTEGER,
+    K_IS_DEVIDED INTEGER,
+    ITER INTEGER)
+AS
+declare variable kc_id_minus id_type;
+declare variable kc_id_plus id_type;
+declare variable kcp_period integer;
+declare variable min_saldo curr_type;
+declare variable prior_calced_period integer;
+declare variable plus_saldo curr_type;
+declare variable total_done integer;
+begin
+  iter = 0;
+
+  while (iter &lt; 20) do
+  begin
+    iter = iter + 1;
+    total_done = 0;
+
+    for select distinct kcp_from_k_id, k_is_devided
+        from kn_kontcalcperc, kontract
+        where kcp_perc_saldo &lt; 0 and
+              k_id = kcp_from_k_id
+        into k_id, k_is_devided
+    do
+    begin
+      is_done = 0;
+      kcp_period = null;
+      min_saldo = 0;
+      kc_id_minus = null;
+      kc_id_plus = null;
+      prior_calced_period = null;
+
+      select kcp_period, min(kcp_perc_saldo)
+      from kn_kontcalcperc
+      where kcp_from_k_id = :k_id
+      group by kcp_period
+      having min(kcp_perc_saldo) &lt; 0 and sum(kcp_perc_saldo) &gt;= 0
+      order by kcp_period desc
+      rows 1
+      into :kcp_period, min_saldo;
+
+      if (kcp_period is not null) then
+      begin
+        select kcp_from_kc_id
+        from kn_kontcalcperc
+        where kcp_from_k_id = :k_id and
+              kcp_period = :kcp_period and
+              kcp_perc_saldo = :min_saldo rows 1
+        into kc_id_minus;
+
+        select kcp_from_kc_id
+        from kn_kontcalcperc
+        where kcp_from_k_id = :k_id and
+              kcp_period = :kcp_period and
+              kcp_perc_saldo &gt;= -:min_saldo rows 1
+        into kc_id_plus;
+
+        if (kc_id_minus is not null and
+            kc_id_plus is not null) then
+        begin
+          select kcp_period
+          from kn_kontcalcperc
+          where (kcp_from_kc_id = :kc_id_minus or
+                kcp_from_kc_id = :kc_id_plus) and
+                kcp_period &lt;= :kcp_period and
+                kcp_perc_calced &gt; 0
+          order by kcp_from_kc_id desc, kcp_period desc
+          rows 1
+          into :prior_calced_period;
+
+          if (prior_calced_period is not null) then
+          begin
+            is_done = 1;
+            update kn_kontcalcperc
+            set kcp_perc_calced = kcp_perc_calced - :min_saldo
+            where kcp_from_kc_id = :kc_id_minus and
+                  kcp_period = :prior_calced_period;
+
+            update kn_kontcalcperc
+            set kcp_perc_calced = kcp_perc_calced + :min_saldo
+            where kcp_from_kc_id = :kc_id_plus and
+                  kcp_period = :prior_calced_period;
+          end
+        end
+        else
+        begin
+          for select kcp_from_kc_id, kcp_perc_saldo
+              from kn_kontcalcperc
+              where kcp_from_k_id = :k_id and
+                    kcp_period = :kcp_period and
+                    kcp_perc_saldo &gt; 0
+              into kc_id_plus, plus_saldo
+          do
+          begin
+            if (plus_saldo &lt; abs(min_saldo)) then
+            begin
+              prior_calced_period = null;
+              select kcp_period
+              from kn_kontcalcperc
+              where (kcp_from_kc_id = :kc_id_minus or
+                    kcp_from_kc_id = :kc_id_plus) and
+                    kcp_period &lt;= :kcp_period and
+                    kcp_perc_calced &gt; 0
+              order by kcp_from_kc_id desc, kcp_period desc
+              rows 1
+              into :prior_calced_period;
+
+              if (prior_calced_period is not null) then
+              begin
+                is_done = 1;
+                update kn_kontcalcperc
+                set kcp_perc_calced = kcp_perc_calced + :plus_saldo
+                where kcp_from_kc_id = :kc_id_minus and
+                      kcp_period = :prior_calced_period;
+
+                update kn_kontcalcperc
+                set kcp_perc_calced = kcp_perc_calced - :plus_saldo
+                where kcp_from_kc_id = :kc_id_plus and
+                      kcp_period = :prior_calced_period;
+
+                min_saldo = min_saldo + plus_saldo;
+              end
+            end
+          end
+        end
+      end
+      total_done = total_done + is_done;
+      suspend;
+    end
+
+    if (total_done = 0) then
+    begin
+      k_id = -1;
+      iter = 21;
+      suspend;
+      exit;
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

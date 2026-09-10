@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_MINIAPP_EDOC_CHECK_COND — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_MINIAPP_EDOC_CHECK_COND: 1 входных, 2 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_MINIAPP_EDOC_CHECK_COND</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_client_relation_list.html"><div class="to">HP_CLIENT_RELATION_LIST</div></a><a class="ref-card" href="hp_verify_amount_goods.html"><div class="to">HP_VERIFY_AMOUNT_GOODS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_edoc_ins_loan_application.html"><div class="to">HP_EDOC_INS_LOAN_APPLICATION</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MA_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">RES_VALUE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RES_TEXT</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_MINIAPP_EDOC_CHECK_COND(
+    MA_ID D_INTEGER)
+RETURNS (
+    RES_VALUE D_SMALLINT,
+    RES_TEXT D_STR_255)
+AS
+declare variable K_ID D_ID;
+declare variable PR_ID D_ID;
+declare variable PR_CODE D_STR_100;
+declare variable C_ID D_ID;
+declare variable IS_PORUCH D_SMALLINT;
+declare variable OTHER_C_ID D_ID;
+declare variable REL_NAME D_STR_100;
+declare variable DB_ID D_ID;
+declare variable IS_OK smallint;
+declare variable MA_DATE_OPER date;
+begin
+  res_text = &#x27;&#x27;;
+  res_value = 0;
+  is_ok = 0;
+
+  db_id = f_get_db_id();
+  if (db_id not in (39801, 41701)) then
+    exit;
+
+  select pr.pr_code
+  from product pr
+  inner join miniapp ma on pr.pr_id = ma.ma_from_pr_id and
+        ma.ma_id = :ma_id and
+        current_date between ma.ma_date_app and ma.ma_date_end
+  into pr_code;
+
+  if ((:pr_code containing &#x27;.kontmat.&#x27;) or (:pr_code containing &#x27;.idjara.&#x27;) or (:pr_code containing &#x27;.fertilizer.&#x27;) or (:pr_code containing &#x27;.selitra.&#x27;)) then
+  begin
+    select k.k_id
+    from kontract k
+    where k.k_from_ma_app_id = :ma_id
+    into k_id;
+
+    if (k_id is null and
+      not exists(select * from kontmat
+      where kml_object_kind = f_objkind(&#x27;miniapp&#x27;, &#x27;id&#x27;)
+      and kml_object_id = :ma_id))
+    then
+      res_text = &#x27;Товар не найден&#x27;;
+    else
+    if (not exists(select * from kontmat km
+         where km.kml_object_kind = f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;) and
+         km.kml_object_id = :k_id)  and
+        not exists(select * from kontmat
+        where kml_object_kind = f_objkind(&#x27;miniapp&#x27;, &#x27;id&#x27;)
+        and kml_object_id = :ma_id)) then
+    begin
+      res_value = -1;
+      res_text = &#x27;Товар не найден&#x27;;
+      suspend;
+      exit;
+    end
+    else
+    begin
+      select res_text
+      from hp_verify_amount_goods(:k_id)
+      into :res_text;
+      if (:res_text &lt;&gt; &#x27;&#x27;) then
+      begin
+        res_value = -1;
+        suspend;
+        exit;
+      end
+    end
+  end
+  if (not exists(select *
+                 from miniapp ma
+                 where ma.ma_is_active = 1 and
+                       ma.ma_id = :ma_id and
+                       ma.ma_date_end = &#x27;31.12.9999&#x27;)) then
+  begin
+    res_value = -1;
+    res_text = &#x27;Заявка не действительная&#x27;;
+    suspend;
+    exit;
+  end
+  if (exists(select *
+             from miniappclient mac
+             where mac.mac_from_ma_id = :ma_id and
+                   mac.mac_is_poruch = -1)) then -- is_poruch = -1 - лицо дающее согласие
+  begin
+    for select mac.mac_from_c_id
+        from miniappclient mac
+        where mac.mac_from_ma_id = :ma_id and
+              mac.mac_amount &gt; 0
+        into c_id
+    do
+    begin
+      other_c_id = 0;
+      rel_name = &#x27;&#x27;;
+
+      select crel_other_c_id, rel_name
+      from hp_client_relation_list(:c_id, 0)
+      where rel_name in (&#x27;супруг&#x27;, &#x27;супруга&#x27;) --
+            rows 1
+      into other_c_id, rel_name;
+
+      if (exists(select *
+                 from miniappclient mac
+                 where mac.mac_from_ma_id = :ma_id and
+                       mac.mac_from_c_id = :other_c_id) and
+          exists(select *
+                 from hp_client_relation_list(:other_c_id, 0)
+                 where crel_from_rel_id in (&#x27;1&#x27;, &#x27;2&#x27;))) then
+        is_ok = 1;
+    end
+    if (is_ok &lt; 1) then
+      res_text = &#x27;Лицом дающее согласие должен быть супруг или супруга!&#x27;;
+  end
+
+  for select mac.mac_from_c_id, ma.ma_date_oper
+      from miniappclient mac
+      inner join miniapp ma on ma.ma_id = mac.mac_from_ma_id and
+            ma.ma_date_end = &#x27;31.12.9999&#x27; and
+            ma.ma_is_active = 1
+      where mac.mac_from_ma_id = :ma_id and
+            mac.mac_is_poruch &lt;&gt; -2
+      into c_id, ma_date_oper
+  do
+  begin
+    if (not exists(select *
+                   from clientdocs cds
+                   inner join passkind pk on cds.cds_from_pk_id = pk.pk_id
+                   inner join passdoctype pdt on pk.pk_from_pdt_id = pdt.pdt_id and
+                         pdt.pdt_code in (&#x27;contact_eds&#x27;, &#x27;emploee_eds&#x27;) --  договор ЭЦП, договор ЭПЦ сотрудника
+                   where cds.cds_from_c_id = :c_id and
+                         coalesce(cds_doc_blob_1, 0) &gt; 0 and
+                         iif(pdt.pdt_code = &#x27;contact_eds&#x27;, coalesce(cds_doc_blob_2, 0) &gt; 0, true) and --Если договор ЭЦП сотрудника, то пропустить проверку на cds_doc_blob_2
+                         cds.cds_is_delete = 0 and
+                         cds.cds_doc_date_begin &lt;= :ma_date_oper and
+                         cds.cds_doc_date_begin &gt;= (select cast(ovs.ovs_datetime as date)
+                                                    from objectprops opr
+                                                    inner join objectvalues ovs on ovs.ovs_from_opr_id = opr.opr_id and
+                                                          cast(ovs_datetime as d_date) &lt;= :ma_date_oper and
+                                                          ovs.ovs_is_active = 1 and
+                                                          ovs.ovs_value &lt;&gt; &#x27;&#x27; and
+                                                          ovs.ovs_add_value = 2
+                                                    where opr.opr_object_kind = 0 and
+                                                          opr.opr_object_id = :c_id and
+                                                          opr.opr_subject_kind = -1 and
+                                                          opr.opr_subject_id = f_get_rd_id(&#x27;contactinfo.cell_main&#x27;)
+                                                    order by ovs_datetime desc
+                                                    rows 1))) then
+    begin
+      if (f_get_const(&#x27;asp_const&#x27;) = 1 and f_asp_signed(:c_id, :ma_date_oper) = 1) then
+        continue;
+      else
+        res_text = res_text || &#x27; У клиента, не закреплен фото договора ЭЦП&#x27;;
+    end
+
+  end
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

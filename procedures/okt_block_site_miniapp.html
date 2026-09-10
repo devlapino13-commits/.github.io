@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OKT_BLOCK_SITE_MINIAPP — процедура — схема БД</title>
+<meta name="description" content="Процедура OKT_BLOCK_SITE_MINIAPP: 4 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>OKT_BLOCK_SITE_MINIAPP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">OPERATOR</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ESM_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACTION_TYPE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">INPUT_CK_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">MESSAGE_TEXT</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RETURN_CK_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">BLANK_TYPE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE OKT_BLOCK_SITE_MINIAPP(
+    OPERATOR STR_100,
+    ESM_ID ID_TYPE,
+    ACTION_TYPE SMALLINT,
+    INPUT_CK_ID INTEGER)
+RETURNS (
+    MESSAGE_TEXT STR_100,
+    RETURN_CK_ID INTEGER,
+    BLANK_TYPE SMALLINT)
+AS
+declare variable blocked_operator str_100;
+declare variable ck_status integer;
+declare variable parent_id integer;
+begin
+  /*
+  ACTION_TYPE = 1 - Заблокировать
+  ACTION_TYPE = 2 - Разблокировать
+  ACTION_TYPE = 3 - Разблокировать всех, у кого блокировока висит 30 минут и более
+  */
+
+  operator = coalesce(operator, &#x27;&#x27;);
+  message_text = &#x27;&#x27;;
+  return_ck_id = 0;
+
+  if (operator &lt;&gt; &#x27;&#x27;) then
+  begin
+    if (action_type = 1) then -- если блокировка
+    begin
+-- полчаю последний результат звонка
+      select chk.ck_blocked_oper, chk.ck_id, chk.ck_status
+      from cc_check_knclient chk
+      where chk.ck_type = 6 -- заявки с сайта
+            and
+            chk.ck_from_esm_id = :esm_id and
+            chk.ck_status &lt;&gt; -1 -- не дозвонилися, не считаю
+      order by chk.ck_id desc
+      rows 1
+      into :blocked_operator, return_ck_id, :ck_status;
+
+      blocked_operator = coalesce(blocked_operator, &#x27;&#x27;);
+      return_ck_id = coalesce(return_ck_id, 0);
+      ck_status = coalesce(ck_status, 0);
+
+      if (ck_status in (-2, 2)) then
+      begin
+        message_text = &#x27;Контакт уже обработан. Блокировка отменена&#x27;;
+        return_ck_id = 0;
+      end
+
+      if ((blocked_operator &lt;&gt; operator) and
+          (blocked_operator &lt;&gt; &#x27;&#x27;)) then
+      begin
+        message_text = &#x27;Контакт заблокирован &#x27; || blocked_operator;
+        return_ck_id = 0;
+      end
+
+      parent_id = null;
+
+      if (ck_status = 0) then
+        blank_type = 1; -- если клиенту еще не звонили, открываю форму первого диалога
+      else
+      if (ck_status = 1) then
+      begin
+        blank_type = 2; -- если клиенту ранее звонили открываю форму второго диалога
+        parent_id = return_ck_id;
+      end
+
+      if ((message_text = &#x27;&#x27;) and
+          (ck_status in (0, 1))) then
+      begin
+        if (blocked_operator = &#x27;&#x27;) then
+        begin
+          insert into cc_check_knclient (ck_type, ck_blocked_datetime, ck_blocked_oper, ck_from_esm_id, ck_status,
+                                         ck_parent_id)
+          values (6, current_timestamp, :operator, :esm_id, 0, :parent_id)
+          returning ck_id
+          into :return_ck_id;
+        end
+      end
+    end
+    else
+    if (action_type = 2) then
+    begin
+      delete from cc_check_knclient chk
+      where chk.ck_type = 6 -- заявки с сайта
+            and
+            chk.ck_blocked_oper = :operator and
+            chk.ck_checked_date is null and
+            chk.ck_id = :input_ck_id and
+            chk.ck_status not in (-2, 2);
+    end
+    else
+    if (action_type = 3) then
+    begin
+      delete from cc_check_knclient chk
+      where chk.ck_type = 6 -- заявки с сайта
+            and
+            chk.ck_checked_date is null and
+            chk.ck_status = 0 -- не обработанная
+            and
+            ((current_timestamp - chk.ck_blocked_datetime) &gt; 0.041666667); -- если разница между текущей датой/временем и временем блокировки больше 1 часа
+    end
+  end
+  else
+    message_text = &#x27;Оператор не определен&#x27;;
+
+  suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

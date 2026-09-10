@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_INTEREST_ADJUSTMENT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_INTEREST_ADJUSTMENT: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_INTEREST_ADJUSTMENT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="aarep_make_zad_list.html"><div class="to">AAREP_MAKE_ZAD_LIST</div></a><a class="ref-card" href="get_kv.html"><div class="to">GET_KV</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_update_stopperc_az.html"><div class="to">HP_UPDATE_STOPPERC_AZ</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">NEW_OL_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_INTEREST_ADJUSTMENT(
+    K_ID ID_TYPE,
+    REP_DATE DATE)
+RETURNS (
+    NEW_OL_ID ID_TYPE)
+AS
+declare variable k_stop_perc date;
+declare variable k_disb_date date;
+declare variable k_last_reg_id integer;
+declare variable k_kontract_no varchar(20);
+declare variable ol_memo varchar(1024);
+declare variable un_id id_type;
+declare variable sh_id integer;
+declare variable sh_date date;
+declare variable sh_perc curr_type;
+declare variable s_perc curr_type;
+declare variable las_ol_date date;
+begin
+  k_stop_perc = null;
+  select k_stop_perc, k_disb_date, k_last_reg_id, k_kontract_no
+  from kontract
+  where k_id = :k_id
+  into k_stop_perc, k_disb_date, k_last_reg_id, k_kontract_no;
+  if (k_stop_perc is null) then
+    exit;
+
+  select max(ok_ol_date)
+  from operkred
+  where ok_from_k_id = :k_id and
+        ok_ol_is_active = 1
+  into las_ol_date;
+  if (las_ol_date is null) then
+    exit;
+
+  if (rep_date is not null) then
+  begin
+    if (rep_date not between k_disb_date and current_date or rep_date &lt; k_stop_perc or rep_date &lt; las_ol_date) then
+    begin
+--      rest_text = &#x27;Задана неверная дата!&#x27;;
+--      suspend;
+--      exit;
+      exception e_default &#x27;Invalid date specified&#x27;;
+    end
+  end
+  else
+  begin
+    rep_date = las_ol_date;
+    if (rep_date &lt; k_stop_perc) then
+      rep_date = k_stop_perc;
+  end
+
+  if (un_id is null) then
+    un_id = 1000000000001;
+
+  for select sh_id, sh_date, zad_perc, coalesce(sh_calc_perc, 0)
+      from aarep_make_zad_list(:k_id, :rep_date, 1)
+      where (zad_perc &lt;&gt; 0 or
+            coalesce(sh_calc_perc, 0) &lt;&gt; 0)
+      into sh_id, sh_date, sh_perc, s_perc
+  do
+  begin
+    if (sh_perc &lt;&gt; s_perc) then
+    begin
+      if (new_ol_id is null) then
+      begin
+        select kv
+        from get_kv(:k_last_reg_id, 5)
+        into :new_ol_id;
+
+        ol_memo = &#x27;Корректировка % по графику в соответствии с накопленными, договора №&#x27; || k_kontract_no || &#x27;. Дата корректировки &#x27; || :rep_date;
+        insert into operlist (ol_id, ol_from_reg_id, ol_oper_type, ol_date, ol_doc_kind, ol_memo, ol_status, is_delete,
+                              ol_user_id)
+        values (:new_ol_id, :k_last_reg_id, 1, :rep_date, 8, :ol_memo, 0, 0, :un_id);
+      end
+
+      if (sh_perc &gt; 0) then
+      begin
+        insert into operkred (ok_from_ol_id, ok_number, ok_from_k_id, ok_sh_id, ok_sh_date, ok_type, ok_os, ok_perc,
+                              ok_fine, ok_pay_type, ok_kommis, ok_sh_os, ok_sh_perc, ok_kommis_adv, ok_tax)
+        values (:new_ol_id, -1, :k_id, :sh_id, :sh_date, 3, 0, 0, 0, 3, 0, 0, -:sh_perc, 0, 0);
+      end
+      if (s_perc &gt; 0) then
+      begin
+        insert into operkred (ok_from_ol_id, ok_number, ok_from_k_id, ok_sh_id, ok_sh_date, ok_type, ok_os, ok_perc,
+                              ok_fine, ok_pay_type, ok_kommis, ok_sh_os, ok_sh_perc, ok_kommis_adv, ok_tax)
+        values (:new_ol_id, -1, :k_id, :sh_id, :sh_date, 3, 0, 0, 0, 3, 0, 0, :s_perc, 0, 0);
+      end
+    end
+  end
+  if (new_ol_id is not null) then
+    suspend;
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

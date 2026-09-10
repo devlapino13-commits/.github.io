@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_REPAY_ALLOC — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_REPAY_ALLOC: 8 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_REPAY_ALLOC</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">8</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">2</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_repay_alloc_tmp.html"><div class="to">HP_REPAY_ALLOC_TMP</div></a><a class="ref-card" href="hp_repay_client_part.html"><div class="to">HP_REPAY_CLIENT_PART</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">2 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_repayment.html"><div class="to">HP_DO_REPAYMENT</div></a><a class="ref-card" href="hp_repay_reschedule.html"><div class="to">HP_REPAY_RESCHEDULE</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">8 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REPAY_AMOUNT</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REPAY_TO_OS</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REPAY_TO_PERC</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REPAY_TO_FINE</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REPAY_TO_KOMMIS</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REPAY_IS_WRTITEOFF</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_REPAY_ALLOC(
+    REP_DATE DATE,
+    REP_K_ID D_ID,
+    REPAY_AMOUNT DECIMAL(18,4),
+    REPAY_TO_OS INTEGER,
+    REPAY_TO_PERC INTEGER,
+    REPAY_TO_FINE INTEGER,
+    REPAY_TO_KOMMIS INTEGER,
+    REPAY_IS_WRTITEOFF D_SMALLINT = null)
+AS
+declare variable cs_pros integer;
+declare variable cs_pred integer;
+declare variable k_disb_date date;
+declare variable cm_database_id integer;
+declare variable s_rec_no integer;
+declare variable rep_saldo decimal(18,4);
+declare variable client_koef double precision;
+declare variable pr_percent_method integer;
+declare variable is_extra_at_end d_smallint;
+declare variable vac_date_begin d_date;
+begin
+  cm_database_id = f_get_db_id();
+
+  if (repay_is_wrtiteoff is null) then
+    repay_is_wrtiteoff = 0;
+
+  update temp_vrepay
+  set pay_os = 0,
+      pay_perc = 0,
+      pay_fine = 0,
+      pay_tax = 0,
+      pay_kommis = 0,
+      pay_extra = 0,
+      resh_perc = 0,
+      sh_new_os = 0,
+      sh_new_perc = 0,
+      depo_amount = 0;
+
+-- Чтение необходимых параметров кредита
+  select cs_pros, cs_pred, k_disb_date, client_koef, pr_percent_method, vac_date_begin
+  from temp_params
+  into :cs_pros, :cs_pred, :k_disb_date, :client_koef, pr_percent_method, vac_date_begin;
+
+  -- RFCRU-1800 Изменение очередности распределения погашений по займам с 01.07.24: пени после срочных %% и ОД
+  if (cm_database_id = 81001 and rep_date &gt;= cast(&#x27;01.07.2024&#x27; as date)) then
+    cs_pros = 7;
+
+  if (client_koef &lt;&gt; 1) then
+  begin
+-- Вычисление доли клиента из распределенной части
+    execute procedure hp_repay_client_part;
+    exit;
+  end
+  if (repay_amount &lt;= 0) then
+    exit;
+  rep_saldo = repay_amount;
+
+  if ((k_disb_date between &#x27;01.10.2013&#x27; and &#x27;30.06.2014&#x27;) and
+      (cm_database_id = 81001) and
+      (cs_pros &lt;&gt; 5)) then
+  begin
+-- если выдачи после 01.10.2013 и РФ, то распределение: Проц, ОС, Штрафы
+    cs_pros = 5;
+  end
+
+  is_extra_at_end = 0;
+  if (cm_database_id = 81001 and rep_date &gt;= &#x27;01.01.2020&#x27;) then
+    is_extra_at_end = 1;
+
+  if (cm_database_id = 39801) then
+    is_extra_at_end = 1;
+-- НАЧАЛО: Распределение доп.обязательств
+  if (is_extra_at_end = 0) then
+  begin
+    select rep_saldo
+    from hp_repay_alloc_tmp(&#x27;Extra&#x27;, :rep_date, 0, 0, 0, 0, :rep_saldo, 1, 0)
+    into :rep_saldo;
+  end
+-- КОНЕЦ: Распределение доп.обязательств
+
+  if (pr_percent_method = -1) then -- Финансирование по исламским принципам
+  begin
+    if (f_ipf_newrepmode(rep_date, rep_k_id, repay_is_wrtiteoff) = 1) then
+    begin
+      -- Все платежи распределяются пропорционально на ОС, переплаты в конце
+      select rep_saldo
+      from hp_repay_alloc_tmp(&#x27;Proportional_ipf&#x27;, :rep_date, 1 * :repay_to_os, 2 * :repay_to_perc, 3 * :repay_to_fine, 4 * :repay_to_kommis, :rep_saldo, 1, 1)
+      into :rep_saldo;
+    end else
+    begin
+      -- Все платежи распределяются пропорционально на ОС, наценку и НсП
+      select rep_saldo
+      from hp_repay_alloc_tmp(&#x27;Proportional&#x27;, :rep_date, 1 * :repay_to_os, 2 * :repay_to_perc, 3 * :repay_to_fine, 4 * :repay_to_kommis, :rep_saldo, 1, 1)
+      into :rep_saldo;
+    end
+  end else
+  begin
+-- НАЧАЛО: Просроченные платежи, специальное распределение
+    select rep_saldo
+    from hp_repay_alloc_tmp(&#x27;Vertical&#x27;, :rep_date, 1 * :repay_to_os, 2 * :repay_to_perc, 3 * :repay_to_fine, 4 * :repay_to_kommis, :rep_saldo, 1, 1)
+    into :rep_saldo;
+-- КОНЕЦ: Просроченные платежи, специальное распределение
+
+-- НАЧАЛО: Просроченные платежи, стандартное распределение по настройкам продукта
+    if (cm_database_id = 39801) then -- RFCKZ-1031 Весь ОС, затем Проценты, после штрафы (все вертикально)
+    begin
+      select rep_saldo
+      from hp_repay_alloc_tmp(&#x27;Vertical&#x27;, :rep_date, 1 * :repay_to_os, 2 * :repay_to_perc, 3 * :repay_to_fine, 4 * :repay_to_kommis, :rep_saldo, 1, 0)
+      into :rep_saldo;
+    end else
+    begin
+      if (cs_pros = 1) then -- ВСЕ штрафы (вертикально), и после горизонтально Проценты, ОС
+      begin
+        select rep_saldo
+        from hp_repay_alloc_tmp(&#x27;Vertical&#x27;, :rep_date, 0, 0, 1 * :repay_to_fine, 4 * :repay_to_kommis, :rep_saldo, 1, 0)
+        into :rep_saldo;
+  
+        select rep_saldo
+        from hp_repay_alloc_tmp(&#x27;Horizontal&#x27;, :rep_date, 2 * :repay_to_os, 1 * :repay_to_perc, 0, 4 * :repay_to_kommis, :rep_saldo, 1, 0)
+        into :rep_saldo;
+      end
+  
+      if (cs_pros = 2) then -- Горизонтально Штрафы, Проц, ОС
+      begin
+        select rep_saldo
+        from hp_repay_alloc_tmp(&#x27;Horizontal&#x27;, :rep_date, 3 * :repay_to_os, 2 * :repay_to_perc, 1 * :repay_to_fine, 4 * :repay_to_kommis, :rep_saldo, 1, 0)
+        into :rep_saldo;
+      end
+  
+      if (cs_pros = 3) then -- ВСЕ штрафы (вертикально), и после горизонтально ОС, Проценты
+      begin
+        select rep_saldo
+        from hp_repay_alloc_tmp(&#x27;Vertical&#x27;, :rep_date, 0, 0, 1 * :repay_to_fine, 4 * :repay_to_kommis, :rep_saldo, 1, 0)
+        into :rep_saldo;
+  
+        select rep_saldo
+        from hp_repay_alloc_tmp(&#x27;Horizontal&#x27;, :rep_date, 1 * :repay_to_os, 2 * :repay_to_perc, 0, 4 * :repay_to_kommis, :rep_saldo, 1, 0)
+        into :rep_saldo;
+      end
+  
+      if (cs_pros = 4) then -- Горизонтально Штрафы, ОС, Проценты
+      begin
+        select rep_saldo
+        from hp_repay_alloc_tmp(&#x27;Horizontal&#x27;, :rep_date, 2 * :repay_to_os, 3 * :repay_to_perc, 1 * :repay_to_fine, 4 * :repay_to_kommis, :rep_saldo, 1, 0)
+        into :rep_saldo;
+      end
+  
+      if (cs_pros = 5) then -- Проц, ОС, Штрафы
+      begin
+        select rep_saldo
+        from hp_repay_alloc_tmp(&#x27;Horizontal&#x27;, :rep_date, 2 * :repay_to_os, 1 * :repay_to_perc, 3 * :repay_to_fine, 4 * :repay_to_kommis, :rep_saldo, 1, 0)
+        into :rep_saldo;
+      end
+  
+      if (cs_pros = 6) then -- Все вертикально: все проценты, все ОС и потом все пени
+      begin
+        select rep_saldo
+        from hp_repay_alloc_tmp(&#x27;Vertical&#x27;, :rep_date, 2 * :repay_to_os, 1 * :repay_to_perc, 3 * :repay_to_fine, 4 * :repay_to_kommis, :rep_saldo, 1, 0)
+        into :rep_saldo;
+      end
+  
+      if (cs_pros = 7) then -- Все вертикально: все проценты, все ОС и потом все пени
+      begin
+        select rep_saldo
+        from hp_repay_alloc_tmp(&#x27;Vertical&#x27;, :rep_date, 2 * :repay_to_os, 1 * :repay_to_perc, 0, 4 * :repay_to_kommis, :rep_saldo, 1, 0)
+        into :rep_saldo;
+  
+        select rep_saldo
+        from hp_repay_alloc_tmp(&#x27;Horizontal&#x27;, :rep_date, 2 * :repay_to_os, 1 * :repay_to_perc, 0, 4 * :repay_to_kommis, :rep_saldo, 2, 0)
+        into :rep_saldo;
+  
+        select rep_saldo
+        from hp_repay_alloc_tmp(&#x27;Vertical&#x27;, :rep_date, 0, 0, 1, 0, :rep_saldo, 1, 0)
+        into :rep_saldo;
+      end
+   end
+
+-- КОНЕЦ: Просроченные платежи, стандартное распределение по настройкам продукта
+
+-- НАЧАЛО: Текущий платеж
+    if (cm_database_id = 39801) then -- RFCKZ-1031 ОС, затем процент (все горизонтально)
+    begin
+      select rep_saldo
+        from hp_repay_alloc_tmp(&#x27;Horizontal&#x27;, :rep_date, 1 * :repay_to_os, 2 * :repay_to_perc, 0, 4 * :repay_to_kommis, :rep_saldo, 2, 0)
+        into :rep_saldo;
+    end else
+    begin
+      if (cs_pros &lt;&gt; 7) then
+      begin
+        select rep_saldo
+        from hp_repay_alloc_tmp(&#x27;Horizontal&#x27;, :rep_date, 2 * :repay_to_os, 1 * :repay_to_perc, 0, 4 * :repay_to_kommis, :rep_saldo, 2, 0)
+        into :rep_saldo;
+      end
+    end
+-- КОНЕЦ: Текущий платеж
+
+-- НАЧАЛО: Будущие платежи
+    if (cs_pred = 2) then -- ОС с очередного погашения
+    begin
+      select rep_saldo
+      from hp_repay_alloc_tmp(&#x27;Horizontal&#x27;, :rep_date, 2 * :repay_to_os, 1 * :repay_to_perc, 0, 4 * :repay_to_kommis, :rep_saldo, 3, 0)
+      into :rep_saldo;
+    end
+
+    if (cs_pred = 3) then -- ОС с последнего погашения (Special_Mode=-1)
+    begin
+      select rep_saldo
+      from hp_repay_alloc_tmp(&#x27;Horizontal&#x27;, :rep_date, 2 * :repay_to_os, 1 * :repay_to_perc, 0, 4 * :repay_to_kommis, :rep_saldo, 3, -1)
+      into :rep_saldo;
+    end
+-- КОНЕЦ: Будущие платежи
+  end
+
+-- НАЧАЛО: Распределение доп.обязательств
+  if (is_extra_at_end = 1) then
+  begin
+    select rep_saldo
+    from hp_repay_alloc_tmp(&#x27;Extra&#x27;, :rep_date, 0, 0, 0, 0, :rep_saldo, 1, 0)
+    into :rep_saldo;
+  end
+-- КОНЕЦ: Распределение доп.обязательств
+
+-- Если Rep_Saldo&gt;0, значит это переплата
+  if (rep_saldo &gt; 0) then
+  begin
+    select max(s_rec_no)
+    from temp_vrepay
+    into :s_rec_no;
+
+    update temp_vrepay
+    set pay_pereplat = pay_pereplat + :rep_saldo
+    where s_rec_no = :s_rec_no;
+  end
+
+-- Если после распределения баланс нулевой, скриптом приравниваем Pay_OS на Zad_OS;
+  rep_saldo = 0;
+  select sum(zad_os - pay_os)
+  from temp_vrepay
+  into :rep_saldo;
+  if (rep_saldo is null) then
+    rep_saldo = 0;
+
+  if (rep_saldo &lt;= 0 and vac_date_begin is null) then
+  begin
+    update temp_vrepay
+    set pay_os = zad_os;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

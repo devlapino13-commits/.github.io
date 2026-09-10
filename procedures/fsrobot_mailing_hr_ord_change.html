@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FSROBOT_MAILING_HR_ORD_CHANGE — процедура — схема БД</title>
+<meta name="description" content="Процедура FSROBOT_MAILING_HR_ORD_CHANGE: 6 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>FSROBOT_MAILING_HR_ORD_CHANGE</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">HO_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OLD_JL_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEW_JL_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OLD_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">NEW_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE FSROBOT_MAILING_HR_ORD_CHANGE(
+    HO_ID ID_TYPE,
+    OLD_JL_ID D_INTEGER,
+    NEW_JL_ID D_INTEGER,
+    OLD_DATE D_DATE,
+    NEW_DATE D_DATE,
+    C_ID ID_TYPE)
+AS
+declare variable email_text d_str_long;
+declare variable ho_order_no str_20;
+declare variable ho_order_type d_integer;
+declare variable ho_cause_id d_integer;
+declare variable ps_date_begin d_date;
+declare variable jl_name str_100;
+declare variable c_name_fio str_100;
+declare variable old_jl_name str_100;
+begin
+  select iif(:old_jl_id &lt;&gt; :new_jl_id, coalesce(ho_order_no, &#x27;б/н&#x27;), ho_order_no), ho_order_type, ho_cause_id,
+         ps_date_begin, jl_name, c_name_fio
+  from hr_orders
+  inner join hr_pstatus on ps_from_ho_id = ho_id
+  inner join joblist on jl_id = ps_from_jl_id
+  inner join clients on c_id = ps_from_c_id
+  where ho_id = :ho_id and
+        ho_status = 1 and
+        ps_from_c_id = :c_id rows 1
+  into ho_order_no, ho_order_type, ho_cause_id, ps_date_begin, jl_name, c_name_fio;
+
+  if (not exists(select *
+                 from refdata
+                 where rd_code = &#x27;OrderChangeTermContract.WorkCondition&#x27; and
+                       rd_id = :ho_cause_id)) then
+  begin
+    email_text = &#x27;Внесено изменение в приказ № &#x27; || ho_order_no || &#x27; от &#x27; || f_datetostr(ps_date_begin) || &#x27;&lt;br&gt;По сотруднику &lt;b&gt;&#x27; || jl_name || &#x27;, &#x27; || c_name_fio || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;;
+
+    if (old_jl_id &lt;&gt; new_jl_id) then
+    begin
+      select jl_name
+      from joblist
+      where jl_id = :old_jl_id
+      into old_jl_name;
+
+      email_text = email_text || &#x27;&lt;br&gt;Старая должность: &lt;b&gt;&#x27; || old_jl_name || &#x27;&lt;/b&gt;&lt;br&gt;Новая должность: &lt;b&gt;&#x27; || jl_name || &#x27;&lt;/b&gt;&lt;br&gt;&#x27;;
+    end
+
+    if (old_date &lt;&gt; new_date) then
+    begin
+      email_text = email_text || &#x27;&lt;br&gt;Старая дата начала действия: &lt;b&gt;&#x27; || f_datetostr(old_date) || &#x27;&lt;/b&gt;&lt;br&gt;Новая дата начала действия: &lt;b&gt;&#x27; || f_datetostr(new_date) || &#x27;&lt;/b&gt;&#x27;;
+    end
+
+    if (email_text is null) then
+      exit;
+
+    insert into fsrobot_msgbox (msg_type, msg_mail_to, msg_subject, msg_body, msg_lifetime_days, msg_from_un_id,
+                                msg_command_kind, msg_object_kind, msg_object_id)
+    values (0, &#x27;ru.staff@molbulak.com&#x27;, &#x27;Внесено изменение в приказ&#x27;, :email_text, 7,
+            1000000000000, &#x27;&#x27;, 0, 0);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

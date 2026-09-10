@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_BKI_ADD_TO_BUFFER — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_BKI_ADD_TO_BUFFER: 4 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_BKI_ADD_TO_BUFFER</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">4</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">7</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">7 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_bki_create_corr_packets.html"><div class="to">HP_BKI_CREATE_CORR_PACKETS</div></a><a class="ref-card" href="hp_bki_create_packets.html"><div class="to">HP_BKI_CREATE_PACKETS</div></a><a class="ref-card" href="hp_bki_fix_error.html"><div class="to">HP_BKI_FIX_ERROR</div></a><a class="ref-card" href="hp_edoc_after_sign_action.html"><div class="to">HP_EDOC_AFTER_SIGN_ACTION</div></a><a class="ref-card" href="hp_edoc_ins_loan_agreement.html"><div class="to">HP_EDOC_INS_LOAN_AGREEMENT</div></a><a class="ref-card" href="hp_sud_bki_send.html"><div class="to">HP_SUD_BKI_SEND</div></a><a class="ref-card" href="hp_sud_cession_send_bki.html"><div class="to">HP_SUD_CESSION_SEND_BKI</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">4 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">SOURCE_ALIAS</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJECT_KIND_NAME</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OBJECT_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ACTUALITY_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_BKI_ADD_TO_BUFFER(
+    SOURCE_ALIAS D_STR_100 NOT NULL,
+    OBJECT_KIND_NAME D_STR_100 NOT NULL,
+    OBJECT_ID D_ID NOT NULL,
+    ACTUALITY_DATE D_DATE NOT NULL)
+AS
+declare variable object_kind d_integer;
+declare variable tag d_integer;
+declare variable bkk_id d_id;
+declare variable bkk_code d_str_code;
+declare variable eds_id d_id;
+declare variable c_id d_id;
+declare variable object_id_tmp d_id;
+declare variable app_summ d_currency;
+declare variable cnt d_integer;
+begin
+  -- пока только для РФ
+  if (f_get_db_id() &lt;&gt; 81001) then
+    exit;
+
+  --- если идет процедура разделения договоров (амнистирование)
+  if (coalesce(rdb$get_context(&#x27;USER_TRANSACTION&#x27;, &#x27;DEVIDE_IN_PROGRESS&#x27;), 0) = 1) then  
+    exit;
+
+  tag = case
+          when source_alias containing (&#x27;.operkred.&#x27;)   then 1
+          when source_alias containing (&#x27;.kontdata.&#x27;)   then 2
+          when source_alias containing (&#x27;.operkroff.&#x27;)  then 3
+          when source_alias containing (&#x27;.kontstate.&#x27;)  then 4
+          when source_alias containing (&#x27;.bki_errors.&#x27;) then 6
+          when source_alias containing (&#x27;.miniapp.&#x27;)    then 7
+          when source_alias containing (&#x27;.lawmain.&#x27;)    then 8
+          when source_alias containing (&#x27;.lawkredit.&#x27;)  then 9
+          when source_alias containing (&#x27;.hp_bki_get_packet.&#x27;)            then 10
+          when source_alias containing (&#x27;.hp_bki_get_loan_list_equifax.&#x27;) then 11 -- переход на следующий статус
+          when source_alias containing (&#x27;.hp_bki_packet_set_status.&#x27;)     then 12 -- повторная отправка &quot;затертых&quot; пакетов после корректировки
+          when source_alias containing (&#x27;.operextra.&#x27;)                    then 13
+          when source_alias containing (&#x27;.hp_edoc_after_sign_action.&#x27;)    then 14 -- подписание заявки
+          when source_alias containing (&#x27;.zalog.&#x27;)      then 15 -- залоги
+                                                             -- 16 - robot
+          when source_alias containing (&#x27;.konteffrate.&#x27;)then 17 -- ПСК
+          when source_alias containing (&#x27;.kontpsk.&#x27;)    then 18 -- ПСК
+          when source_alias containing (&#x27;.bki_bankrupt.&#x27;)then 19 -- Банкроты
+          when source_alias containing (&#x27;.edoc_msg.&#x27;)   then 20 -- Отправка документа
+          when source_alias containing (&#x27;.perslist.&#x27;)   then 21 -- Изменение перс. данных
+          when source_alias containing (&#x27;.bankrupt.&#x27;)   then 22 -- Банкротства
+          when source_alias containing (&#x27;.knclient_pdn.&#x27;)   then 23 -- Расчет ПДН 60 дней
+          when source_alias containing (&#x27;.hp_edoc_ins_loan_agreement.&#x27;)   then 24 -- Утверждение договора
+--          when source_alias containing (&#x27;.perstemp.&#x27;)   then 25
+--          when source_alias containing (&#x27;.kn_oksummary.&#x27;)   then 26 -- изменилась дата окончания договора
+          when source_alias containing (&#x27;.kontdevides.&#x27;)   then 27 -- разделение
+          when source_alias containing (&#x27;.hp_sud_cession_send_bki.&#x27;)   then 28 -- Цессии (продажа договора)
+          when source_alias containing (&#x27;.extsysmain.&#x27;)   then 29 -- выдача
+          when source_alias containing (&#x27;.hp_sud_bki_send.&#x27;)   then 30 -- суд (новый модуль)
+        end;
+
+  if (tag is null) then
+    exception e_default &#x27;unknoun tag for source_alias: &#x27; || source_alias;
+
+  -- стали происходить изменения в БД по очень старым контрактам, что рождает кучу ненужных событий в прошлом. Ограничим.
+  -- Если это событие не по судебным делам и не отправка из процедур, то ограничим тремя месяцами
+  -- При необходимости отправим вручную
+  if (actuality_date &lt; current_date - 90 and tag not in (6,8,9,10,11,12,13,15,30)) then
+    exit;
+
+  -- правила отбора событий для записи в буфер.
+  if (tag = 4 and source_alias not containing (&#x27;.ks_state1.&#x27;) and source_alias not containing (&#x27;.ks_state2.&#x27;)) then
+    exit;
+  else if (tag = 13 and source_alias not containing (&#x27;.ox_from_rd_id&#x27; || f_get_rd_id(&#x27;OperExtraKind.LawClientExpense&#x27;) || &#x27;.&#x27;)) then
+    exit;
+  else if (tag = 21 and source_alias not containing (&#x27;.pls_edit_kind1.&#x27;)) then
+    tag = 25; -- корректировка / изменения без подписания перс. данных
+  else if (tag = 22 and exists(select 1
+                              from bankrupt
+                              where brt_from_c_id = :object_id
+                                and brt_date_fact = :actuality_date
+                                and brt_date_end &lt; current_date)) --  не первая запись
+  then
+    exit;
+
+  object_kind = f_objkind(object_kind_name, &#x27;id&#x27;);
+
+  if (object_kind_name = &#x27;miniapp&#x27;) then -- если это заявка и по ней есть договор, то в буфер закинем договор, что бы избежать ситуации когда по одной паре заявка-договор были бы две записи
+  begin
+    object_id_tmp = object_id;
+
+    select f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;), k_id
+    from kontract k
+    where k.k_from_ma_app_id = :object_id_tmp
+    order by k_status desc
+    rows 1
+    into object_kind, object_id;
+  end
+
+  -- если контракт есть в списке заблокированных (удаляли ранее по разным причинам), то запись не производим
+  if (object_kind = f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;)
+    and exists(select bsl_id from bki_stoplist_loans bsl where bsl.bsl_from_k_id = :object_id))
+  then
+    exit;
+
+  -- если это подписание заявки, то сохраним сумму
+  if (tag = 14) then
+  begin
+    select eds_id, eds_from_c_id
+    from edoc_sign, edoc_list
+    where eds_from_edl_id = edl_id
+      and edl_from_edc_id = f_edoc_kind(&#x27;loan.application&#x27;,&#x27;id&#x27;)
+      and edl_object_kind = :object_kind
+      and edl_object_id = :object_id
+      and edl_status = 1
+      and eds_status = 1
+    into eds_id, c_id;
+
+    select mac_amount
+    from miniappclient
+    where mac_from_ma_id = :object_id
+      and mac_from_c_id = :c_id
+    into app_summ;
+
+    if (eds_id is not null and app_summ is not null) then
+      update or insert into bki_sign_app_data (bad_from_eds_id, bad_summ)
+      values (:eds_id, :app_summ)
+      matching (bad_from_eds_id);
+  end
+  else if (tag = 20) then -- ловим первую отправку договора
+  begin
+    cnt = 0;
+
+    select edl_object_kind, edl_object_id, min(msg_datetime), count(distinct msg_id)
+    from edoc_sign, edoc_list, edoc_msg, fsrobot_msgbox
+    where eds_from_edl_id = edl_id
+      and edl_from_edc_id = f_edoc_kind(&#x27;loan.agreement&#x27;,&#x27;id&#x27;)
+      and edm_from_eds_id = eds_id
+      and msg_id = edm_from_msg_id
+      and eds_id = :object_id
+    group by 1,2
+    into object_kind, object_id, actuality_date, cnt;
+
+    if (cnt &lt;&gt; 1) then
+      exit;
+  end 
+
+  -- RFCRU-5786
+  if (tag in (7, 14, 24, 29) -- заявка, одобрение (утверждение), выдача/договор, отказ
+      and actuality_date &gt; current_date - 2) -- максимум вчерашние
+  then
+  begin
+    if (not exists (select *
+            from bki_buffer
+            where bkb_from_bkk_id = :bkk_id
+              and bkb_object_kind = :object_kind
+              and bkb_object_id   = :object_id
+              and bkb_date        = :actuality_date
+              and bkb_type        = 2)   --- AF
+    )
+    then
+      insert into bki_buffer (bkb_from_bkk_id, bkb_object_kind, bkb_object_id, bkb_date, bkb_tag, bkb_type)
+      values (1, :object_kind, :object_id, :actuality_date, :tag, 2);
+  end
+
+  for select bkk.bkk_id, bkk.bkk_code
+    from bki_kind bkk
+    where bkk.bkk_inactive = 0
+  into bkk_id, bkk_code
+  do
+  begin
+    if (bkk_code = &#x27;ru.nbki&#x27; and source_alias not containing (&#x27;.nbki.&#x27;)) then
+      continue;
+
+    if (not exists (select *
+            from bki_buffer
+            where bkb_from_bkk_id = :bkk_id
+              and bkb_object_kind = :object_kind
+              and bkb_object_id   = :object_id
+              and bkb_date        = :actuality_date
+              and bkb_type        = 0)
+    )
+    then
+      insert into bki_buffer (bkb_from_bkk_id, bkb_object_kind, bkb_object_id, bkb_date, bkb_tag)
+      values (:bkk_id, :object_kind, :object_id, :actuality_date, :tag);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

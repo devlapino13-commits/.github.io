@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_FT_CLIENT_LIST — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_FT_CLIENT_LIST: 1 входных, 11 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_FT_CLIENT_LIST</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">11</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">11 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">C_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REC_NO</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">FIO</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">BIRTH_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">RESIDENT</div><div class="ptype">VARCHAR(10)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">DEBT_TXT</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ZALOG_DEBT_TXT</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OVERPAY_TXT</div><div class="ptype">VARCHAR(1024)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">LAST_PAYMENT_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ASP_DATE_OPEN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">ASP_DATE_REJECT</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_FT_CLIENT_LIST(
+    REP_DATE D_DATE)
+RETURNS (
+    C_ID D_ID,
+    REC_NO D_INTEGER,
+    FIO D_STR_255,
+    BIRTH_DATE D_DATE,
+    RESIDENT D_STR_10,
+    DEBT_TXT D_STR_LONG,
+    ZALOG_DEBT_TXT D_STR_LONG,
+    OVERPAY_TXT D_STR_LONG,
+    LAST_PAYMENT_DATE D_DATE,
+    ASP_DATE_OPEN D_DATE,
+    ASP_DATE_REJECT D_DATE)
+AS
+declare variable asp_kind d_integer;
+declare variable max_date_const d_date;
+declare variable min_date_const d_date;
+begin
+  -- выборка очень большая, поэтому пришлось делать почти всё через один запрос, так скорость гораздо выше
+  asp_kind = f_edoc_kind(&#x27;asp.agreement&#x27;, &#x27;id&#x27;);
+  rec_no = 0;
+  max_date_const = &#x27;31.12.9999&#x27;;
+  min_date_const = &#x27;01.01.1900&#x27;;
+
+  for with t_overpay(ok_from_k_id, overpay_sum) as (
+    select ok_from_k_id, -sum(ok_os)
+    from operkred
+    where ok_ol_is_active = 1
+      and ok_type = 9
+      and ok_ol_date &lt;= :rep_date
+    group by 1
+    having sum(ok_os) &lt;&gt; 0
+  ), t1(c_id, debt_str, zalog_debt_str, overpay_str, asp_date_open, asp_date_reject, last_payment_date) as (
+  -- 1. активные клиенты (имеют активные договоры)
+    select kc_from_c_id, cast(list(f_numtostr(oks_balance, 2) || &#x27; - &#x27; || k_kontract_no, &#x27;, &#x27;) as d_str_long), null, null, :max_date_const, :min_date_const, :min_date_const
+    from oksummary, knclient, kontract
+    where kc_from_k_id = oks_from_k_id
+      and k_id = oks_from_k_id
+      and oks_close_state = 0
+      and :rep_date between oks_date_begin and oks_date_end
+    group by 1,3,4,5,6,7
+  union  -- добавляем так же залогодателей
+    select z_from_c_id, null, cast(list(f_numtostr(oks_balance, 2) || &#x27; - &#x27; || k_kontract_no, &#x27;, &#x27;) as d_str_long), null, :max_date_const, :min_date_const, :min_date_const
+    from oksummary, zalog, kontract
+    where z_from_k_id = oks_from_k_id
+      and k_id = oks_from_k_id
+      and oks_close_state = 0
+      and :rep_date between oks_date_begin and oks_date_end
+    group by 1,2,4,5,6,7
+  union   -- 2. имеют непогашенные переплаты
+    select kc_from_c_id, null, null, cast(list(f_numtostr(overpay_sum, 2) || &#x27; - &#x27; || k_kontract_no, &#x27;, &#x27;) as d_str_long), :max_date_const, :min_date_const, :min_date_const
+    from t_overpay, knclient, kontract
+    where kc_from_k_id = ok_from_k_id
+      and k_id = kc_from_k_id
+    group by 1,2,3,5,6,7
+  union -- 3. замороженные переплаты
+    select acc_object_id, null, null, cast(list(f_numtostr(-f_acc_bal(acc_id, current_date, &#x27;sum&#x27;), 2) || &#x27; - Заморожено&#x27;, &#x27;, &#x27;) as d_str_long),
+        :max_date_const, :min_date_const, :min_date_const
+    from ref_account, ref_accbalance
+    where ab_code = &#x27;60322&#x27;
+      and acc_from_ab_id = ab_id
+      and acc_add_code = &#x27;60322 (83)&#x27;
+      and acc_object_kind = 0
+      and coalesce(f_acc_bal(acc_id, current_date, &#x27;sum&#x27;), 0) &lt;&gt; 0
+    group by 1,2,3,5,6,7
+  union  -- 4. активный АСП
+    select edl_object_id, null, null, null, cast(eds_status_datetime as date), coalesce(edl_date_end + 1, :min_date_const), :min_date_const
+    from edoc_sign, edoc_list, edoc_blank edb
+    where eds_from_edl_id = edl_id
+      and edb_from_edl_id = edl_id
+      and edl_from_edc_id = :asp_kind
+      and edl_object_kind = 0
+      and eds_status = 1
+      and eds_status_datetime &lt; :rep_date + 1
+      and coalesce(edl_date_end, :max_date_const) &gt;= :rep_date
+  union -- 5. платеж был в течении двух лет
+    select kc_from_c_id, null, null, null, :max_date_const, :min_date_const, max(ks_date_begin)
+    from kontstate, knclient
+    where kc_from_k_id = ks_from_k_id
+      and ks_ol_is_delete = 0
+      and ks_state = 2
+      and ks_date_begin &gt;= dateadd(year, -2, :rep_date)
+    group by 1,2,3,4,5,6
+    having max(ks_date_begin) &lt; :rep_date
+  ), t2 (c_id, debt_str, zalog_debt_str, overpay_str, asp_date_open, asp_date_reject, last_payment_date) as (
+    select c_id, list(debt_str, &#x27;, &#x27;), list(zalog_debt_str, &#x27;, &#x27;), list(overpay_str, &#x27;, &#x27;),
+        min(asp_date_open), max(asp_date_reject), max(last_payment_date)
+    from t1
+    group by 1
+  )
+  select t2.c_id, c_name_fio, c_birth_date, iif(c_citizen = 13, &#x27;+&#x27;, &#x27;&#x27;),
+      debt_str, zalog_debt_str, overpay_str,
+      iif(asp_date_open = :max_date_const, null, asp_date_open),
+      iif(asp_date_reject = :min_date_const, null, asp_date_reject),
+      iif(last_payment_date = :min_date_const, null, last_payment_date)
+  from t2, clients c
+  where c.c_id = t2.c_id
+  and not exists(select 1 from ft_info_stoplist
+              where current_date between fisl_freeze_date_begin and coalesce(fisl_freeze_date_end, :max_date_const)
+                and fisl_from_c_id = t2.c_id)
+  into c_id, fio, birth_date, resident, debt_txt, zalog_debt_txt, overpay_txt,
+       asp_date_open, asp_date_reject, last_payment_date
+  do
+  begin
+    rec_no = rec_no + 1;
+
+    if (asp_date_open is null) then
+      select min(cast(eds_status_datetime as date)), max(edl_date_end + 1)
+      from edoc_sign, edoc_list, edoc_blank edb
+      where eds_from_edl_id = edl_id
+        and edb_from_edl_id = edl_id
+        and edl_from_edc_id = :asp_kind
+        and edl_object_kind = 0
+        and edl_object_id = :c_id
+        and eds_status = 1
+        and eds_status_datetime &lt; :rep_date + 1
+      into asp_date_open, asp_date_reject;
+
+    if (last_payment_date is null) then
+      select max(ok_ol_date)
+      from knclient, operkred
+      where kc_from_c_id = :c_id
+        and ok_from_k_id = kc_from_k_id
+        and ok_type = 4
+        and ok_ol_is_active = 1
+        and ok_ol_date &lt;= :rep_date
+      into last_payment_date;
+
+    suspend;
+  end 
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_MBULAK_CARD_PAYMENT — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_MBULAK_CARD_PAYMENT: 2 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_MBULAK_CARD_PAYMENT</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">3 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="card_command_adv_perc_writeoff.html"><div class="to">CARD_COMMAND_ADV_PERC_WRITEOFF</div></a><a class="ref-card" href="card_payment_card_limit_update.html"><div class="to">CARD_PAYMENT_CARD_LIMIT_UPDATE</div></a><a class="ref-card" href="hp_client_bank_card_mb.html"><div class="to">HP_CLIENT_BANK_CARD_MB</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_do_repayment.html"><div class="to">HP_DO_REPAYMENT</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OL_ID</div><div class="ptype">BIGINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_MBULAK_CARD_PAYMENT(
+    K_ID D_ID,
+    OL_ID D_ID)
+AS
+begin
+  if (f_get_db_id() not in (39801, 41701)) then exit;
+
+  -- если это кредит по карте МБулак
+  if (exists(
+    select *
+    from kontract kont
+    where kont.k_id = :k_id
+      and kont.k_disb_kind = 6)) then
+  begin
+    -- если карта не активна
+    if (not exists(select * from hp_client_bank_card_mb(-:k_id, current_date, 0)))
+    then exception e_message &#x27;Не определена активная карта МБулак.&#x27;;
+
+    -- меняем счёт переплаты (если она есть)
+    update operbook set
+      ob_account_kt = left(ob_account_kt, 14) || &#x27;1101&#x27;
+    where ob_from_ol_id = :ol_id
+      and ob_short_acc_kt starting &#x27;21199/&#x27;;
+
+    -- если было списание по закрытию займа, то ничего не делаем
+    /*
+    if (exists(
+      select * from cardsync
+      where cs_from_k_id = :k_id
+        and cs_from_csc_id = f_get_cardsynccfg_id(&#x27;write-off_on_closing&#x27;)))
+    then exit;
+    */
+
+    -- если это плата комиссии за карточное обслуживание
+    if (exists(
+      select *
+      from operkred ok
+      where ok.ok_from_ol_id = :ol_id
+        and ok.ok_from_k_id = :k_id
+        and ok.ok_type = 4
+        and ok.ok_ol_is_active = 1
+        and ok.ok_kommis &lt; 0))
+    then
+      -- комиссия за карточное обслуживание
+      execute procedure card_command_adv_perc_writeoff(f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;), :k_id, :ol_id);
+    else
+      -- изменение кредитного лимита по факту платежа
+      execute procedure card_payment_card_limit_update(f_objkind(&#x27;kontract&#x27;, &#x27;id&#x27;), :k_id, :ol_id);
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

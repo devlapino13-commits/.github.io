@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_PRODTYPEBLANK_LIST — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_PRODTYPEBLANK_LIST: 1 входных, 6 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_PRODTYPEBLANK_LIST</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">6</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">BLN_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">6 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PRTB_FROM_PRT_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PRTB_FROM_BLN_ID</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PRT_NAME</div><div class="ptype">VARCHAR(255)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PRT_USED_PRODUCT</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PRT_USED_BLANK</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PRT_CHECKED</div><div class="ptype">INTEGER</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_PRODTYPEBLANK_LIST(
+    BLN_ID INTEGER)
+RETURNS (
+    PRTB_FROM_PRT_ID INTEGER,
+    PRTB_FROM_BLN_ID INTEGER,
+    PRT_NAME VARCHAR(255),
+    PRT_USED_PRODUCT INTEGER,
+    PRT_USED_BLANK INTEGER,
+    PRT_CHECKED INTEGER)
+AS
+begin
+  for select prt_id, prt_name
+      from prodtype
+      where prt_is_delete = 0
+      into prtb_from_prt_id, prt_name
+  do
+  begin
+    prtb_from_bln_id = bln_id;
+    prt_used_product = 0;
+    prt_used_blank = 0;
+    prt_checked = 0;
+
+    select count(*)
+    from prodtypelink, product
+    where prtl_from_prt_id = :prtb_from_prt_id and
+          prtl_from_pr_id = pr_id and
+          coalesce(prtl_date_begin, &#x27;01.01.1990&#x27;) &lt;= current_date and
+          coalesce(prtl_date_end, &#x27;31.12.2999&#x27;) &gt;= current_date and
+          pr_date_begin &lt;= current_date and
+          pr_date_end &gt;= current_date
+    into prt_used_product;
+    if (prt_used_product is null) then
+      prt_used_product = 0;
+
+    select count(*)
+    from prodtypeblank, blankblob
+    where prtb_from_prt_id = :prtb_from_prt_id and
+          prtb_from_bln_id = blb_from_bln_id and
+          blb_date_end &gt;= &#x27;31.12.2999&#x27; and
+          (blb_blob is not null or
+          blb_frx_blob is not null)
+    into prt_used_blank;
+    if (prt_used_blank is null) then
+      prt_used_blank = 0;
+
+    if (exists(select *
+               from prodtypeblank
+               where prtb_from_prt_id = :prtb_from_prt_id and
+                     prtb_from_bln_id = :bln_id)) then
+      prt_checked = 1;
+
+    suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

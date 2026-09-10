@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_PANTERA_BONUS_REP — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_PANTERA_BONUS_REP: 3 входных, 5 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_PANTERA_BONUS_REP</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">5</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="cc_ceo_pantera_efficiency.html"><div class="to">CC_CEO_PANTERA_EFFICIENCY</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE_BEGIN</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">REP_DATE_END</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">PROJECT_TYPE</div><div class="ptype">SMALLINT</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">5 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">K_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OPER_CALLED</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">OK_SUM</div><div class="ptype">DECIMAL(18,4)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">KF_NAME</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">K_KONTRACT_NO</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_PANTERA_BONUS_REP(
+    REP_DATE_BEGIN DATE,
+    REP_DATE_END DATE,
+    PROJECT_TYPE SMALLINT)
+RETURNS (
+    K_ID DECIMAL(18,0),
+    OPER_CALLED VARCHAR(100),
+    OK_SUM DECIMAL(18,4),
+    KF_NAME VARCHAR(50),
+    K_KONTRACT_NO VARCHAR(50))
+AS
+declare variable k_from_kf_id decimal(18,0);
+declare variable pant_date_begin date;
+declare variable pant_date_end date;
+declare variable pant_id decimal(15,2);
+declare variable pant_last_call_date date;
+declare variable is_ok smallint;
+declare variable sbl_id integer;
+declare variable ok_sum_temp decimal(18,4);
+declare variable ok_ol_date date;
+begin
+  /*
+    Логика отчета:
+
+    Для пантеры считаю выплаченные суммы, только если оператор звонил (и дозвнился) клиенту или его родственникам до даты выплаты
+    Для СБ считаю выплаченные суммы вне зависимости от наличия звонков клиенту
+    */
+
+  for select pantk.pant_id, pantk.pant_from_k_id, pantk.pant_oper_called, kont.k_kontract_no, k_from_kf_id,
+             pantk.pant_date_begin, pantk.pant_date_end, pantk.pant_last_call_date
+      from pantera_kontracts pantk
+      inner join kontract kont on kont.k_id = pantk.pant_from_k_id
+      where pantk.pant_date_end &gt;= :rep_date_begin -- чтобы вычислить у кого группа была на руках
+            and
+            ((pantk.pant_cl_call_qty &gt; 0 or
+            pantk.pant_cont_call_qty &gt; 0) /*  or (:PROJECT_TYPE = 2)*/ ) -- если клиенту звонил оператор ранее даты начала отчета, все равно он подлежит дальнейшей проверке
+            and
+            pantk.pant_date_end &gt;= pant_date_begin -- исключаю передачи в один и тот же день
+            and
+            pantk.pant_project_type = :project_type /* 1 - КЦ, 2 - СБ Айбек, 3 - СБ Эльдар*/
+      order by pant_oper_called
+      into :pant_id, :k_id, :oper_called, :k_kontract_no, :k_from_kf_id, :pant_date_begin, :pant_date_end,
+           :pant_last_call_date
+  do
+  begin
+    is_ok = 0;
+--if (:PROJECT_TYPE = 1) then
+--begin
+    if (pant_last_call_date &lt;= :rep_date_end) then
+      is_ok = 1;
+--end
+--else  is_ok = 1;
+
+    if (is_ok = 0) then
+    begin
+      if (exists(select *
+                 from pantera_clients pc
+                 where pc.pcl_from_pan_id = :pant_id and
+                       pc.pcl_res &gt; 0 and
+                       pc.pcl_called_date &lt;= :rep_date_end rows 1)) then
+        is_ok = 1;
+    end
+    if (is_ok = 0) then
+    begin
+      if (exists(select *
+                 from pantera_contacts pcon
+                 where pcon.pcon_from_pan_id = :pant_id and
+                       pcon.pcon_res &gt; 0 and
+                       pcon.pcon_called_date &lt;= :rep_date_end rows 1)) then
+        is_ok = 1;
+    end
+
+-- если выявлено, что действительно, был соврершен успешный звонок клиенту или конт. лицу (.._res &gt; 0), тогда  ....
+    if (is_ok = 1) then
+    begin
+      if (pant_date_begin &lt; rep_date_begin) then
+        pant_date_begin = rep_date_begin;
+      if (pant_date_end &gt; rep_date_end) then
+        pant_date_end = rep_date_end;
+
+      select kal_new_kf_name
+      from knaktlist
+      where knaktlist.is_delete = 0 and
+            :rep_date_end between kal_date and kal_date_end and
+            kal_from_kf_id = :k_from_kf_id
+      into kf_name;
+
+      if (project_type = 1) then
+        sbl_id = 82;
+      if (project_type = 2) then
+        sbl_id = 90;
+      if (project_type = 3) then
+        sbl_id = 87;
+
+      ok_sum = 0;
+      ok_sum_temp = 0;
+
+      for select -sum(ok.ok_os + ok.ok_perc + ok.ok_fine), ok.ok_ol_date
+          from operkred ok
+          where ok.ok_type = 4 and
+                ok.ok_ol_is_active = 1 and
+                ok.ok_ol_date between :pant_date_begin and :pant_date_end and
+                ok.ok_from_k_id = :k_id and
+                ok_from_c_id = 0
+          group by ok.ok_ol_date
+          order by ok.ok_ol_date
+          into :ok_sum_temp, :ok_ol_date
+      do
+      begin
+        if (ok_sum_temp is null) then
+          ok_sum_temp = 0;
+        if (exists(select *
+                   from sb_akt sba
+                   where sba.sba_from_k_id = :k_id and
+                         :ok_ol_date between sba.sba_date_begin and sba.sba_date_end and
+                         sba.sba_from_sbl_id = :sbl_id)) then
+          ok_sum = ok_sum + ok_sum_temp;
+      end
+
+      if (ok_sum is null) then
+        ok_sum = 0;
+
+      if (ok_sum &lt;&gt; 0) then
+      begin
+        suspend;
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PUT_CLIENT_TO_DELETE_BUFFER — процедура — схема БД</title>
+<meta name="description" content="Процедура PUT_CLIENT_TO_DELETE_BUFFER: 0 входных, 0 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>PUT_CLIENT_TO_DELETE_BUFFER</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">0</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">0</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">не вызывает другие процедуры</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">0 шт.</span></summary>
+    <p class="none-note">ни одна процедура не вызывает эту</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">0 шт.</span></summary>
+    <p class="none-note">параметров нет</p>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE PUT_CLIENT_TO_DELETE_BUFFER
+AS
+declare variable c_id d_id;
+begin
+    -- RFCRU-5565
+
+    for select csr.csr_from_c_id
+    from clientstate_ru csr
+    where csr.csr_from_c_id not in (-1, 1000000000000)
+        and csr.csr_total = 0
+        and csr.csr_is_restored = 0
+        and csr_from_c_id &gt;= 1010100000000
+    into :c_id
+    do
+    begin
+        -- Если запись уже была создана, тогда не создаём дубликаты
+        if (exists
+            (
+                select 1
+                from client_delete_buffer cdb
+                where cdb.cdb_from_c_id = :c_id
+            )
+        ) then
+            continue;
+
+        -- Если по клиенту была создана онлайн заявка, тогда карточку данного клиента не удаляем в течении 60 дней
+        if (exists
+            (
+                select 1
+                from cc_website_miniapp wma
+                where wma.wma_from_c_id = :c_id
+                    and wma.wma_date &gt;= current_date - 60
+            )
+        ) then
+            continue;
+
+        -- RFCRU-6028: Если с момента добавления клиента в БД прошло менее 7 суток, не помещаем его в буфер на удаление
+        if (exists
+            (
+                select 1
+                from clients
+                where c_id = :c_id
+                    and c_datetime &gt;= dateadd(day, -7, current_timestamp)
+            )
+        ) then
+            continue;
+
+        -- Не добавляем в буфер на удаление виртуальныйх сотрудников и прочих особых клиентов (c_id у таких обычно &lt; 1010100000000)
+        if (exists
+            (
+                select 1
+                from clients
+                where c_id = :c_id
+                    and c_name_fio starting &#x27;Виртуальный&#x27;
+            )
+        ) then
+            continue; 
+
+        -- Переносим абсольтно все данные клиента в наш буффер
+        -- Делаем это для того, чтобы в моменте у нас была возможность восстановить клиента
+        insert into client_delete_buffer
+        (
+            cdb_from_c_id, c_type, c_name_fio, c_sex, c_birth_date, c_nation, c_citizen, c_pass_no, c_pass_date, c_pass_who,
+            c_pass_date_expire, c_from_reg_id, c_email, c_family, c_education, c_kol_family, c_kol_child, c_memo, c_reg_no,
+            c_okpo, c_inn, c_ext_inn, c_account, c_org_from_b_id, c_hired_date, c_is_resident, c_army, c_tabel,
+            c_plastcard_no, c_others, c_is_personal, c_doc_type, c_form_status_long, c_form_status_short, c_org_type_long,
+            c_org_type_short, c_original_id, c_fam_business, c_from_un_id, c_datetime, c_index_c_pass_no,
+            c_finpolis_send_date, c_finpolis_proceed, c_pincode, c_from_fl_id, c_fam_adl_id, c_blob_photo_id,
+            c_blob_pass1_id, c_blob_pass2_id, c_kib_id, c_birth_year, c_verify_status, c_verify_datetime, c_from_is_id,
+            c_pass_last_change, c_pft_risk_koef, c_pft_risk_memo, c_alternat_fio, c_alternat_fl_id, c_birth_country,
+            c_birth_city, c_pass_who_code, c_birthday_commited, c_source_system, c_name_full, c_is_public, c_type_contr,
+            c_is_founder, c_is_benefic_owner, c_name_eng, c_name_eng_fl_id, c_blank_lang, c_authorized_capital, c_branches,
+            c_doc_inform, c_goals, c_current_gni_categ
+        )
+        select
+            c_id, c_type, c_name_fio, c_sex, c_birth_date, c_nation, c_citizen, c_pass_no, c_pass_date, c_pass_who,
+            c_pass_date_expire, c_from_reg_id, c_email, c_family, c_education, c_kol_family, c_kol_child, c_memo, c_reg_no,
+            c_okpo, c_inn, c_ext_inn, c_account, c_org_from_b_id, c_hired_date, c_is_resident, c_army, c_tabel,
+            c_plastcard_no, c_others, c_is_personal, c_doc_type, c_form_status_long, c_form_status_short, c_org_type_long,
+            c_org_type_short, c_original_id, c_fam_business, c_from_un_id, c_datetime, c_index_c_pass_no,
+            c_finpolis_send_date, c_finpolis_proceed, c_pincode, c_from_fl_id, c_fam_adl_id, c_blob_photo_id,
+            c_blob_pass1_id, c_blob_pass2_id, c_kib_id, c_birth_year, c_verify_status, c_verify_datetime, c_from_is_id,
+            c_pass_last_change, c_pft_risk_koef, c_pft_risk_memo, c_alternat_fio, c_alternat_fl_id, c_birth_country,
+            c_birth_city, c_pass_who_code, c_birthday_commited, c_source_system, c_name_full, c_is_public, c_type_contr,
+            c_is_founder, c_is_benefic_owner, c_name_eng, c_name_eng_fl_id, c_blank_lang, c_authorized_capital, c_branches,
+            c_doc_inform, c_goals, c_current_gni_categ
+        from clients
+        where c_id = :c_id;
+
+
+        -- Перед тем как работать (обновлять) клиента, мы должны отключаем все триггеры таблицы clients
+        rdb$set_context(&#x27;USER_TRANSACTION&#x27;, &#x27;IGNORE_C_ID&#x27;, :c_id);
+
+
+        -- Только после того как все триггеры были отключены, мы обновляем клиента
+        update clients
+        set
+            c_type = -1,
+            c_name_fio = &#x27;Удалён&#x27;,
+            c_sex = -1,
+            c_birth_date = null,
+            c_nation = -1,
+            c_citizen = -1,
+            c_pass_no = &#x27; &#x27;,
+            c_pass_date = null,
+            c_pass_who = null,
+            c_pass_date_expire = null,
+            c_from_reg_id = -1,
+            c_email = &#x27; &#x27;,
+            c_family = -1,
+            c_education = -1,
+            c_kol_family = -1,
+            c_kol_child = -1,
+            c_memo = &#x27; &#x27;,
+            c_reg_no = &#x27; &#x27;,
+            c_okpo = &#x27; &#x27;,
+            c_inn = &#x27; &#x27;,
+            c_ext_inn = &#x27; &#x27;,
+            c_account = &#x27; &#x27;,
+            c_org_from_b_id = &#x27; &#x27;,
+            c_hired_date = null,
+            c_is_resident = -1,
+            c_army = -1,
+            c_tabel = &#x27; &#x27;,
+            c_plastcard_no = &#x27; &#x27;,
+            c_others = &#x27; &#x27;,
+            c_is_personal = -1,
+            c_doc_type = -1,
+            c_form_status_long = &#x27; &#x27;,
+            c_form_status_short = &#x27; &#x27;,
+            c_org_type_long = &#x27; &#x27;,
+            c_org_type_short = &#x27; &#x27;,
+            c_original_id = null,
+            c_fam_business = -1,
+            c_from_un_id = 1000000000000,
+            c_datetime = null,
+            c_index_c_pass_no = &#x27; &#x27;,
+            c_finpolis_send_date = null,
+            c_finpolis_proceed = -1,
+            c_pincode = &#x27; &#x27;,
+            c_from_fl_id = null,
+            c_fam_adl_id = 81001000000000,
+            c_blob_photo_id = 0,
+            c_blob_pass1_id = 0,
+            c_blob_pass2_id = 0,
+            c_kib_id = -1,
+            c_birth_year = -1,
+            c_verify_status = -1,
+            c_verify_datetime = null,
+            c_from_is_id = -1,
+            c_pass_last_change = null,
+            c_pft_risk_koef = -1,
+            c_pft_risk_memo = &#x27; &#x27;,
+            c_alternat_fio = null,
+            c_alternat_fl_id = null,
+            c_birth_country = &#x27; &#x27;,
+            c_birth_city = &#x27; &#x27;,
+            c_pass_who_code = &#x27; &#x27;,
+            c_birthday_commited = -1,
+            c_source_system = -1,
+            c_name_full = &#x27; &#x27;,
+            c_is_public = -1,
+            c_type_contr = -1,
+            c_is_founder = -1,
+            c_is_benefic_owner = -1,
+            c_name_eng = &#x27; &#x27;,
+            c_name_eng_fl_id = null,
+            c_blank_lang = &#x27;unk&#x27;,
+            c_authorized_capital = &#x27; &#x27;,
+            c_branches = &#x27; &#x27;,
+            c_doc_inform = &#x27; &#x27;,
+            c_goals = &#x27; &#x27;,
+            c_current_gni_categ = -1
+        where c_id = :c_id;
+    end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

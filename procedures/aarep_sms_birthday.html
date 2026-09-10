@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAREP_SMS_BIRTHDAY — процедура — схема БД</title>
+<meta name="description" content="Процедура AAREP_SMS_BIRTHDAY: 1 входных, 3 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>AAREP_SMS_BIRTHDAY</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">3</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="hp_contdata_get_cell_main.html"><div class="to">HP_CONTDATA_GET_CELL_MAIN</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fsrobot_sms_send_daily.html"><div class="to">FSROBOT_SMS_SEND_DAILY</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">REP_DATE</div><div class="ptype">DATE</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">3 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">PHONE</div><div class="ptype">VARCHAR(20)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">CLIENT_ID</div><div class="ptype">DECIMAL(18,0)</div><div class="pdesc empty">—</div></div><div class="prow"><div class="pname">C_ALTERNAT_FIO</div><div class="ptype">VARCHAR(100)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE AAREP_SMS_BIRTHDAY(
+    REP_DATE DATE)
+RETURNS (
+    PHONE VARCHAR(20),
+    CLIENT_ID DECIMAL(18,0),
+    C_ALTERNAT_FIO VARCHAR(100))
+AS
+declare variable rep_month integer;
+declare variable rep_day integer;
+declare variable no_leap_year integer;
+declare variable db_id d_integer;
+begin
+  rep_month = extract(month from :rep_date);
+  rep_day = extract(day from :rep_date);
+  db_id = f_get_db_id();
+
+  no_leap_year = 0;
+  if (rep_month * 100 + rep_day = 301 and
+      extract(month from dateadd(day, -1, :rep_date)) * 100 + extract(day from dateadd(day, -1, :rep_date)) = 228) then
+    no_leap_year = 1; -- не високосный год
+
+  for select c_id,
+             (select cont_value
+              from hp_contdata_get_cell_main(0, c_id)), c_alternat_fio
+      from clients
+      where c_birth_date is not null and
+            (extract(month from c_birth_date) * 100 + extract(day from c_birth_date) = :rep_month * 100 + :rep_day
+              or (:no_leap_year = 1
+                  and extract(month from c_birth_date) * 100 + extract(day from c_birth_date) = 229))
+      into :client_id, :phone, :c_alternat_fio
+  do
+  begin
+    if (phone &lt;&gt; &#x27;&#x27;) then
+    begin
+      if (exists(select *
+                 from knclient, kontstate
+                 where kc_from_c_id = :client_id and
+                       kc_amount_approved &gt; 0 and
+                       ks_from_k_id = kc_from_k_id and
+                       ks_ol_is_delete = 0 and
+                       ks_date_begin &lt;= :rep_date and
+                       ks_date_end &gt;= :rep_date and
+                       ks_state = 1)) then
+      begin
+        if (db_id &lt;&gt; 81001 or f_clientcom_allowed(client_id, 1, 1, 1) = 1) then
+        suspend;
+      end
+    end
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

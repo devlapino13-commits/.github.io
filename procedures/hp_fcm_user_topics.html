@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP_FCM_USER_TOPICS — процедура — схема БД</title>
+<meta name="description" content="Процедура HP_FCM_USER_TOPICS: 2 входных, 1 выходных параметров">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html">FinStart. База данных</a>
+  <nav class="menu"><a href="../index.html">Таблицы</a><a href="../overview.html">Схемы</a><a href="../functions.html">Функции</a><a href="../procedures.html">Процедуры</a><a href="../info.html">Инфо</a></nav>
+</header>
+<div class="page">
+
+<a href="../procedures.html" class="back-link" onclick="if(window.history.length>1){window.history.back();return false;}">← Назад</a>
+<h1><code>HP_FCM_USER_TOPICS</code></h1>
+
+<div class="stats">
+  <div class="stat"><span class="k">Входные параметры:</span> <span class="v">2</span></div>
+  <div class="stat"><span class="k">Выходные параметры:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывает процедур:</span> <span class="v">1</span></div>
+  <div class="stat"><span class="k">Вызывается из:</span> <span class="v">1</span></div>
+</div>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Использует другие процедуры<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="fm_user_topics.html"><div class="to">FM_USER_TOPICS</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Вызывается из других процедур<span class="legend">1 шт.</span></summary>
+    <div class="ref-grid ref-grid-proc"><a class="ref-card" href="mc_message_list.html"><div class="to">MC_MESSAGE_LIST</div></a></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Входные параметры<span class="legend">2 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">UN_ID</div><div class="ptype">BIGINT</div><div class="pdesc">ID пользователя МП</div></div><div class="prow"><div class="pname">MCL_ID</div><div class="ptype">BIGINT</div><div class="pdesc">ID пользователя КМП</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <details class="param-details" open>
+    <summary class="param-head">Выходные параметры<span class="legend">1 шт.</span></summary>
+    <div class="param-table"><div class="prow fhead"><div>Параметр</div><div>Тип</div><div>Описание</div></div><div class="prow"><div class="pname">TOPIC_NAME</div><div class="ptype">VARCHAR(50)</div><div class="pdesc empty">—</div></div></div>
+  </details>
+</section>
+
+<section class="block">
+  <h2>Определение</h2>
+  
+<details class="ddl">
+  <summary>Показать DDL (CREATE PROCEDURE)<button type="button" class="copy-btn" onclick="event.preventDefault();event.stopPropagation();copyDdl(this)">Копировать</button></summary>
+  <pre>CREATE PROCEDURE HP_FCM_USER_TOPICS(
+    UN_ID D_ID,
+    MCL_ID D_ID)
+RETURNS (
+    TOPIC_NAME D_STR_CODE)
+AS
+declare variable db_id d_integer; /* Код БД */
+declare variable fcm_id d_str_255; /* ID Firebase */
+declare variable c_id d_id; /* ID клиента */
+declare variable db_prefix d_str_lang; /* Префикс БД */
+declare variable mcl_project d_integer; /* Проект: МБулак, OIVO... */
+declare variable mcl_project_kmp d_integer; /* ID проекта КМП MBulak */
+declare variable mcl_project_oivo d_integer; /* ID проекта КМП OIVO */
+begin
+  -- Сервис: FsSvc
+  -- Возвращает группы рассылок (топиков), на которые должен быть подписан пользователь
+  -- При добавлении новой группы добавить описание ниже:
+  -- Группы рассылок (топики)
+  -- ru_kmp_all, kg_kmp_all, az_kmp_all, kz_kmp_all - Все пользователи КМП (по стране)
+  -- ru_oivo_all - Все пользователи OIVO КМП (РФ)
+  -- ru_kmp_ad  - Все пользователи КМП (РФ), подписавшие согласие на рекламу
+  -- ru_kmp_test - Тестовая рассылка программистам РФ
+
+  db_id = f_get_db_id();
+  db_prefix = case db_id
+      when 41701 then &#x27;kg_&#x27;
+      when 81001 then &#x27;ru_&#x27;
+      when 94401 then &#x27;az_&#x27;
+      when 39801 then &#x27;kz_&#x27;
+      else null
+    end;
+  if (db_prefix is null) then
+    exit;
+
+  mcl_project_kmp = f_enum_id(&#x27;mcl_project&#x27;, &#x27;kmp&#x27;);
+  mcl_project_oivo = f_enum_id(&#x27;mcl_project&#x27;, &#x27;oivo&#x27;);
+
+  if (mcl_id is not null) then
+  begin
+    select mcl_google_id, mcl_from_c_id, mcl_project
+    from mc_login
+    where mcl_id = :mcl_id
+      and mcl_is_delete = 0
+      and coalesce(mcl_google_id, &#x27;&#x27;) &lt;&gt; &#x27;&#x27;
+    into fcm_id, c_id, mcl_project;
+
+    if (coalesce(fcm_id, &#x27;&#x27;) = &#x27;&#x27;) then
+      exit;
+
+    if (db_id &lt;&gt; 81001) then
+    begin
+      -- Везде, кроме РФ одно МП для клиентов
+      topic_name = db_prefix || &#x27;kmp_all&#x27;;
+      suspend;
+    end
+
+    if (db_id = 81001) then
+    begin
+      if (mcl_project = mcl_project_kmp) then
+      begin
+        topic_name = db_prefix || &#x27;kmp_all&#x27;;
+        suspend;
+        if (c_id is not null and f_clientcom_allowed(c_id, 1, 0, 0) = 1) then
+        begin
+          topic_name = db_prefix || &#x27;kmp_ad&#x27;;
+          suspend;
+        end
+      end
+      if (mcl_project = mcl_project_oivo) then
+      begin
+        topic_name = db_prefix || &#x27;oivo_all&#x27;;
+        suspend;
+      end
+
+      -- Тестовая рассылка
+      if (exists(select *
+        from mc_login
+        where mcl_id = :mcl_id
+          and mcl_is_delete = 0
+          and mcl_login in (
+            &#x27;79772654344&#x27;, -- Анатолий �©егольский
+            &#x27;79778968471&#x27;, -- Оксана �©егольская
+            &#x27;79222260870&#x27;, -- Сергей Кравцов
+            &#x27;79684828697&#x27;) -- Ксения Панкова
+        )) then
+      begin
+        topic_name = db_prefix || &#x27;kmp_test&#x27;;
+        suspend;
+      end
+    end
+  end
+  else if (un_id is not null) then
+  begin
+    -- TODO, избавиться от процедуры fm_user_topics, перенести сюда по части топиков
+    for select replace(mg_topic, &#x27;/topics/&#x27;, &#x27;&#x27;)
+    from fm_user_topics(:un_id)
+    into topic_name
+    do
+      suspend;
+  end
+end</pre>
+</details>
+
+</section>
+
+</div>
+<script>
+  function copyDdl(btn){
+    const pre = btn.closest('details').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>
